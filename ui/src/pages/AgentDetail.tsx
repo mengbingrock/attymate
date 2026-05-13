@@ -39,6 +39,7 @@ import { EntityRow } from "../components/EntityRow";
 import { Identity } from "../components/Identity";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { RunButton, PauseResumeButton } from "../components/AgentActionButtons";
+import { AgentChatSheet } from "../components/AgentChatSheet";
 import { BudgetPolicyCard } from "../components/BudgetPolicyCard";
 import { FileTree, buildFileTree } from "../components/FileTree";
 import { ScrollToBottom } from "../components/ScrollToBottom";
@@ -74,6 +75,7 @@ import {
   ArrowLeft,
   HelpCircle,
   FolderOpen,
+  MessageSquare,
 } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -640,6 +642,7 @@ export function AgentDetail() {
   const navigate = useNavigate();
   const [actionError, setActionError] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const activeView = urlRunId ? "runs" as AgentDetailView : parseAgentDetailView(urlTab ?? null);
   const needsDashboardData = activeView === "dashboard";
   const needsRunData = activeView === "runs" || Boolean(urlRunId);
@@ -955,6 +958,15 @@ export function AgentDetail() {
             onResume={() => agentAction.mutate("resume")}
             disabled={agentAction.isPending || isPendingApproval}
           />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setChatOpen(true)}
+            disabled={isPendingApproval}
+          >
+            <MessageSquare className="h-3.5 w-3.5 sm:mr-1" />
+            <span className="hidden sm:inline">Chat</span>
+          </Button>
           <span className="hidden sm:inline"><StatusBadge status={agent.status} /></span>
           {mobileLiveRun && (
             <Link
@@ -1162,6 +1174,20 @@ export function AgentDetail() {
           />
         </div>
       ) : null}
+
+      {resolvedCompanyId && (
+        <AgentChatSheet
+          agent={{
+            id: agent.id,
+            name: agent.name,
+            role: agent.role,
+            icon: agent.icon,
+            companyId: resolvedCompanyId,
+          }}
+          open={chatOpen}
+          onOpenChange={setChatOpen}
+        />
+      )}
     </div>
   );
 }

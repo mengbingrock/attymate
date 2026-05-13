@@ -751,6 +751,7 @@ const heartbeatRunListContextColumns = {
   contextWakeReason: sql<string | null>`${heartbeatRuns.contextSnapshot} ->> 'wakeReason'`.as("contextWakeReason"),
   contextWakeSource: sql<string | null>`${heartbeatRuns.contextSnapshot} ->> 'wakeSource'`.as("contextWakeSource"),
   contextWakeTriggerDetail: sql<string | null>`${heartbeatRuns.contextSnapshot} ->> 'wakeTriggerDetail'`.as("contextWakeTriggerDetail"),
+  contextUserMessage: sql<string | null>`${heartbeatRuns.contextSnapshot} ->> 'userMessage'`.as("contextUserMessage"),
 } as const;
 
 const heartbeatRunListResultColumns = {
@@ -1188,6 +1189,7 @@ export function summarizeHeartbeatRunContextSnapshot(
     "wakeSource",
     "wakeTriggerDetail",
     "modelProfile",
+    "userMessage",
   ] as const;
 
   for (const key of allowedKeys) {
@@ -1590,7 +1592,8 @@ export function shouldResetTaskSessionForWake(
     wakeReason === "issue_assigned" ||
     wakeReason === "execution_review_requested" ||
     wakeReason === "execution_approval_requested" ||
-    wakeReason === "execution_changes_requested"
+    wakeReason === "execution_changes_requested" ||
+    wakeReason === USER_CHAT_WAKE_REASON
   ) {
     return true;
   }
@@ -1665,6 +1668,7 @@ function describeSessionResetReason(
   if (wakeReason === "execution_review_requested") return "wake reason is execution_review_requested";
   if (wakeReason === "execution_approval_requested") return "wake reason is execution_approval_requested";
   if (wakeReason === "execution_changes_requested") return "wake reason is execution_changes_requested";
+  if (wakeReason === USER_CHAT_WAKE_REASON) return "wake reason is user_chat_message";
   return null;
 }
 
@@ -1813,6 +1817,10 @@ function enrichWakeContextSnapshot(input: {
   }
   if (!readNonEmptyString(contextSnapshot["wakeTriggerDetail"]) && triggerDetail) {
     contextSnapshot.wakeTriggerDetail = triggerDetail;
+  }
+  const userMessageFromPayload = readNonEmptyString(payload?.["userMessage"]);
+  if (!readNonEmptyString(contextSnapshot["userMessage"]) && userMessageFromPayload) {
+    contextSnapshot.userMessage = userMessageFromPayload;
   }
   normalizeModelProfileWakeContext({ contextSnapshot, payload });
   normalizeInteractionContinuationWakeContext(contextSnapshot, payload);
@@ -2150,6 +2158,67 @@ export function buildPaperclipTaskMarkdown(input: {
   }
   lines.push("", "Use this task context as the current assignment.");
   return lines.join("\n");
+}
+
+export const USER_CHAT_WAKE_REASON = "user_chat_message";
+
+// Direct-chat prompt template for wakeups originating from the UI chat sheet.
+// Replaces the default heartbeat "check for work" prompt so the agent answers
+// the user instead of scanning issues for routine work. Hermes template
+// placeholders ({{agentName}}, {{agentId}}, {{companyId}}, {{paperclipApiUrl}})
+// are rendered by the adapter; the user message is inlined verbatim inside a
+// fenced block so any "{{...}}" in the user text is treated as literal text.
+export function buildUserChatPromptTemplate(userMessage: string): string {
+  const longestBacktickRun = Math.max(
+    2,
+    ...Array.from(userMessage.matchAll(/`+/g), (match) => match[0].length),
+  );
+  const fence = "`".repeat(longestBacktickRun + 1);
+  return [
+    `You are "{{agentName}}", an AI agent in a Paperclip-managed company.`,
+    "",
+    "## Direct chat with a user",
+    "",
+    "A user is messaging you through the agent's chat sheet. Read their message, gather any context you need from the Paperclip API, then reply conversationally on stdout. Your stdout reply IS the response delivered to the user — do NOT post comments on any issue, do NOT change any issue state, and do NOT start new work unless the user explicitly asks.",
+    "",
+    "User's message:",
+    `${fence}text`,
+    userMessage,
+    fence,
+    "",
+    "## Tools you may call (read-only context gathering)",
+    "",
+    "Use the `terminal` tool with `curl` for every Paperclip API call. Each request must include:",
+    "  -H \"Authorization: Bearer $PAPERCLIP_API_KEY\"",
+    "",
+    "Your identity:",
+    "  Agent ID:   {{agentId}}",
+    "  Company ID: {{companyId}}",
+    "  API base:   {{paperclipApiUrl}}",
+    "",
+    "Endpoints likely useful here:",
+    "",
+    "1. List every open issue assigned to you (status + title + priority — covers \"what are you working on\", \"what's your queue\", \"what's blocked\"):",
+    "   `curl -s -H \"Authorization: Bearer $PAPERCLIP_API_KEY\" \"{{paperclipApiUrl}}/companies/{{companyId}}/issues?assigneeAgentId={{agentId}}\" | python3 -c \"import sys,json;rows=json.loads(sys.stdin.read());[print(f'{r[\\\"identifier\\\"]:>8} {r[\\\"status\\\"]:>12} {r[\\\"priority\\\"]:>6}  {r[\\\"title\\\"]}') for r in rows if r['status'] not in ('done','cancelled')]`",
+    "",
+    "2. Read your own agent record — role, title, instructions, configuration — so you can answer \"what are your responsibilities\" / \"who are you\":",
+    "   `curl -s -H \"Authorization: Bearer $PAPERCLIP_API_KEY\" \"{{paperclipApiUrl}}/agents/{{agentId}}?companyId={{companyId}}\"`",
+    "",
+    "3. Fetch a specific issue when the user references one by identifier (e.g. ABC-12):",
+    "   `curl -s -H \"Authorization: Bearer $PAPERCLIP_API_KEY\" \"{{paperclipApiUrl}}/issues/ISSUE_IDENTIFIER\"`",
+    "",
+    "4. (Optional) See the last few comments on a specific issue:",
+    "   `curl -s -H \"Authorization: Bearer $PAPERCLIP_API_KEY\" \"{{paperclipApiUrl}}/issues/ISSUE_IDENTIFIER/comments?order=desc&limit=5\"`",
+    "",
+    "## How to answer",
+    "",
+    "- Lead with the direct answer in the first sentence.",
+    "- For status / \"what are you doing today\": summarize in_progress and todo issues (identifier, status, one-line title). Call out anything blocked and what's blocking it.",
+    "- For \"what are your responsibilities\" or \"what's your role\": describe your role/title and the kinds of issues you typically own, drawn from your agent record.",
+    "- For a specific issue: fetch it and give a 1–3 sentence summary plus current status.",
+    "- Be concise. Plain text on stdout. No markdown headers, no JSON, no tool output dumps.",
+    "- Strict no-write rule: do not PATCH, POST, or DELETE anything. Only GETs to gather context.",
+  ].join("\n");
 }
 
 // A positive liveness check means some process currently owns the PID.
@@ -7659,9 +7728,19 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
           "local agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY",
         );
       }
+      const chatUserMessage = readNonEmptyString(context.userMessage);
+      const effectiveAgent = chatUserMessage
+        ? {
+            ...agent,
+            adapterConfig: {
+              ...parseObject(agent.adapterConfig),
+              promptTemplate: buildUserChatPromptTemplate(chatUserMessage),
+            },
+          }
+        : agent;
       const adapterResult = await adapter.execute({
         runId: run.id,
-        agent,
+        agent: effectiveAgent,
         runtime: runtimeForAdapter,
         config: runtimeConfig,
         context,
@@ -9492,6 +9571,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
           contextWakeReason,
           contextWakeSource,
           contextWakeTriggerDetail,
+          contextUserMessage,
           resultSummary,
           resultResult,
           resultMessage,
@@ -9501,6 +9581,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
           resultCostUsdCamel,
           ...rest
         } = row as typeof row & {
+          contextUserMessage?: string | null;
           resultSummary?: string | null;
           resultResult?: string | null;
           resultMessage?: string | null;
@@ -9521,6 +9602,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
             wakeReason: contextWakeReason,
             wakeSource: contextWakeSource,
             wakeTriggerDetail: contextWakeTriggerDetail,
+            userMessage: contextUserMessage,
           }),
           resultJson: safeForLegacyEncoding
             ? null
