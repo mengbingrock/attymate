@@ -2164,10 +2164,15 @@ export const USER_CHAT_WAKE_REASON = "user_chat_message";
 
 // Direct-chat prompt template for wakeups originating from the UI chat sheet.
 // Replaces the default heartbeat "check for work" prompt so the agent answers
-// the user instead of scanning issues for routine work. Hermes template
-// placeholders ({{agentName}}, {{agentId}}, {{companyId}}, {{paperclipApiUrl}})
-// are rendered by the adapter; the user message is inlined verbatim inside a
-// fenced block so any "{{...}}" in the user text is treated as literal text.
+// the user instead of scanning issues for routine work.
+//
+// Identity and API base come from the auto-injected env vars
+// ($PAPERCLIP_AGENT_ID, $PAPERCLIP_COMPANY_ID, $PAPERCLIP_API_URL,
+// $PAPERCLIP_API_KEY) rather than template placeholders, so the curl examples
+// stay correct regardless of which `renderTemplate` data is available. Only the
+// agent name uses a template placeholder ({{agent.name}}). The user message is
+// inlined verbatim inside a fenced block so any "{{...}}" in the user text is
+// treated as literal text.
 export function buildUserChatPromptTemplate(userMessage: string): string {
   const longestBacktickRun = Math.max(
     2,
@@ -2175,7 +2180,7 @@ export function buildUserChatPromptTemplate(userMessage: string): string {
   );
   const fence = "`".repeat(longestBacktickRun + 1);
   return [
-    `You are "{{agentName}}", an AI agent in a Paperclip-managed company.`,
+    `You are "{{agent.name}}", an AI agent in a Paperclip-managed company.`,
     "",
     "## Direct chat with a user",
     "",
@@ -2196,27 +2201,23 @@ export function buildUserChatPromptTemplate(userMessage: string): string {
     "",
     "## Tools (read-only, only when needed)",
     "",
-    "Use the `terminal` tool with `curl`. Every request must include:",
-    "  -H \"Authorization: Bearer $PAPERCLIP_API_KEY\"",
-    "",
-    "Your identity (use directly — no call needed to know who/where you are):",
-    "  Agent ID:   {{agentId}}",
-    "  Company ID: {{companyId}}",
-    "  API base:   {{paperclipApiUrl}}",
+    "Use the `terminal` tool with `curl`. Your identity and API base are already in the environment — no call needed to know who/where you are:",
+    "  $PAPERCLIP_AGENT_ID, $PAPERCLIP_COMPANY_ID, $PAPERCLIP_API_URL",
+    "Every request must include: -H \"Authorization: Bearer $PAPERCLIP_API_KEY\"",
     "",
     "Pick at most one, only if required to answer:",
     "",
-    "1. Your open issues (status / queue / what's blocked):",
-    "   `curl -s -H \"Authorization: Bearer $PAPERCLIP_API_KEY\" \"{{paperclipApiUrl}}/companies/{{companyId}}/issues?assigneeAgentId={{agentId}}\" | python3 -c \"import sys,json;rows=json.loads(sys.stdin.read());[print(f'{r[\\\"identifier\\\"]:>8} {r[\\\"status\\\"]:>12} {r[\\\"priority\\\"]:>6}  {r[\\\"title\\\"]}') for r in rows if r['status'] not in ('done','cancelled')]`",
+    "1. Your queue / status / what's assigned:",
+    "   `curl -s -H \"Authorization: Bearer $PAPERCLIP_API_KEY\" \"$PAPERCLIP_API_URL/api/agents/me/inbox-lite\"`",
     "",
-    "2. Your own agent record (role / title / instructions) — only if the user asks about your responsibilities and you can't already answer:",
-    "   `curl -s -H \"Authorization: Bearer $PAPERCLIP_API_KEY\" \"{{paperclipApiUrl}}/agents/{{agentId}}?companyId={{companyId}}\"`",
+    "2. Your role / title / instructions — only if the user asks about your responsibilities and you can't already answer:",
+    "   `curl -s -H \"Authorization: Bearer $PAPERCLIP_API_KEY\" \"$PAPERCLIP_API_URL/api/agents/me\"`",
     "",
     "3. A specific issue the user named by identifier (e.g. ABC-12):",
-    "   `curl -s -H \"Authorization: Bearer $PAPERCLIP_API_KEY\" \"{{paperclipApiUrl}}/issues/ISSUE_IDENTIFIER\"`",
+    "   `curl -s -H \"Authorization: Bearer $PAPERCLIP_API_KEY\" \"$PAPERCLIP_API_URL/api/issues/ISSUE_IDENTIFIER\"`",
     "",
     "4. Last few comments on a specific issue — only if the user asks about recent discussion:",
-    "   `curl -s -H \"Authorization: Bearer $PAPERCLIP_API_KEY\" \"{{paperclipApiUrl}}/issues/ISSUE_IDENTIFIER/comments?order=desc&limit=5\"`",
+    "   `curl -s -H \"Authorization: Bearer $PAPERCLIP_API_KEY\" \"$PAPERCLIP_API_URL/api/issues/ISSUE_IDENTIFIER/comments?order=desc&limit=5\"`",
     "",
     "## How to answer",
     "",
@@ -7737,6 +7738,10 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         );
       }
       const chatUserMessage = readNonEmptyString(context.userMessage);
+      // Direct-chat wakes swap the heavy "check for work" heartbeat prompt for a
+      // lightweight conversational prompt. The adapter reads the prompt from
+      // `config.promptTemplate` (runtimeConfig), so the override MUST land there;
+      // patching agent.adapterConfig alone has no effect on the rendered prompt.
       const effectiveAgent = chatUserMessage
         ? {
             ...agent,
@@ -7746,6 +7751,12 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
             },
           }
         : agent;
+      if (chatUserMessage) {
+        runtimeConfig = {
+          ...runtimeConfig,
+          promptTemplate: buildUserChatPromptTemplate(chatUserMessage),
+        };
+      }
       const adapterResult = await adapter.execute({
         runId: run.id,
         agent: effectiveAgent,
