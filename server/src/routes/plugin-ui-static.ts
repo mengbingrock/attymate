@@ -246,10 +246,14 @@ export function pluginUiStaticRoutes(db: Db, options: PluginUiStaticRouteOptions
     try {
       plugin = await registry.getById(pluginId);
     } catch (error) {
-      const maybeCode =
-        typeof error === "object" && error !== null && "code" in error
-          ? (error as { code?: unknown }).code
+      const readCode = (err: unknown): unknown =>
+        typeof err === "object" && err !== null && "code" in err
+          ? (err as { code?: unknown }).code
           : undefined;
+      const cause = typeof error === "object" && error !== null && "cause" in error
+        ? (error as { cause?: unknown }).cause
+        : undefined;
+      const maybeCode = readCode(error) ?? readCode(cause);
       if (maybeCode !== "22P02") {
         throw error;
       }
