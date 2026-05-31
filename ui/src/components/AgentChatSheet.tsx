@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@/lib/router";
-import { MessageSquare, Send, Loader2, ExternalLink } from "lucide-react";
+import { MessageSquare, Send, Loader2, ExternalLink, Trash2 } from "lucide-react";
 import type { HeartbeatRun } from "@paperclipai/shared";
 import { agentsApi } from "../api/agents";
 import { heartbeatsApi } from "../api/heartbeats";
@@ -116,6 +116,20 @@ export function AgentChatSheet({
     refetchInterval: open ? 4000 : false,
   });
 
+  const { data: runtimeState } = useQuery({
+    queryKey: queryKeys.agents.runtimeState(agent.id),
+    queryFn: () => agentsApi.runtimeState(agent.id, agent.companyId),
+    enabled: open,
+  });
+
+  const chatClearedAt = useMemo(() => {
+    const raw = (runtimeState?.stateJson as Record<string, unknown> | undefined)
+      ?.chatClearedAt;
+    if (typeof raw !== "string") return null;
+    const ms = new Date(raw).getTime();
+    return Number.isNaN(ms) ? null : ms;
+  }, [runtimeState]);
+
   const chatRuns = useMemo(() => {
     const all = heartbeats ?? [];
     return all
@@ -130,9 +144,14 @@ export function AgentChatSheet({
               ((ctx as Record<string, unknown>).payload as Record<string, unknown>))
         );
       })
+      .filter((run) =>
+        chatClearedAt === null
+          ? true
+          : new Date(run.createdAt).getTime() > chatClearedAt,
+      )
       .slice()
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-  }, [heartbeats]);
+  }, [heartbeats, chatClearedAt]);
 
   const sendMessage = useMutation({
     mutationFn: async (message: string) => {
@@ -164,11 +183,35 @@ export function AgentChatSheet({
     },
   });
 
+  const clearHistory = useMutation({
+    mutationFn: () => agentsApi.clearChatHistory(agent.id, agent.companyId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.agents.runtimeState(agent.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.heartbeats(agent.companyId, agent.id),
+      });
+    },
+    onError: (err) => {
+      setSendError(err instanceof Error ? err.message : "Failed to clear chat history");
+    },
+  });
+
   const submit = useCallback(() => {
     const trimmed = draft.trim();
     if (!trimmed || sendMessage.isPending) return;
     sendMessage.mutate(trimmed);
   }, [draft, sendMessage]);
+
+  const handleClearHistory = useCallback(() => {
+    if (clearHistory.isPending || chatRuns.length === 0) return;
+    const confirmed = window.confirm(
+      `Clear the chat history with ${agent.name}? Messages will be hidden from this conversation. The underlying run records are preserved.`,
+    );
+    if (!confirmed) return;
+    clearHistory.mutate();
+  }, [clearHistory, chatRuns.length, agent.name]);
 
   useEffect(() => {
     if (!open) {
@@ -196,12 +239,27 @@ export function AgentChatSheet({
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent">
               <AgentIcon icon={agent.icon ?? null} className="h-5 w-5" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <SheetTitle className="truncate">Chat with {agent.name}</SheetTitle>
               <SheetDescription className="truncate">
                 Messages are delivered as on-demand heartbeats with full agent context.
               </SheetDescription>
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="shrink-0 text-muted-foreground hover:text-destructive"
+              onClick={handleClearHistory}
+              disabled={clearHistory.isPending || chatRuns.length === 0}
+              title="Clear chat history"
+            >
+              {clearHistory.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              <span className="ml-1.5">Clear</span>
+            </Button>
           </div>
         </SheetHeader>
 

@@ -9707,6 +9707,32 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       };
     },
 
+    // Hide the direct-chat history for an agent without deleting any runs.
+    // Chat messages live as heartbeat_runs tagged user_chat_message, which also
+    // back cost/finance/activity audit records; rather than delete them we stamp
+    // a per-agent `chatClearedAt` marker into runtime stateJson and let the chat
+    // sheet hide runs created at/before it. The marker is merged into stateJson
+    // (not overwritten) so other keys survive; updateRuntimeState never touches
+    // stateJson, so normal chat traffic preserves it.
+    clearChatHistory: async (agentId: string) => {
+      const agent = await getAgent(agentId);
+      if (!agent) throw notFound("Agent not found");
+      const existing = await ensureRuntimeState(agent);
+      const chatClearedAt = new Date().toISOString();
+      const runtimePatch: Partial<typeof agentRuntimeState.$inferInsert> = {
+        stateJson: {
+          ...(existing.stateJson ?? {}),
+          chatClearedAt,
+        },
+        updatedAt: new Date(),
+      };
+      await db
+        .update(agentRuntimeState)
+        .set(runtimePatch)
+        .where(eq(agentRuntimeState.agentId, agentId));
+      return { chatClearedAt };
+    },
+
     listEvents: (runId: string, afterSeq = 0, limit = 200) =>
       db
         .select()

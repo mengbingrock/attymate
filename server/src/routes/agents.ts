@@ -1952,6 +1952,32 @@ export function agentRoutes(
     res.json(state);
   });
 
+  router.post("/agents/:id/chat-history/clear", async (req, res) => {
+    assertBoard(req);
+    const id = req.params.id as string;
+    const agent = await svc.getById(id);
+    if (!agent) {
+      res.status(404).json({ error: "Agent not found" });
+      return;
+    }
+    await assertBoardCanManageAgentsForCompany(req, agent.companyId);
+    assertCompanyAccess(req, agent.companyId);
+
+    const result = await heartbeat.clearChatHistory(id);
+
+    await logActivity(db, {
+      companyId: agent.companyId,
+      actorType: "user",
+      actorId: req.actor.userId ?? "board",
+      action: "agent.chat_history_cleared",
+      entityType: "agent",
+      entityId: id,
+      details: { chatClearedAt: result.chatClearedAt },
+    });
+
+    res.json(result);
+  });
+
   router.post("/companies/:companyId/agent-hires", validate(createAgentHireSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
     await assertCanCreateAgentsForCompany(req, companyId);

@@ -180,6 +180,8 @@ export const agentsApi = {
     api.get<AgentTaskSession[]>(agentPath(id, companyId, "/task-sessions")),
   resetSession: (id: string, taskKey?: string | null, companyId?: string) =>
     api.post<void>(agentPath(id, companyId, "/runtime-state/reset-session"), { taskKey: taskKey ?? null }),
+  clearChatHistory: (id: string, companyId?: string) =>
+    api.post<{ chatClearedAt: string }>(agentPath(id, companyId, "/chat-history/clear"), {}),
   adapterModels: (
     companyId: string,
     type: string,
