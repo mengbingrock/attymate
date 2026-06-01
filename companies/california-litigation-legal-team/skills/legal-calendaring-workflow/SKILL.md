@@ -1,0 +1,64 @@
+---
+name: legal-calendaring-workflow
+description: Use when a Paperclip legal agent must calculate, propose, review, create, update, or verify litigation calendar entries, court deadlines, hearing dates, discovery deadlines, service dates, reminder schedules, or calendar QA. Do not use to write to a calendar, send notices, or apply firm-specific calendaring preferences unless the issue supplies the applicable calendar policy and the required approval has been granted.
+---
+
+# Legal Calendaring Workflow
+
+## Paperclip Role
+
+Use this skill from a Calendar Agent or supervisor-delegated calendaring child issue. The skill is product-safe: it contains no firm-specific rules, private calendar names, internal URLs, account details, or client facts. Deployment-specific policy must be supplied in the issue or a configured `{firm_profile}` reference.
+
+## Required Issue Contract
+
+Before work begins, confirm the issue states:
+
+- Matter root or approved source set.
+- Output root for proposed deadline tables and verification notes.
+- Calendar policy source, such as `{firm_profile}.firm_calendar_policy`, public court rule, or user-supplied instruction.
+- Jurisdiction, court, triggering event, triggering date, service method, hearing date, reservation date, or other calculation facts.
+- Target calendar or a rule for asking the supervisor to choose one.
+- Forbidden roots and no-cross-matter inspection rule.
+- Approval gates for calendar writes, invitations, notifications, email, external portal access, and destructive edits.
+
+If any required field is missing, mark the issue blocked or comment with a concise missing-input list. Do not infer facts from other matters.
+
+## Heartbeat Workflow
+
+1. Checkout the assigned issue before doing substantive work.
+2. Read the issue body, comments, parent issue, and supplied policy references.
+3. Confirm the required issue contract and approval state.
+4. Extract dates and source facts only from approved sources.
+5. Calculate deadlines using public rules, supplied policy, and verified holiday information.
+6. Post a proposed deadline/calendar table to the issue or save a new artifact under `{output_root}` if allowed.
+7. Request approval before any calendar write, update, deletion, invite, notification, or email.
+8. After approved writes, read back the calendar entry and post verification details.
+
+## Approval Gates
+
+Approval is required before:
+
+- Creating, updating, deleting, inviting, notifying, or emailing from a calendar system.
+- Opening authenticated portals or private firm resources.
+- Applying a firm policy that was not supplied in the issue or deployment configuration.
+- Treating a calculation as final when facts are incomplete or conflicting.
+- Filing, serving, signing, or sending anything based on a calendar result.
+
+## Inputs And Outputs
+
+Inputs may include PDFs, docket facts, email text, service proofs, hearing notices, reservation receipts, public court rules, and deployment-supplied policy.
+
+Outputs must be limited to proposed calendar entries, calculation notes, issue comments, verification notes, and new artifacts under `{output_root}`. Do not store passwords, PINs, account secrets, or private internal URLs.
+
+## Tool Policy
+
+Use calendar connectors only when the deployment authorizes them. Browser tools are allowed only for public court resources or approved private portal access. Use local date-calculation scripts only when they are deployment-safe and parameterized; do not rely on hardcoded firm calendars.
+
+## Handoff Rules
+
+Return to the Legal Ops Supervisor when facts are missing, the deadline depends on legal strategy, a policy conflict exists, or an external approval is needed. Mark done only after posting the proposed entries or verified write results.
+
+## Reference Files
+
+- `references/firm-calendar-policy-template.md`: deployment-safe policy fields a firm may provide.
+- `references/calendar-output-format.md`: generic proposal and verification format.
