@@ -1,0 +1,101 @@
+schema: paperclip/v1
+agents:
+  legal-ops-supervisor:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+  source-intake-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+  facts-evidence-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+  legal-research-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+  drafting-assembly-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1800
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+  legal-qa-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+  calendar-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+  docket-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+  notebooklm-kb-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+inputs:
+  deployment:
+    workspace_root:
+      kind: path
+      requirement: required
+      description: Absolute workspace root to configure as each codex_local agent cwd after import.
+    codex_auth:
+      kind: text
+      requirement: required
+      description: Configure authenticated Codex CLI access or an approved API-key based auth mechanism in the target deployment.
+    matter_root:
+      kind: path
+      requirement: runtime
+      description: Supplied per issue through the Matter Safety Contract, not stored in the reusable package.
+    output_root:
+      kind: path
+      requirement: runtime
+      description: Supplied per issue through the Matter Safety Contract, not stored in the reusable package.
