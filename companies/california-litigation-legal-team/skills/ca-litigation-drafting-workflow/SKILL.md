@@ -19,9 +19,9 @@ Before drafting begins, confirm the issue states:
 - Allowed outputs, such as new draft sections, tables, QA notes, or new working-copy documents.
 - Authority source limits.
 - Drafting profile or style policy, if deployment-specific style is required.
-- Approval gates for Word writes, new authorities, strategy changes, finalization, filing, service, signing, and email.
+- Environment profile reference, autonomy level, learning mode, and red gates already approved.
 
-If scope, source, output, or approval boundaries are missing, block and ask the supervisor to cure the issue.
+If scope, source, or output boundaries are missing, return the missing-field list to the supervisor. If approved sources and output root are clear, continue safe draft work and log unresolved issues instead of blocking.
 
 ## Heartbeat Workflow
 
@@ -30,13 +30,17 @@ If scope, source, output, or approval boundaries are missing, block and ask the 
 3. Build or update intermediary tables before major drafting when needed.
 4. Draft only from approved source facts and approved authorities.
 5. Post draft text, issue tables, or artifact paths for review.
-6. Wait for approval before updating Word working copies or any active draft.
+6. Request approval only before Word writes to active drafts, finalization, or other red-gate actions.
 7. Preserve formatting and existing user edits when a Word update is approved.
 8. Post a change log, remaining placeholders, unresolved citations, and QA risks.
 
-## Approval Gates
+## Checkpoint Policy
 
-Approval is required before:
+Proceed autonomously with green drafting work: source-bound draft text, outlines, issue tables, QA notes, change logs, and new artifacts under `{output_root}`.
+
+Route yellow issues to Legal Ops Supervisor when facts conflict, child scope needs repair, or a strategy question can be separated from safe drafting.
+
+Red-gate approval is required before:
 
 - Updating a Word file or active draft.
 - Using new authorities beyond supplied/approved sources.
@@ -56,7 +60,7 @@ Use document tooling only for new working copies or approved active-draft update
 
 ## Handoff Rules
 
-Return to the supervisor if facts conflict, strategy is needed, authorities are missing, output would exceed allowed writes, or finalization is requested. Mark done only after posting the draft artifact and unresolved-issue list.
+Return discrete yellow/red issues to the supervisor, but do not stop safe drafting when approved sources and output boundaries support continued work. Mark done only after posting the draft artifact and unresolved-issue list.
 
 ## Reference Files
 

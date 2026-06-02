@@ -18,23 +18,27 @@ Before processing begins, confirm the issue states:
 - Forbidden roots and no-cross-matter inspection rule.
 - Allowed outputs, such as Docling Markdown, JSON, OCR text, manifests, and QA notes.
 - Tool configuration, such as `{docling_runtime}` or an approved setup command.
-- Approval gates for tool installation, model downloads, uploads, destructive file actions, and external services.
+- Environment profile reference, autonomy level, learning mode, and red gates already approved.
 
-If any path or tool boundary is missing, block and ask the supervisor to cure it.
+If a path or output boundary is missing, return a concise missing-field list to the supervisor. If the local runtime is missing, record the tool gap and continue with non-OCR manifest or extraction QA work when useful.
 
 ## Heartbeat Workflow
 
 1. Checkout the assigned issue.
 2. Confirm source and output boundaries.
 3. Check whether the approved Docling runtime exists.
-4. If setup, install, or model download is required, request approval before proceeding.
+4. If setup, install, or model download is required, record the gap and request approval before that red-gate action.
 5. Process only the approved files.
 6. Write sidecar outputs under `{output_root}`.
 7. Post a manifest, extraction-quality notes, and files created.
 
-## Approval Gates
+## Checkpoint Policy
 
-Approval is required before:
+Proceed autonomously with green work: processing approved files with an already-configured local runtime, writing sidecars under `{output_root}`, and posting extraction-quality notes.
+
+Route yellow issues to Legal Ops Supervisor when runtime configuration is unclear or extraction quality affects downstream work.
+
+Red-gate approval is required before:
 
 - Installing Docling, downloading models, or changing runtime configuration.
 - Uploading source or derived content.
@@ -51,7 +55,7 @@ Use a configured local runtime. Prefer environment variables or issue-supplied p
 
 ## Handoff Rules
 
-Return to the supervisor if the runtime is missing and approval is absent, a source is unreadable, extraction quality is unreliable, or downstream legal interpretation is required.
+Return discrete yellow/red issues to the supervisor, but continue safe manifest or QA work when possible.
 
 ## Reference Files
 

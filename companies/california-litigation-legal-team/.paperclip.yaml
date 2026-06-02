@@ -81,6 +81,15 @@ agents:
         graceSec: 20
         extraArgs:
           - "--skip-git-repo-check"
+  practice-learning-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
 inputs:
   deployment:
     workspace_root:
@@ -91,6 +100,42 @@ inputs:
       kind: text
       requirement: required
       description: Configure authenticated Codex CLI access or an approved API-key based auth mechanism in the target deployment.
+    python_command:
+      kind: text
+      requirement: required
+      description: Python command or environment launcher agents may use for local scripts and PDF/OCR tooling.
+    pdf_ocr_runtime:
+      kind: text
+      requirement: required
+      description: Deployment-approved OCR/PDF runtime, such as Docling or another local processing tool, configured outside the public package.
+    browser_tooling:
+      kind: text
+      requirement: required
+      description: Browser automation tool status and approval policy for BrowserOS or an equivalent deployment-approved browser.
+    gmail_connector:
+      kind: text
+      requirement: optional
+      description: Gmail connector status. Sensitive values must use Paperclip secret references, not inline package data.
+    google_calendar_connector:
+      kind: text
+      requirement: optional
+      description: Google Calendar connector status. Calendar writes require issue-level approval.
+    google_drive_connector:
+      kind: text
+      requirement: optional
+      description: Google Drive connector status. Downloads, uploads, and sharing require issue-level approval.
+    lexis_access:
+      kind: text
+      requirement: optional
+      description: Lexis or legal research access status. External research and new authorities require issue-level approval.
+    lasc_access:
+      kind: text
+      requirement: optional
+      description: LASC docket access status. Authentication, paid retrieval, downloads, filing, and service require approval.
+    notebooklm_access:
+      kind: text
+      requirement: optional
+      description: NotebookLM or equivalent knowledge-base access status. Uploads, sharing, and external queries require approval.
     matter_root:
       kind: path
       requirement: runtime
