@@ -22,7 +22,13 @@ import "./index.css";
 
 initPluginBridge(React, ReactDOM);
 
-if ("serviceWorker" in navigator) {
+// Service Worker registration is restricted by spec to http/https origins.
+// In a native shell (Tauri webview is `tauri://localhost`, Electron uses
+// `file://`), the call throws synchronously and crashes SPA bootstrap.
+if (
+  "serviceWorker" in navigator &&
+  /^https?:$/.test(window.location.protocol)
+) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js");
   });
