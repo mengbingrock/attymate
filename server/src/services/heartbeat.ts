@@ -158,6 +158,7 @@ import {
 import {
   readPaperclipSkillSyncPreference,
   writePaperclipSkillSyncPreference,
+  type PaperclipSkillEntry,
 } from "@paperclipai/adapter-utils/server-utils";
 import { extractSkillMentionIds } from "@paperclipai/shared";
 import { environmentService } from "./environments.js";
@@ -7167,7 +7168,12 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       runScopedMentionedSkillKeys,
     );
     const runtimeSkillEntries = await companySkills.listRuntimeSkillEntries(agent.companyId);
-    let runtimeConfig = {
+    // `promptTemplate` is an optional override the chat-wake path drops in below
+    // (see ~line 7755). The adapter reads it from runtimeConfig at execute time.
+    let runtimeConfig: {
+      paperclipRuntimeSkills: PaperclipSkillEntry[];
+      promptTemplate?: string;
+    } = {
       ...effectiveResolvedConfig,
       paperclipRuntimeSkills: runtimeSkillEntries,
     };
