@@ -1,0 +1,15 @@
+{
+  "name": "attymate-electron",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AttyMate desktop app (Electron shell around paperclip.attymate.com)",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}

@@ -1,0 +1,4 @@
+# Electron-builder / packaging output
+/dist/
+/out/
+node_modules/
