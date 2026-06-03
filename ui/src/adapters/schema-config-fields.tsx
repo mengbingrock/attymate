@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { AdapterConfigSchema, ConfigFieldSchema, CreateConfigValues } from "@paperclipai/adapter-utils";
 
 import type { AdapterConfigFieldsProps } from "./types";
+import { apiUrl } from "../lib/api-origin";
 import {
   Field,
   DraftInput,
@@ -217,7 +218,7 @@ async function fetchConfigSchema(adapterType: string): Promise<AdapterConfigSche
 
   const promise = (async () => {
     try {
-      const res = await fetch(`/api/adapters/${encodeURIComponent(adapterType)}/config-schema`);
+      const res = await fetch(apiUrl(`/adapters/${encodeURIComponent(adapterType)}/config-schema`));
       if (!res.ok) {
         failedSchemaTypes.add(adapterType);
         return null;

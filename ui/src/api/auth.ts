@@ -5,6 +5,7 @@ import {
   type CurrentUserProfile,
   type UpdateCurrentUserProfile,
 } from "@paperclipai/shared";
+import { apiUrl } from "../lib/api-origin";
 
 type AuthErrorBody =
   | {
@@ -61,7 +62,7 @@ function extractAuthError(payload: AuthErrorBody, status: number) {
 }
 
 async function authPost(path: string, body: Record<string, unknown>) {
-  const res = await fetch(`/api/auth${path}`, {
+  const res = await fetch(apiUrl(`/auth${path}`), {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -75,7 +76,7 @@ async function authPost(path: string, body: Record<string, unknown>) {
 }
 
 async function authPatch<T>(path: string, body: Record<string, unknown>, parse: (value: unknown) => T): Promise<T> {
-  const res = await fetch(`/api/auth${path}`, {
+  const res = await fetch(apiUrl(`/auth${path}`), {
     method: "PATCH",
     credentials: "include",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -90,7 +91,7 @@ async function authPatch<T>(path: string, body: Record<string, unknown>, parse: 
 
 export const authApi = {
   getSession: async (): Promise<AuthSession | null> => {
-    const res = await fetch("/api/auth/get-session", {
+    const res = await fetch(apiUrl("/auth/get-session"), {
       credentials: "include",
       headers: { Accept: "application/json" },
     });
@@ -114,7 +115,7 @@ export const authApi = {
   },
 
   getProfile: async (): Promise<CurrentUserProfile> => {
-    const res = await fetch("/api/auth/profile", {
+    const res = await fetch(apiUrl("/auth/profile"), {
       credentials: "include",
       headers: { Accept: "application/json" },
     });

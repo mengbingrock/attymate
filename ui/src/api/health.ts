@@ -26,9 +26,11 @@ export type HealthStatus = {
   devServer?: DevServerHealthStatus;
 };
 
+import { apiUrl } from "../lib/api-origin";
+
 export const healthApi = {
   get: async (): Promise<HealthStatus> => {
-    const res = await fetch("/api/health", {
+    const res = await fetch(apiUrl("/health"), {
       credentials: "include",
       headers: { Accept: "application/json" },
     });
