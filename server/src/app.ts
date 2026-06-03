@@ -123,6 +123,7 @@ export async function createApp(
     deploymentMode: DeploymentMode;
     deploymentExposure: DeploymentExposure;
     allowedHostnames: string[];
+    appOrigins: string[];
     bindHost: string;
     authReady: boolean;
     companyDeletionEnabled: boolean;
@@ -145,6 +146,34 @@ export async function createApp(
     },
   }));
   app.use(httpLogger);
+
+  // Cross-origin SPA support (Tauri/Electron webview, CDN-hosted UI).
+  // No-op when opts.appOrigins is empty (the default).
+  if (opts.appOrigins.length > 0) {
+    const allowedOrigins = new Set(opts.appOrigins);
+    app.use((req, res, next) => {
+      const origin = req.headers.origin;
+      if (!origin || !allowedOrigins.has(origin)) {
+        return next();
+      }
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Vary", "Origin");
+      if (req.method === "OPTIONS") {
+        const reqHeaders = req.headers["access-control-request-headers"];
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+        res.setHeader(
+          "Access-Control-Allow-Headers",
+          (Array.isArray(reqHeaders) ? reqHeaders.join(", ") : reqHeaders) || "Content-Type, Authorization",
+        );
+        res.setHeader("Access-Control-Max-Age", "600");
+        res.status(204).end();
+        return;
+      }
+      next();
+    });
+  }
+
   const privateHostnameGateEnabled = shouldEnablePrivateHostnameGuard({
     deploymentMode: opts.deploymentMode,
     deploymentExposure: opts.deploymentExposure,

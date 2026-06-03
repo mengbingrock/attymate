@@ -37,10 +37,19 @@ export function deriveAuthCookiePrefix(instanceId = resolvePaperclipInstanceId()
   return `paperclip-${scopedInstanceId}`;
 }
 
-export function buildBetterAuthAdvancedOptions(input: { disableSecureCookies: boolean }) {
+export function buildBetterAuthAdvancedOptions(input: {
+  disableSecureCookies: boolean;
+  crossOrigin?: boolean;
+}) {
+  // When the SPA is hosted off-origin (Tauri/Electron webview, CDN), the browser
+  // will only attach session cookies on cross-site requests if SameSite=None;Secure.
+  // Otherwise leave SameSite at better-auth's default (Lax) for CSRF protection.
   return {
     cookiePrefix: deriveAuthCookiePrefix(),
     ...(input.disableSecureCookies ? { useSecureCookies: false } : {}),
+    ...(input.crossOrigin
+      ? { defaultCookieAttributes: { sameSite: "none" as const, secure: true } }
+      : {}),
   };
 }
 
@@ -86,6 +95,12 @@ export function deriveAuthTrustedOrigins(config: Config, opts?: { listenPort?: n
       }
     }
   }
+  // App origins (off-process SPA hosts) — required for better-auth to accept
+  // cross-origin requests carrying our session cookie.
+  for (const origin of config.appOrigins) {
+    const trimmed = origin.trim().replace(/\/+$/, "");
+    if (trimmed) trustedOrigins.add(trimmed);
+  }
 
   return Array.from(trustedOrigins);
 }
@@ -120,7 +135,10 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
       requireEmailVerification: false,
       disableSignUp: config.authDisableSignUp,
     },
-    advanced: buildBetterAuthAdvancedOptions({ disableSecureCookies: isHttpOnly }),
+    advanced: buildBetterAuthAdvancedOptions({
+      disableSecureCookies: isHttpOnly,
+      crossOrigin: config.appOrigins.length > 0,
+    }),
   };
 
   if (!baseUrl) {

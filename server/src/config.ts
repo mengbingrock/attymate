@@ -57,6 +57,7 @@ export interface Config {
   host: string;
   port: number;
   allowedHostnames: string[];
+  appOrigins: string[];
   authBaseUrlMode: AuthBaseUrlMode;
   authPublicBaseUrl: string | undefined;
   authDisableSignUp: boolean;
@@ -239,6 +240,21 @@ export function loadConfig(): Config {
         .filter(Boolean),
     ),
   );
+  // PAPERCLIP_APP_ORIGINS: comma-separated list of full origins (scheme://host[:port])
+  // that are allowed to host the SPA out-of-process (CDN, Electron, Tauri webview, etc).
+  // When set: emits CORS headers on /api/* for those origins, and switches session
+  // cookies to SameSite=None;Secure so cross-origin requests carry them.
+  const appOriginsRaw = process.env.PAPERCLIP_APP_ORIGINS;
+  const appOrigins = appOriginsRaw
+    ? Array.from(
+        new Set(
+          appOriginsRaw
+            .split(",")
+            .map((value) => value.trim().replace(/\/+$/, ""))
+            .filter((value) => value.length > 0 && /^[a-z]+:\/\//i.test(value)),
+        ),
+      )
+    : [];
   const companyDeletionEnvRaw = process.env.PAPERCLIP_ENABLE_COMPANY_DELETION;
   const companyDeletionEnabled =
     companyDeletionEnvRaw !== undefined
@@ -293,6 +309,7 @@ export function loadConfig(): Config {
     host: resolvedBind.host,
     port: Number(process.env.PORT) || fileConfig?.server.port || 3100,
     allowedHostnames,
+    appOrigins,
     authBaseUrlMode,
     authPublicBaseUrl,
     authDisableSignUp,
