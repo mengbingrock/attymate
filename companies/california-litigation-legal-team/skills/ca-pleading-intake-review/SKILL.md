@@ -18,9 +18,9 @@ Before intake begins, confirm the issue states:
 - Forbidden roots and no-cross-matter inspection rule.
 - Allowed outputs, such as inventories, OCR sidecars, source manifests, and intake summaries.
 - Whether external mailbox, drive, OCR, or NotebookLM tools are authorized.
-- Approval gates for downloads, uploads, email actions, destructive file actions, and drafting handoff.
+- Environment profile reference, autonomy level, learning mode, and red gates already approved.
 
-If the contract is missing, block and ask the supervisor to provide it.
+If the contract is missing, return a concise missing-field list to the supervisor. If approved source files and output root are clear, continue safe intake work and log unresolved gaps.
 
 ## Heartbeat Workflow
 
@@ -32,9 +32,13 @@ If the contract is missing, block and ask the supervisor to provide it.
 6. Flag extraction gaps, visual-verification needs, missing proofs, caption inconsistencies, and unresolved party issues.
 7. Prepare a NotebookLM handoff manifest only if approved; do not upload.
 
-## Approval Gates
+## Checkpoint Policy
 
-Approval is required before:
+Proceed autonomously with green work: local source inventories, extraction/OCR need assessment, source manifests, intake summaries, and approved sidecar artifacts under `{output_root}`.
+
+Route yellow issues to Legal Ops Supervisor when filing/service facts conflict, source scope needs repair, or a drafting handoff needs clearer routing.
+
+Red-gate approval is required before:
 
 - Downloading from email/drive systems unless the issue authorizes it.
 - Uploading to NotebookLM or another external system.
@@ -54,7 +58,7 @@ Use PDF/OCR tools when source text is unavailable or unreliable. Use mailbox/dri
 
 ## Handoff Rules
 
-Return to Legal Ops Supervisor for missing sources, conflicting filing/service facts, unclear party identity, needed legal strategy, or external-tool approvals. Hand off drafting to the Drafting & Assembly Agent.
+Return discrete yellow/red issues to Legal Ops Supervisor, but continue safe intake when approved sources and output boundaries allow it. Hand off drafting to the Drafting & Assembly Agent.
 
 ## Reference Files
 

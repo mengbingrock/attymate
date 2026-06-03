@@ -19,24 +19,28 @@ Before research begins, confirm the issue states:
 - Output root for research logs, authority tables, exports, and memos.
 - Authority-use limits, including whether only supplied authorities may be used.
 - Forbidden roots and no-cross-matter inspection rule.
-- Approval gates for browser auth, downloads/exports, new authorities, Lexis AI/Protege, uploads, and strategy changes.
+- Environment profile reference, autonomy level, learning mode, and red gates already approved.
 
-If Lexis access, scope, or matter label is missing, block and ask the supervisor to cure the issue.
+If research scope or matter label is missing, return the missing-field list to the supervisor. If external Lexis access is not approved, continue with supplied or already-approved authorities and record what external work remains.
 
 ## Heartbeat Workflow
 
 1. Checkout the assigned issue.
 2. Read the parent issue, comments, supplied authorities, and research scope.
-3. Confirm approval for external Lexis research before opening Lexis or authenticated browser sessions.
+3. Confirm approval for external Lexis research before opening Lexis or authenticated browser sessions; otherwise perform supplied-authority workup only.
 4. Search targeted public/legal databases using source-bound terms.
 5. Open and verify primary authorities before relying on them.
 6. Shepardize or treatment-check key authorities when the legal point matters.
 7. Keep a research log with search strings, filters, sources reviewed, accepted authorities, rejected authorities, and treatment notes.
 8. Post findings and save approved outputs under `{output_root}`.
 
-## Approval Gates
+## Checkpoint Policy
 
-Approval is required before:
+Proceed autonomously with green work: supplied-authority tables, citation formatting checks from supplied text, issue research logs, and source-supported memo notes using approved sources.
+
+Route yellow issues to Legal Ops Supervisor when scope expands or a discrete legal strategy question can be separated from source verification.
+
+Red-gate approval is required before:
 
 - Browser authentication, Lexis login, or MFA.
 - Adding new authorities beyond the supplied/approved source set.
@@ -56,7 +60,7 @@ Use BrowserOS or another deployment-authorized browser. Pause for manual login/M
 
 ## Handoff Rules
 
-Return to the supervisor if scope expands, authority conflicts materially affect strategy, a controlling authority is unavailable, or approval is needed. Mark done only after posting a source-supported answer and any required authority table.
+Return discrete yellow/red issues to the supervisor, but continue supplied-authority work when possible. Mark done only after posting a source-supported answer, authority table, and unresolved external-research list.
 
 ## Reference Files
 

@@ -1,25 +1,32 @@
 # Matter Safety Contract
 
-Every implementation child issue in a subpoena MTC run must include this contract. If any field is missing, ambiguous, or points outside the selected matter, the specialist agent must block and ask Legal Ops Supervisor to cure the issue before doing implementation work.
+Every live matter parent issue and every implementation child issue must include this contract. If required scope is missing, Legal Ops Supervisor cures the issue before specialists expand work. Specialists should continue safe work when the approved sources and output root are clear, and should only block when no safe work remains.
 
-- Matter root: exact absolute selected matter folder.
-- Output root: exact absolute `Intermediary work` folder inside the selected matter.
-- Read-only source roots: explicit folders the child may inspect, such as `Exhibits`, `Context (not exhibit)`, `Authorities`, or `Examples`.
-- Forbidden roots: all other matter folders; gold, final, signed, filed, served, or user-edited documents unless expressly approved.
-- Allowed outputs: new intermediary artifacts, OCR sidecars, QA notes, or new working draft copies appropriate to the child issue.
-- No cross-matter inspection: do not inspect or use files outside Matter root unless the issue explicitly permits a named path.
-- Approval gates: Lexis, NotebookLM, uploads, browser auth, new authorities, sanctions/relief/strategy/privacy/protective-order changes, conflicting drafts, overwrite/delete/rename, finalization, filing, service, signing, and email.
+- Workflow type: MTC, pleading intake, docket check, calendaring, research, drafting, QA, learning, or another named workflow.
+- Autonomy level: `safe-draft-only`, `supervised-tools`, or `approved-external-actions`.
+- Environment profile reference: private Firm Environment Profile section that defines workspace, tools, connectors, and approval policy.
+- Matter root: exact selected matter folder or approved source set supplied at runtime.
+- Output root: exact allowed output location, normally the matter's intermediary work folder.
+- Read-only source roots: explicit folders or files the child may inspect, such as exhibits, context, authorities, examples, pleadings, or docket materials.
+- Forbidden roots: all other matters; gold, final, signed, filed, served, or user-edited documents unless expressly approved.
+- Allowed outputs: new intermediary artifacts, OCR sidecars, QA notes, research logs, proposed calendar tables, draft text, or new working draft copies appropriate to the child issue.
+- Learning mode: `off`, `private-profile`, or `sanitized-skill-proposal`.
+- Allowed learning sources: issue comments, documents, attachments, run summaries, named artifacts, or none.
+- Do-not-learn list: client facts, privileged strategy, confidential source text, local paths, credentials, private URLs, account IDs, matter identifiers, and any issue-specific exclusions.
+- No cross-matter inspection: do not inspect or use files outside the approved scope unless the issue explicitly permits a named path.
+- Red gates already approved: browser auth, Lexis or new authorities, NotebookLM, external uploads/downloads, paid retrieval, calendar writes, email, Word writes to active drafts, strategy/relief/sanctions/privacy/protective-order changes, overwrite/delete/rename, finalization, filing, service, and signing.
 
 Supervisor delegation requirements:
 
-- Start every live run from one parent Paperclip issue assigned to Legal Ops Supervisor.
-- Complete read-only Launch Intake before any implementation child issue is created.
-- Create child issues only after run-start approval, except for blocked approval or missing-input issues.
+- Start every live matter workflow from one parent Paperclip issue assigned to Legal Ops Supervisor.
+- Complete read-only intake before implementation child issues are created when the workflow requires matter selection or source scoping.
+- Create child issues dynamically from the parent issue; do not rely on import-time MTC starter tasks.
 - Set `parentId` on every child issue to the Legal Ops parent issue.
 - Assign each child issue to the correct specialist agent.
+- Include the full Matter Safety Contract or a focused subset that includes every field needed for the child issue.
 
-Specialist refusal rule:
+Checkpoint policy:
 
-- Do not proceed without explicit Matter root, Output root, allowed read-only source roots, forbidden roots/no-cross-matter inspection, allowed outputs, and approval gates.
-- Do not inspect other matter folders to infer missing paths or sources.
-- Write only the allowed outputs, normally under Output root.
+- Green actions proceed autonomously and are logged: reading approved sources, creating new output-root artifacts, OCR sidecars, source indexes, draft text, QA notes, research logs from supplied sources, and proposed calendar tables.
+- Yellow escalations go to Legal Ops Supervisor when the parent issue already authorizes the needed cure: routing, internal scope clarification, child issue contract repair, or source ambiguity that does not require new external action.
+- Red gates require board/user approval before action: external auth, Lexis or new authorities, uploads/downloads from external systems, paid retrieval, calendar writes, email, filing, service, signing, finalization, overwrite/delete/rename, and material strategy changes.

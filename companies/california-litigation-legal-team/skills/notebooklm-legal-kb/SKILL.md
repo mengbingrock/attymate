@@ -18,23 +18,27 @@ Before NotebookLM work begins, confirm the issue states:
 - Notebook title or naming policy supplied at runtime.
 - Whether create/connect/upload/query actions are approved.
 - Forbidden roots and no-cross-matter inspection rule.
-- Approval gates for login/MFA, uploads, deletions, source changes, exports, and external sharing.
+- Environment profile reference, autonomy level, learning mode, and red gates already approved.
 
-If the verified source manifest or approval is missing, block and ask the supervisor to cure the issue.
+If the verified source manifest is missing, return a concise missing-field list to the supervisor. If external approval is missing, continue local manifest QA and proposed source-pack planning without using NotebookLM.
 
 ## Heartbeat Workflow
 
 1. Checkout the assigned issue.
 2. Confirm scope, verified-source manifest, and approval state.
 3. Validate that every upload candidate is marked locally verified.
-4. Pause for login/MFA or external auth as needed.
+4. Pause for login/MFA or external auth only when that red-gate action is approved.
 5. Create, connect, upload, or query only within the approved action.
 6. Store notebook metadata and retrieval logs under `{output_root}` if allowed.
 7. Post source-linked retrieval results and unresolved limitations.
 
-## Approval Gates
+## Checkpoint Policy
 
-Approval is required before:
+Proceed autonomously with green work: verified-source manifest QA, upload plans, retrieval question lists, and local source citation maps under `{output_root}`.
+
+Route yellow issues to Legal Ops Supervisor when sources are unverified or retrieval questions need drafting/research interpretation.
+
+Red-gate approval is required before:
 
 - Notebook creation, connection, upload, deletion, source removal, sharing, or external export.
 - Login, MFA, or browser auth.
@@ -51,7 +55,7 @@ Use deployment-authorized NotebookLM tooling. Do not store credentials. Notebook
 
 ## Handoff Rules
 
-Return to the supervisor if sources are unverified, upload approval is absent, auth is blocked, retrieval conflicts with local sources, or drafting/research interpretation is needed.
+Return discrete yellow/red issues to the supervisor, but continue safe local manifest work when possible.
 
 ## Reference Files
 

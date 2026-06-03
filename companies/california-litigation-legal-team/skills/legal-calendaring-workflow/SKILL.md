@@ -19,9 +19,9 @@ Before work begins, confirm the issue states:
 - Jurisdiction, court, triggering event, triggering date, service method, hearing date, reservation date, or other calculation facts.
 - Target calendar or a rule for asking the supervisor to choose one.
 - Forbidden roots and no-cross-matter inspection rule.
-- Approval gates for calendar writes, invitations, notifications, email, external portal access, and destructive edits.
+- Environment profile reference, autonomy level, learning mode, and red gates already approved.
 
-If any required field is missing, mark the issue blocked or comment with a concise missing-input list. Do not infer facts from other matters.
+If a required calculation fact or policy source is missing, return a concise missing-input list. Do not infer facts from other matters. Continue with any proposed entries that can be calculated from approved facts.
 
 ## Heartbeat Workflow
 
@@ -34,9 +34,13 @@ If any required field is missing, mark the issue blocked or comment with a conci
 7. Request approval before any calendar write, update, deletion, invite, notification, or email.
 8. After approved writes, read back the calendar entry and post verification details.
 
-## Approval Gates
+## Checkpoint Policy
 
-Approval is required before:
+Proceed autonomously with green work: deadline calculations from approved facts, proposed calendar tables, verification notes, and artifact creation under `{output_root}`.
+
+Route yellow issues to Legal Ops Supervisor when facts are incomplete, policy conflicts exist, or a deadline depends on strategy.
+
+Red-gate approval is required before:
 
 - Creating, updating, deleting, inviting, notifying, or emailing from a calendar system.
 - Opening authenticated portals or private firm resources.
@@ -56,7 +60,7 @@ Use calendar connectors only when the deployment authorizes them. Browser tools 
 
 ## Handoff Rules
 
-Return to the Legal Ops Supervisor when facts are missing, the deadline depends on legal strategy, a policy conflict exists, or an external approval is needed. Mark done only after posting the proposed entries or verified write results.
+Return discrete yellow/red issues to Legal Ops Supervisor, but continue safe proposed-entry work when approved facts allow it. Mark done only after posting the proposed entries or verified write results.
 
 ## Reference Files
 
