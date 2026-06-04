@@ -9,13 +9,17 @@ import { userWorkspaceService } from "../services/user-workspaces.js";
 import { assertBoard } from "./authz.js";
 
 /**
- * AttyMate local workspace routes.
+ * AttyMate local-workspace routes.
  *
- * Lets each authenticated user record the absolute path of the local folder
- * they've granted AttyMate access to. The path is stored verbatim — server has
- * no way to validate it exists (the path is on the user's machine, not here).
- * Path-syntax sanity is enforced here; existence/readability is enforced by
- * AttyMate's main process when the bridge actually serves a read.
+ * A user can grant AttyMate access to N local folders (migration 0086). The
+ * path itself is unvalidatable from the server side (it lives on the user's
+ * machine); we sanity-check the syntax here and let the AttyMate bridge
+ * enforce existence + readability when it actually serves a read/write.
+ *
+ * Read/write routes (`/local-files/read|write`) operate on the user's
+ * "default" workspace (oldest grant) for now — adding a workspaceId param to
+ * those calls is the natural next step once an agent UI needs to address a
+ * specific folder.
  */
 
 const workspacePathSchema = z
@@ -26,7 +30,7 @@ const workspacePathSchema = z
   .refine((value) => value.startsWith("/"), "workspacePath must be absolute (start with /)")
   .refine((value) => !value.split("/").includes(".."), "workspacePath must not contain .. segments");
 
-const upsertWorkspaceSchema = z.object({
+const addWorkspaceSchema = z.object({
   workspacePath: workspacePathSchema,
 });
 
@@ -81,44 +85,46 @@ export function userWorkspaceRoutes(db: Db) {
   const router = Router();
   const svc = userWorkspaceService(db);
 
-  router.get("/users/me/workspace", async (req, res) => {
+  // ── Workspace folder list (plural) ─────────────────────────────────────────
+
+  router.get("/users/me/workspaces", async (req, res) => {
     const userId = requireBoardUserId(req, res);
     if (!userId) return;
-    const row = await svc.get(userId);
-    if (!row) {
-      res.status(204).end();
+    const rows = await svc.listByUser(userId);
+    res.json(rows);
+  });
+
+  router.post("/users/me/workspaces", validate(addWorkspaceSchema), async (req, res) => {
+    const userId = requireBoardUserId(req, res);
+    if (!userId) return;
+    const row = await svc.add(userId, req.body.workspacePath);
+    res.status(201).json(row);
+  });
+
+  router.delete("/users/me/workspaces/:id", async (req, res) => {
+    const userId = requireBoardUserId(req, res);
+    if (!userId) return;
+    const removed = await svc.removeById(userId, req.params.id);
+    if (!removed) {
+      res.status(404).json({ error: "Workspace not found" });
       return;
     }
-    res.json(row);
-  });
-
-  router.put("/users/me/workspace", validate(upsertWorkspaceSchema), async (req, res) => {
-    const userId = requireBoardUserId(req, res);
-    if (!userId) return;
-    const row = await svc.upsert(userId, req.body.workspacePath);
-    res.json(row);
-  });
-
-  router.delete("/users/me/workspace", async (req, res) => {
-    const userId = requireBoardUserId(req, res);
-    if (!userId) return;
-    await svc.remove(userId);
     res.status(204).end();
   });
 
-  // Read a file from the user's granted workspace via the AttyMate bridge.
+  // ── Local file ops (read/write the user's default workspace) ───────────────
   //
-  // The request path is RELATIVE to the workspace root the user granted via
-  // PUT /users/me/workspace. We join the two, prevent traversal, and dispatch
-  // the absolute path to the user's connected AttyMate. AttyMate re-validates
-  // (defense in depth) and returns base64 bytes.
+  // The relative path is resolved against the user's default workspace (oldest
+  // grant). Adding a workspaceId/folderId param to switch among multiple grants
+  // is the next iteration; for now agents see one folder.
+
   router.post("/users/me/local-files/read", validate(readLocalFileSchema), async (req, res) => {
     const userId = requireBoardUserId(req, res);
     if (!userId) return;
 
-    const workspace = await svc.get(userId);
+    const workspace = await svc.getDefault(userId);
     if (!workspace) {
-      throw unprocessable("No workspace granted. PUT /users/me/workspace first.");
+      throw unprocessable("No workspace granted. Add a folder under WORKSPACE in the sidebar first.");
     }
     if (!isUserBridgeConnected(userId)) {
       throw unprocessable("AttyMate is not connected. Open the desktop app and sign in.");
@@ -138,25 +144,19 @@ export function userWorkspaceRoutes(db: Db) {
         workspaceRoot: workspace.workspacePath,
       })) as BridgeReadResponse;
     } catch (err) {
-      // Bridge errors (not connected, timed out, client-side read failure) are
-      // surfaced as 422 — the caller (eventually an agent tool) should report
-      // them to the user, not retry blindly.
       throw unprocessable(err instanceof Error ? err.message : String(err));
     }
 
     res.json(payload);
   });
 
-  // Write a file to the user's granted workspace via the AttyMate bridge.
-  // Same path-resolution + dispatch shape as read; AttyMate side does the
-  // symlink-safety + size-cap + parent-dir-must-exist enforcement.
   router.post("/users/me/local-files/write", validate(writeLocalFileSchema), async (req, res) => {
     const userId = requireBoardUserId(req, res);
     if (!userId) return;
 
-    const workspace = await svc.get(userId);
+    const workspace = await svc.getDefault(userId);
     if (!workspace) {
-      throw unprocessable("No workspace granted. PUT /users/me/workspace first.");
+      throw unprocessable("No workspace granted. Add a folder under WORKSPACE in the sidebar first.");
     }
     if (!isUserBridgeConnected(userId)) {
       throw unprocessable("AttyMate is not connected. Open the desktop app and sign in.");

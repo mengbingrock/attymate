@@ -192,4 +192,7 @@ export const queryKeys = {
   adapters: {
     all: ["adapters"] as const,
   },
+  userWorkspaces: {
+    list: ["user-workspaces"] as const,
+  },
 };
