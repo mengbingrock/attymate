@@ -30,21 +30,40 @@ const upsertWorkspaceSchema = z.object({
   workspacePath: workspacePathSchema,
 });
 
+const relativeWorkspacePathSchema = z
+  .string()
+  .trim()
+  .min(1, "path required")
+  .max(1024, "path too long")
+  // Reject any absolute path; the agent should always express paths relative
+  // to the user's workspace root. Absolute paths from agents are a smell.
+  .refine((value) => !value.startsWith("/"), "path must be relative to the workspace root")
+  .refine((value) => !value.split("/").includes(".."), "path must not contain .. segments");
+
 const readLocalFileSchema = z.object({
-  path: z
-    .string()
-    .trim()
-    .min(1, "path required")
-    .max(1024, "path too long")
-    // Reject any absolute path; the agent should always express paths relative
-    // to the user's workspace root. Absolute paths from agents are a smell.
-    .refine((value) => !value.startsWith("/"), "path must be relative to the workspace root")
-    .refine((value) => !value.split("/").includes(".."), "path must not contain .. segments"),
+  path: relativeWorkspacePathSchema,
+});
+
+// ~8MB cap on the base64 string ≈ ~6MB raw. The bridge re-checks decoded size
+// against MAX_WRITE_BYTES (5MB) and is the authoritative limit; this just
+// prevents oversized request bodies from getting through validation.
+const MAX_WRITE_BASE64_CHARS = 8 * 1024 * 1024;
+
+const writeLocalFileSchema = z.object({
+  path: relativeWorkspacePathSchema,
+  // Empty contents allowed — agents legitimately create empty placeholder files.
+  contents: z.string().max(MAX_WRITE_BASE64_CHARS, "contents too large (base64-encoded)"),
+  encoding: z.literal("base64").optional().default("base64"),
 });
 
 interface BridgeReadResponse {
   contents: string;
   encoding: string;
+  size: number;
+  mtime: string;
+}
+
+interface BridgeWriteResponse {
   size: number;
   mtime: string;
 }
@@ -126,6 +145,43 @@ export function userWorkspaceRoutes(db: Db) {
     }
 
     res.json(payload);
+  });
+
+  // Write a file to the user's granted workspace via the AttyMate bridge.
+  // Same path-resolution + dispatch shape as read; AttyMate side does the
+  // symlink-safety + size-cap + parent-dir-must-exist enforcement.
+  router.post("/users/me/local-files/write", validate(writeLocalFileSchema), async (req, res) => {
+    const userId = requireBoardUserId(req, res);
+    if (!userId) return;
+
+    const workspace = await svc.get(userId);
+    if (!workspace) {
+      throw unprocessable("No workspace granted. PUT /users/me/workspace first.");
+    }
+    if (!isUserBridgeConnected(userId)) {
+      throw unprocessable("AttyMate is not connected. Open the desktop app and sign in.");
+    }
+
+    const relativePath = req.body.path as string;
+    const resolvedAbs = path.resolve(workspace.workspacePath, relativePath);
+    const rel = path.relative(workspace.workspacePath, resolvedAbs);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+      throw unprocessable("path escapes the granted workspace root");
+    }
+
+    let payload: BridgeWriteResponse;
+    try {
+      payload = (await dispatchToUserBridge(userId, "write", {
+        path: resolvedAbs,
+        workspaceRoot: workspace.workspacePath,
+        contents: req.body.contents,
+        encoding: req.body.encoding,
+      })) as BridgeWriteResponse;
+    } catch (err) {
+      throw unprocessable(err instanceof Error ? err.message : String(err));
+    }
+
+    res.json({ path: rel, ...payload });
   });
 
   return router;

@@ -23,6 +23,7 @@ import WebSocket from "ws";
 // Hard cap on file size we'll read in one request. Anything bigger we reject
 // with an error rather than streaming megabytes through the WS frame buffer.
 const MAX_READ_BYTES = 5 * 1024 * 1024;
+const MAX_WRITE_BYTES = 5 * 1024 * 1024;
 
 /**
  * Server-dispatched "read" handler.
@@ -89,8 +90,107 @@ export function registerOpHandler(op, handler) {
   opHandlers.set(op, handler);
 }
 
+/**
+ * Server-dispatched "write" handler.
+ *   args: { path: string (absolute), workspaceRoot: string (absolute),
+ *           contents: string (base64), encoding?: "base64" }
+ *   returns: { size, mtime }
+ *
+ * Symmetric to read but with extra care because writing creates state.
+ * Symlink safety: the target file may not exist yet (we're creating it), so
+ * realpath(target) would fail with ENOENT. Instead we realpath the PARENT
+ * directory — that captures any symlink-redirect of the dirs on the way —
+ * then join with the basename. If the file already exists as a symlink, we
+ * separately follow it and re-check the destination is in-workspace.
+ *
+ * Auto-creating parent dirs is intentionally NOT supported in MVP: an agent
+ * accidentally typing "src/nw/file.ts" would silently materialise a new
+ * directory tree. If the parent doesn't exist, error and let the agent decide.
+ */
+async function handleWrite({ path: absPath, workspaceRoot, contents, encoding }) {
+  if (typeof absPath !== "string" || typeof workspaceRoot !== "string") {
+    throw new Error("write: missing path or workspaceRoot");
+  }
+  if (typeof contents !== "string") {
+    throw new Error("write: contents must be a base64 string");
+  }
+  if (encoding && encoding !== "base64") {
+    throw new Error(`write: unsupported encoding '${encoding}' (only base64)`);
+  }
+  if (!path.isAbsolute(absPath) || !path.isAbsolute(workspaceRoot)) {
+    throw new Error("write: path and workspaceRoot must be absolute");
+  }
+
+  let realRoot;
+  try {
+    realRoot = await fs.realpath(workspaceRoot);
+  } catch (err) {
+    throw new Error(`write: workspace ${err.code ?? "EFAIL"}: ${err.message}`);
+  }
+
+  // Resolve the parent's real path; this catches any symlink-redirected
+  // intermediate directory before we touch the file.
+  const parentAbs = path.dirname(absPath);
+  const targetName = path.basename(absPath);
+  let effectiveDir;
+  try {
+    effectiveDir = await fs.realpath(parentAbs);
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      throw new Error("write: parent directory does not exist");
+    }
+    throw new Error(`write: parent ${err.code ?? "EFAIL"}: ${err.message}`);
+  }
+  const relParent = path.relative(realRoot, effectiveDir);
+  if (relParent.startsWith("..") || path.isAbsolute(relParent)) {
+    throw new Error("write: parent directory is outside the granted workspace");
+  }
+
+  const effectiveTarget = path.join(effectiveDir, targetName);
+
+  // If the target already exists, validate it's safe to overwrite.
+  try {
+    const lstat = await fs.lstat(effectiveTarget);
+    if (lstat.isDirectory()) {
+      throw new Error("write: target is a directory");
+    }
+    if (lstat.isSymbolicLink()) {
+      const linkReal = await fs.realpath(effectiveTarget);
+      const relLink = path.relative(realRoot, linkReal);
+      if (relLink.startsWith("..") || path.isAbsolute(relLink)) {
+        throw new Error("write: existing symlink escapes the workspace");
+      }
+    } else if (!lstat.isFile()) {
+      throw new Error("write: target exists and is not a regular file");
+    }
+  } catch (err) {
+    if (err.code !== "ENOENT") throw err;
+    // ENOENT is fine — file doesn't exist yet, we'll create it.
+  }
+
+  const buf = Buffer.from(contents, "base64");
+  // Buffer.from with "base64" silently drops invalid chars and stops at the
+  // first non-base64 byte. A non-empty input that decodes to 0 bytes is
+  // almost certainly malformed — reject it rather than write an empty file
+  // the agent didn't ask for.
+  if (buf.byteLength === 0 && contents.length > 0) {
+    throw new Error("write: contents did not decode as valid base64");
+  }
+  if (buf.byteLength > MAX_WRITE_BYTES) {
+    throw new Error(`write: payload too large (${buf.byteLength} bytes, max ${MAX_WRITE_BYTES})`);
+  }
+
+  await fs.writeFile(effectiveTarget, buf);
+  const stat = await fs.stat(effectiveTarget);
+  return {
+    size: stat.size,
+    mtime: stat.mtime.toISOString(),
+  };
+}
+
 // Default op handlers registered at module load.
 opHandlers.set("read", handleRead);
+opHandlers.set("write", handleWrite);
 
 function pickServerOrigin(appUrl) {
   // Drop trailing slashes; convert https://x → wss://x; http → ws.
