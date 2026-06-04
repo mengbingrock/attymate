@@ -8,6 +8,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { startBridgeClient, stopBridgeClient } from "./bridge-client.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,7 +68,16 @@ ipcMain.handle("pick-folder", async () => {
   return result.filePaths[0];
 });
 
-app.whenReady().then(createMainWindow);
+app.whenReady().then(() => {
+  createMainWindow();
+  // Open the local bridge WS to the server. It self-polls for the session
+  // cookie and connects once the user signs in; safe to call before login.
+  startBridgeClient(APP_URL);
+});
+
+app.on("before-quit", () => {
+  stopBridgeClient();
+});
 
 app.on("window-all-closed", () => {
   // Standard macOS convention: keep app running until ⌘Q.

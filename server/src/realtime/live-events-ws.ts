@@ -242,7 +242,10 @@ export function setupLiveEventsWebSocketServer(
     const url = new URL(req.url, "http://localhost");
     const companyId = parseCompanyId(url.pathname);
     if (!companyId) {
-      socket.destroy();
+      // Cooperative routing: other upgrade listeners (e.g. local-bridge-ws)
+      // see the same event and may match this path. Return silently rather
+      // than destroying. The handler registered LAST is responsible for
+      // closing truly unrouted upgrades (currently local-bridge-ws).
       return;
     }
 

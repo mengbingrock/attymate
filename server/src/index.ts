@@ -28,6 +28,7 @@ import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { logger } from "./middleware/logger.js";
 import { setupLiveEventsWebSocketServer } from "./realtime/live-events-ws.js";
+import { setupLocalBridgeWebSocketServer } from "./realtime/local-bridge-ws.js";
 import {
   feedbackService,
   heartbeatService,
@@ -652,6 +653,14 @@ export async function startServer(): Promise<StartedServer> {
   process.env.PAPERCLIP_API_URL = configuredApiUrl;
   
   setupLiveEventsWebSocketServer(server, db as any, {
+    deploymentMode: config.deploymentMode,
+    resolveSessionFromHeaders,
+  });
+
+  // Local bridge MUST be registered AFTER live-events-ws so its upgrade
+  // handler runs last and can act as the "tail destroyer" for unrouted paths.
+  // See cooperative-routing comment in live-events-ws.ts and local-bridge-ws.ts.
+  setupLocalBridgeWebSocketServer(server, db as any, {
     deploymentMode: config.deploymentMode,
     resolveSessionFromHeaders,
   });
