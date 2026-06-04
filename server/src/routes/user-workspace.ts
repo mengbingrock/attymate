@@ -72,6 +72,25 @@ interface BridgeWriteResponse {
   mtime: string;
 }
 
+interface BridgeListdirResponse {
+  entries: Array<{
+    name: string;
+    kind: "dir" | "file" | "symlink" | "other";
+    size?: number;
+    mtime?: string | null;
+  }>;
+  truncated: boolean;
+  total: number;
+}
+
+// Relative path that's allowed to be empty (workspace root listing).
+const listdirPathSchema = z
+  .string()
+  .max(1024, "path too long")
+  .refine((value) => !value.startsWith("/"), "path must be relative to the workspace root")
+  .refine((value) => !value.split("/").includes(".."), "path must not contain .. segments")
+  .default("");
+
 function requireBoardUserId(req: Request, res: Response): string | null {
   assertBoard(req);
   if (!req.actor.userId) {
@@ -110,6 +129,53 @@ export function userWorkspaceRoutes(db: Db) {
       return;
     }
     res.status(204).end();
+  });
+
+  // Per-workspace directory listing. Unlike read/write (which target the
+  // user's default workspace), the file explorer needs to address each
+  // workspace independently — so we take the workspace id in the URL.
+  //
+  // Note: this is a GET (safe method) so it bypasses boardMutationGuard's
+  // Origin/Referer check; cookie auth alone is sufficient.
+  router.get("/users/me/workspaces/:id/files", async (req, res) => {
+    const userId = requireBoardUserId(req, res);
+    if (!userId) return;
+
+    const all = await svc.listByUser(userId);
+    const workspace = all.find((w) => w.id === req.params.id);
+    if (!workspace) {
+      res.status(404).json({ error: "Workspace not found" });
+      return;
+    }
+    if (!isUserBridgeConnected(userId)) {
+      throw unprocessable("AttyMate is not connected. Open the desktop app and sign in.");
+    }
+
+    const parseResult = listdirPathSchema.safeParse(req.query.path ?? "");
+    if (!parseResult.success) {
+      res.status(400).json({ error: "Validation error", details: parseResult.error.issues });
+      return;
+    }
+    const relativePath = parseResult.data;
+    const resolvedAbs = relativePath
+      ? path.resolve(workspace.workspacePath, relativePath)
+      : workspace.workspacePath;
+    const rel = path.relative(workspace.workspacePath, resolvedAbs);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+      throw unprocessable("path escapes the granted workspace root");
+    }
+
+    let payload: BridgeListdirResponse;
+    try {
+      payload = (await dispatchToUserBridge(userId, "listdir", {
+        path: resolvedAbs,
+        workspaceRoot: workspace.workspacePath,
+      })) as BridgeListdirResponse;
+    } catch (err) {
+      throw unprocessable(err instanceof Error ? err.message : String(err));
+    }
+
+    res.json(payload);
   });
 
   // ── Local file ops (read/write the user's default workspace) ───────────────

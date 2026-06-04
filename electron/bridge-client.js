@@ -24,6 +24,10 @@ import WebSocket from "ws";
 // with an error rather than streaming megabytes through the WS frame buffer.
 const MAX_READ_BYTES = 5 * 1024 * 1024;
 const MAX_WRITE_BYTES = 5 * 1024 * 1024;
+// Cap directory listings to keep response sizes sane. node_modules can have
+// 10k+ entries and we'd never want to ship them all over a single WS frame
+// for a tree view. The client surfaces a "truncated" marker when this trips.
+const MAX_LISTDIR_ENTRIES = 1000;
 
 /**
  * Server-dispatched "read" handler.
@@ -188,9 +192,81 @@ async function handleWrite({ path: absPath, workspaceRoot, contents, encoding })
   };
 }
 
+/**
+ * Server-dispatched "listdir" handler.
+ *   args: { path: string (absolute), workspaceRoot: string (absolute) }
+ *   returns: { entries: [{name, kind, size?, mtime?}...], truncated: bool, total: number }
+ *
+ * Per-entry lstat is intentional (we report symlinks as "symlink", not what
+ * they point at) — saves us from following a symlink that escapes the
+ * workspace just to ask "is this a file?". The sort is folders-first then
+ * name-asc so the tree view shows the conventional shape.
+ */
+async function handleListdir({ path: absPath, workspaceRoot }) {
+  if (typeof absPath !== "string" || typeof workspaceRoot !== "string") {
+    throw new Error("listdir: missing path or workspaceRoot");
+  }
+  if (!path.isAbsolute(absPath) || !path.isAbsolute(workspaceRoot)) {
+    throw new Error("listdir: path and workspaceRoot must be absolute");
+  }
+  let realPath;
+  let realRoot;
+  try {
+    realPath = await fs.realpath(absPath);
+    realRoot = await fs.realpath(workspaceRoot);
+  } catch (err) {
+    throw new Error(`listdir: ${err.code ?? "EFAIL"}: ${err.message}`);
+  }
+  const rel = path.relative(realRoot, realPath);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    throw new Error("listdir: path escapes the granted workspace");
+  }
+  const dirStat = await fs.stat(realPath);
+  if (!dirStat.isDirectory()) {
+    throw new Error("listdir: not a directory");
+  }
+  const names = await fs.readdir(realPath);
+  const total = names.length;
+  const slice = names.slice(0, MAX_LISTDIR_ENTRIES);
+  const entries = await Promise.all(
+    slice.map(async (name) => {
+      try {
+        const lstat = await fs.lstat(path.join(realPath, name));
+        let kind;
+        if (lstat.isSymbolicLink()) kind = "symlink";
+        else if (lstat.isDirectory()) kind = "dir";
+        else if (lstat.isFile()) kind = "file";
+        else kind = "other";
+        return {
+          name,
+          kind,
+          size: kind === "file" ? lstat.size : undefined,
+          mtime: lstat.mtime.toISOString(),
+        };
+      } catch {
+        // Per-entry permission errors shouldn't blow up the whole listing.
+        // Mark it as unknown; the UI can render it greyed-out.
+        return { name, kind: "other", mtime: null };
+      }
+    }),
+  );
+  entries.sort((a, b) => {
+    const ad = a.kind === "dir" ? 0 : 1;
+    const bd = b.kind === "dir" ? 0 : 1;
+    if (ad !== bd) return ad - bd;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+  });
+  return {
+    entries,
+    truncated: total > slice.length,
+    total,
+  };
+}
+
 // Default op handlers registered at module load.
 opHandlers.set("read", handleRead);
 opHandlers.set("write", handleWrite);
+opHandlers.set("listdir", handleListdir);
 
 function pickServerOrigin(appUrl) {
   // Drop trailing slashes; convert https://x → wss://x; http → ws.

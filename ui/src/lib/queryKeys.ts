@@ -194,5 +194,7 @@ export const queryKeys = {
   },
   userWorkspaces: {
     list: ["user-workspaces"] as const,
+    files: (workspaceId: string, relativePath: string) =>
+      ["user-workspaces", workspaceId, "files", relativePath] as const,
   },
 };
