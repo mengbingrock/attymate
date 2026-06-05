@@ -102,13 +102,20 @@ export function startRunnerConnection(config: RunnerClientConfig): { stop: () =>
 
   function connect() {
     if (stopped) return;
-    log(`connecting to ${wsUrl}`, { companyId: config.companyId, runnerId: config.runnerId });
-    const ws = new WebSocket(wsUrl, {
-      headers: {
-        [RUNNER_AUTH_HEADER]: config.token,
-        [RUNNER_COMPANY_HEADER]: config.companyId,
-      },
+    log(`connecting to ${wsUrl}`, {
+      companyId: config.companyId,
+      runnerId: config.runnerId,
+      auth: config.auth.mode,
     });
+    const headers: Record<string, string> = {
+      [RUNNER_COMPANY_HEADER]: config.companyId,
+    };
+    if (config.auth.mode === "cookie") {
+      headers.Cookie = config.auth.cookie;
+    } else {
+      headers[RUNNER_AUTH_HEADER] = config.auth.token;
+    }
+    const ws = new WebSocket(wsUrl, { headers });
     socket = ws;
 
     ws.on("open", () => {

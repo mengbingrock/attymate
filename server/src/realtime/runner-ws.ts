@@ -17,7 +17,11 @@
 import type { IncomingMessage, Server as HttpServer } from "node:http";
 import { createRequire } from "node:module";
 import type { Duplex } from "node:stream";
+import { and, eq } from "drizzle-orm";
+import type { Db } from "@paperclipai/db";
+import { companyMemberships, instanceUserRoles } from "@paperclipai/db";
 import type { DeploymentMode } from "@paperclipai/shared";
+import type { BetterAuthSessionResult } from "../auth/better-auth.js";
 import {
   RUNNER_WS_PATH,
   RUNNER_AUTH_HEADER,
@@ -79,6 +83,8 @@ interface InflightRun {
 interface RunnerRegistryEntry {
   socket: WsSocket;
   companyId: string;
+  /** Authenticated user this runner paired as, or null for static-token runners. */
+  userId: string | null;
   runnerId: string;
   connectedAt: Date;
   /** Runs dispatched to this runner, keyed by run id (correlation id). */
@@ -101,29 +107,94 @@ function rejectUpgrade(socket: Duplex, statusLine: string, message: string) {
   socket.destroy();
 }
 
+function headersFromIncomingMessage(req: IncomingMessage): Headers {
+  const headers = new Headers();
+  for (const [key, raw] of Object.entries(req.headers)) {
+    if (!raw) continue;
+    if (Array.isArray(raw)) {
+      for (const value of raw) headers.append(key, value);
+      continue;
+    }
+    headers.set(key, raw);
+  }
+  return headers;
+}
+
+/** Active membership of the company, or instance-admin override. */
+async function userIsCompanyMember(db: Db, userId: string, companyId: string): Promise<boolean> {
+  const [roleRow, memberRow] = await Promise.all([
+    db
+      .select({ id: instanceUserRoles.id })
+      .from(instanceUserRoles)
+      .where(and(eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin")))
+      .then((rows) => rows[0] ?? null),
+    db
+      .select({ companyId: companyMemberships.companyId })
+      .from(companyMemberships)
+      .where(
+        and(
+          eq(companyMemberships.companyId, companyId),
+          eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, userId),
+          eq(companyMemberships.status, "active"),
+        ),
+      )
+      .then((rows) => rows[0] ?? null),
+  ]);
+  return !!roleRow || !!memberRow;
+}
+
+interface RunnerAuthDeps {
+  deploymentMode: DeploymentMode;
+  db: Db;
+  resolveSessionFromHeaders?: (headers: Headers) => Promise<BetterAuthSessionResult | null>;
+}
+
 /**
- * Slice-1 auth: a single static pairing token shared between the control plane
- * (env PAPERCLIP_RUNNER_TOKEN) and the runner-client. Returns the company id
- * the runner is pairing for, or null to reject. A later slice replaces this
- * with per-device Ed25519 identity + a paired-devices table.
+ * Authorize a runner WS upgrade. Two paths, both requiring `authenticated` mode:
+ *
+ *   1. Per-user pairing (preferred): the upgrade carries the user's session
+ *      cookie. We resolve it to a user and require active membership of the
+ *      company named in the company header. The runner acts AS that user.
+ *   2. Static token (fallback, headless/CI): PAPERCLIP_RUNNER_TOKEN matches the
+ *      auth header. No user identity (userId = null).
+ *
+ * The shared static token is a server secret and must never ship in a client;
+ * the cookie path is what desktop/Electron runners use. A later slice adds
+ * per-device Ed25519 identity + a paired-devices table.
  */
-function authorizeRunnerUpgrade(
+async function authorizeRunnerUpgrade(
   req: IncomingMessage,
-  opts: { deploymentMode: DeploymentMode },
-): { companyId: string } | null {
+  opts: RunnerAuthDeps,
+): Promise<{ companyId: string; userId: string | null } | null> {
   // The runner channel requires an identified deployment, mirroring the
   // local-bridge constraint. local_trusted has no per-company external runners.
   if (opts.deploymentMode !== "authenticated") return null;
-  const expected = process.env.PAPERCLIP_RUNNER_TOKEN;
-  if (!expected) {
-    logger.warn("runner-ws: PAPERCLIP_RUNNER_TOKEN not set; refusing runner upgrades");
-    return null;
-  }
-  const presented = readHeader(req, RUNNER_AUTH_HEADER);
-  if (!presented || presented !== expected) return null;
   const companyId = readHeader(req, RUNNER_COMPANY_HEADER);
   if (!companyId) return null;
-  return { companyId };
+
+  // Path 1 — per-user session cookie. Only attempt when a cookie is actually
+  // present, so token-only runners don't pay for a session lookup.
+  if (opts.resolveSessionFromHeaders && req.headers.cookie) {
+    const session = await opts.resolveSessionFromHeaders(headersFromIncomingMessage(req));
+    const userId = session?.user?.id;
+    if (userId) {
+      if (await userIsCompanyMember(opts.db, userId, companyId)) {
+        return { companyId, userId };
+      }
+      logger.warn({ companyId, userId }, "runner-ws: user is not a member of company; rejecting");
+      return null;
+    }
+    // Cookie present but no valid session — fall through to the token path.
+  }
+
+  // Path 2 — static pairing token (headless/CI).
+  const expected = process.env.PAPERCLIP_RUNNER_TOKEN;
+  if (expected) {
+    const presented = readHeader(req, RUNNER_AUTH_HEADER);
+    if (presented && presented === expected) return { companyId, userId: null };
+  }
+  return null;
 }
 
 /** True when a runner is connected and ready for the given company. */
@@ -161,8 +232,17 @@ export function dispatchRun(
 
 export function setupRunnerWebSocketServer(
   server: HttpServer,
-  opts: { deploymentMode: DeploymentMode },
+  db: Db,
+  opts: {
+    deploymentMode: DeploymentMode;
+    resolveSessionFromHeaders?: (headers: Headers) => Promise<BetterAuthSessionResult | null>;
+  },
 ) {
+  const authDeps: RunnerAuthDeps = {
+    deploymentMode: opts.deploymentMode,
+    db,
+    resolveSessionFromHeaders: opts.resolveSessionFromHeaders,
+  };
   const wss = new WebSocketServer({ noServer: true });
   const aliveByClient = new Map<WsSocket, boolean>();
 
@@ -178,12 +258,16 @@ export function setupRunnerWebSocketServer(
   }, PING_INTERVAL_MS);
 
   wss.on("connection", (socket: WsSocket, req: IncomingMessage) => {
-    const companyId = (req as IncomingMessage & { paperclipRunnerCompanyId?: string })
-      .paperclipRunnerCompanyId;
+    const reqCtx = req as IncomingMessage & {
+      paperclipRunnerCompanyId?: string;
+      paperclipRunnerUserId?: string | null;
+    };
+    const companyId = reqCtx.paperclipRunnerCompanyId;
     if (!companyId) {
       socket.close(1008, "missing company context");
       return;
     }
+    const userId = reqCtx.paperclipRunnerUserId ?? null;
 
     // Replace any prior runner for this company, rejecting its inflight runs.
     const prior = registry.get(companyId);
@@ -202,13 +286,14 @@ export function setupRunnerWebSocketServer(
     const entry: RunnerRegistryEntry = {
       socket,
       companyId,
+      userId,
       runnerId: "unknown",
       connectedAt: new Date(),
       inflight: new Map(),
     };
     registry.set(companyId, entry);
     aliveByClient.set(socket, true);
-    logger.info({ companyId }, "runner-ws: runner connected");
+    logger.info({ companyId, userId }, "runner-ws: runner connected");
 
     socket.on("pong", () => {
       aliveByClient.set(socket, true);
@@ -265,7 +350,7 @@ export function setupRunnerWebSocketServer(
           run.reject(new Error("Local execution runner disconnected."));
         }
         registry.delete(companyId);
-        logger.info({ companyId }, "runner-ws: runner disconnected");
+        logger.info({ companyId, userId }, "runner-ws: runner disconnected");
       }
     });
 
@@ -284,16 +369,28 @@ export function setupRunnerWebSocketServer(
     // Only handle our path; let other upgrade listeners see non-matching paths.
     if (url.pathname !== RUNNER_WS_PATH) return;
 
-    const authed = authorizeRunnerUpgrade(req, opts);
-    if (!authed) {
-      rejectUpgrade(socket, "401 Unauthorized", "runner pairing token required");
-      return;
-    }
-    (req as IncomingMessage & { paperclipRunnerCompanyId?: string }).paperclipRunnerCompanyId =
-      authed.companyId;
-    wss.handleUpgrade(req, socket, head, (ws: WsSocket) => {
-      wss.emit("connection", ws, req);
-    });
+    void (async () => {
+      let authed: { companyId: string; userId: string | null } | null;
+      try {
+        authed = await authorizeRunnerUpgrade(req, authDeps);
+      } catch (err) {
+        logger.warn({ err }, "runner-ws: authorize failed");
+        authed = null;
+      }
+      if (!authed) {
+        rejectUpgrade(socket, "401 Unauthorized", "runner pairing requires a valid session or token");
+        return;
+      }
+      const reqCtx = req as IncomingMessage & {
+        paperclipRunnerCompanyId?: string;
+        paperclipRunnerUserId?: string | null;
+      };
+      reqCtx.paperclipRunnerCompanyId = authed.companyId;
+      reqCtx.paperclipRunnerUserId = authed.userId;
+      wss.handleUpgrade(req, socket, head, (ws: WsSocket) => {
+        wss.emit("connection", ws, req);
+      });
+    })();
   });
 
   return wss;

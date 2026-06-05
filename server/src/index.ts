@@ -661,8 +661,9 @@ export async function startServer(): Promise<StartedServer> {
   // Local execution runner channel. Registered BEFORE the local bridge so its
   // upgrade handler claims /api/runner/ws before the bridge's "tail destroyer"
   // can reject it as unrouted.
-  setupRunnerWebSocketServer(server, {
+  setupRunnerWebSocketServer(server, db as any, {
     deploymentMode: config.deploymentMode,
+    resolveSessionFromHeaders,
   });
 
   // Local bridge MUST be registered AFTER live-events-ws so its upgrade

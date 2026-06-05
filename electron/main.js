@@ -9,6 +9,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startBridgeClient, stopBridgeClient } from "./bridge-client.js";
+import { startRunnerHost, stopRunnerHost } from "./runner-host.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,6 +44,7 @@ function createMainWindow() {
   });
 
   win.loadURL(APP_URL);
+  return win;
 }
 
 // ─── IPC: pick-folder ──────────────────────────────────────────────────────
@@ -73,10 +75,14 @@ app.whenReady().then(() => {
   // Open the local bridge WS to the server. It self-polls for the session
   // cookie and connects once the user signs in; safe to call before login.
   startBridgeClient(APP_URL);
+  // Supervise the local-execution runner. It self-polls for the session cookie
+  // + selected company (from the webview) and forks the runner once both exist.
+  startRunnerHost(APP_URL);
 });
 
 app.on("before-quit", () => {
   stopBridgeClient();
+  stopRunnerHost();
 });
 
 app.on("window-all-closed", () => {
