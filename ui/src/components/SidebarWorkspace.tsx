@@ -300,13 +300,20 @@ function FolderRow({ depth, label, labelTooltip, open, onToggle, trailing }: Fol
       role="treeitem"
       aria-expanded={open}
     >
-      <ChevronRight
-        className={cn(
-          "h-3 w-3 shrink-0 text-muted-foreground/60 transition-transform",
-          open && "rotate-90",
-        )}
-        aria-hidden="true"
-      />
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+        className="shrink-0 inline-flex h-4 w-4 items-center justify-center rounded-sm text-muted-foreground/60 hover:text-foreground hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 outline-none"
+        aria-label={open ? "Collapse folder" : "Expand folder"}
+      >
+        <ChevronRight
+          className={cn("h-3 w-3 transition-transform", open && "rotate-90")}
+          aria-hidden="true"
+        />
+      </button>
       <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/80" aria-hidden="true" />
       {labelTooltip ? (
         <Tooltip>
