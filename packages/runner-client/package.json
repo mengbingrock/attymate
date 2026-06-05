@@ -24,12 +24,18 @@
   "dependencies": {
     "@paperclipai/adapter-utils": "workspace:*",
     "@paperclipai/adapter-claude-local": "workspace:*",
+    "@paperclipai/adapter-codex-local": "workspace:*",
+    "@paperclipai/adapter-cursor-local": "workspace:*",
+    "@paperclipai/adapter-gemini-local": "workspace:*",
+    "@paperclipai/adapter-opencode-local": "workspace:*",
+    "@paperclipai/adapter-pi-local": "workspace:*",
     "ws": "^8.19.0"
   },
   "devDependencies": {
     "@types/node": "^24.6.0",
     "@types/ws": "^8.18.1",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
   }
 }

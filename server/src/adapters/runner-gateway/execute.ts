@@ -50,7 +50,9 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     };
   }
 
-  // The real adapter to run on the client. Slice 1 defaults to claude_local.
+  // The real adapter to run on the client. The runner-client supports
+  // claude_local / codex_local / cursor_local / gemini_local / opencode_local /
+  // pi_local; defaults to claude_local when unset.
   const runnerAdapterType = asString(ctx.config.runnerAdapterType, "claude_local");
 
   const spec: RunnerExecutionSpec = {

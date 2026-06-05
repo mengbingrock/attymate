@@ -1,22 +1,21 @@
-// Run executor (runner-client side) — slice 1 / step 5: real execution.
+// Run executor (runner-client side) — real execution.
 //
-// Realizes a local workspace on THIS machine, then invokes the claude_local
-// adapter's execute() (the same module the server used to call) so the `claude`
-// subprocess is spawned here, not on the control plane. stdout/stderr/spawn are
-// forwarded back as run.event frames; the AdapterExecutionResult is returned to
-// the control plane verbatim for its existing finalize/cost path.
+// Realizes a local workspace on THIS machine, then invokes the underlying local
+// adapter's execute() (the same module the server used to call) so the agent CLI
+// (claude/codex/cursor/gemini/opencode/pi) is spawned here, not on the control
+// plane. stdout/stderr/spawn are forwarded back as run.event frames; the
+// AdapterExecutionResult is returned to the control plane verbatim for its
+// existing finalize/cost path.
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import type {
-  AdapterExecutionContext,
-  AdapterExecutionResult,
-} from "@paperclipai/adapter-utils";
+import type { AdapterExecutionContext } from "@paperclipai/adapter-utils";
+import type { AdapterExecutionResult } from "@paperclipai/adapter-utils";
 import type {
   RunnerExecutionSpec,
   RunEventFrame,
 } from "@paperclipai/adapter-utils/runner-protocol";
-import { execute as claudeExecute } from "@paperclipai/adapter-claude-local/server";
+import { resolveLocalExecute } from "./adapters.js";
 
 export interface RunExecutionCallbacks {
   /** Emit a streamed event back to the control plane. `seq` is assigned by the caller. */
@@ -26,15 +25,6 @@ export interface RunExecutionCallbacks {
 export interface RunExecutionEnv {
   /** Root under which per-run workspaces are realized locally. */
   workspacesRoot: string;
-}
-
-/** Map a spec's adapterType to a local execute() implementation. Slice 1: claude only. */
-function resolveLocalExecute(adapterType: string) {
-  if (adapterType === "claude_local") return claudeExecute;
-  throw Object.assign(
-    new Error(`runner-client does not support adapterType "${adapterType}" yet`),
-    { code: "runner_adapter_unsupported" },
-  );
 }
 
 /**

@@ -19,7 +19,8 @@ machine instead of spawning a subprocess on the control plane.
 
 Core fields:
 - runnerAdapterType (string, optional): the real adapter to run on the client.
-  Default "claude_local".
+  One of: claude_local, codex_local, cursor_local, gemini_local,
+  opencode_local, pi_local. Default "claude_local".
 - workspace (object, optional): how the client realizes the working directory.
   - strategy ("git_worktree" | "agent_home"): default "agent_home".
   - repoUrl, baseRef, branchTemplate (strings, for git_worktree).
