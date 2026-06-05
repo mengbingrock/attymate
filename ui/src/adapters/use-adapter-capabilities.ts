@@ -25,6 +25,13 @@ const KNOWN_DEFAULTS: Record<string, AdapterCapabilities> = {
   pi_local: { supportsInstructionsBundle: true, supportsSkills: true, supportsLocalAgentJwt: true, requiresMaterializedRuntimeSkills: true, supportsModelProfiles: false },
   hermes_local: { supportsInstructionsBundle: false, supportsSkills: true, supportsLocalAgentJwt: true, requiresMaterializedRuntimeSkills: false, supportsModelProfiles: false },
   openclaw_gateway: ALL_FALSE,
+  // Runner-backed local agents: instructions are forwarded and the JWT injected.
+  // Skills / model-profiles aren't surfaced for the gateway variants yet.
+  claude_local_runner: { supportsInstructionsBundle: true, supportsSkills: false, supportsLocalAgentJwt: true, requiresMaterializedRuntimeSkills: false, supportsModelProfiles: false },
+  codex_local_runner: { supportsInstructionsBundle: true, supportsSkills: false, supportsLocalAgentJwt: true, requiresMaterializedRuntimeSkills: false, supportsModelProfiles: false },
+  gemini_local_runner: { supportsInstructionsBundle: true, supportsSkills: false, supportsLocalAgentJwt: true, requiresMaterializedRuntimeSkills: false, supportsModelProfiles: false },
+  opencode_local_runner: { supportsInstructionsBundle: true, supportsSkills: false, supportsLocalAgentJwt: true, requiresMaterializedRuntimeSkills: false, supportsModelProfiles: false },
+  pi_local_runner: { supportsInstructionsBundle: true, supportsSkills: false, supportsLocalAgentJwt: true, requiresMaterializedRuntimeSkills: false, supportsModelProfiles: false },
 };
 
 /**

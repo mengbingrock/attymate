@@ -244,6 +244,9 @@ export {
   type PluginApiRouteCheckoutPolicy,
   type PluginEventType,
   type PluginBridgeErrorCode,
+  LOCAL_RUNNER_AGENT_TYPES,
+  localRunnerVariantType,
+  localRunnerBaseType,
 } from "./constants.js";
 
 export {

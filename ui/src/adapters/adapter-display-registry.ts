@@ -110,6 +110,36 @@ const adapterDisplayMap: Record<string, AdapterDisplayInfo> = {
     comingSoon: true,
     disabledLabel: "Configure OpenClaw within the App",
   },
+  claude_local_runner: {
+    label: "Claude Code (Local Runner)",
+    description: "Run Claude Code on your machine via the connected local runner",
+    icon: Sparkles,
+    experimental: true,
+  },
+  codex_local_runner: {
+    label: "Codex (Local Runner)",
+    description: "Run Codex on your machine via the connected local runner",
+    icon: Code,
+    experimental: true,
+  },
+  gemini_local_runner: {
+    label: "Gemini CLI (Local Runner)",
+    description: "Run Gemini on your machine via the connected local runner",
+    icon: Gem,
+    experimental: true,
+  },
+  opencode_local_runner: {
+    label: "OpenCode (Local Runner)",
+    description: "Run OpenCode on your machine via the connected local runner",
+    icon: OpenCodeLogoIcon,
+    experimental: true,
+  },
+  pi_local_runner: {
+    label: "Pi (Local Runner)",
+    description: "Run Pi on your machine via the connected local runner",
+    icon: Terminal,
+    experimental: true,
+  },
   process: {
     label: "Process",
     description: "Internal process adapter",
