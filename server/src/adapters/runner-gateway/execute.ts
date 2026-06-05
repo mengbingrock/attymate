@@ -18,7 +18,9 @@ import {
   type RunnerExecutionSpec,
   type RunnerWorkspaceSpec,
 } from "@paperclipai/adapter-utils/runner-protocol";
+import { packRunnerConfig } from "@paperclipai/adapter-utils/runner-materialize";
 import { asString, parseObject } from "../utils.js";
+import { logger } from "../../middleware/logger.js";
 import { dispatchRun, isRunnerOnline } from "../../realtime/runner-ws.js";
 
 function buildWorkspaceSpec(config: Record<string, unknown>): RunnerWorkspaceSpec {
@@ -55,6 +57,13 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   // pi_local; defaults to claude_local when unset.
   const runnerAdapterType = asString(ctx.config.runnerAdapterType, "claude_local");
 
+  // The server resolved skills/instructions into container-absolute paths that
+  // don't exist on the client. Embed their contents so the runner can
+  // materialize them locally (see @paperclipai/adapter-utils/runner-materialize).
+  const portableConfig = await packRunnerConfig(ctx.config, {
+    log: (msg) => logger.warn({ companyId, runId: ctx.runId }, `runner-gateway: ${msg}`),
+  });
+
   const spec: RunnerExecutionSpec = {
     protocolVersion: RUNNER_PROTOCOL_VERSION,
     runId: ctx.runId,
@@ -75,10 +84,11 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       taskKey: ctx.runtime.taskKey,
     },
     // The server has already resolved model profile, skills, prompt template and
-    // (slice 1, default secret model 2a) secrets into config. The client uses it
-    // verbatim. We do not forward our own runnerAdapterType/workspace keys as
-    // adapter config noise — the client reads adapterType/workspace from the spec.
-    config: ctx.config,
+    // (slice 1, default secret model 2a) secrets into config. Skill/instruction
+    // file contents are embedded by packRunnerConfig so the client can realize
+    // them locally; everything else is forwarded verbatim. The client reads
+    // adapterType/workspace from the spec, not from this config.
+    config: portableConfig,
     context: ctx.context,
     workspace: buildWorkspaceSpec(ctx.config),
     authToken: ctx.authToken ?? null,

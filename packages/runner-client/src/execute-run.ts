@@ -15,6 +15,7 @@ import type {
   RunnerExecutionSpec,
   RunEventFrame,
 } from "@paperclipai/adapter-utils/runner-protocol";
+import { materializeRunnerConfig } from "@paperclipai/adapter-utils/runner-materialize";
 import { resolveLocalExecute } from "./adapters.js";
 
 export interface RunExecutionCallbacks {
@@ -80,7 +81,13 @@ export async function executeRun(
     ...incomingContext,
     paperclipWorkspace: { ...incomingWorkspace, cwd, source: "runner_local" },
   };
-  const config: Record<string, unknown> = { ...spec.config, cwd };
+  // The control plane embedded skill/instruction file CONTENTS in the spec
+  // (their server paths don't exist here). Materialize them into a staging dir
+  // beside the workspace and rewrite the paths to local copies before the
+  // adapter reads them.
+  const stagingRoot = path.join(env.workspacesRoot, ".runtime", spec.runId);
+  const portableConfig = await materializeRunnerConfig(spec.config, stagingRoot);
+  const config: Record<string, unknown> = { ...portableConfig, cwd };
 
   const ctx: AdapterExecutionContext = {
     runId: spec.runId,
