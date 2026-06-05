@@ -9,7 +9,8 @@
     "start": "electron .",
     "dev": "electron .",
     "build:main": "node --input-type=module -e \"import esbuild from 'esbuild'; import c from './esbuild.config.mjs'; await esbuild.build(c)\" && cp preload.cjs build/preload.cjs",
-    "dist": "pnpm build:main && electron-builder --mac --x64"
+    "dist": "pnpm build:main && electron-builder --mac --x64",
+    "dist:win": "pnpm build:main && electron-builder --win --x64"
   },
   "build": {
     "appId": "com.attymate.desktop",
@@ -39,6 +40,11 @@
       ],
       "identity": null,
       "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": [
+        { "target": "zip", "arch": "x64" }
+      ]
     }
   },
   "dependencies": {
