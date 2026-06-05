@@ -5,7 +5,7 @@
 // then handles run.start frames by invoking executeRun and streaming
 // run.event/run.result back. Reconnects with exponential backoff on drop.
 
-import { createRequire } from "node:module";
+import WebSocketImpl from "ws";
 import {
   RUNNER_AUTH_HEADER,
   RUNNER_COMPANY_HEADER,
@@ -18,8 +18,10 @@ import {
 import type { RunnerClientConfig } from "./config.js";
 import { executeRun } from "./execute-run.js";
 
-const require = createRequire(import.meta.url);
-const WebSocket = require("ws") as new (
+// Static import so esbuild can inline ws into a self-contained bundle (the
+// packaged Electron app forks this with no node_modules alongside it). The cast
+// keeps the existing structural RunnerSocket typing.
+const WebSocket = WebSocketImpl as unknown as new (
   url: string,
   opts?: { headers?: Record<string, string> },
 ) => RunnerSocket;

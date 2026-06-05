@@ -1,47 +1,17 @@
 /**
- * esbuild configuration for bundling the runner-client into a single self-
- * contained file the Electron app can fork via utilityProcess.
+ * esbuild configuration — a SINGLE self-contained ESM bundle of the runner-client
+ * for the Electron app to fork via utilityProcess with NO node_modules alongside
+ * it (it ships as an extraResource in the packaged app).
  *
- * Bundles all workspace packages (@paperclipai/*) — the runner-client plus its
- * adapter packages and adapter-utils — into one ESM file. External npm packages
- * (ws, picocolors, …) stay as runtime deps resolved from node_modules. The
- * agent CLIs the adapters spawn (claude, codex, …) are NOT bundled; they're the
- * user's own tools, found on PATH at runtime.
+ * Everything is inlined: the workspace packages (runner-client + adapter-utils +
+ * the adapter packages) AND ws/picocolors. Only ws's optional native deps stay
+ * external — they aren't installed here, so ws falls back to its pure-JS path.
+ * The banner gives the ESM output a `require` (via createRequire) so esbuild's
+ * external-require shim can resolve-or-throw those optional deps at runtime.
+ *
+ * The agent CLIs the adapters spawn (claude, codex, …) are NOT bundled; they're
+ * the user's own tools, found on PATH at runtime.
  */
-
-import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(__dirname, "..", "..");
-
-// Workspace packages whose npm dependencies must be collected as externals.
-// (esbuild discovers what to bundle by following imports; we enumerate these
-// only to gather their non-@paperclipai deps and keep them external.)
-const workspacePaths = [
-  "packages/runner-client",
-  "packages/adapter-utils",
-  "packages/adapters/claude-local",
-  "packages/adapters/codex-local",
-  "packages/adapters/cursor-local",
-  "packages/adapters/gemini-local",
-  "packages/adapters/opencode-local",
-  "packages/adapters/pi-local",
-];
-
-// Collect all external (non-workspace) npm package names so they remain runtime
-// dependencies rather than being inlined.
-const externals = new Set();
-for (const p of workspacePaths) {
-  const pkg = JSON.parse(readFileSync(resolve(repoRoot, p, "package.json"), "utf8"));
-  for (const name of Object.keys(pkg.dependencies || {})) {
-    if (!name.startsWith("@paperclipai/")) externals.add(name);
-  }
-  for (const name of Object.keys(pkg.optionalDependencies || {})) {
-    externals.add(name);
-  }
-}
 
 /** @type {import('esbuild').BuildOptions} */
 export default {
@@ -51,7 +21,12 @@ export default {
   target: "node20",
   format: "esm",
   outfile: "dist/runner-bundle.mjs",
-  external: [...externals].sort(),
+  // ws lazily require()s these optional native acceleration deps inside try/catch;
+  // they're absent, so keep them external and let the runtime require throw → pure JS.
+  external: ["bufferutil", "utf-8-validate"],
+  banner: {
+    js: "import { createRequire as __pcCreateRequire } from 'node:module'; const require = __pcCreateRequire(import.meta.url);",
+  },
   treeShaking: true,
   sourcemap: true,
 };

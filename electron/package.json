@@ -7,12 +7,45 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron ."
+    "dev": "electron .",
+    "build:main": "node --input-type=module -e \"import esbuild from 'esbuild'; import c from './esbuild.config.mjs'; await esbuild.build(c)\" && cp preload.cjs build/preload.cjs",
+    "dist": "pnpm build:main && electron-builder --mac --x64"
+  },
+  "build": {
+    "appId": "com.attymate.desktop",
+    "productName": "AttyMate",
+    "npmRebuild": false,
+    "directories": {
+      "output": "dist"
+    },
+    "extraMetadata": {
+      "main": "build/main.mjs"
+    },
+    "files": [
+      "build/main.mjs",
+      "build/preload.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../packages/runner-client/dist/runner-bundle.mjs",
+        "to": "runner-bundle.mjs"
+      }
+    ],
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": "x64" },
+        { "target": "zip", "arch": "x64" }
+      ],
+      "identity": null,
+      "category": "public.app-category.developer-tools"
+    }
   },
   "dependencies": {
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "electron": "^33.0.0"
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
   }
 }
