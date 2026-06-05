@@ -62,6 +62,31 @@ export {
 } from "./command-redaction.js";
 export { buildSandboxNpmInstallCommand } from "./sandbox-install-command.js";
 export { inferOpenAiCompatibleBiller } from "./billing.js";
+// Local Execution Runner protocol (slice 1). Browser-safe: type-only plus a
+// few constants and a JSON-parse helper, no node imports.
+export type {
+  RunnerWorkspaceStrategy,
+  RunnerWorkspaceSpec,
+  RunnerExecutionSpec,
+  RunStartFrame,
+  RunCancelFrame,
+  RunnerLogStream,
+  RunEventFrame,
+  RunResultFrame,
+  RunFailedFrame,
+  RunnerHelloFrame,
+  RunnerPingFrame,
+  RunnerServerFrame,
+  RunnerClientFrame,
+  RunnerFrame,
+} from "./runner-protocol.js";
+export {
+  RUNNER_PROTOCOL_VERSION,
+  RUNNER_WS_PATH,
+  RUNNER_AUTH_HEADER,
+  RUNNER_COMPANY_HEADER,
+  parseRunnerFrame,
+} from "./runner-protocol.js";
 // Keep the root adapter-utils entry browser-safe because the UI imports it.
 // The sandbox callback bridge stays available via its dedicated subpath export.
 export type {

@@ -270,8 +270,13 @@ export function setupLocalBridgeWebSocketServer(
       // truly unrouted upgrades) lives in this handler because it's registered
       // last; see the matching change in live-events-ws.ts which now returns
       // silently on non-match rather than destroying.
-      if (!url.pathname.startsWith("/api/companies/") || !url.pathname.endsWith("/events/ws")) {
-        // Unknown path AND not the live-events pattern — definitively unhandled.
+      const isLiveEvents =
+        url.pathname.startsWith("/api/companies/") && url.pathname.endsWith("/events/ws");
+      // The runner channel registers its own upgrade handler earlier; do not
+      // destroy its sockets here even though this handler runs last.
+      const isRunner = url.pathname === "/api/runner/ws";
+      if (!isLiveEvents && !isRunner) {
+        // Unknown path AND not a known cooperative pattern — definitively unhandled.
         rejectUpgrade(socket, "404 Not Found", "no websocket endpoint at this path");
       }
       return;

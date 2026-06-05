@@ -29,6 +29,7 @@ import { loadConfig } from "./config.js";
 import { logger } from "./middleware/logger.js";
 import { setupLiveEventsWebSocketServer } from "./realtime/live-events-ws.js";
 import { setupLocalBridgeWebSocketServer } from "./realtime/local-bridge-ws.js";
+import { setupRunnerWebSocketServer } from "./realtime/runner-ws.js";
 import {
   feedbackService,
   heartbeatService,
@@ -655,6 +656,13 @@ export async function startServer(): Promise<StartedServer> {
   setupLiveEventsWebSocketServer(server, db as any, {
     deploymentMode: config.deploymentMode,
     resolveSessionFromHeaders,
+  });
+
+  // Local execution runner channel. Registered BEFORE the local bridge so its
+  // upgrade handler claims /api/runner/ws before the bridge's "tail destroyer"
+  // can reject it as unrouted.
+  setupRunnerWebSocketServer(server, {
+    deploymentMode: config.deploymentMode,
   });
 
   // Local bridge MUST be registered AFTER live-events-ws so its upgrade
