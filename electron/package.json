@@ -10,6 +10,7 @@
     "dev": "electron .",
     "build:main": "node --input-type=module -e \"import esbuild from 'esbuild'; import c from './esbuild.config.mjs'; await esbuild.build(c)\" && cp preload.cjs build/preload.cjs",
     "dist": "pnpm build:main && electron-builder --mac --x64",
+    "dist:mac-arm64": "bash scripts/build-mac-arm64.sh",
     "dist:win": "pnpm build:main && electron-builder --win --x64"
   },
   "build": {
@@ -35,10 +36,9 @@
     ],
     "mac": {
       "target": [
-        { "target": "dmg", "arch": "x64" },
-        { "target": "zip", "arch": "x64" }
+        { "target": "dmg", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
       ],
-      "identity": null,
       "category": "public.app-category.developer-tools"
     },
     "win": {
