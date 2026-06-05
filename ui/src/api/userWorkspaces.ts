@@ -20,6 +20,13 @@ export type WorkspaceListing = {
   total: number;
 };
 
+export type WorkspaceFileContent = {
+  contents: string; // base64
+  encoding: "base64";
+  size: number;
+  mtime: string;
+};
+
 export const userWorkspacesApi = {
   list: () => api.get<UserWorkspace[]>("/users/me/workspaces"),
   add: (workspacePath: string) =>
@@ -29,4 +36,8 @@ export const userWorkspacesApi = {
     const qs = relativePath ? `?path=${encodeURIComponent(relativePath)}` : "";
     return api.get<WorkspaceListing>(`/users/me/workspaces/${workspaceId}/files${qs}`);
   },
+  readFile: (workspaceId: string, relativePath: string) =>
+    api.get<WorkspaceFileContent>(
+      `/users/me/workspaces/${workspaceId}/files/read?path=${encodeURIComponent(relativePath)}`,
+    ),
 };

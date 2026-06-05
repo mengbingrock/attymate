@@ -91,6 +91,10 @@ const listdirPathSchema = z
   .refine((value) => !value.split("/").includes(".."), "path must not contain .. segments")
   .default("");
 
+// Relative file path for the per-workspace read endpoint — must be non-empty
+// (the workspace root itself isn't a file to read).
+const fileReadPathSchema = relativeWorkspacePathSchema;
+
 function requireBoardUserId(req: Request, res: Response): string | null {
   assertBoard(req);
   if (!req.actor.userId) {
@@ -129,6 +133,49 @@ export function userWorkspaceRoutes(db: Db) {
       return;
     }
     res.status(204).end();
+  });
+
+  // Per-workspace file read (preview). Same per-id model as the listing
+  // endpoint; uses the existing "read" bridge op, so all the symlink-safety
+  // + size cap that protect the default-workspace read also apply here.
+  router.get("/users/me/workspaces/:id/files/read", async (req, res) => {
+    const userId = requireBoardUserId(req, res);
+    if (!userId) return;
+
+    const all = await svc.listByUser(userId);
+    const workspace = all.find((w) => w.id === req.params.id);
+    if (!workspace) {
+      res.status(404).json({ error: "Workspace not found" });
+      return;
+    }
+
+    const parseResult = fileReadPathSchema.safeParse(req.query.path ?? "");
+    if (!parseResult.success) {
+      res.status(400).json({ error: "Validation error", details: parseResult.error.issues });
+      return;
+    }
+    if (!isUserBridgeConnected(userId)) {
+      throw unprocessable("AttyMate is not connected. Open the desktop app and sign in.");
+    }
+
+    const relativePath = parseResult.data;
+    const resolvedAbs = path.resolve(workspace.workspacePath, relativePath);
+    const rel = path.relative(workspace.workspacePath, resolvedAbs);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+      throw unprocessable("path escapes the granted workspace root");
+    }
+
+    let payload: BridgeReadResponse;
+    try {
+      payload = (await dispatchToUserBridge(userId, "read", {
+        path: resolvedAbs,
+        workspaceRoot: workspace.workspacePath,
+      })) as BridgeReadResponse;
+    } catch (err) {
+      throw unprocessable(err instanceof Error ? err.message : String(err));
+    }
+
+    res.json(payload);
   });
 
   // Per-workspace directory listing. Unlike read/write (which target the

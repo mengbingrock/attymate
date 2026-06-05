@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { createContext, useCallback, useContext, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronRight,
@@ -21,6 +21,14 @@ import { useToastActions } from "../context/ToastContext";
 import { queryKeys } from "../lib/queryKeys";
 import { cn } from "../lib/utils";
 import { SidebarSection } from "./SidebarSection";
+import {
+  WorkspaceFilePreviewDialog,
+  type FilePreviewTarget,
+} from "./WorkspaceFilePreviewDialog";
+
+// Avoids drilling an onPreview callback through 3 levels of recursive
+// tree components. Only FileRow uses it; the Provider lives in SidebarWorkspace.
+const FilePreviewContext = createContext<(target: FilePreviewTarget) => void>(() => {});
 
 // Ambient hook into AttyMate's contextBridge-exposed API (see electron/preload.cjs).
 // Pure browser callers don't get `window.attymate`, so every read here is
@@ -50,6 +58,9 @@ const INDENT_PX = 12;
 
 export function SidebarWorkspace() {
   const [open, setOpen] = useState(true);
+  const [previewTarget, setPreviewTarget] = useState<FilePreviewTarget | null>(null);
+  const openPreview = useCallback((t: FilePreviewTarget) => setPreviewTarget(t), []);
+  const closePreview = useCallback(() => setPreviewTarget(null), []);
   const queryClient = useQueryClient();
   const { pushToast } = useToastActions();
   const isElectron = inAttyMate();
@@ -101,34 +112,37 @@ export function SidebarWorkspace() {
   if (!isElectron) return null;
 
   return (
-    <SidebarSection
-      label="Workspace"
-      collapsible={{ open, onOpenChange: setOpen }}
-      headerAction={{
-        ariaLabel: "Add local folder",
-        icon: Plus,
-        onClick: handleAdd,
-      }}
-    >
-      {workspaces && workspaces.length > 0 ? (
-        <TooltipProvider delayDuration={400}>
-          <div className="flex flex-col gap-0.5">
-            {workspaces.map((ws) => (
-              <WorkspaceRoot
-                key={ws.id}
-                workspace={ws}
-                onRemove={() => removeMutation.mutate(ws.id)}
-                removing={removeMutation.isPending && removeMutation.variables === ws.id}
-              />
-            ))}
+    <FilePreviewContext.Provider value={openPreview}>
+      <SidebarSection
+        label="Workspace"
+        collapsible={{ open, onOpenChange: setOpen }}
+        headerAction={{
+          ariaLabel: "Add local folder",
+          icon: Plus,
+          onClick: handleAdd,
+        }}
+      >
+        {workspaces && workspaces.length > 0 ? (
+          <TooltipProvider delayDuration={400}>
+            <div className="flex flex-col gap-0.5">
+              {workspaces.map((ws) => (
+                <WorkspaceRoot
+                  key={ws.id}
+                  workspace={ws}
+                  onRemove={() => removeMutation.mutate(ws.id)}
+                  removing={removeMutation.isPending && removeMutation.variables === ws.id}
+                />
+              ))}
+            </div>
+          </TooltipProvider>
+        ) : (
+          <div className="px-3 py-1.5 text-[12px] text-muted-foreground/60">
+            No folders yet. Use + to add one.
           </div>
-        </TooltipProvider>
-      ) : (
-        <div className="px-3 py-1.5 text-[12px] text-muted-foreground/60">
-          No folders yet. Use + to add one.
-        </div>
-      )}
-    </SidebarSection>
+        )}
+      </SidebarSection>
+      <WorkspaceFilePreviewDialog target={previewTarget} onClose={closePreview} />
+    </FilePreviewContext.Provider>
   );
 }
 
@@ -241,7 +255,13 @@ function FolderContents({ workspaceId, relativePath, depth }: FolderContentsProp
             depth={depth}
           />
         ) : (
-          <FileRow key={entry.name} depth={depth} entry={entry} />
+          <FileRow
+            key={entry.name}
+            depth={depth}
+            entry={entry}
+            workspaceId={workspaceId}
+            parentPath={relativePath}
+          />
         ),
       )}
       {data.truncated && (
@@ -306,17 +326,45 @@ function FolderRow({ depth, label, labelTooltip, open, onToggle, trailing }: Fol
 type FileRowProps = {
   depth: number;
   entry: WorkspaceFileEntry;
+  workspaceId: string;
+  parentPath: string;
 };
 
-function FileRow({ depth, entry }: FileRowProps) {
+function FileRow({ depth, entry, workspaceId, parentPath }: FileRowProps) {
+  const openPreview = useContext(FilePreviewContext);
   const Icon = entry.kind === "symlink" ? FileSymlink : FileIcon;
+  const relativePath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+  // Symlinks/other can't be safely previewed via the read op (it requires a
+  // regular file). Keep the row visible but inert.
+  const clickable = entry.kind === "file";
+
   return (
     <div
       className={cn(
         "flex items-center gap-1.5 py-1 text-[13px]",
-        "text-foreground/70 hover:bg-accent/40 transition-colors cursor-default",
+        "text-foreground/70 transition-colors",
+        clickable
+          ? "hover:bg-accent/40 hover:text-foreground cursor-pointer"
+          : "cursor-default",
       )}
       style={{ paddingLeft: 12 + depth * INDENT_PX + 12, paddingRight: 12 }}
+      onClick={
+        clickable
+          ? () => openPreview({ workspaceId, relativePath, name: entry.name })
+          : undefined
+      }
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                openPreview({ workspaceId, relativePath, name: entry.name });
+              }
+            }
+          : undefined
+      }
     >
       <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" aria-hidden="true" />
       <span className="flex-1 truncate select-none">{entry.name}</span>
