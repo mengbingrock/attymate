@@ -1,6 +1,6 @@
 ---
 name: practice-workflow-learning
-description: Use when a Paperclip learning agent is explicitly authorized to observe a completed or in-progress legal workflow issue, summarize practice lessons, propose private firm-profile updates, or draft sanitized public skill improvement proposals. Do not use when learning consent, allowed sources, or do-not-learn boundaries are missing.
+description: Use when a Paperclip learning agent is explicitly authorized to observe a completed or in-progress legal workflow issue, summarize practice lessons, propose private Firm Operations Guide updates, or draft sanitized public skill improvement proposals. Do not use when learning consent, allowed sources, or do-not-learn boundaries are missing.
 ---
 
 # Practice Workflow Learning
@@ -15,7 +15,7 @@ Confirm the issue states:
 - Source issue or parent issue to learn from.
 - Allowed learning sources: issue comments, issue documents, attachments, run summaries, named output artifacts, or named profile sections.
 - Do-not-learn list: client facts, privileged strategy, confidential source text, account details, private URLs, local paths, credentials, firm secrets, and any matter-specific identifiers.
-- Output target: issue comment, issue document, private profile proposal, or sanitized skill proposal.
+- Output target: issue comment, issue document, Firm Operations Guide proposal, or sanitized skill proposal.
 - Approval gates for profile writes, public package edits, external sharing, uploads, or tool access.
 
 If any required field is missing, do not inspect the workflow. Return the issue to Legal Ops Supervisor with a concise missing-input list.
@@ -38,7 +38,7 @@ Proceed autonomously with observation and proposal drafting when the learning co
 
 Return to Legal Ops Supervisor when source scope is ambiguous, the learning mode is missing, the output target is unclear, or the observed workflow includes privileged strategy that cannot be safely abstracted.
 
-Require human approval before writing to a private firm profile, editing public package files, changing live agent instructions, uploading/sharing learning outputs, or expanding learning beyond the named sources.
+Require human approval before writing to the Firm Operations Guide, editing public package files, changing live agent instructions, uploading/sharing learning outputs, or expanding learning beyond the named sources.
 
 ## Output Format
 
@@ -50,7 +50,7 @@ Use this concise structure:
 - Learning mode:
 - Sources reviewed:
 - Reusable workflow lessons:
-- Private firm-profile proposals:
+- Private Firm Operations Guide proposals:
 - Sanitized skill proposals:
 - Do-not-learn material excluded:
 - Required approvals:

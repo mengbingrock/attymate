@@ -1,6 +1,6 @@
-# Firm Environment Profile Template
+# Firm Operations Guide Template
 
-This template is for private deployment setup through Paperclip issue documents or comments. Do not commit completed profiles to a public package.
+This template is for private deployment setup through a Paperclip issue document with key `firm-operations-guide`. Do not commit completed guides to a public package.
 
 ## Workspace
 
@@ -18,6 +18,7 @@ This template is for private deployment setup through Paperclip issue documents 
 - Agent cwd policy:
 - Model/timeout defaults:
 - Skill discovery status:
+- Legal Ops hiring policy:
 
 ## Local Tools
 
@@ -31,12 +32,13 @@ This template is for private deployment setup through Paperclip issue documents 
 ## External Tools
 
 - Browser tool:
-- Gmail:
+- Gmail connector:
+- Gmail monitor profile:
 - Google Calendar:
 - Google Drive:
 - Lexis/legal research:
 - LASC docket:
-- NotebookLM:
+- External knowledge-base or upload systems:
 - Filing/service/email portals:
 
 ## Firm Practice
@@ -48,6 +50,13 @@ This template is for private deployment setup through Paperclip issue documents 
 - Authority policy:
 - Approval policy:
 - Do-not-learn categories:
+
+## Matter Mapping
+
+- Active matter index source:
+- Matter intake checklist:
+- Matter-folder mapping owner:
+- Retention and closure policy:
 
 ## Readiness
 

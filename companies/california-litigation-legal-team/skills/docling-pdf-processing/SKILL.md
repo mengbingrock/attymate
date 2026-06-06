@@ -7,7 +7,7 @@ description: Use when a Paperclip PDF/OCR agent must convert approved PDFs or sc
 
 ## Paperclip Role
 
-Use this skill from the Source Intake Agent, NotebookLM KB Agent, or another scoped intake child issue. The skill is deployment-safe and avoids hardcoded local paths. Tool locations must come from issue instructions, environment variables, or deployment configuration.
+Use this skill from the Source Intake Agent or another scoped intake child issue. The skill is deployment-safe and avoids hardcoded local paths. Tool locations must come from issue instructions, environment variables, or deployment configuration.
 
 ## Required Issue Contract
 
@@ -18,7 +18,7 @@ Before processing begins, confirm the issue states:
 - Forbidden roots and no-cross-matter inspection rule.
 - Allowed outputs, such as Docling Markdown, JSON, OCR text, manifests, and QA notes.
 - Tool configuration, such as `{docling_runtime}` or an approved setup command.
-- Environment profile reference, autonomy level, learning mode, and red gates already approved.
+- Firm Operations Guide reference or scoped guide excerpt, autonomy level, learning mode, and red gates already approved.
 
 If a path or output boundary is missing, return a concise missing-field list to the supervisor. If the local runtime is missing, record the tool gap and continue with non-OCR manifest or extraction QA work when useful.
 

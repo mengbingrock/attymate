@@ -44,6 +44,7 @@ A package root is identified by one primary markdown file:
 - `AGENTS.md` for an agent package
 - `PROJECT.md` for a project package
 - `TASK.md` for a task package
+- `GOAL.md` for a goal package
 - `SKILL.md` for a skill package defined by the Agent Skills specification
 
 A GitHub repo may contain one package at root or many packages in subdirectories.
@@ -58,8 +59,10 @@ TEAM.md
 AGENTS.md
 PROJECT.md
 TASK.md
+GOAL.md
 SKILL.md
 
+goals/<slug>/GOAL.md
 agents/<slug>/AGENTS.md
 teams/<slug>/TEAM.md
 projects/<slug>/PROJECT.md
@@ -223,7 +226,32 @@ Rules:
 - the skill package itself should carry any complexity around external refs, vendoring, mirrors, or pinned upstream content
 - this keeps `AGENTS.md` readable and consistent with `skills.sh`-style sharing
 
-## 9. PROJECT.md
+## 9. GOAL.md
+
+`GOAL.md` defines a portable company goal. Goals are the strategic "why" layer that projects and tasks can link back to.
+
+```yaml
+schema: agentcompanies/v1
+kind: goal
+slug: launch-mvp
+title: Launch MVP
+description: Ship the first usable product.
+level: company
+status: active
+parent: broader-company-goal
+owner: ceo
+```
+
+Notes:
+
+- `title` may also be expressed as `name`.
+- `level` should usually be `company`, `team`, `agent`, or `task`.
+- `status` should usually be `planned`, `active`, `achieved`, or `cancelled`.
+- `parent` references another goal slug.
+- `owner` references an agent slug.
+- the markdown body may supply the long description.
+
+## 10. PROJECT.md
 
 `PROJECT.md` defines a lightweight project package.
 
@@ -243,7 +271,7 @@ owner: cto
 - `includes` may contain `TASK.md`, `SKILL.md`, or supporting docs when explicit wiring is needed
 - project packages are intended to seed planned work, not represent runtime task state
 
-## 10. TASK.md
+## 11. TASK.md
 
 `TASK.md` defines a lightweight starter task.
 
@@ -286,7 +314,7 @@ routines:
 - vendors should ignore unknown recurring-task extensions they do not understand
 - vendors importing legacy `schedule.recurrence` data may translate it into their own runtime trigger model, but new exports should prefer the simpler `recurring: true` base field
 
-## 11. SKILL.md Compatibility
+## 12. SKILL.md Compatibility
 
 A skill package must remain a valid Agent Skills package.
 
@@ -325,7 +353,7 @@ metadata:
 ---
 ```
 
-## 12. Source References
+## 13. Source References
 
 A package may point to upstream content instead of vendoring it.
 
@@ -367,7 +395,7 @@ sources:
 - branch-only refs may be allowed in development mode but must warn
 - exporters should default to `referenced` for third-party content unless redistribution is clearly allowed
 
-## 13. Resolution Rules
+## 14. Resolution Rules
 
 Given a package root, an importer resolves in this order:
 
@@ -392,13 +420,14 @@ An importer must surface:
 - referenced upstream content that requires network fetch
 - executable content in skills or scripts
 
-## 14. Import Graph
+## 15. Import Graph
 
 A package importer should build a graph from:
 
 - `COMPANY.md`
 - `TEAM.md`
 - `AGENTS.md`
+- `GOAL.md`
 - `PROJECT.md`
 - `TASK.md`
 - `SKILL.md`
@@ -414,7 +443,7 @@ Suggested import UI behavior:
 - selecting a recurring task should make it clear that the import target is a routine / automation, not a one-time task
 - selecting referenced third-party content shows attribution, license, and fetch policy
 
-## 15. Vendor Extensions
+## 16. Vendor Extensions
 
 Vendor-specific data should live outside the base package shape.
 
@@ -480,7 +509,7 @@ Additional rules for Paperclip exporters:
 - warn on system-dependent values such as absolute commands and absolute `PATH` overrides
 - omit empty and default-valued Paperclip fields when possible
 
-## 16. Export Rules
+## 17. Export Rules
 
 A compliant exporter should:
 
@@ -496,7 +525,7 @@ A compliant exporter should:
 - prefer `referenced` over silent vendoring for third-party content
 - preserve `SKILL.md` as-is when exporting compatible skills
 
-## 17. Licensing And Attribution
+## 18. Licensing And Attribution
 
 A compliant tool must:
 
@@ -506,7 +535,7 @@ A compliant tool must:
 - surface missing license metadata as a warning
 - surface restrictive or unknown licenses before install/import if content is vendored or mirrored
 
-## 18. Optional Lock File
+## 19. Optional Lock File
 
 Authoring does not require a lock file.
 
@@ -528,7 +557,7 @@ Rules:
 - lock files are generated artifacts, not canonical authoring input
 - the markdown package remains the source of truth
 
-## 19. Paperclip Mapping
+## 20. Paperclip Mapping
 
 Paperclip can map this spec to its runtime model like this:
 
@@ -536,6 +565,7 @@ Paperclip can map this spec to its runtime model like this:
   - `COMPANY.md` -> company metadata
   - `TEAM.md` -> importable org subtree
   - `AGENTS.md` -> agent identity and instructions
+  - `GOAL.md` -> company/team/agent/task goal
   - `PROJECT.md` -> starter project definition
   - `TASK.md` -> starter issue/task definition, or recurring task template when `recurring: true`
   - `SKILL.md` -> imported skill package
@@ -551,7 +581,7 @@ That keeps the base format broader than Paperclip.
 
 This specification itself remains vendor-neutral and intended for any agent-company runtime, not only Paperclip.
 
-## 20. Cutover
+## 21. Cutover
 
 Paperclip should cut over to this markdown-first package model as the primary portability format.
 
@@ -559,7 +589,7 @@ Paperclip should cut over to this markdown-first package model as the primary po
 
 For Paperclip, this should be treated as a hard cutover in product direction rather than a long-lived dual-format strategy.
 
-## 21. Minimal Example
+## 22. Minimal Example
 
 ```text
 lean-dev-shop/

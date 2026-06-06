@@ -4,7 +4,7 @@ kind: company
 slug: california-litigation-legal-team
 name: California Litigation Legal Team
 description: Paperclip company for reusable California litigation workflows with supervised issue scope, approvals, and specialist agents.
-version: 0.3.0
+version: 0.5.0
 license: MIT
 goals:
   - Coordinate reusable California litigation workflows through Paperclip issues, approvals, budgets, and Codex local agents.
@@ -13,9 +13,13 @@ requirements:
   runtime:
     - Paperclip with codex_local adapter support.
     - Authenticated Codex CLI or an approved deployment-specific API-key auth mechanism.
-    - Python and OCR/PDF tooling configured through a private runtime environment profile.
+    - Python and OCR/PDF tooling configured through the private Firm Operations Guide.
     - Matter and output paths supplied at runtime through issue contracts.
 includes:
+  - goals/complete-firm-onboarding-and-runtime-readiness/GOAL.md
+  - goals/run-matter-scoped-litigation-work-safely/GOAL.md
+  - goals/produce-source-bound-litigation-work-product/GOAL.md
+  - goals/improve-firm-workflow-through-opt-in-learning/GOAL.md
   - agents/legal-ops-supervisor/AGENTS.md
   - agents/source-intake-agent/AGENTS.md
   - agents/facts-evidence-agent/AGENTS.md
@@ -23,9 +27,9 @@ includes:
   - agents/drafting-assembly-agent/AGENTS.md
   - agents/docket-agent/AGENTS.md
   - agents/calendar-agent/AGENTS.md
-  - agents/notebooklm-kb-agent/AGENTS.md
   - agents/legal-qa-agent/AGENTS.md
   - agents/practice-learning-agent/AGENTS.md
+  - agents/gmail-monitor-agent/AGENTS.md
   - projects/firm-onboarding/PROJECT.md
   - skills/legal-calendaring-workflow/SKILL.md
   - skills/lexis-browseros-legal-research/SKILL.md
@@ -33,7 +37,6 @@ includes:
   - skills/ca-pleading-intake-review/SKILL.md
   - skills/docling-pdf-processing/SKILL.md
   - skills/lasc-browseros-docket-check/SKILL.md
-  - skills/notebooklm-legal-kb/SKILL.md
   - skills/ca-subpoena-mtc-autonomous-runner/SKILL.md
   - skills/ca-subpoena-mtc-drafting-workflow/SKILL.md
   - skills/practice-workflow-learning/SKILL.md

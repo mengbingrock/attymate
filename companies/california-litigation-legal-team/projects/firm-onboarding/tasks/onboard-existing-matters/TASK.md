@@ -8,6 +8,6 @@ project: firm-onboarding
 priority: medium
 ---
 
-Create a private Firm Environment Profile section for matter mapping.
+Create or update the Firm Operations Guide section for matter mapping.
 
-Inventory existing matters at a high level only: matter labels, approved matter roots, output roots, source folder conventions, and any do-not-inspect folders. Do not extract client facts into public package files. Live work on a matter still requires a separate parent issue with a Matter Safety Contract.
+Inventory existing matters at a high level only: matter labels, approved matter roots, output roots, source folder conventions, and any do-not-inspect folders. Do not extract client facts into public package files. Live work on a matter still requires a separate parent issue with a Matter Safety Contract and Firm Operations Guide reference. Add a section-ready update or direct document edit to `firm-operations-guide`.

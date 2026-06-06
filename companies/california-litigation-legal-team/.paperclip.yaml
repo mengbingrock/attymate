@@ -1,6 +1,8 @@
 schema: paperclip/v1
 agents:
   legal-ops-supervisor:
+    permissions:
+      canCreateAgents: true
     adapter:
       type: codex_local
       config:
@@ -72,7 +74,7 @@ agents:
         graceSec: 20
         extraArgs:
           - "--skip-git-repo-check"
-  notebooklm-kb-agent:
+  practice-learning-agent:
     adapter:
       type: codex_local
       config:
@@ -81,7 +83,7 @@ agents:
         graceSec: 20
         extraArgs:
           - "--skip-git-repo-check"
-  practice-learning-agent:
+  gmail-monitor-agent:
     adapter:
       type: codex_local
       config:
@@ -108,6 +110,10 @@ inputs:
       kind: text
       requirement: required
       description: Deployment-approved OCR/PDF runtime, such as Docling or another local processing tool, configured outside the public package.
+    firm_operations_guide:
+      kind: text
+      requirement: required
+      description: Private Paperclip issue-document reference for the deployment's durable Firm Operations Guide.
     browser_tooling:
       kind: text
       requirement: required
@@ -116,6 +122,10 @@ inputs:
       kind: text
       requirement: optional
       description: Gmail connector status. Sensitive values must use Paperclip secret references, not inline package data.
+    gmail_monitor_profile:
+      kind: text
+      requirement: optional
+      description: Read-only Gmail monitoring scope, query rules, dedupe policy, routing criteria, redaction policy, and schedule preference. Required before enabling Gmail Monitor Agent routines.
     google_calendar_connector:
       kind: text
       requirement: optional
@@ -132,10 +142,6 @@ inputs:
       kind: text
       requirement: optional
       description: LASC docket access status. Authentication, paid retrieval, downloads, filing, and service require approval.
-    notebooklm_access:
-      kind: text
-      requirement: optional
-      description: NotebookLM or equivalent knowledge-base access status. Uploads, sharing, and external queries require approval.
     matter_root:
       kind: path
       requirement: runtime

@@ -88,6 +88,7 @@ export {
   portabilityEnvInputSchema,
   portabilityCompanyManifestEntrySchema,
   portabilitySidebarOrderSchema,
+  portabilityGoalManifestEntrySchema,
   portabilityAgentManifestEntrySchema,
   portabilitySkillManifestEntrySchema,
   portabilityManifestSchema,

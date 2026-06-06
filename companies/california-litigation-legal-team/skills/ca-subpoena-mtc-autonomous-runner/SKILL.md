@@ -13,14 +13,14 @@ Use this Paperclip-native wrapper as the runtime authority for MTC coordination,
 
 - Begin with user-owned matter selection.
 - Require a parent issue assigned to Legal Ops Supervisor. Do not start from import-time MTC seed issues.
-- Confirm Matter Safety Contract fields: workflow type, autonomy level, environment profile reference, matter root, output root, source roots, forbidden roots, allowed outputs, learning mode, do-not-learn list, and red gates already approved.
+- Confirm Matter Safety Contract fields: workflow type, autonomy level, Firm Operations Guide reference or scoped guide excerpt, matter root, output root, source roots, forbidden roots, allowed outputs, learning mode, do-not-learn list, and red gates already approved.
 - In planning, inspect only the selected matter and produce a Launch Intake Packet.
 - Do not create files, OCR sidecars, draft sections, Word copies, or run-state artifacts during planning.
 - After implementation is authorized, create `Intermediary work\00_Autonomous Run State.md` or the matter's equivalent new run-state artifact.
 - Create only new intermediary artifacts and new working draft copies.
 - Do not overwrite source files, user-edited drafts, final drafts, signed documents, served documents, or filing documents without explicit approval.
 - Do not use legal authorities from memory.
-- Stop at red gates: external research/upload, Lexis or new authorities, NotebookLM, browser auth, external downloads, paid retrieval, email, filing, service, signing, finalization, Word writes to active drafts, strategy changes, sanctions changes, relief changes, privacy/protective-order changes, or conflicting draft selection.
+- Stop at red gates: external research/upload, Lexis or new authorities, external knowledge-base/upload systems, browser auth, external downloads, paid retrieval, email, filing, service, signing, finalization, Word writes to active drafts, strategy changes, sanctions changes, relief changes, privacy/protective-order changes, or conflicting draft selection.
 - Continue green work without asking: source inventory, safe OCR planning, source-bound tables, draft text under the output root, research logs from supplied authorities, QA notes, and proposed child issue descriptions.
 
 ## Paperclip Mapping

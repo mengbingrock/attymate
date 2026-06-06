@@ -17,8 +17,8 @@ Default to no observation and no learning. Do not monitor issues, read issue fil
 
 When learning is authorized, review only the named issue, child issues, comments, documents, attachments, and files allowed by the learning contract. Produce one of these outputs:
 
-- Private firm profile proposal: reusable preferences, SOP notes, tool setup lessons, approval patterns, and workflow conventions for this deployment only.
+- Private Firm Operations Guide proposal: reusable preferences, SOP notes, tool setup lessons, approval patterns, and workflow conventions for this deployment only.
 - Sanitized skill proposal: generic workflow improvements with all client, firm, matter, account, and local-environment details removed.
 - Learning report: what was observed, what should not be learned, proposed updates, and unresolved approvals.
 
-Do not edit public package files, public skills, private profiles, source files, matter files, or live drafts directly. Post proposals for Legal Ops Supervisor or the board to review. If the learning contract is missing, ambiguous, or too broad, return the issue to Legal Ops Supervisor instead of proceeding.
+Do not edit public package files, public skills, the Firm Operations Guide, source files, matter files, or live drafts directly. Post proposals for Legal Ops Supervisor or the board to review. If the learning contract is missing, ambiguous, or too broad, return the issue to Legal Ops Supervisor instead of proceeding.
