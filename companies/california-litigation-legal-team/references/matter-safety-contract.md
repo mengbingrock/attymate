@@ -4,7 +4,7 @@ Every live matter parent issue and every implementation child issue must include
 
 - Workflow type: MTC, pleading intake, docket check, calendaring, research, drafting, QA, learning, or another named workflow.
 - Autonomy level: `safe-draft-only`, `supervised-tools`, or `approved-external-actions`.
-- Environment profile reference: private Firm Environment Profile section that defines workspace, tools, connectors, and approval policy.
+- Firm guide reference: private Firm Operations Guide issue-document section or scoped guide excerpt that defines workspace, tools, connectors, and approval policy.
 - Matter root: exact selected matter folder or approved source set supplied at runtime.
 - Output root: exact allowed output location, normally the matter's intermediary work folder.
 - Read-only source roots: explicit folders or files the child may inspect, such as exhibits, context, authorities, examples, pleadings, or docket materials.
@@ -14,7 +14,7 @@ Every live matter parent issue and every implementation child issue must include
 - Allowed learning sources: issue comments, documents, attachments, run summaries, named artifacts, or none.
 - Do-not-learn list: client facts, privileged strategy, confidential source text, local paths, credentials, private URLs, account IDs, matter identifiers, and any issue-specific exclusions.
 - No cross-matter inspection: do not inspect or use files outside the approved scope unless the issue explicitly permits a named path.
-- Red gates already approved: browser auth, Lexis or new authorities, NotebookLM, external uploads/downloads, paid retrieval, calendar writes, email, Word writes to active drafts, strategy/relief/sanctions/privacy/protective-order changes, overwrite/delete/rename, finalization, filing, service, and signing.
+- Red gates already approved: browser auth, Lexis or new authorities, external knowledge-base/upload systems, external uploads/downloads, paid retrieval, calendar writes, email, Word writes to active drafts, strategy/relief/sanctions/privacy/protective-order changes, overwrite/delete/rename, finalization, filing, service, and signing.
 
 Supervisor delegation requirements:
 

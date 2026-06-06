@@ -25,6 +25,12 @@ const accessSvc = {
   setPrincipalPermission: vi.fn(),
 };
 
+const goalSvc = {
+  list: vi.fn(),
+  create: vi.fn(),
+  update: vi.fn(),
+};
+
 const projectSvc = {
   list: vi.fn(),
   create: vi.fn(),
@@ -81,6 +87,10 @@ vi.mock("../services/agents.js", () => ({
 
 vi.mock("../services/access.js", () => ({
   accessService: () => accessSvc,
+}));
+
+vi.mock("../services/goals.js", () => ({
+  goalService: () => goalSvc,
 }));
 
 vi.mock("../services/projects.js", () => ({
@@ -229,6 +239,31 @@ describe("company portability", () => {
         metadata: null,
       },
     ]);
+    goalSvc.list.mockResolvedValue([]);
+    goalSvc.create.mockImplementation(async (companyId: string, input: Record<string, unknown>) => ({
+      id: `goal-${String(input.title).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`,
+      companyId,
+      title: input.title,
+      description: input.description ?? null,
+      level: input.level ?? "company",
+      status: input.status ?? "planned",
+      parentId: input.parentId ?? null,
+      ownerAgentId: input.ownerAgentId ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+    goalSvc.update.mockImplementation(async (id: string, input: Record<string, unknown>) => ({
+      id,
+      companyId: "company-imported",
+      title: input.title ?? "Updated goal",
+      description: input.description ?? null,
+      level: input.level ?? "company",
+      status: input.status ?? "planned",
+      parentId: input.parentId ?? null,
+      ownerAgentId: input.ownerAgentId ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
     projectSvc.list.mockResolvedValue([]);
     projectSvc.createWorkspace.mockResolvedValue(null);
     projectSvc.listWorkspaces.mockResolvedValue([]);
@@ -1039,6 +1074,100 @@ describe("company portability", () => {
       projectId: "project-imported",
       projectWorkspaceId: "workspace-imported",
       title: "Write launch task",
+    }));
+  });
+
+  it("imports portable goals and links projects by goal slug", async () => {
+    const portability = companyPortabilityService({} as any);
+    const files = {
+      "COMPANY.md": [
+        "---",
+        "schema: agentcompanies/v1",
+        "name: Litigation Team",
+        "includes:",
+        "  - goals/onboarding/GOAL.md",
+        "  - projects/firm-onboarding/PROJECT.md",
+        "---",
+        "",
+      ].join("\n"),
+      "goals/onboarding/GOAL.md": [
+        "---",
+        "schema: agentcompanies/v1",
+        "kind: goal",
+        "slug: onboarding",
+        "title: Complete Firm Onboarding",
+        "level: company",
+        "status: active",
+        "---",
+        "",
+        "Prepare the firm environment before live work.",
+      ].join("\n"),
+      "projects/firm-onboarding/PROJECT.md": [
+        "---",
+        "schema: agentcompanies/v1",
+        "kind: project",
+        "slug: firm-onboarding",
+        "name: Firm Onboarding",
+        "goals:",
+        "  - onboarding",
+        "---",
+        "",
+      ].join("\n"),
+    };
+
+    projectSvc.create.mockImplementation(async (_companyId: string, input: Record<string, unknown>) => ({
+      id: "project-imported",
+      name: input.name,
+      urlKey: "firm-onboarding",
+      ...input,
+    }));
+
+    const preview = await portability.previewImport({
+      source: { type: "inline", rootPath: "litigation-team", files },
+      include: {
+        company: true,
+        goals: true,
+        agents: false,
+        projects: true,
+        issues: false,
+        skills: false,
+      },
+      target: { mode: "new_company" },
+    });
+
+    expect(preview.manifest.goals).toHaveLength(1);
+    expect(preview.plan.goalPlans).toEqual([
+      expect.objectContaining({
+        slug: "onboarding",
+        action: "create",
+        plannedTitle: "Complete Firm Onboarding",
+      }),
+    ]);
+
+    const result = await portability.importBundle({
+      source: { type: "inline", rootPath: "litigation-team", files },
+      include: {
+        company: true,
+        goals: true,
+        agents: false,
+        projects: true,
+        issues: false,
+        skills: false,
+      },
+      target: { mode: "new_company" },
+      collisionStrategy: "rename",
+    }, "user-1");
+
+    expect(result.goals).toEqual([
+      expect.objectContaining({
+        slug: "onboarding",
+        action: "created",
+        title: "Complete Firm Onboarding",
+      }),
+    ]);
+    expect(projectSvc.create).toHaveBeenCalledWith("company-imported", expect.objectContaining({
+      name: "Firm Onboarding",
+      goalIds: ["goal-complete-firm-onboarding"],
     }));
   });
 

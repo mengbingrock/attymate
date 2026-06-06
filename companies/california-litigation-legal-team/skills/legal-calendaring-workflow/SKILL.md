@@ -19,7 +19,7 @@ Before work begins, confirm the issue states:
 - Jurisdiction, court, triggering event, triggering date, service method, hearing date, reservation date, or other calculation facts.
 - Target calendar or a rule for asking the supervisor to choose one.
 - Forbidden roots and no-cross-matter inspection rule.
-- Environment profile reference, autonomy level, learning mode, and red gates already approved.
+- Firm Operations Guide reference or scoped guide excerpt, autonomy level, learning mode, and red gates already approved.
 
 If a required calculation fact or policy source is missing, return a concise missing-input list. Do not infer facts from other matters. Continue with any proposed entries that can be calculated from approved facts.
 

@@ -10,6 +10,7 @@ import { routineVariableSchema } from "./routine.js";
 export const portabilityIncludeSchema = z
   .object({
     company: z.boolean().optional(),
+    goals: z.boolean().optional(),
     agents: z.boolean().optional(),
     projects: z.boolean().optional(),
     issues: z.boolean().optional(),
@@ -74,6 +75,18 @@ export const portabilityAgentManifestEntrySchema = z.object({
   metadata: z.record(z.unknown()).nullable(),
 });
 
+export const portabilityGoalManifestEntrySchema = z.object({
+  slug: z.string().min(1),
+  title: z.string().min(1),
+  path: z.string().min(1),
+  description: z.string().nullable(),
+  level: z.string().nullable(),
+  status: z.string().nullable(),
+  parentGoalSlug: z.string().min(1).nullable(),
+  ownerAgentSlug: z.string().min(1).nullable(),
+  metadata: z.record(z.unknown()).nullable(),
+});
+
 export const portabilitySkillManifestEntrySchema = z.object({
   key: z.string().min(1),
   slug: z.string().min(1),
@@ -97,6 +110,7 @@ export const portabilityProjectManifestEntrySchema = z.object({
   name: z.string().min(1),
   path: z.string().min(1),
   description: z.string().nullable(),
+  goalSlugs: z.array(z.string().min(1)).default([]),
   ownerAgentSlug: z.string().min(1).nullable(),
   leadAgentSlug: z.string().min(1).nullable(),
   targetDate: z.string().nullable(),
@@ -179,6 +193,7 @@ export const portabilityManifestSchema = z.object({
     .nullable(),
   includes: z.object({
     company: z.boolean(),
+    goals: z.boolean().optional(),
     agents: z.boolean(),
     projects: z.boolean(),
     issues: z.boolean(),
@@ -186,6 +201,7 @@ export const portabilityManifestSchema = z.object({
   }),
   company: portabilityCompanyManifestEntrySchema.nullable(),
   sidebar: portabilitySidebarOrderSchema.nullable(),
+  goals: z.array(portabilityGoalManifestEntrySchema).default([]),
   agents: z.array(portabilityAgentManifestEntrySchema),
   skills: z.array(portabilitySkillManifestEntrySchema).default([]),
   projects: z.array(portabilityProjectManifestEntrySchema).default([]),

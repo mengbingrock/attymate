@@ -55,6 +55,14 @@ function buildActionMap(preview: CompanyPortabilityPreviewResult): Map<string, s
   const map = new Map<string, string>();
   const manifest = preview.manifest;
 
+  for (const gp of preview.plan.goalPlans ?? []) {
+    const goal = manifest.goals?.find((g) => g.slug === gp.slug);
+    if (goal) {
+      const path = ensureMarkdownPath(goal.path);
+      map.set(path, gp.action);
+    }
+  }
+
   for (const ap of preview.plan.agentPlans) {
     const agent = manifest.agents.find((a) => a.slug === ap.slug);
     if (agent) {
@@ -267,7 +275,7 @@ function ImportPreviewPane({
 
 interface ConflictItem {
   slug: string;
-  kind: "agent" | "project" | "issue" | "skill";
+  kind: "goal" | "agent" | "project" | "issue" | "skill";
   originalName: string;
   plannedName: string;
   filePath: string | null;
@@ -279,6 +287,20 @@ function buildConflictList(
 ): ConflictItem[] {
   const conflicts: ConflictItem[] = [];
   const manifest = preview.manifest;
+
+  for (const gp of preview.plan.goalPlans ?? []) {
+    if (gp.existingGoalId) {
+      const goal = manifest.goals?.find((g) => g.slug === gp.slug);
+      conflicts.push({
+        slug: gp.slug,
+        kind: "goal",
+        originalName: goal?.title ?? gp.slug,
+        plannedName: gp.plannedTitle,
+        filePath: goal ? ensureMarkdownPath(goal.path) : null,
+        action: gp.action === "update" ? "update" : "rename",
+      });
+    }
+  }
 
   // Agents with collisions
   for (const ap of preview.plan.agentPlans) {
@@ -730,7 +752,7 @@ export function CompanyImport() {
       if (!source) throw new Error("No source configured.");
       return companiesApi.importPreview({
         source,
-        include: { company: true, agents: true, projects: true, issues: true },
+        include: { company: true, goals: true, agents: true, projects: true, issues: true, skills: true },
         target:
           targetMode === "new"
             ? { mode: "new_company", newCompanyName: newCompanyName || null }
@@ -834,7 +856,7 @@ export function CompanyImport() {
       if (!source) throw new Error("No source configured.");
       return companiesApi.importBundle({
         source,
-        include: { company: true, agents: true, projects: true, issues: true },
+        include: { company: true, goals: true, agents: true, projects: true, issues: true, skills: true },
         target:
           targetMode === "new"
             ? { mode: "new_company", newCompanyName: newCompanyName || null }

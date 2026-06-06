@@ -8,6 +8,6 @@ project: firm-onboarding
 priority: medium
 ---
 
-Create a private Firm Environment Profile section for learning policy.
+Create or update the Firm Operations Guide section for learning policy.
 
-Set default `Learning mode` to `off` unless the board chooses otherwise. Define who may enable learning on a matter issue, allowed learning sources, do-not-learn categories, private profile update workflow, sanitized skill proposal workflow, and approval requirements before any public skill update.
+Set default `Learning mode` to `off` unless the board chooses otherwise. Define who may enable learning on a matter issue, allowed learning sources, do-not-learn categories, private guide update workflow, sanitized skill proposal workflow, and approval requirements before any public skill update. Add a section-ready update or direct document edit to `firm-operations-guide`.

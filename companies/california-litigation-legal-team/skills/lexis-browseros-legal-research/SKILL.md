@@ -19,7 +19,7 @@ Before research begins, confirm the issue states:
 - Output root for research logs, authority tables, exports, and memos.
 - Authority-use limits, including whether only supplied authorities may be used.
 - Forbidden roots and no-cross-matter inspection rule.
-- Environment profile reference, autonomy level, learning mode, and red gates already approved.
+- Firm Operations Guide reference or scoped guide excerpt, autonomy level, learning mode, and red gates already approved.
 
 If research scope or matter label is missing, return the missing-field list to the supervisor. If external Lexis access is not approved, continue with supplied or already-approved authorities and record what external work remains.
 

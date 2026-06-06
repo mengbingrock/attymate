@@ -80,6 +80,7 @@ interface CompanyImportOptions extends BaseClientOptions {
 
 const DEFAULT_EXPORT_INCLUDE: CompanyPortabilityInclude = {
   company: true,
+  goals: false,
   agents: true,
   projects: false,
   issues: false,
@@ -88,6 +89,7 @@ const DEFAULT_EXPORT_INCLUDE: CompanyPortabilityInclude = {
 
 const DEFAULT_IMPORT_INCLUDE: CompanyPortabilityInclude = {
   company: true,
+  goals: true,
   agents: true,
   projects: true,
   issues: true,
@@ -100,6 +102,7 @@ const IMPORT_INCLUDE_OPTIONS: Array<{
   hint: string;
 }> = [
   { value: "company", label: "Company", hint: "name, branding, and company settings" },
+  { value: "goals", label: "Goals", hint: "company goals and project alignment" },
   { value: "projects", label: "Projects", hint: "projects and workspace metadata" },
   { value: "issues", label: "Tasks", hint: "tasks and recurring routines" },
   { value: "agents", label: "Agents", hint: "agent records and org structure" },
@@ -108,13 +111,14 @@ const IMPORT_INCLUDE_OPTIONS: Array<{
 
 const IMPORT_PREVIEW_SAMPLE_LIMIT = 6;
 
-type ImportSelectableGroup = "projects" | "issues" | "agents" | "skills";
+type ImportSelectableGroup = "goals" | "projects" | "issues" | "agents" | "skills";
 
 type ImportSelectionCatalog = {
   company: {
     includedByDefault: boolean;
     files: string[];
   };
+  goals: Array<{ key: string; label: string; hint?: string; files: string[] }>;
   projects: Array<{ key: string; label: string; hint?: string; files: string[] }>;
   issues: Array<{ key: string; label: string; hint?: string; files: string[] }>;
   agents: Array<{ key: string; label: string; hint?: string; files: string[] }>;
@@ -124,6 +128,7 @@ type ImportSelectionCatalog = {
 
 type ImportSelectionState = {
   company: boolean;
+  goals: Set<string>;
   projects: Set<string>;
   issues: Set<string>;
   agents: Set<string>;
@@ -161,13 +166,14 @@ function parseInclude(
   const values = input.split(",").map((part) => part.trim().toLowerCase()).filter(Boolean);
   const include = {
     company: values.includes("company"),
+    goals: values.includes("goals"),
     agents: values.includes("agents"),
     projects: values.includes("projects"),
     issues: values.includes("issues") || values.includes("tasks"),
     skills: values.includes("skills"),
   };
-  if (!include.company && !include.agents && !include.projects && !include.issues && !include.skills) {
-    throw new Error("Invalid --include value. Use one or more of: company,agents,projects,issues,tasks,skills");
+  if (!include.company && !include.goals && !include.agents && !include.projects && !include.issues && !include.skills) {
+    throw new Error("Invalid --include value. Use one or more of: company,goals,agents,projects,issues,tasks,skills");
   }
   return include;
 }
@@ -265,6 +271,12 @@ export function buildImportSelectionCatalog(preview: CompanyPortabilityPreviewRe
       includedByDefault: preview.include.company && preview.manifest.company !== null,
       files: Array.from(companyFiles).sort((left, right) => left.localeCompare(right)),
     },
+    goals: (preview.manifest.goals ?? []).map((goal) => ({
+      key: goal.slug,
+      label: goal.title,
+      hint: goal.slug,
+      files: collectEntityFiles(preview.files, normalizePortablePath(goal.path)),
+    })),
     projects: preview.manifest.projects.map((project) => {
       const projectPath = normalizePortablePath(project.path);
       const projectDir = projectPath.includes("/") ? projectPath.slice(0, projectPath.lastIndexOf("/")) : "";
@@ -308,6 +320,7 @@ function toKeySet(items: Array<{ key: string }>): Set<string> {
 export function buildDefaultImportSelectionState(catalog: ImportSelectionCatalog): ImportSelectionState {
   return {
     company: catalog.company.includedByDefault,
+    goals: toKeySet(catalog.goals),
     projects: toKeySet(catalog.projects),
     issues: toKeySet(catalog.issues),
     agents: toKeySet(catalog.agents),
@@ -329,6 +342,8 @@ function summarizeGroupSelection(catalog: ImportSelectionCatalog, state: ImportS
 
 function getGroupLabel(group: ImportSelectableGroup): string {
   switch (group) {
+    case "goals":
+      return "Goals";
     case "projects":
       return "Projects";
     case "issues":
@@ -352,7 +367,7 @@ export function buildSelectedFilesFromImportSelection(
     }
   }
 
-  for (const group of ["projects", "issues", "agents", "skills"] as const) {
+  for (const group of ["goals", "projects", "issues", "agents", "skills"] as const) {
     const selectedKeys = state[group];
     for (const item of catalog[group]) {
       if (!selectedKeys.has(item.key)) continue;
@@ -412,6 +427,11 @@ async function promptForImportSelection(preview: CompanyPortabilityPreviewResult
           value: "company",
           label: state.company ? "Company: included" : "Company: skipped",
           hint: catalog.company.files.length > 0 ? "toggle company metadata" : "no company metadata in package",
+        },
+        {
+          value: "goals",
+          label: "Select Goals",
+          hint: summarizeGroupSelection(catalog, state, "goals"),
         },
         {
           value: "projects",
@@ -560,6 +580,18 @@ function summarizeImportProjectResults(projects: CompanyPortabilityImportResult[
   return `${projects.length} ${pluralize(projects.length, "project")} total (${parts.join(", ")})`;
 }
 
+function summarizeImportGoalResults(goals: NonNullable<CompanyPortabilityImportResult["goals"]>): string {
+  if (goals.length === 0) return "0 goals changed";
+  const created = goals.filter((goal) => goal.action === "created").length;
+  const updated = goals.filter((goal) => goal.action === "updated").length;
+  const skipped = goals.filter((goal) => goal.action === "skipped").length;
+  const parts: string[] = [];
+  if (created > 0) parts.push(`${created} created`);
+  if (updated > 0) parts.push(`${updated} updated`);
+  if (skipped > 0) parts.push(`${skipped} skipped`);
+  return `${goals.length} ${pluralize(goals.length, "goal")} total (${parts.join(", ")})`;
+}
+
 function actionChip(action: string): string {
   switch (action) {
     case "create":
@@ -621,6 +653,7 @@ export function renderCompanyImportPreview(
     "",
     pc.bold("Package"),
     `- company: ${preview.manifest.company?.name ?? preview.manifest.source?.companyName ?? "not included"}`,
+    `- goals: ${(preview.manifest.goals ?? []).length}`,
     `- agents: ${preview.manifest.agents.length}`,
     `- projects: ${preview.manifest.projects.length}`,
     `- tasks: ${preview.manifest.issues.length}`,
@@ -635,6 +668,7 @@ export function renderCompanyImportPreview(
   lines.push("");
   lines.push(pc.bold("Plan"));
   lines.push(`- company: ${actionChip(preview.plan.companyAction === "none" ? "unchanged" : preview.plan.companyAction)}`);
+  lines.push(`- goals: ${summarizePlanCounts(preview.plan.goalPlans ?? [], "goal")}`);
   lines.push(`- agents: ${summarizePlanCounts(preview.plan.agentPlans, "agent")}`);
   lines.push(`- projects: ${summarizePlanCounts(preview.plan.projectPlans, "project")}`);
   lines.push(`- tasks: ${summarizePlanCounts(preview.plan.issuePlans, "task")}`);
@@ -642,6 +676,15 @@ export function renderCompanyImportPreview(
     lines.push(`- skills: ${preview.manifest.skills.length} ${pluralize(preview.manifest.skills.length, "skill")} packaged`);
   }
 
+  appendPreviewExamples(
+    lines,
+    "Goal examples",
+    (preview.plan.goalPlans ?? []).map((plan) => ({
+      action: plan.action,
+      label: `${plan.slug} -> ${plan.plannedTitle}`,
+      reason: plan.reason,
+    })),
+  );
   appendPreviewExamples(
     lines,
     "Agent examples",
@@ -684,6 +727,7 @@ export function renderCompanyImportResult(
   const lines: string[] = [
     `${pc.bold("Target")}  ${meta.targetLabel}`,
     `${pc.bold("Company")} ${result.company.name} (${actionChip(result.company.action)})`,
+    `${pc.bold("Goals")}   ${summarizeImportGoalResults(result.goals ?? [])}`,
     `${pc.bold("Agents")}  ${summarizeImportAgentResults(result.agents)}`,
     `${pc.bold("Projects")} ${summarizeImportProjectResults(result.projects)}`,
   ];
@@ -692,6 +736,15 @@ export function renderCompanyImportResult(
     lines.splice(1, 0, `${pc.bold("URL")}     ${meta.companyUrl}`);
   }
 
+  appendPreviewExamples(
+    lines,
+    "Goal results",
+    (result.goals ?? []).map((goal) => ({
+      action: goal.action,
+      label: `${goal.slug} -> ${goal.title}`,
+      reason: goal.reason,
+    })),
+  );
   appendPreviewExamples(
     lines,
     "Agent results",
@@ -1215,7 +1268,7 @@ export function registerCompanyCommands(program: Command): void {
       .description("Export a company into a portable markdown package")
       .argument("<companyId>", "Company ID")
       .requiredOption("--out <path>", "Output directory")
-      .option("--include <values>", "Comma-separated include set: company,agents,projects,issues,tasks,skills", "company,agents")
+      .option("--include <values>", "Comma-separated include set: company,goals,agents,projects,issues,tasks,skills", "company,agents")
       .option("--skills <values>", "Comma-separated skill slugs/keys to export")
       .option("--projects <values>", "Comma-separated project shortnames/ids to export")
       .option("--issues <values>", "Comma-separated issue identifiers/ids to export")
@@ -1268,7 +1321,7 @@ export function registerCompanyCommands(program: Command): void {
       .command("import")
       .description("Import a portable markdown company package from local path, URL, or GitHub")
       .argument("<fromPathOrUrl>", "Source path or URL")
-      .option("--include <values>", "Comma-separated include set: company,agents,projects,issues,tasks,skills")
+      .option("--include <values>", "Comma-separated include set: company,goals,agents,projects,issues,tasks,skills")
       .option("--target <mode>", "Target mode: new | existing")
       .option("-C, --company-id <id>", "Existing target company ID")
       .option("--new-company-name <name>", "Name override for --target new")

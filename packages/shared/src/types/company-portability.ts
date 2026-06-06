@@ -5,6 +5,7 @@ import type { IssueCommentMetadata, IssueCommentPresentation } from "./issue.js"
 
 export interface CompanyPortabilityInclude {
   company: boolean;
+  goals?: boolean;
   agents: boolean;
   projects: boolean;
   issues: boolean;
@@ -49,11 +50,24 @@ export interface CompanyPortabilitySidebarOrder {
   projects: string[];
 }
 
+export interface CompanyPortabilityGoalManifestEntry {
+  slug: string;
+  title: string;
+  path: string;
+  description: string | null;
+  level: string | null;
+  status: string | null;
+  parentGoalSlug: string | null;
+  ownerAgentSlug: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
 export interface CompanyPortabilityProjectManifestEntry {
   slug: string;
   name: string;
   path: string;
   description: string | null;
+  goalSlugs?: string[];
   ownerAgentSlug: string | null;
   leadAgentSlug: string | null;
   targetDate: string | null;
@@ -174,6 +188,7 @@ export interface CompanyPortabilityManifest {
   includes: CompanyPortabilityInclude;
   company: CompanyPortabilityCompanyManifestEntry | null;
   sidebar: CompanyPortabilitySidebarOrder | null;
+  goals?: CompanyPortabilityGoalManifestEntry[];
   agents: CompanyPortabilityAgentManifestEntry[];
   skills: CompanyPortabilitySkillManifestEntry[];
   projects: CompanyPortabilityProjectManifestEntry[];
@@ -191,7 +206,7 @@ export interface CompanyPortabilityExportResult {
 
 export interface CompanyPortabilityExportPreviewFile {
   path: string;
-  kind: "company" | "agent" | "skill" | "project" | "issue" | "extension" | "readme" | "other";
+  kind: "company" | "goal" | "agent" | "skill" | "project" | "issue" | "extension" | "readme" | "other";
 }
 
 export interface CompanyPortabilityExportPreviewResult {
@@ -201,6 +216,7 @@ export interface CompanyPortabilityExportPreviewResult {
   fileInventory: CompanyPortabilityExportPreviewFile[];
   counts: {
     files: number;
+    goals?: number;
     agents: number;
     skills: number;
     projects: number;
@@ -261,6 +277,14 @@ export interface CompanyPortabilityPreviewProjectPlan {
   reason: string | null;
 }
 
+export interface CompanyPortabilityPreviewGoalPlan {
+  slug: string;
+  action: "create" | "update" | "skip";
+  plannedTitle: string;
+  existingGoalId: string | null;
+  reason: string | null;
+}
+
 export interface CompanyPortabilityPreviewIssuePlan {
   slug: string;
   action: "create" | "skip";
@@ -276,6 +300,7 @@ export interface CompanyPortabilityPreviewResult {
   selectedAgentSlugs: string[];
   plan: {
     companyAction: "none" | "create" | "update";
+    goalPlans?: CompanyPortabilityPreviewGoalPlan[];
     agentPlans: CompanyPortabilityPreviewAgentPlan[];
     projectPlans: CompanyPortabilityPreviewProjectPlan[];
     issuePlans: CompanyPortabilityPreviewIssuePlan[];
@@ -302,6 +327,13 @@ export interface CompanyPortabilityImportResult {
     name: string;
     action: "created" | "updated" | "unchanged";
   };
+  goals?: {
+    slug: string;
+    id: string | null;
+    action: "created" | "updated" | "skipped";
+    title: string;
+    reason: string | null;
+  }[];
   agents: {
     slug: string;
     id: string | null;

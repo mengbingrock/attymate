@@ -19,7 +19,7 @@ Before drafting begins, confirm the issue states:
 - Allowed outputs, such as new draft sections, tables, QA notes, or new working-copy documents.
 - Authority source limits.
 - Drafting profile or style policy, if deployment-specific style is required.
-- Environment profile reference, autonomy level, learning mode, and red gates already approved.
+- Firm Operations Guide reference or scoped guide excerpt, autonomy level, learning mode, and red gates already approved.
 
 If scope, source, or output boundaries are missing, return the missing-field list to the supervisor. If approved sources and output root are clear, continue safe draft work and log unresolved issues instead of blocking.
 

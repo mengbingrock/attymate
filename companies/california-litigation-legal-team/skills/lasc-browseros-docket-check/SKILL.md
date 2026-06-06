@@ -18,7 +18,7 @@ Before docket work begins, confirm the issue states:
 - Output root for notes or status artifacts.
 - Whether browser access is approved.
 - Forbidden actions, including filing, service, paid retrieval, email, and calendaring unless separately approved.
-- Environment profile reference, autonomy level, learning mode, and red gates already approved.
+- Firm Operations Guide reference or scoped guide excerpt, autonomy level, learning mode, and red gates already approved.
 
 If search parameters are missing, return a concise missing-field list to the supervisor. If browser approval is missing, prepare a docket-check plan or local source comparison and record the external work that remains.
 

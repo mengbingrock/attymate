@@ -25,6 +25,7 @@ my-company/
 ```
 
 - **COMPANY.md** defines company name, description, and metadata.
+- **GOAL.md** files define company, team, agent, or task goals that projects and issues can link to.
 - **AGENT.md** files contain agent identity, role, and instructions.
 - **SKILL.md** files are compatible with the Agent Skills ecosystem.
 - **.paperclip.yaml** holds Paperclip-specific config (adapter types, env inputs, budgets) as an optional sidecar.
@@ -42,7 +43,7 @@ paperclipai company export <company-id> --out ./my-export
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--out <path>` | Output directory (required) | — |
-| `--include <values>` | Comma-separated set: `company`, `agents`, `projects`, `issues`, `tasks`, `skills` | `company,agents` |
+| `--include <values>` | Comma-separated set: `company`, `goals`, `agents`, `projects`, `issues`, `tasks`, `skills` | `company,agents` |
 | `--skills <values>` | Export only specific skill slugs | all |
 | `--projects <values>` | Export only specific project shortnames or IDs | all |
 | `--issues <values>` | Export specific issue identifiers or IDs | none |
@@ -56,7 +57,7 @@ paperclipai company export <company-id> --out ./my-export
 paperclipai company export abc123 --out ./backup --include company,agents,projects
 
 # Export everything including tasks and skills
-paperclipai company export abc123 --out ./full-export --include company,agents,projects,tasks,skills
+paperclipai company export abc123 --out ./full-export --include company,goals,agents,projects,tasks,skills
 
 # Export only specific skills
 paperclipai company export abc123 --out ./skills-only --include skills --skills review,deploy
@@ -65,6 +66,7 @@ paperclipai company export abc123 --out ./skills-only --include skills --skills 
 ### What Gets Exported
 
 - Company name, description, and metadata
+- Goals and project goal links
 - Agent names, roles, reporting structure, and instructions
 - Project definitions and workspace config
 - Task/issue descriptions (when included)
@@ -99,7 +101,7 @@ paperclipai company import org/repo/companies/acme
 | `--target <mode>` | `new` (create a new company) or `existing` (merge into existing) | inferred from context |
 | `--company-id <id>` | Target company ID for `--target existing` | current context |
 | `--new-company-name <name>` | Override company name for `--target new` | from package |
-| `--include <values>` | Comma-separated set: `company`, `agents`, `projects`, `issues`, `tasks`, `skills` | auto-detected |
+| `--include <values>` | Comma-separated set: `company`, `goals`, `agents`, `projects`, `issues`, `tasks`, `skills` | auto-detected |
 | `--agents <list>` | Comma-separated agent slugs to import, or `all` | `all` |
 | `--collision <mode>` | How to handle name conflicts: `rename`, `skip`, or `replace` | `rename` |
 | `--ref <value>` | Git ref for GitHub imports (branch, tag, or commit) | default branch |

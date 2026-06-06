@@ -1,6 +1,6 @@
 ---
 name: ca-pleading-intake-review
-description: Use when a Paperclip intake agent must perform source-bound California pleading intake or review, including complaints, amended complaints, answers, proofs of service, filing/service facts, allegation summaries, party/caption checks, and local source manifests. Do not use for external legal research, calendaring writes, drafting beyond intake summaries, or NotebookLM upload without approval.
+description: Use when a Paperclip intake agent must perform source-bound California pleading intake or review, including complaints, amended complaints, answers, proofs of service, filing/service facts, allegation summaries, party/caption checks, and local source manifests. Do not use for external legal research, calendaring writes, drafting beyond intake summaries, or external knowledge-base uploads without approval.
 ---
 
 # California Pleading Intake Review
@@ -17,8 +17,8 @@ Before intake begins, confirm the issue states:
 - Read-only source roots or exact files to inspect.
 - Forbidden roots and no-cross-matter inspection rule.
 - Allowed outputs, such as inventories, OCR sidecars, source manifests, and intake summaries.
-- Whether external mailbox, drive, OCR, or NotebookLM tools are authorized.
-- Environment profile reference, autonomy level, learning mode, and red gates already approved.
+- Whether external mailbox, drive, OCR, or external upload tools are authorized.
+- Firm Operations Guide reference or scoped guide excerpt, autonomy level, learning mode, and red gates already approved.
 
 If the contract is missing, return a concise missing-field list to the supervisor. If approved source files and output root are clear, continue safe intake work and log unresolved gaps.
 
@@ -30,7 +30,7 @@ If the contract is missing, return a concise missing-field list to the superviso
 4. Create only approved sidecar artifacts under `{output_root}`.
 5. Summarize pleadings with source page, paragraph, exhibit, filing, or service references where available.
 6. Flag extraction gaps, visual-verification needs, missing proofs, caption inconsistencies, and unresolved party issues.
-7. Prepare a NotebookLM handoff manifest only if approved; do not upload.
+7. Prepare an external-upload handoff manifest only if approved; do not upload.
 
 ## Checkpoint Policy
 
@@ -41,7 +41,7 @@ Route yellow issues to Legal Ops Supervisor when filing/service facts conflict, 
 Red-gate approval is required before:
 
 - Downloading from email/drive systems unless the issue authorizes it.
-- Uploading to NotebookLM or another external system.
+- Uploading to any external system.
 - Emailing, filing, serving, signing, finalizing, or calendar writing.
 - Editing originals or user-edited documents.
 - Expanding into legal research or drafting beyond intake summaries.
