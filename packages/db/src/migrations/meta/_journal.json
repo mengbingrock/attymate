@@ -610,6 +610,13 @@
       "when": 1780596615681,
       "tag": "0086_workspace_multi",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1780797881065,
+      "tag": "0087_lush_captain_midlands",
+      "breakpoints": true
     }
   ]
 }

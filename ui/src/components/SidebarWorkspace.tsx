@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronRight,
+  Circle,
+  CircleDot,
   File as FileIcon,
   FileSymlink,
   Folder as FolderIcon,
@@ -52,6 +54,20 @@ function displayName(workspacePath: string): string {
   return last || workspacePath;
 }
 
+// Which folder this user's local-runner agents run in. Mirrors the server's
+// getActive precedence: newest non-null activeAt wins; otherwise the oldest
+// grant. Returns the active workspace id, or null when the list is empty.
+function resolveActiveWorkspaceId(workspaces: UserWorkspace[]): string | null {
+  if (workspaces.length === 0) return null;
+  const marked = workspaces
+    .filter((w) => w.activeAt)
+    .sort((a, b) => new Date(b.activeAt as string).getTime() - new Date(a.activeAt as string).getTime());
+  if (marked.length > 0) return marked[0].id;
+  return [...workspaces].sort(
+    (a, b) => new Date(a.grantedAt).getTime() - new Date(b.grantedAt).getTime(),
+  )[0].id;
+}
+
 // Indentation per nesting level (px). Mirrors the visual rhythm of the rest
 // of the sidebar — small enough to nest deep, big enough to scan.
 const INDENT_PX = 12;
@@ -94,6 +110,18 @@ export function SidebarWorkspace() {
     },
   });
 
+  const setActiveMutation = useMutation({
+    mutationFn: (id: string) => userWorkspacesApi.setActive(id),
+    onSuccess: invalidateList,
+    onError: (err: unknown) => {
+      const message =
+        err instanceof ApiError ? err.message : "Could not set active workspace";
+      pushToast({ tone: "error", title: "Set active failed", body: message });
+    },
+  });
+
+  const activeWorkspaceId = workspaces ? resolveActiveWorkspaceId(workspaces) : null;
+
   const handleAdd = async () => {
     if (!window.attymate?.pickFolder) return;
     try {
@@ -131,6 +159,11 @@ export function SidebarWorkspace() {
                   workspace={ws}
                   onRemove={() => removeMutation.mutate(ws.id)}
                   removing={removeMutation.isPending && removeMutation.variables === ws.id}
+                  isActive={ws.id === activeWorkspaceId}
+                  onSetActive={() => setActiveMutation.mutate(ws.id)}
+                  settingActive={
+                    setActiveMutation.isPending && setActiveMutation.variables === ws.id
+                  }
                 />
               ))}
             </div>
@@ -150,9 +183,19 @@ type WorkspaceRootProps = {
   workspace: UserWorkspace;
   onRemove: () => void;
   removing: boolean;
+  isActive: boolean;
+  onSetActive: () => void;
+  settingActive: boolean;
 };
 
-function WorkspaceRoot({ workspace, onRemove, removing }: WorkspaceRootProps) {
+function WorkspaceRoot({
+  workspace,
+  onRemove,
+  removing,
+  isActive,
+  onSetActive,
+  settingActive,
+}: WorkspaceRootProps) {
   const [open, setOpen] = useState(false);
   const label = displayName(workspace.workspacePath);
 
@@ -161,26 +204,67 @@ function WorkspaceRoot({ workspace, onRemove, removing }: WorkspaceRootProps) {
       <FolderRow
         depth={0}
         label={label}
-        labelTooltip={workspace.workspacePath}
+        labelTooltip={
+          isActive
+            ? `${workspace.workspacePath}\n(active — local-runner agents run here)`
+            : workspace.workspacePath
+        }
         open={open}
         onToggle={() => setOpen((v) => !v)}
         trailing={
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className={cn(
-              "shrink-0 h-5 w-5 text-muted-foreground/60 hover:text-foreground",
-              "opacity-0 group-hover/workspace-row:opacity-100 focus-visible:opacity-100",
-            )}
-            aria-label={`Remove ${workspace.workspacePath}`}
-            disabled={removing}
-            onClick={(e) => {
-              e.stopPropagation();
-              onRemove();
-            }}
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
+          <>
+            {/* Active indicator / set-active toggle. The active folder shows a
+                filled dot always; others show a hollow dot on hover that sets
+                them active when clicked. */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className={cn(
+                    "shrink-0 h-5 w-5",
+                    isActive
+                      ? "text-primary"
+                      : "text-muted-foreground/60 hover:text-foreground opacity-0 group-hover/workspace-row:opacity-100 focus-visible:opacity-100",
+                  )}
+                  aria-label={
+                    isActive ? "Active workspace" : `Set ${workspace.workspacePath} active`
+                  }
+                  aria-pressed={isActive}
+                  disabled={settingActive || isActive}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isActive) onSetActive();
+                  }}
+                >
+                  {isActive ? (
+                    <CircleDot className="h-3.5 w-3.5" />
+                  ) : (
+                    <Circle className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-[11px]">
+                {isActive ? "Active — agents run here" : "Set as active workspace"}
+              </TooltipContent>
+            </Tooltip>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={cn(
+                "shrink-0 h-5 w-5 text-muted-foreground/60 hover:text-foreground",
+                "opacity-0 group-hover/workspace-row:opacity-100 focus-visible:opacity-100",
+              )}
+              aria-label={`Remove ${workspace.workspacePath}`}
+              disabled={removing}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove();
+              }}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </>
         }
       />
       {open && (

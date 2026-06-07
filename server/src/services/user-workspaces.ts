@@ -7,6 +7,7 @@ export type UserWorkspaceRow = {
   workspacePath: string;
   grantedAt: Date;
   updatedAt: Date;
+  activeAt: Date | null;
 };
 
 const SELECT_COLS = {
@@ -14,7 +15,24 @@ const SELECT_COLS = {
   workspacePath: userWorkspaces.workspacePath,
   grantedAt: userWorkspaces.grantedAt,
   updatedAt: userWorkspaces.updatedAt,
+  activeAt: userWorkspaces.activeAt,
 } as const;
+
+/**
+ * Pick the active workspace from a user's rows. Newest non-null `activeAt` wins;
+ * otherwise the oldest grant (so a single-folder user needs zero clicks). Pure
+ * so it can be unit-tested without a DB; `getActive` delegates to it.
+ */
+export function pickActiveWorkspace<T extends { grantedAt: Date; activeAt: Date | null }>(
+  rows: T[],
+): T | null {
+  if (rows.length === 0) return null;
+  const marked = rows
+    .filter((r) => r.activeAt)
+    .sort((a, b) => (b.activeAt as Date).getTime() - (a.activeAt as Date).getTime());
+  if (marked.length > 0) return marked[0];
+  return [...rows].sort((a, b) => a.grantedAt.getTime() - b.grantedAt.getTime())[0];
+}
 
 /**
  * Manages the absolute paths each user has granted AttyMate access to.
@@ -72,6 +90,30 @@ export function userWorkspaceService(db: Db) {
         .where(and(eq(userWorkspaces.id, id), eq(userWorkspaces.userId, userId)))
         .returning({ id: userWorkspaces.id });
       return result.length > 0;
+    },
+
+    // The folder this user's local-execution-runner agents run in. Newest
+    // `activeAt` wins; if the user never marked one active, fall back to the
+    // oldest grant so a single-folder user works with zero clicks. Returns null
+    // if the user hasn't granted any folder.
+    async getActive(userId: string): Promise<UserWorkspaceRow | null> {
+      const rows = await db
+        .select(SELECT_COLS)
+        .from(userWorkspaces)
+        .where(eq(userWorkspaces.userId, userId));
+      return pickActiveWorkspace(rows);
+    },
+
+    // Mark one folder active by stamping now(). Other rows keep their (older)
+    // activeAt, so the latest stamp wins in getActive. Returns the updated row,
+    // or null if the id doesn't belong to this user.
+    async setActive(userId: string, id: string): Promise<UserWorkspaceRow | null> {
+      const [row] = await db
+        .update(userWorkspaces)
+        .set({ activeAt: new Date() })
+        .where(and(eq(userWorkspaces.id, id), eq(userWorkspaces.userId, userId)))
+        .returning(SELECT_COLS);
+      return row ?? null;
     },
   };
 }

@@ -17,6 +17,8 @@ import type {
 } from "@paperclipai/adapter-utils/runner-protocol";
 import { materializeRunnerConfig } from "@paperclipai/adapter-utils/runner-materialize";
 import { resolveLocalExecute } from "./adapters.js";
+import type { RunnerClientConfig } from "./config.js";
+import { resolveActiveWorkspacePath } from "./active-workspace.js";
 
 export interface RunExecutionCallbacks {
   /** Emit a streamed event back to the control plane. `seq` is assigned by the caller. */
@@ -24,25 +26,74 @@ export interface RunExecutionCallbacks {
 }
 
 export interface RunExecutionEnv {
-  /** Root under which per-run workspaces are realized locally. */
+  /** Root under which fallback per-run workspaces are realized locally. */
   workspacesRoot: string;
+  /** Full runner config, so workspace resolution can call the control plane as the user. */
+  config: RunnerClientConfig;
+}
+
+/** Thrown when the run can't be placed in a real working directory. */
+class WorkspaceError extends Error {
+  code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+  }
 }
 
 /**
  * Realize the working directory for this run on the local machine.
  *
- * Slice 1 supports `agent_home` (a plain per-run directory). `git_worktree` is
- * stubbed to a plain dir for now with a clear marker; real worktree/clone logic
- * is a later slice. Returns the absolute cwd.
+ * - `user_active` (default for desktop agents): run DIRECTLY in the user's active
+ *   Workspace folder, resolved by the runner from the control plane. If none is
+ *   granted or the folder is gone, fail with a clear typed error rather than
+ *   silently using a throwaway dir.
+ * - `agent_home`: a plain per-run directory under the runner root (headless/token
+ *   runners, or explicit opt-in).
+ * - `git_worktree`: still stubbed → plain per-run dir with a marker.
  */
 async function realizeWorkspace(
   spec: RunnerExecutionSpec,
   env: RunExecutionEnv,
   cb: RunExecutionCallbacks,
 ): Promise<string> {
+  const strategy = spec.workspace.strategy;
+
+  if (strategy === "user_active") {
+    const active = await resolveActiveWorkspacePath(env.config);
+    if (!active) {
+      throw new WorkspaceError(
+        "runner_no_workspace",
+        "No active Workspace folder. Open AttyMate → WORKSPACE, add a folder and mark it active, then retry.",
+      );
+    }
+    let stat: import("node:fs").Stats;
+    try {
+      stat = await fs.stat(active);
+    } catch {
+      throw new WorkspaceError(
+        "runner_no_workspace",
+        `Active Workspace folder no longer exists: ${active}. Pick a different folder in AttyMate → WORKSPACE.`,
+      );
+    }
+    if (!stat.isDirectory()) {
+      throw new WorkspaceError(
+        "runner_no_workspace",
+        `Active Workspace path is not a directory: ${active}.`,
+      );
+    }
+    cb.emit({
+      kind: "log",
+      stream: "lifecycle",
+      chunk: `[runner-client] running in active workspace ${active}\n`,
+    });
+    return active;
+  }
+
+  // Fallback strategies use a per-run dir under the runner root.
   const cwd = path.join(env.workspacesRoot, spec.runId);
   await fs.mkdir(cwd, { recursive: true });
-  if (spec.workspace.strategy === "git_worktree") {
+  if (strategy === "git_worktree") {
     // TODO(later slice): create a real git worktree from repoUrl@baseRef.
     cb.emit({
       kind: "log",
@@ -65,7 +116,22 @@ export async function executeRun(
   env: RunExecutionEnv,
 ): Promise<AdapterExecutionResult> {
   const localExecute = resolveLocalExecute(spec.adapterType);
-  const cwd = await realizeWorkspace(spec, env, cb);
+  let cwd: string;
+  try {
+    cwd = await realizeWorkspace(spec, env, cb);
+  } catch (err) {
+    if (err instanceof WorkspaceError) {
+      cb.emit({ kind: "log", stream: "lifecycle", chunk: `[runner-client] ${err.message}\n` });
+      return {
+        exitCode: null,
+        signal: null,
+        timedOut: false,
+        errorMessage: err.message,
+        errorCode: err.code,
+      };
+    }
+    throw err;
+  }
 
   // The adapter resolves its working directory from context.paperclipWorkspace.cwd
   // first, then config.cwd. Inject our locally-realized cwd into both so the

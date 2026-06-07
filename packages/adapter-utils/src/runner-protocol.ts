@@ -31,12 +31,16 @@ export const RUNNER_COMPANY_HEADER = "x-paperclip-runner-company";
 // Execution spec — what crosses the wire on run.start (server → client)
 // ---------------------------------------------------------------------------
 
-export type RunnerWorkspaceStrategy = "git_worktree" | "agent_home";
+export type RunnerWorkspaceStrategy = "git_worktree" | "agent_home" | "user_active";
 
 export interface RunnerWorkspaceSpec {
   /**
-   * How the client should realize the working directory locally. `git_worktree`
-   * creates a worktree from repoUrl@baseRef; `agent_home` is a plain directory.
+   * How the client should realize the working directory locally:
+   * - `user_active`: run directly in the user's active Workspace folder, which
+   *   the runner resolves itself from the control plane (GET /users/me/workspaces).
+   *   No absolute path crosses the wire — the path stays on the user's machine.
+   * - `git_worktree`: create a worktree from repoUrl@baseRef.
+   * - `agent_home`: a plain per-run directory under the runner's workspace root.
    */
   strategy: RunnerWorkspaceStrategy;
   repoUrl?: string | null;

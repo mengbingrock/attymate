@@ -34,8 +34,13 @@ function buildWorkspaceSpec(config: Record<string, unknown>): RunnerWorkspaceSpe
       branchTemplate: asString(ws.branchTemplate, "") || null,
     };
   }
-  // Default: a plain per-agent home directory on the client.
-  return { strategy: "agent_home" };
+  if (strategy === "agent_home") {
+    return { strategy: "agent_home" };
+  }
+  // Default: run in the user's active Workspace folder. The runner resolves the
+  // absolute path itself (as the paired user) so no server-side path — which
+  // would be a control-plane container path — leaks into the run.
+  return { strategy: "user_active" };
 }
 
 export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExecutionResult> {

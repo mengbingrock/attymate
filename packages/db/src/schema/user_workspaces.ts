@@ -13,6 +13,12 @@ import { pgTable, uuid, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core
  * currently dispatch against the user's "default" workspace (the oldest one);
  * a future workspaceId param on those routes will let agents target a specific
  * folder.
+ *
+ * `activeAt` marks which folder the user's local-execution-runner agents run in:
+ * the row with the most-recent non-null `activeAt` is "the active workspace".
+ * Using a timestamp (rather than a boolean) sidesteps multi-row uniqueness — a
+ * new "set active" just stamps now() and the latest wins. Null = never marked
+ * active; resolution falls back to the oldest grant.
  */
 export const userWorkspaces = pgTable(
   "user_workspaces",
@@ -22,6 +28,7 @@ export const userWorkspaces = pgTable(
     workspacePath: text("workspace_path").notNull(),
     grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    activeAt: timestamp("active_at", { withTimezone: true }),
   },
   (table) => ({
     userPathUq: uniqueIndex("user_workspaces_user_path_uq").on(table.userId, table.workspacePath),

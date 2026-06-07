@@ -89,7 +89,7 @@ export function startRunnerConnection(config: RunnerClientConfig): { stop: () =>
             send(socketRef, { type: "run.event", id, seq: seq++, event });
           },
         },
-        { workspacesRoot: config.workspacesRoot },
+        { workspacesRoot: config.workspacesRoot, config },
       );
       send(socketRef, { type: "run.result", id, result });
     } catch (err) {

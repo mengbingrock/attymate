@@ -1,0 +1,1 @@
+ALTER TABLE "user_workspaces" ADD COLUMN "active_at" timestamp with time zone;

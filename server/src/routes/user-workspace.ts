@@ -135,6 +135,20 @@ export function userWorkspaceRoutes(db: Db) {
     res.status(204).end();
   });
 
+  // Mark one folder as the active workspace — where this user's
+  // local-execution-runner agents run. The runner resolves it itself via the
+  // GET list; this just records the choice.
+  router.post("/users/me/workspaces/:id/active", async (req, res) => {
+    const userId = requireBoardUserId(req, res);
+    if (!userId) return;
+    const row = await svc.setActive(userId, req.params.id);
+    if (!row) {
+      res.status(404).json({ error: "Workspace not found" });
+      return;
+    }
+    res.json(row);
+  });
+
   // Per-workspace file read (preview). Same per-id model as the listing
   // endpoint; uses the existing "read" bridge op, so all the symlink-safety
   // + size cap that protect the default-workspace read also apply here.
