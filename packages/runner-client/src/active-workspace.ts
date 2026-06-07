@@ -54,16 +54,29 @@ export async function resolveActiveWorkspacePath(
 ): Promise<string | null> {
   if (config.auth.mode !== "cookie") return null;
   const base = httpBaseFromServerUrl(config.serverUrl);
-  const url = `${base}/users/me/workspaces`;
+  // REST routes are mounted under /api (server app.use("/api", api); UI client
+  // uses BASE="/api"). Must match or the request 404s and we wrongly conclude
+  // "no active workspace".
+  const url = `${base}/api/users/me/workspaces`;
   try {
     const res = await fetch(url, {
       headers: { Cookie: config.auth.cookie, Accept: "application/json" },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Distinguish a failed lookup from a genuinely-empty workspace list so the
+      // "no active workspace" error isn't misattributed (e.g. a 404/401 here).
+      // eslint-disable-next-line no-console
+      console.warn(`[runner-client] workspace lookup failed: ${res.status} ${url}`);
+      return null;
+    }
     const rows = (await res.json()) as UserWorkspaceRow[];
     if (!Array.isArray(rows)) return null;
     return selectActiveWorkspacePath(rows);
-  } catch {
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[runner-client] workspace lookup error: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return null;
   }
 }
