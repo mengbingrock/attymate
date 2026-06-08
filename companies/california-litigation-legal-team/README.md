@@ -24,6 +24,7 @@ To import the company without onboarding starter issues, omit `tasks` from `--in
 - Configure each `codex_local` agent with the deployment's absolute `cwd` / workspace root.
 - Configure authenticated Codex CLI access or an approved deployment-specific API-key auth mechanism.
 - Configure Python, OCR/PDF tooling, Docling or equivalent local processing, and approved output roots.
+- Review executable-script trust before using repo helper scripts. The MTC drafting skill references an optional local OCR helper at `skills/ca-subpoena-mtc-drafting-workflow/scripts/ocr_pdf_intake.ps1`; it requires explicit `{matter_root}` / `{output_root}` scope, writes only under the approved output root, and must be run only in a deployment-approved Python/OCR environment. Paperclip company import stores the markdown skill/reference files; deployments that want the helper should review and copy or run it from the repository source after approval.
 - Set budgets, model choices, and approval policies appropriate for the deployment.
 - Configure external-tool access before use: BrowserOS or equivalent browser tooling, Gmail, Google Calendar, Google Drive, Lexis, LASC, external knowledge-base/upload systems, filing, service, and upload/download workflows.
 - Configure `gmail_monitor_profile` before enabling Gmail Monitor Agent routines.

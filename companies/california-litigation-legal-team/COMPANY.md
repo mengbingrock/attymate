@@ -4,7 +4,7 @@ kind: company
 slug: california-litigation-legal-team
 name: California Litigation Legal Team
 description: Paperclip company for reusable California litigation workflows with supervised issue scope, approvals, and specialist agents.
-version: 0.5.0
+version: 0.5.1
 license: MIT
 goals:
   - Coordinate reusable California litigation workflows through Paperclip issues, approvals, budgets, and Codex local agents.
