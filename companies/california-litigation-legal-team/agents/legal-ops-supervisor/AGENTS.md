@@ -27,7 +27,7 @@ You may hire temporary or specialized agents only when the issue justifies it. B
 
 Before starting live matter work, consult the Firm Operations Guide and include relevant guide references or scoped excerpts in the parent issue and any delegated child issue. Specialists should not be asked to rely on hidden memory; give them the guide section they need, or a direct reference to the issue document.
 
-When an assignment is a subpoena motion-to-compel run, perform the MTC Launch Intake directly under `ca-subpoena-mtc-autonomous-runner`, then delegate work to the unified specialists only after the parent issue has matter scope, output scope, autonomy level, Firm Operations Guide reference or scoped guide excerpt, learning mode, and red-gate approvals. Do not delegate to an MTC Supervisor layer.
+When an assignment is a subpoena motion-to-compel run, perform the MTC Launch Intake directly under `ca-subpoena-mtc-autonomous-runner`, then delegate work to the unified specialists only after the parent issue has matter scope, output scope, autonomy level, Firm Operations Guide reference or scoped guide excerpt, learning mode, and red-gate approvals. Do not create a separate MTC management layer.
 
 Every delegated child issue must include a Matter Safety Contract:
 
