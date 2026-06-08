@@ -1,0 +1,57 @@
+{
+  "name": "attymate-electron",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AttyMate desktop app (Electron shell around paperclip.attymate.com)",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build:main": "node --input-type=module -e \"import esbuild from 'esbuild'; import c from './esbuild.config.mjs'; await esbuild.build(c)\" && cp preload.cjs build/preload.cjs",
+    "dist": "pnpm build:main && electron-builder --mac --x64",
+    "dist:mac-arm64": "bash scripts/build-mac-arm64.sh",
+    "dist:win": "pnpm build:main && electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.attymate.desktop",
+    "productName": "AttyMate",
+    "npmRebuild": false,
+    "directories": {
+      "output": "dist"
+    },
+    "extraMetadata": {
+      "main": "build/main.mjs"
+    },
+    "files": [
+      "build/main.mjs",
+      "build/preload.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../packages/runner-client/dist/runner-bundle.mjs",
+        "to": "runner-bundle.mjs"
+      }
+    ],
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
+      ],
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": [
+        { "target": "zip", "arch": "x64" }
+      ]
+    }
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  }
+}

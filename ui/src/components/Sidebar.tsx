@@ -19,6 +19,7 @@ import { SidebarSection } from "./SidebarSection";
 import { SidebarNavItem } from "./SidebarNavItem";
 import { SidebarProjects } from "./SidebarProjects";
 import { SidebarAgents } from "./SidebarAgents";
+import { SidebarWorkspace } from "./SidebarWorkspace";
 import { useDialogActions } from "../context/DialogContext";
 import { useCompany } from "../context/CompanyContext";
 import { heartbeatsApi } from "../api/heartbeats";
@@ -106,6 +107,8 @@ export function Sidebar() {
             <SidebarNavItem to="/workspaces" label="Workspaces" icon={GitBranch} />
           ) : null}
         </SidebarSection>
+
+        <SidebarWorkspace />
 
         <SidebarProjects />
 

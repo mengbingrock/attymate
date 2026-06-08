@@ -39,8 +39,40 @@ export const AGENT_ADAPTER_TYPES = [
   "pi_local",
   "cursor",
   "openclaw_gateway",
+  // The runner-gateway execution engine, plus one selectable variant per local
+  // agent that runs on the user's machine via the connected runner-client.
+  "runner_gateway",
+  "claude_local_runner",
+  "codex_local_runner",
+  "gemini_local_runner",
+  "opencode_local_runner",
+  "pi_local_runner",
 ] as const;
 export type AgentAdapterType = (typeof AGENT_ADAPTER_TYPES)[number] | (string & {});
+
+/**
+ * Local agents that the runner-client can execute, exposed in the agent picker
+ * as "<Agent> (Local Runner)" options. Each maps to a `<agent>_runner` adapter
+ * type that routes to the runner_gateway engine with this `runnerAdapterType`.
+ * (cursor is omitted: its registry type is `cursor`, not `cursor_local`.)
+ */
+export const LOCAL_RUNNER_AGENT_TYPES = [
+  "claude_local",
+  "codex_local",
+  "gemini_local",
+  "opencode_local",
+  "pi_local",
+] as const;
+
+/** Adapter type for the runner-backed variant of a local agent. */
+export function localRunnerVariantType(agentType: string): string {
+  return `${agentType}_runner`;
+}
+
+/** Underlying local agent type for a runner variant, or null if not a variant. */
+export function localRunnerBaseType(adapterType: string): string | null {
+  return adapterType.endsWith("_runner") ? adapterType.slice(0, -"_runner".length) : null;
+}
 
 export const AGENT_ROLES = [
   "ceo",

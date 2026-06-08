@@ -158,6 +158,7 @@ import {
 import {
   readPaperclipSkillSyncPreference,
   writePaperclipSkillSyncPreference,
+  type PaperclipSkillEntry,
 } from "@paperclipai/adapter-utils/server-utils";
 import { extractSkillMentionIds } from "@paperclipai/shared";
 import { environmentService } from "./environments.js";
@@ -7167,7 +7168,12 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       runScopedMentionedSkillKeys,
     );
     const runtimeSkillEntries = await companySkills.listRuntimeSkillEntries(agent.companyId);
-    let runtimeConfig = {
+    // `promptTemplate` is an optional override the chat-wake path drops in below
+    // (see ~line 7755). The adapter reads it from runtimeConfig at execute time.
+    let runtimeConfig: {
+      paperclipRuntimeSkills: PaperclipSkillEntry[];
+      promptTemplate?: string;
+    } = {
       ...effectiveResolvedConfig,
       paperclipRuntimeSkills: runtimeSkillEntries,
     };
@@ -7190,6 +7196,13 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
           workspace: existingExecutionWorkspace,
         })
       : null;
+    // NOTE (local-execution-runner, slice 1): for `runner_gateway` agents the
+    // real workspace is realized on the user's machine by runner-client, not
+    // here. realizeExecutionWorkspace is still called but is a harmless no-op
+    // pass-through unless config.workspaceStrategy.type === "git_worktree" (it
+    // just returns baseCwd), and the runner ignores the server-side cwd. A later
+    // slice should skip server-side workspace realization entirely for
+    // runner-routed agents; for now this stays to keep the change minimal.
     const executionWorkspace = reusedExecutionWorkspace ?? await realizeExecutionWorkspace({
           base: executionWorkspaceBase,
           config: runtimeConfig,

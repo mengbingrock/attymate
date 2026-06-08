@@ -7,7 +7,7 @@ import type {
   EnvBinding,
   Environment,
 } from "@paperclipai/shared";
-import { AGENT_DEFAULT_MAX_CONCURRENT_RUNS, supportedEnvironmentDriversForAdapter } from "@paperclipai/shared";
+import { AGENT_DEFAULT_MAX_CONCURRENT_RUNS, localRunnerBaseType, supportedEnvironmentDriversForAdapter } from "@paperclipai/shared";
 import type { AdapterModel } from "../api/agents";
 import { agentsApi } from "../api/agents";
 import { environmentsApi } from "../api/environments";
@@ -313,6 +313,9 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
   const adapterType = isCreate
     ? props.values.adapterType
     : overlay.adapterType ?? props.agent.adapterType;
+  // Runner-backed variants (e.g. claude_local_runner) have no models of their
+  // own — the model list / detection comes from the underlying local agent.
+  const modelAdapterType = localRunnerBaseType(adapterType) ?? adapterType;
   const getCapabilities = useAdapterCapabilities();
   const adapterCaps = getCapabilities(adapterType);
   const isLocal = adapterCaps.supportsInstructionsBundle || adapterCaps.supportsSkills || adapterCaps.supportsLocalAgentJwt;
@@ -347,14 +350,14 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
 
   // Fetch adapter models for the effective adapter type
   const modelQueryKey = selectedCompanyId
-    ? queryKeys.agents.adapterModels(selectedCompanyId, adapterType, currentDefaultEnvironmentId || null)
-    : ["agents", "none", "adapter-models", adapterType];
+    ? queryKeys.agents.adapterModels(selectedCompanyId, modelAdapterType, currentDefaultEnvironmentId || null)
+    : ["agents", "none", "adapter-models", modelAdapterType];
   const {
     data: fetchedModels,
     error: fetchedModelsError,
   } = useQuery({
     queryKey: modelQueryKey,
-    queryFn: () => agentsApi.adapterModels(selectedCompanyId!, adapterType, {
+    queryFn: () => agentsApi.adapterModels(selectedCompanyId!, modelAdapterType, {
       environmentId: currentDefaultEnvironmentId || null,
     }),
     enabled: Boolean(selectedCompanyId),
@@ -381,13 +384,13 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
     refetch: refetchDetectedModel,
   } = useQuery({
     queryKey: selectedCompanyId
-      ? queryKeys.agents.detectModel(selectedCompanyId, adapterType)
-      : ["agents", "none", "detect-model", adapterType],
+      ? queryKeys.agents.detectModel(selectedCompanyId, modelAdapterType)
+      : ["agents", "none", "detect-model", modelAdapterType],
     queryFn: () => {
       if (!selectedCompanyId) {
         throw new Error("Select a company to detect the model");
       }
-      return agentsApi.detectModel(selectedCompanyId, adapterType);
+      return agentsApi.detectModel(selectedCompanyId, modelAdapterType);
     },
     enabled: Boolean(selectedCompanyId && isLocal && adapterType !== "opencode_local"),
   });
@@ -528,7 +531,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
     setRefreshingModels(true);
     setRefreshModelsError(null);
     try {
-      const refreshed = await agentsApi.adapterModels(selectedCompanyId, adapterType, { refresh: true });
+      const refreshed = await agentsApi.adapterModels(selectedCompanyId, modelAdapterType, { refresh: true });
       queryClient.setQueryData(modelQueryKey, refreshed);
     } catch (error) {
       setRefreshModelsError(error instanceof Error ? error.message : "Failed to refresh adapter models.");
@@ -843,19 +846,22 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                 value={adapterType}
                 disabledTypes={disabledTypes}
                 onChange={(t) => {
+                  // For runner-backed variants (e.g. codex_local_runner), default
+                  // model/flags follow the underlying agent (codex_local).
+                  const baseT = localRunnerBaseType(t) ?? t;
                   if (isCreate) {
                     // Reset all adapter-specific fields to defaults when switching adapter type
                     const { adapterType: _at, ...defaults } = defaultCreateValues;
                     const nextValues: CreateConfigValues = { ...defaults, adapterType: t };
-                    if (t === "codex_local") {
+                    if (baseT === "codex_local") {
                       nextValues.model = DEFAULT_CODEX_LOCAL_MODEL;
                       nextValues.dangerouslyBypassSandbox =
                         DEFAULT_CODEX_LOCAL_BYPASS_APPROVALS_AND_SANDBOX;
-                    } else if (t === "gemini_local") {
+                    } else if (baseT === "gemini_local") {
                       nextValues.model = DEFAULT_GEMINI_LOCAL_MODEL;
-                    } else if (t === "cursor") {
+                    } else if (baseT === "cursor") {
                       nextValues.model = DEFAULT_CURSOR_LOCAL_MODEL;
-                    } else if (t === "opencode_local") {
+                    } else if (baseT === "opencode_local") {
                       nextValues.model = DEFAULT_OPENCODE_LOCAL_MODEL;
                     }
                     set!(nextValues);
@@ -868,20 +874,20 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                       modelProfiles: { cheap: { cleared: true } },
                       adapterConfig: {
                         model:
-                          t === "codex_local"
+                          baseT === "codex_local"
                             ? DEFAULT_CODEX_LOCAL_MODEL
-                            : t === "gemini_local"
+                            : baseT === "gemini_local"
                               ? DEFAULT_GEMINI_LOCAL_MODEL
-                            : t === "opencode_local"
+                            : baseT === "opencode_local"
                               ? DEFAULT_OPENCODE_LOCAL_MODEL
-                            : t === "cursor"
+                            : baseT === "cursor"
                               ? DEFAULT_CURSOR_LOCAL_MODEL
                               : "",
                         effort: "",
                         modelReasoningEffort: "",
                         variant: "",
                         mode: "",
-                        ...(t === "codex_local"
+                        ...(baseT === "codex_local"
                           ? {
                               dangerouslyBypassApprovalsAndSandbox:
                                 DEFAULT_CODEX_LOCAL_BYPASS_APPROVALS_AND_SANDBOX,
@@ -1092,7 +1098,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                   </div>
                 </>
               )}
-              {adapterType === "claude_local" && (
+              {(modelAdapterType === "claude_local") && (
                 <ClaudeLocalAdvancedFields {...adapterFieldProps} />
               )}
               <uiAdapter.ConfigFields {...adapterFieldProps} />

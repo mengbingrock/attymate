@@ -1,0 +1,7 @@
+# Electron-builder / packaging output
+/dist/
+/out/
+node_modules/
+
+# esbuild-bundled main process output
+/build/

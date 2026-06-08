@@ -12,6 +12,12 @@ export const BUILTIN_ADAPTER_TYPES = new Set([
   "opencode_local",
   "pi_local",
   "hermes_local",
+  "runner_gateway",
+  "claude_local_runner",
+  "codex_local_runner",
+  "gemini_local_runner",
+  "opencode_local_runner",
+  "pi_local_runner",
   "process",
   "http",
 ]);

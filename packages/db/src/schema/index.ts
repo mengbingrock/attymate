@@ -4,6 +4,7 @@ export { authUsers, authSessions, authAccounts, authVerifications } from "./auth
 export { instanceSettings } from "./instance_settings.js";
 export { instanceUserRoles } from "./instance_user_roles.js";
 export { userSidebarPreferences } from "./user_sidebar_preferences.js";
+export { userWorkspaces } from "./user_workspaces.js";
 export { agents } from "./agents.js";
 export { boardApiKeys } from "./board_api_keys.js";
 export { cliAuthChallenges } from "./cli_auth_challenges.js";
