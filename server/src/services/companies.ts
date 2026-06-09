@@ -32,6 +32,31 @@ import {
 import { notFound, unprocessable } from "../errors.js";
 import { environmentService } from "./environments.js";
 
+/**
+ * Detect a unique-constraint violation on the company issue prefix.
+ *
+ * drizzle-orm wraps driver errors in a DrizzleQueryError whose `code`/
+ * `constraint` live on `.cause` (the underlying PostgresError), so we walk the
+ * cause chain instead of only inspecting the top-level error. Inspecting only
+ * the wrapper made `createCompanyWithUniquePrefix` re-throw real prefix
+ * collisions instead of retrying, surfacing as a 500 on company import.
+ */
+export function isIssuePrefixConflict(error: unknown) {
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    const code = (current as { code?: string }).code;
+    const constraint = (current as { constraint?: string }).constraint
+      ?? (current as { constraint_name?: string }).constraint_name;
+    if (code === "23505" && constraint === "companies_issue_prefix_idx") {
+      return true;
+    }
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 export function companyService(db: Db) {
   const ISSUE_PREFIX_FALLBACK = "CMP";
   const environmentsSvc = environmentService(db);
@@ -122,19 +147,6 @@ export function companyService(db: Db) {
   function suffixForAttempt(attempt: number) {
     if (attempt <= 1) return "";
     return "A".repeat(attempt - 1);
-  }
-
-  function isIssuePrefixConflict(error: unknown) {
-    const constraint = typeof error === "object" && error !== null && "constraint" in error
-      ? (error as { constraint?: string }).constraint
-      : typeof error === "object" && error !== null && "constraint_name" in error
-        ? (error as { constraint_name?: string }).constraint_name
-        : undefined;
-    return typeof error === "object"
-      && error !== null
-      && "code" in error
-      && (error as { code?: string }).code === "23505"
-      && constraint === "companies_issue_prefix_idx";
   }
 
   async function createCompanyWithUniquePrefix(data: typeof companies.$inferInsert) {
