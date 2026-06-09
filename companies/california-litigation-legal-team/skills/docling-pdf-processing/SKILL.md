@@ -1,5 +1,5 @@
 ---
-name: three-stage-pdf-processing
+name: docling-pdf-processing
 description: Use when a Paperclip PDF/OCR agent must convert approved PDFs or scanned legal documents into page-complete sidecar Markdown, JSON manifests, Azure OCR outputs, vision-corrected pages, and extraction QA using the three-stage PDF pipeline script. Do not use to modify originals, process unscoped matter files, install tools without approval, upload source material without approval, or treat derived text as a replacement for source evidence.
 ---
 
