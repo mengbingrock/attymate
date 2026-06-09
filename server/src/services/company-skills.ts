@@ -133,6 +133,11 @@ type SkillSourceMeta = {
   workspaceId?: string;
   workspaceName?: string;
   workspaceCwd?: string;
+  // Set when a skill has been localized to an editable managed dir. Preserves
+  // where it originally came from so badges/provenance survive the local_path flip.
+  localized?: boolean;
+  originalSourceType?: CompanySkillSourceType;
+  originalSourceLocator?: string | null;
 };
 
 export type LocalSkillInventoryMode = "full" | "project_root";
@@ -150,6 +155,10 @@ type RuntimeSkillEntryOptions = {
 };
 
 const skillInventoryRefreshPromises = new Map<string, Promise<void>>();
+
+// Per-skill in-flight localization, so two concurrent detail/read calls for the
+// same skill don't both copy files + flip the DB row. Keyed by `${companyId}:${skillId}`.
+const skillLocalizePromises = new Map<string, Promise<CompanySkill>>();
 
 function selectCompanySkillColumns() {
   return {
@@ -1420,6 +1429,33 @@ function isMarkdownPath(filePath: string) {
   return fileName === "skill.md" || fileName.endsWith(".md");
 }
 
+// Map a source type / sourceKind to the UI badge. Used to preserve provenance
+// after a skill is localized (its sourceType becomes local_path, but we still
+// show where it came from via metadata.originalSourceType / sourceKind).
+function badgeForSource(
+  sourceType: CompanySkillSourceType | undefined,
+  sourceKind: string | undefined,
+): CompanySkillSourceBadge {
+  if (sourceKind === "paperclip_bundled") return "paperclip";
+  switch (sourceType) {
+    case "github":
+      return "github";
+    case "skills_sh":
+      return "skills_sh";
+    case "url":
+      return "url";
+    case "catalog":
+      return "catalog";
+    case "local_path":
+      return "local";
+    default:
+      return "catalog";
+  }
+}
+
+// Every skill is editable: on first access skills are localized to an editable
+// managed copy (see localizeSkill), so deriveSkillSourceInfo always reports
+// editable=true. Badge/label still reflect the ORIGINAL source for provenance.
 function deriveSkillSourceInfo(skill: SkillSourceInfoTarget): {
   editable: boolean;
   editableReason: string | null;
@@ -1429,10 +1465,35 @@ function deriveSkillSourceInfo(skill: SkillSourceInfoTarget): {
 } {
   const metadata = getSkillMeta(skill);
   const localSkillDir = normalizeSkillDirectory(skill);
+  const managedRoot = resolveManagedSkillsRoot(skill.companyId);
+  const owner = asString(metadata.owner) ?? null;
+  const repo = asString(metadata.repo) ?? null;
+
+  // A localized skill (or any managed-root local_path skill): editable, but show
+  // its original provenance badge/label instead of a generic "workspace" one.
+  const isManagedLocal = localSkillDir != null && localSkillDir.startsWith(managedRoot);
+  if (metadata.localized === true || isManagedLocal) {
+    const originalType = metadata.originalSourceType ?? skill.sourceType;
+    const badge = badgeForSource(originalType, metadata.sourceKind);
+    const label =
+      metadata.sourceKind === "paperclip_bundled"
+        ? "Paperclip bundled"
+        : owner && repo
+          ? `${owner}/${repo}`
+          : asString(metadata.originalSourceLocator) ?? "Paperclip workspace";
+    return {
+      editable: true,
+      editableReason: null,
+      sourceLabel: label,
+      sourceBadge: badge,
+      sourcePath: managedRoot,
+    };
+  }
+
   if (metadata.sourceKind === "paperclip_bundled") {
     return {
-      editable: false,
-      editableReason: "Bundled Paperclip skills are read-only.",
+      editable: true,
+      editableReason: null,
       sourceLabel: "Paperclip bundled",
       sourceBadge: "paperclip",
       sourcePath: null,
@@ -1440,11 +1501,9 @@ function deriveSkillSourceInfo(skill: SkillSourceInfoTarget): {
   }
 
   if (skill.sourceType === "skills_sh") {
-    const owner = asString(metadata.owner) ?? null;
-    const repo = asString(metadata.repo) ?? null;
     return {
-      editable: false,
-      editableReason: "Skills.sh-managed skills are read-only.",
+      editable: true,
+      editableReason: null,
       sourceLabel: skill.sourceLocator ?? (owner && repo ? `${owner}/${repo}` : null),
       sourceBadge: "skills_sh",
       sourcePath: null,
@@ -1452,11 +1511,9 @@ function deriveSkillSourceInfo(skill: SkillSourceInfoTarget): {
   }
 
   if (skill.sourceType === "github") {
-    const owner = asString(metadata.owner) ?? null;
-    const repo = asString(metadata.repo) ?? null;
     return {
-      editable: false,
-      editableReason: "Remote GitHub skills are read-only. Fork or import locally to edit them.",
+      editable: true,
+      editableReason: null,
       sourceLabel: owner && repo ? `${owner}/${repo}` : skill.sourceLocator,
       sourceBadge: "github",
       sourcePath: null,
@@ -1465,8 +1522,8 @@ function deriveSkillSourceInfo(skill: SkillSourceInfoTarget): {
 
   if (skill.sourceType === "url") {
     return {
-      editable: false,
-      editableReason: "URL-based skills are read-only. Save them locally to edit them.",
+      editable: true,
+      editableReason: null,
       sourceLabel: skill.sourceLocator,
       sourceBadge: "url",
       sourcePath: null,
@@ -1474,20 +1531,9 @@ function deriveSkillSourceInfo(skill: SkillSourceInfoTarget): {
   }
 
   if (skill.sourceType === "local_path") {
-    const managedRoot = resolveManagedSkillsRoot(skill.companyId);
     const projectName = asString(metadata.projectName);
     const workspaceName = asString(metadata.workspaceName);
     const isProjectScan = metadata.sourceKind === "project_scan";
-    if (localSkillDir && localSkillDir.startsWith(managedRoot)) {
-      return {
-        editable: true,
-        editableReason: null,
-        sourceLabel: "Paperclip workspace",
-        sourceBadge: "paperclip",
-        sourcePath: managedRoot,
-      };
-    }
-
     return {
       editable: true,
       editableReason: null,
@@ -1500,9 +1546,10 @@ function deriveSkillSourceInfo(skill: SkillSourceInfoTarget): {
     };
   }
 
+  // catalog (and any other) — editable; content lives in DB markdown until localized.
   return {
-    editable: false,
-    editableReason: "This skill source is read-only.",
+    editable: true,
+    editableReason: null,
     sourceLabel: skill.sourceLocator,
     sourceBadge: "catalog",
     sourcePath: null,
@@ -1577,29 +1624,38 @@ export function companySkillService(db: Db) {
 
   async function pruneMissingLocalPathSkills(companyId: string) {
     const rows = await db
-      .select({
-        id: companySkills.id,
-        key: companySkills.key,
-        slug: companySkills.slug,
-        sourceType: companySkills.sourceType,
-        sourceLocator: companySkills.sourceLocator,
-      })
+      .select(selectCompanySkillColumns())
       .from(companySkills)
       .where(eq(companySkills.companyId, companyId));
-    const skills = rows.map((row) => ({
-      ...row,
-      sourceType: row.sourceType as CompanySkillSourceType,
-    }));
+    const skills = rows.map((row) => toCompanySkill(row));
     const missingIds = new Set(await findMissingLocalSkillIds(skills));
     if (missingIds.size === 0) return;
 
     for (const skill of skills) {
       if (!missingIds.has(skill.id)) continue;
+      // A localized skill whose managed dir vanished should self-heal from the DB
+      // seed (markdown is always present), NOT be deleted — that's the user's
+      // editable copy. Only genuinely external local_path skills (project scans /
+      // user paths that the user removed) are pruned.
+      if (isLocalizedSkill(companyId, skill)) {
+        await selfHealLocalizedSkill(companyId, skill);
+        continue;
+      }
       await db
         .delete(companySkills)
         .where(eq(companySkills.id, skill.id));
       await fs.rm(resolveRuntimeSkillMaterializedPath(companyId, skill), { recursive: true, force: true });
     }
+  }
+
+  // Re-create a localized skill's managed dir from the DB seed when it has gone
+  // missing on disk. SKILL.md always comes back from skill.markdown; other
+  // inventory files are restored best-effort (their content may have been on disk
+  // only and be unrecoverable, which is acceptable — the skill survives).
+  async function selfHealLocalizedSkill(companyId: string, skill: CompanySkill) {
+    const dir = resolveLocalizedSkillDir(companyId, skill);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, "SKILL.md"), skill.markdown, "utf8");
   }
 
   async function ensureSkillInventoryCurrent(companyId: string) {
@@ -1727,7 +1783,8 @@ export function companySkillService(db: Db) {
 
   async function detail(companyId: string, id: string): Promise<CompanySkillDetail | null> {
     await ensureSkillInventoryCurrent(companyId);
-    const skill = await getById(companyId, id);
+    // Localize on first view so the detail page surfaces an editable local copy.
+    const skill = await ensureLocalized(companyId, id);
     if (!skill) return null;
     const usedByAgents = await usage(companyId, skill.key);
     return enrichSkill(skill, usedByAgents.length, usedByAgents);
@@ -1739,9 +1796,12 @@ export function companySkillService(db: Db) {
     if (!skill) return null;
 
     if (skill.sourceType !== "github" && skill.sourceType !== "skills_sh") {
+      const localized = getSkillMeta(skill).localized === true;
       return {
         supported: false,
-        reason: "Only GitHub-managed skills support update checks.",
+        reason: localized
+          ? "This skill has been localized for editing; remote updates are disabled."
+          : "Only GitHub-managed skills support update checks.",
         trackingRef: null,
         currentRef: skill.sourceRef ?? null,
         latestRef: null,
@@ -1777,8 +1837,18 @@ export function companySkillService(db: Db) {
     };
   }
 
+  // Read a skill file. This is intentionally NON-mutating: it does NOT localize.
+  // Localization happens only at user-facing edit entry points (detail/updateFile),
+  // so internal readers — notably plugin-managed-skills drift detection — can
+  // inspect a skill's current content without flipping its source type.
   async function readFile(companyId: string, skillId: string, relativePath: string): Promise<CompanySkillFileDetail | null> {
     await ensureSkillInventoryCurrent(companyId);
+    return readFileRaw(companyId, skillId, relativePath);
+  }
+
+  // Lower-level read against the skill's CURRENT source, without the inventory
+  // refresh. Used during materialization and by readFile.
+  async function readFileRaw(companyId: string, skillId: string, relativePath: string): Promise<CompanySkillFileDetail | null> {
     const skill = await getById(companyId, skillId);
     if (!skill) return null;
 
@@ -1877,11 +1947,12 @@ export function companySkillService(db: Db) {
 
   async function updateFile(companyId: string, skillId: string, relativePath: string, content: string): Promise<CompanySkillFileDetail> {
     await ensureSkillInventoryCurrent(companyId);
-    const skill = await getById(companyId, skillId);
+    // Localize first so a never-viewed remote/bundled skill is editable on save.
+    const skill = await ensureLocalized(companyId, skillId);
     if (!skill) throw notFound("Skill not found");
 
     const source = deriveSkillSourceInfo(skill);
-    if (!source.editable || skill.sourceType !== "local_path") {
+    if (!source.editable) {
       throw unprocessable(source.editableReason ?? "This skill cannot be edited.");
     }
 
@@ -2148,7 +2219,7 @@ export function companySkillService(db: Db) {
     await fs.mkdir(skillDir, { recursive: true });
 
     for (const entry of skill.fileInventory) {
-      const detail = await readFile(companyId, skill.id, entry.path).catch(() => null);
+      const detail = await readFileRaw(companyId, skill.id, entry.path).catch(() => null);
       if (!detail) continue;
       const targetPath = path.resolve(skillDir, entry.path);
       await fs.mkdir(path.dirname(targetPath), { recursive: true });
@@ -2161,6 +2232,105 @@ export function companySkillService(db: Db) {
   function resolveRuntimeSkillMaterializedPath(companyId: string, skill: Pick<CompanySkill, "key" | "slug">) {
     const runtimeRoot = path.resolve(resolveManagedSkillsRoot(companyId), "__runtime__");
     return path.resolve(runtimeRoot, buildSkillRuntimeName(skill.key, skill.slug));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Skill localization
+  //
+  // Every skill is made editable by copying its files into a persistent managed
+  // dir under resolveManagedSkillsRoot(companyId) and rewriting its DB row to
+  // sourceType="local_path" pointing there. After that, local disk is the source
+  // of truth; the DB markdown/fileInventory remain only as a seed + self-heal
+  // backup. This is the persistent, idempotent cousin of materializeRuntimeSkillFiles.
+  // ---------------------------------------------------------------------------
+
+  function resolveLocalizedSkillDir(companyId: string, skill: Pick<CompanySkill, "key" | "slug">) {
+    // Directly under the managed root (sibling of __catalog__/__runtime__), so
+    // deriveSkillSourceInfo's `startsWith(managedRoot)` check treats it as a
+    // first-class Paperclip-workspace skill.
+    return path.resolve(resolveManagedSkillsRoot(companyId), buildSkillRuntimeName(skill.key, skill.slug));
+  }
+
+  function isLocalizedSkill(companyId: string, skill: CompanySkill): boolean {
+    if (getSkillMeta(skill).localized === true) return true;
+    if (skill.sourceType !== "local_path") return false;
+    const dir = normalizeSkillDirectory(skill);
+    return !!dir && dir.startsWith(resolveManagedSkillsRoot(companyId));
+  }
+
+  // Copy a skill's files to its persistent managed dir. Idempotent: if SKILL.md
+  // already exists on disk we leave the dir untouched (never rm — that would
+  // destroy edits). Reads each inventory file via readFile, which resolves the
+  // skill's CURRENT source (disk/DB-markdown/remote fetch) — so this must run
+  // BEFORE the row is flipped to local_path.
+  async function materializeLocalizedSkillFiles(companyId: string, skill: CompanySkill): Promise<string> {
+    const dir = resolveLocalizedSkillDir(companyId, skill);
+    const entryStat = await statPath(path.join(dir, "SKILL.md"));
+    if (entryStat?.isFile()) return dir;
+
+    await fs.mkdir(dir, { recursive: true });
+    for (const entry of skill.fileInventory) {
+      const detail = await readFileRaw(companyId, skill.id, entry.path).catch(() => null);
+      if (!detail) continue;
+      const targetPath = path.resolve(dir, entry.path);
+      await fs.mkdir(path.dirname(targetPath), { recursive: true });
+      await fs.writeFile(targetPath, detail.content, "utf8");
+    }
+    // Guarantee SKILL.md exists even if it wasn't in the inventory for some reason.
+    const skillMdPath = path.join(dir, "SKILL.md");
+    if (!(await statPath(skillMdPath))?.isFile()) {
+      await fs.writeFile(skillMdPath, skill.markdown, "utf8");
+    }
+    return dir;
+  }
+
+  // One-time transition: copy to disk + rewrite the DB row to local_path,
+  // preserving original provenance in metadata. Deduped per skill so concurrent
+  // callers don't double-write.
+  async function localizeSkill(companyId: string, skill: CompanySkill): Promise<CompanySkill> {
+    if (isLocalizedSkill(companyId, skill)) return skill;
+
+    const cacheKey = `${companyId}:${skill.id}`;
+    const inFlight = skillLocalizePromises.get(cacheKey);
+    if (inFlight) return inFlight;
+
+    const promise = (async () => {
+      const dir = await materializeLocalizedSkillFiles(companyId, skill);
+      const meta = getSkillMeta(skill);
+      const nextMeta = {
+        ...meta,
+        localized: true,
+        originalSourceType: meta.originalSourceType ?? skill.sourceType,
+        originalSourceLocator: meta.originalSourceLocator ?? skill.sourceLocator ?? null,
+      };
+      const row = await db
+        .update(companySkills)
+        .set({
+          sourceType: "local_path",
+          sourceLocator: dir,
+          metadata: nextMeta,
+          updatedAt: new Date(),
+        })
+        .where(eq(companySkills.id, skill.id))
+        .returning()
+        .then((rows) => rows[0] ?? null);
+      if (!row) throw notFound("Skill not found");
+      return toCompanySkill(row);
+    })().finally(() => {
+      if (skillLocalizePromises.get(cacheKey) === promise) {
+        skillLocalizePromises.delete(cacheKey);
+      }
+    });
+
+    skillLocalizePromises.set(cacheKey, promise);
+    return promise;
+  }
+
+  // Load a skill and localize it if needed. Returns null if the skill is gone.
+  async function ensureLocalized(companyId: string, skillId: string): Promise<CompanySkill | null> {
+    const skill = await getById(companyId, skillId);
+    if (!skill) return null;
+    return localizeSkill(companyId, skill);
   }
 
   async function listRuntimeSkillEntries(
@@ -2326,6 +2496,13 @@ export function companySkillService(db: Db) {
       const incomingOwner = asString(incomingMeta.owner);
       const incomingRepo = asString(incomingMeta.repo);
       const incomingKind = asString(incomingMeta.sourceKind);
+      // Never re-seed over a localized skill — re-import (esp. ensureBundledSkills
+      // on every inventory refresh) would revert its editable local copy back to
+      // the shared read-only source path and clobber edits.
+      if (existing && existingMeta.localized === true) {
+        out.push(existing);
+        continue;
+      }
       if (
         existing
         && existingMeta.sourceKind === "paperclip_bundled"
@@ -2448,8 +2625,9 @@ export function companySkillService(db: Db) {
       .delete(companySkills)
       .where(eq(companySkills.id, skillId));
 
-    // Clean up materialized runtime files
+    // Clean up materialized runtime files + the persistent localized dir.
     await fs.rm(resolveRuntimeSkillMaterializedPath(companyId, skill), { recursive: true, force: true });
+    await fs.rm(resolveLocalizedSkillDir(companyId, skill), { recursive: true, force: true });
 
     return skill;
   }
