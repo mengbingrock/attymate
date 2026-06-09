@@ -1,4 +1,7 @@
 schema: paperclip/v1
+sidebar:
+  agents: [legal-ops-supervisor, source-intake-agent, facts-evidence-agent, legal-research-agent, drafting-assembly-agent, legal-qa-agent, calendar-agent, docket-agent, practice-learning-agent, gmail-monitor-agent]
+  projects: [firm-onboarding]
 agents:
   legal-ops-supervisor:
     permissions:
