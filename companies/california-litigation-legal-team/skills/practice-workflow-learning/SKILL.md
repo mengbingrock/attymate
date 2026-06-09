@@ -1,13 +1,22 @@
 ---
+schema: agentcompanies/v1
+slug: practice-workflow-learning
 name: practice-workflow-learning
 description: Use when a Paperclip learning agent is explicitly authorized to observe a completed or in-progress legal workflow issue, summarize practice lessons, propose private Firm Operations Guide updates, or draft sanitized public skill improvement proposals. Do not use when learning consent, allowed sources, or do-not-learn boundaries are missing.
 ---
 
-# Practice Workflow Learning
+# practice-workflow-learning
 
-Use this skill from the Practice Learning Agent only when the assigned issue includes an explicit learning contract.
+*How the California Litigation Legal Team learns from its own workflows — source-bound and supervised, capturing reusable patterns while never learning client facts or privileged strategy.*
 
-## Required Issue Contract
+## When to load this skill
+
+- The Practice Learning Agent is assigned an issue that includes an explicit learning contract.
+- A completed or in-progress legal workflow issue is to be observed for practice lessons.
+- Private Firm Operations Guide updates or sanitized public skill improvement proposals are to be drafted.
+- Do not use when learning consent, allowed sources, or do-not-learn boundaries are missing.
+
+## Inputs
 
 Confirm the issue states:
 
@@ -18,31 +27,24 @@ Confirm the issue states:
 - Output target: issue comment, issue document, Firm Operations Guide proposal, or sanitized skill proposal.
 - Approval gates for profile writes, public package edits, external sharing, uploads, or tool access.
 
-If any required field is missing, do not inspect the workflow. Return the issue to Legal Ops Supervisor with a concise missing-input list.
+If any required field is missing, do not inspect the workflow. Return the issue to the Legal Ops Supervisor with a concise missing-input list.
 
-## Workflow
+## Procedure
 
-1. Checkout the assigned issue and read its learning contract.
-2. Read only the allowed sources. Prefer Paperclip issue context, issue documents, and approved artifacts over raw matter files.
-3. Separate observations into:
+1. **Checkout and read the contract.** Checkout the assigned issue and read its learning contract.
+2. **Read only allowed sources.** Read only the allowed sources. Prefer Paperclip issue context, issue documents, and approved artifacts over raw matter files.
+3. **Classify observations.** Separate observations into:
    - Workflow pattern: recurring step, handoff, artifact, checklist, or decision point.
    - Firm preference: private deployment style, SOP, template, tool convention, or approval preference.
    - Product-safe improvement: generic instruction that could improve a public skill after sanitization.
-   - Do-not-learn material: confidential, privileged, matter-specific, or account-specific content.
-4. Produce the requested output with confidence and provenance.
-5. If proposing a skill update, write it as a patch proposal or clean markdown excerpt, not as an applied file edit.
+   - Do-not-learn material: confidential, privileged, matter-specific, or account-specific content — excluded, never captured.
+4. **Checkpoint and gate.** Proceed autonomously with observation and proposal drafting when the learning contract is complete and sources are already approved. Return to the Legal Ops Supervisor when source scope is ambiguous, the learning mode is missing, the output target is unclear, or the observed workflow includes privileged strategy that cannot be safely abstracted. Require human approval before writing to the Firm Operations Guide, editing public package files, changing live agent instructions, uploading/sharing learning outputs, or expanding learning beyond the named sources.
+5. **Produce the output.** Produce the requested output with confidence and provenance.
+6. **Propose, do not apply.** If proposing a skill update, write it as a patch proposal or clean markdown excerpt, not as an applied file edit.
 
-## Checkpoint Policy
+## Outputs
 
-Proceed autonomously with observation and proposal drafting when the learning contract is complete and sources are already approved.
-
-Return to Legal Ops Supervisor when source scope is ambiguous, the learning mode is missing, the output target is unclear, or the observed workflow includes privileged strategy that cannot be safely abstracted.
-
-Require human approval before writing to the Firm Operations Guide, editing public package files, changing live agent instructions, uploading/sharing learning outputs, or expanding learning beyond the named sources.
-
-## Output Format
-
-Use this concise structure:
+Use this concise Learning Report structure:
 
 ```md
 ## Learning Report
@@ -56,4 +58,18 @@ Use this concise structure:
 - Required approvals:
 ```
 
-Do not include raw confidential text. Paraphrase only at the abstraction level needed to improve the workflow.
+- Skill-update proposals are patch proposals or clean markdown excerpts, never applied file edits.
+- Do not include raw confidential text. Paraphrase only at the abstraction level needed to improve the workflow.
+
+## Anti-patterns
+
+- Inspecting the workflow when learning consent, allowed sources, or do-not-learn boundaries are missing.
+- Learning client facts, privileged strategy, confidential source text, account details, private URLs, local paths, credentials, firm secrets, or matter-specific identifiers.
+- Reading beyond the named allowed sources, or preferring raw matter files over approved issue context and artifacts.
+- Writing to the Firm Operations Guide, editing public package files, changing live agent instructions, or uploading/sharing outputs without human approval.
+- Applying a skill update as a file edit instead of proposing it as a patch or excerpt.
+- Including raw confidential text instead of paraphrasing at the minimum abstraction level.
+
+## Reference
+
+Pair this skill with the workflow skills it observes — `ca-subpoena-mtc-drafting-workflow` and `lexis-browseros-legal-research` — and route all profile writes and public-package edits through the Legal Ops Supervisor and the required human approval gates.
