@@ -14,6 +14,18 @@ agents:
         graceSec: 20
         extraArgs:
           - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
   source-intake-agent:
     adapter:
       type: codex_local
@@ -23,6 +35,18 @@ agents:
         graceSec: 20
         extraArgs:
           - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
   facts-evidence-agent:
     adapter:
       type: codex_local
@@ -32,6 +56,18 @@ agents:
         graceSec: 20
         extraArgs:
           - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
   legal-research-agent:
     adapter:
       type: codex_local
@@ -41,6 +77,18 @@ agents:
         graceSec: 20
         extraArgs:
           - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
   drafting-assembly-agent:
     adapter:
       type: codex_local
@@ -50,6 +98,18 @@ agents:
         graceSec: 20
         extraArgs:
           - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
   legal-qa-agent:
     adapter:
       type: codex_local
@@ -59,6 +119,18 @@ agents:
         graceSec: 20
         extraArgs:
           - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
   calendar-agent:
     adapter:
       type: codex_local
@@ -68,6 +140,18 @@ agents:
         graceSec: 20
         extraArgs:
           - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
   docket-agent:
     adapter:
       type: codex_local
@@ -77,6 +161,18 @@ agents:
         graceSec: 20
         extraArgs:
           - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
   practice-learning-agent:
     adapter:
       type: codex_local
@@ -86,6 +182,18 @@ agents:
         graceSec: 20
         extraArgs:
           - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
   gmail-monitor-agent:
     adapter:
       type: codex_local
@@ -95,6 +203,18 @@ agents:
         graceSec: 20
         extraArgs:
           - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
 inputs:
   deployment:
     workspace_root:
