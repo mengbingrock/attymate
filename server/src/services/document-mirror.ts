@@ -152,12 +152,15 @@ export function documentMirrorService(db: Db) {
     }
   }
 
-  // Deliver all pending rows for a user to their default workspace folder over the
+  // Deliver all pending rows for a user to their active workspace folder over the
   // bridge. Called on bridge (re)connect and best-effort right after enqueue.
+  // Uses getActive (the folder toggled active in the sidebar; falls back to the
+  // oldest grant when none is marked) so mirrored files land where the user is
+  // working, not just in the first folder they ever granted.
   async function flushForUser(userId: string): Promise<void> {
     if (!isUserBridgeConnected(userId)) return;
 
-    const workspace = await workspaces.getDefault(userId);
+    const workspace = await workspaces.getActive(userId);
     if (!workspace) return;
 
     const rows = await db
