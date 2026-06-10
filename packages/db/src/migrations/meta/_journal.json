@@ -617,6 +617,13 @@
       "when": 1780797881065,
       "tag": "0087_lush_captain_midlands",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1781058777117,
+      "tag": "0088_messy_husk",
+      "breakpoints": true
     }
   ]
 }
