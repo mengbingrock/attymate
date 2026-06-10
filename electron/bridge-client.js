@@ -95,6 +95,65 @@ export function registerOpHandler(op, handler) {
 }
 
 /**
+ * Create `parentAbs` (and any missing ancestors) while guaranteeing the result
+ * stays inside `realRoot` (already a realpath). Strategy: find the deepest
+ * already-existing ancestor and realpath it (resolving any symlinks up to there),
+ * verify it's in-workspace, then verify the lexically-resolved full path is still
+ * in-workspace BEFORE mkdir — so a symlinked existing ancestor can't redirect the
+ * new tree outside the root. After creation, realpath again and re-check. Returns
+ * the verified real path of the created parent.
+ */
+async function createParentWithin(parentAbs, realRoot) {
+  let existing = parentAbs;
+  const missing = [];
+  // Walk up until we hit an existing directory (or the filesystem root).
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await fs.stat(existing);
+      break;
+    } catch (err) {
+      if (err.code !== "ENOENT") {
+        throw new Error(`write: parent ${err.code ?? "EFAIL"}: ${err.message}`);
+      }
+    }
+    const next = path.dirname(existing);
+    if (next === existing) {
+      throw new Error("write: parent directory does not exist");
+    }
+    missing.unshift(path.basename(existing));
+    existing = next;
+  }
+
+  let realExisting;
+  try {
+    realExisting = await fs.realpath(existing);
+  } catch (err) {
+    throw new Error(`write: parent ${err.code ?? "EFAIL"}: ${err.message}`);
+  }
+  const relExisting = path.relative(realRoot, realExisting);
+  if (relExisting.startsWith("..") || path.isAbsolute(relExisting)) {
+    throw new Error("write: parent directory is outside the granted workspace");
+  }
+
+  const intendedParent = path.join(realExisting, ...missing);
+  const relIntended = path.relative(realRoot, intendedParent);
+  if (relIntended.startsWith("..") || path.isAbsolute(relIntended)) {
+    throw new Error("write: parent directory is outside the granted workspace");
+  }
+
+  await fs.mkdir(intendedParent, { recursive: true });
+
+  const realCreated = await fs.realpath(intendedParent);
+  const relCreated = path.relative(realRoot, realCreated);
+  if (relCreated.startsWith("..") || path.isAbsolute(relCreated)) {
+    throw new Error("write: parent directory is outside the granted workspace");
+  }
+  return realCreated;
+}
+
+/**
  * Server-dispatched "write" handler.
  *   args: { path: string (absolute), workspaceRoot: string (absolute),
  *           contents: string (base64), encoding?: "base64" }
@@ -107,11 +166,13 @@ export function registerOpHandler(op, handler) {
  * then join with the basename. If the file already exists as a symlink, we
  * separately follow it and re-check the destination is in-workspace.
  *
- * Auto-creating parent dirs is intentionally NOT supported in MVP: an agent
- * accidentally typing "src/nw/file.ts" would silently materialise a new
- * directory tree. If the parent doesn't exist, error and let the agent decide.
+ * Auto-creating parent dirs is opt-in via `createParents`. Without it a missing
+ * parent errors (an agent typo like "src/nw/file.ts" shouldn't silently
+ * materialise a tree). With it — used by the document-mirror feature, which
+ * writes to per-issue folders — we create the chain, but only after proving every
+ * step stays inside the granted workspace (see createParentWithin).
  */
-async function handleWrite({ path: absPath, workspaceRoot, contents, encoding }) {
+async function handleWrite({ path: absPath, workspaceRoot, contents, encoding, createParents }) {
   if (typeof absPath !== "string" || typeof workspaceRoot !== "string") {
     throw new Error("write: missing path or workspaceRoot");
   }
@@ -133,17 +194,22 @@ async function handleWrite({ path: absPath, workspaceRoot, contents, encoding })
   }
 
   // Resolve the parent's real path; this catches any symlink-redirected
-  // intermediate directory before we touch the file.
+  // intermediate directory before we touch the file. When the parent is missing
+  // and createParents is set, build the chain (containment-checked) instead of
+  // erroring.
   const parentAbs = path.dirname(absPath);
   const targetName = path.basename(absPath);
   let effectiveDir;
   try {
     effectiveDir = await fs.realpath(parentAbs);
   } catch (err) {
-    if (err.code === "ENOENT") {
+    if (err.code !== "ENOENT") {
+      throw new Error(`write: parent ${err.code ?? "EFAIL"}: ${err.message}`);
+    }
+    if (!createParents) {
       throw new Error("write: parent directory does not exist");
     }
-    throw new Error(`write: parent ${err.code ?? "EFAIL"}: ${err.message}`);
+    effectiveDir = await createParentWithin(parentAbs, realRoot);
   }
   const relParent = path.relative(realRoot, effectiveDir);
   if (relParent.startsWith("..") || path.isAbsolute(relParent)) {
