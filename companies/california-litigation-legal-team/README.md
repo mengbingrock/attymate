@@ -12,7 +12,7 @@ It packages one board-facing Legal Ops Supervisor, reusable specialist agents, a
 | Tone | `green` |
 | Agents | 10 |
 | Projects | 1 (Firm Onboarding) |
-| Tasks | 9 (onboarding) |
+| Tasks | 12 (onboarding) |
 | Goals | 4 |
 | Skills | 9 |
 
@@ -68,7 +68,7 @@ Each agent is defined by four files: `AGENTS.md` (role, triggers, handoffs, deli
 
 ## Projects
 
-- [Firm Onboarding](projects/firm-onboarding/PROJECT.md) — import-time onboarding to configure workspace, runtime, local tools, connectors, SOPs, matter mapping, and policy before any live matter work. Nine onboarding tasks, all owned by the Legal Ops Supervisor.
+- [Firm Onboarding](projects/firm-onboarding/PROJECT.md) — import-time onboarding to configure workspace, runtime, local tools, connectors, Gmail/Calendar/Docket monitor profiles, SOPs, matter mapping, and policy before any live matter work. Twelve onboarding tasks, all owned by the Legal Ops Supervisor.
 
 The subpoena motion-to-compel workflow is a skill-triggered workflow owned by Legal Ops and the unified specialists — not an import-time project or a separate sub-organization. Live work begins only from a user-created parent issue with a complete Matter Safety Contract.
 
@@ -101,7 +101,8 @@ To import the company without onboarding starter issues, omit `tasks` from `--in
 - Review executable-script trust before using repo helper scripts. The MTC drafting skill references an optional local OCR helper at `skills/ca-subpoena-mtc-drafting-workflow/scripts/ocr_pdf_intake.ps1`; it requires explicit `{matter_root}` / `{output_root}` scope, writes only under the approved output root, and must be run only in a deployment-approved Python/OCR environment. Paperclip company import stores the markdown skill/reference files; deployments that want the helper should review and copy or run it from the repository source after approval.
 - Set budgets, model choices, and approval policies appropriate for the deployment.
 - Configure external-tool access before use: BrowserOS or equivalent browser tooling, Gmail, Google Calendar, Google Drive, Lexis, LASC, external knowledge-base/upload systems, filing, service, and upload/download workflows.
-- Configure `gmail_monitor_profile` before enabling Gmail Monitor Agent routines.
+- Configure `gmail_monitor_profile`, `calendar_monitor_profile`, `docket_monitor_profile`, and `monitoring_report_policy` before enabling monitor routines.
+- Keep monitor routines paused until the board/operator approves the profile and schedule. Monitor reports go to Legal Ops Supervisor; monitors do not open substantive legal work directly.
 - Keep the completed Firm Operations Guide private to the deployment.
 - Start live work only from a parent issue assigned to Legal Ops Supervisor.
 - Put exact `{matter_root}`, `{output_root}`, Firm Operations Guide reference, read-only source roots, forbidden roots, allowed outputs, autonomy level, learning mode, and red gates in every live issue's Matter Safety Contract.
