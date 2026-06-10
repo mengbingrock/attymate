@@ -2,6 +2,8 @@
 
 Every live matter parent issue and every implementation child issue must include this contract. If required scope is missing, Legal Ops Supervisor cures the issue before specialists expand work. Specialists should continue safe work when the approved sources and output root are clear, and should only block when no safe work remains.
 
+This is an internal coordination contract. Lawyers should not be asked to fill it out field by field. Legal Ops Supervisor should use `light-intake-guide.md` to ask plain-language questions, apply safe defaults, and translate the answers into the contract.
+
 - Workflow type: MTC, pleading intake, docket check, calendaring, research, drafting, QA, learning, or another named workflow.
 - Autonomy level: `safe-draft-only`, `supervised-tools`, or `approved-external-actions`.
 - Firm guide reference: private Firm Operations Guide issue-document section or scoped guide excerpt that defines workspace, tools, connectors, and approval policy.
@@ -18,6 +20,8 @@ Every live matter parent issue and every implementation child issue must include
 
 Supervisor delegation requirements:
 
+- Use Light Intake Mode for vague user requests, monitor findings, and first-pass matter triage. Start from the least intrusive approved source set and ask only for the next decision needed.
+- If a contract field is missing, ask one natural-language question or offer 2-3 concrete choices instead of returning the full checklist to the lawyer.
 - Start every live matter workflow from one parent Paperclip issue assigned to Legal Ops Supervisor.
 - Complete read-only intake before implementation child issues are created when the workflow requires matter selection or source scoping.
 - Create child issues dynamically from the parent issue; do not rely on import-time MTC starter tasks.

@@ -55,6 +55,8 @@ Productized skills in this package must not include client confidentiality, firm
 
 The default imported project is firm onboarding. It helps the board configure workspace structure, Codex/Paperclip runtime, Python/OCR tools, external connectors, firm SOPs, templates, matter mapping, approval policy, and learning policy before live matter work.
 
+Legal Ops Supervisor is also the lawyer-facing intake concierge. It should ask short plain-English questions, use safe defaults, and translate the lawyer's answers into Matter Safety Contracts and specialist child issues instead of asking the lawyer to fill internal checklists.
+
 The subpoena MTC workflow remains available as a specialized skill-triggered workflow inside the broader litigation team. It is handled by Legal Ops Supervisor and the unified specialists, not by an import-time MTC project or separate MTC sub-organization. Live MTC work must begin from a user-created parent issue assigned to Legal Ops Supervisor with matter selection, explicit source/output scope, autonomy level, learning mode, and red-gate approvals.
 
 ## Identity

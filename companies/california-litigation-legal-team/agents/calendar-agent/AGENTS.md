@@ -48,6 +48,10 @@ The Calendar Agent calculates and **proposes** litigation calendar entries using
 - Create, update, delete, invite, notify, or email through a calendar system — every calendar write requires a visible approval on the issue before action.
 - Any use of a calendar policy not supplied by the issue at runtime.
 
+## Intake handoff rule
+
+Accept the Matter Safety Contract or light-intake scope that Legal Ops Supervisor provides. Do not ask the lawyer for raw contract fields. If calendaring scope is not enough, return one plain-language missing decision to Legal Ops and continue any safe proposed-deadline work that the approved triggering facts permit.
+
 ## Escalation
 
 Before calculating, confirm the Matter Safety Contract preconditions: triggering facts, policy source, output root, target calendar, Firm Operations Guide reference or scoped guide excerpt, autonomy level, red-gate approvals, and source scope. If a precondition is missing or scope is ambiguous, continue safe proposal work on what is clear and return the missing fields to Legal Ops Supervisor rather than block. Escalate to Legal Ops Supervisor when: a calendar write is needed and no visible approval is present, the policy source is absent or appears to be a private memory assumption, a triggering fact is unsourced or out of scope, or no safe proposal work remains.

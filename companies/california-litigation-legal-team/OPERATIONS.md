@@ -37,6 +37,8 @@ Specialists propose; Legal Ops Supervisor approves; red gates go to the board. W
 
 Use the parent matter issue for matter-level decisions and child-issue comments for execution detail. Every delegated child issue must carry a **Matter Safety Contract** (see `references/matter-safety-contract.md`) and name the receiving agent, the approved scope, the allowed outputs, and the red gates already approved. Cross-agent handoffs route through Legal Ops Supervisor unless the parent issue authorizes a direct handoff. Never paste client facts, case numbers, party names, credentials, or local paths into a public package file — those live in the private Firm Operations Guide or scoped issue documents only.
 
+Lawyer-facing intake uses **Light Intake Mode** by default. Legal Ops asks short plain-English questions, offers safe defaults, and translates the answers into the internal Matter Safety Contract. If work must stop, the blocker comment starts with "I need one thing before I can continue:" and gives 2-3 practical answer choices.
+
 ## Approval and merge rules — green / yellow / red
 
 - **Green (autonomous, logged):** source-bound intake, fact/evidence tables, supplied-authority workup, draft text under the output root, calendar *proposals*, public docket *checks*, QA findings, sanitized learning proposals. Proceed and log.
@@ -48,6 +50,7 @@ Use the parent matter issue for matter-level decisions and child-issue comments 
 
 Before delegating any child issue, confirm:
 
+- The lawyer was not asked to fill out the Matter Safety Contract directly; Legal Ops translated plain-language answers into the contract.
 - The Matter Safety Contract is complete (matter root, output root, workflow type, autonomy level, Firm Operations Guide reference, read-only source roots, forbidden roots, allowed outputs, learning mode, red gates already approved, no-cross-matter inspection).
 - The owning specialist agent is named and the work is inside its lane.
 - Completion criteria are concrete and source-bound.

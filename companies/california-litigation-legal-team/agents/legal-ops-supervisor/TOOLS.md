@@ -15,7 +15,7 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 - Company constitution: `COMPANY.md`
 - Operating manual: `OPERATIONS.md`
 - Project inventory: `PROJECT-INVENTORY.md` (read before delegating any task)
-- References: `references/` — `matter-safety-contract.md`, `workflow-boundaries.md`, `workflow-issue-templates.md`, `firm-operations-guide-template.md`
+- References: `references/` — `light-intake-guide.md`, `matter-safety-contract.md`, `workflow-boundaries.md`, `workflow-issue-templates.md`, `firm-operations-guide-template.md`
 - Own memory: `agents/legal-ops-supervisor/memory/` (daily notes)
 - Own runtime journal: `agents/legal-ops-supervisor/HEARTBEAT.md`
 
@@ -30,7 +30,8 @@ BrowserOS, Lexis, LASC, Gmail, Google Calendar, Google Drive, Word / live-draft 
 ## Conventions
 
 - Every child issue carries a complete Matter Safety Contract and sets `parentId` to the Legal Ops parent issue.
+- The lawyer does not fill out the Matter Safety Contract. Use `light-intake-guide.md` to ask plain-language questions, then translate the answer into the contract.
 - Never store client data, case numbers, party names, credentials, internal URLs, or local paths in package files — those live in the private Firm Operations Guide and scoped issue documents only.
 - Hiring a temporary/specialized agent requires a documented scope, manager, skills, budget/time bound, access limits, approval gates, and retirement condition — never to bypass a missing approval, a matter-scope limit, a confidentiality rule, or an external-tool gate.
 - Check `PROJECT-INVENTORY.md` before creating or delegating a deliverable so work is not duplicated.
-- If a matter or output scope is unclear, create a missing-input or approval issue instead of delegating implementation work.
+- If a matter or output scope is unclear and no safe work remains, mark the issue `blocked` and ask for one concrete next answer with 2-3 practical choices.
