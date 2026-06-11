@@ -6,7 +6,7 @@ This file is the firm's operating manual. `COMPANY.md` is the constitution (iden
 
 ## Phase model
 
-Phase 1 is **onboarding and runtime readiness** — there is no live matter work until it is done. Turn the company intent into a configured deployment: workspace structure, Codex/Paperclip runtime, Python/OCR tooling, external connectors, firm SOPs and templates, matter mapping, approval policy, and learning policy, all consolidated into the private Firm Operations Guide (`firm-operations-guide`). Phase 2 — live, matter-scoped litigation work — begins only after the readiness smoke test is green and a supervising attorney owns the work product.
+Phase 1 is **onboarding and runtime readiness** — there is no live matter work until it is done. Turn the company intent into a configured deployment: workspace structure, Codex/Paperclip runtime, Python/OCR tooling, external connectors, Gmail/Calendar/Docket monitor profiles, firm SOPs and templates, matter mapping, approval policy, and learning policy, all consolidated into the private Firm Operations Guide (`firm-operations-guide`). Phase 2 — live, matter-scoped litigation work — begins only after the readiness smoke test is green and a supervising attorney owns the work product.
 
 | Function | Phase 1 "done" when |
 |---|---|
@@ -16,8 +16,8 @@ Phase 1 is **onboarding and runtime readiness** — there is no live matter work
 | Legal Research Agent | Knows its authority-use limits; runs on supplied/approved authorities with external research gated. |
 | Drafting & Assembly Agent | Produces source-bound draft text under the output root without touching live/final files. |
 | Legal QA Agent | Has a working confidentiality/source/authority/approval checklist and applies it to one artifact. |
-| Calendar Agent | Has a calendar policy source and posts proposals before any approved write. |
-| Docket Agent | Knows the public-docket scope and the paid/login/CAPTCHA gates it must not cross. |
+| Calendar Agent | Has a calendar policy source, optional `calendar_monitor_profile`, and posts proposals before any approved write. |
+| Docket Agent | Knows the public-docket scope, optional `docket_monitor_profile`, and the paid/login/CAPTCHA gates it must not cross. |
 | Practice Learning Agent | Learning mode default `off`; activates only under an explicit learning contract. |
 | Gmail Monitor Agent | A `gmail_monitor_profile` exists; runs read-only and routes candidates to Legal Ops. |
 
@@ -31,13 +31,17 @@ Specialists propose; Legal Ops Supervisor approves; red gates go to the board. W
 |---|---|---|---|
 | Onboarding readiness status | legal-ops-supervisor | Board / firm owner | Until Phase 1 closes |
 | Per-matter parent-issue status | legal-ops-supervisor | Board / supervising attorney | Per active matter |
+| Matter Status Digest | legal-ops-supervisor | Parent matter issue | On creation, blocker changes, child delegation, and lawyer status questions |
 | Readiness smoke (green/yellow/red) | legal-ops-supervisor | Board | On environment change |
+| Monitor findings | gmail-monitor-agent / calendar-agent / docket-agent | legal-ops-supervisor | Per approved monitor profile |
 
 ## Communication conventions
 
 Use the parent matter issue for matter-level decisions and child-issue comments for execution detail. Every delegated child issue must carry a **Matter Safety Contract** (see `references/matter-safety-contract.md`) and name the receiving agent, the approved scope, the allowed outputs, and the red gates already approved. Cross-agent handoffs route through Legal Ops Supervisor unless the parent issue authorizes a direct handoff. Never paste client facts, case numbers, party names, credentials, or local paths into a public package file — those live in the private Firm Operations Guide or scoped issue documents only.
 
 Lawyer-facing intake uses **Light Intake Mode** by default. Legal Ops asks short plain-English questions, offers safe defaults, and translates the answers into the internal Matter Safety Contract. If work must stop, the blocker comment starts with "I need one thing before I can continue:" and gives 2-3 practical answer choices.
+
+Every active parent matter issue also gets a **Matter Status Digest** using `references/matter-status-digest.md`. It should explain the matter, current status, work already done, blocker, next-step owner, whether the lawyer needs to act, and what happens next. Child issues may carry technical details, but the parent issue should always have one lawyer-readable summary.
 
 ## Approval and merge rules — green / yellow / red
 
@@ -51,6 +55,7 @@ Lawyer-facing intake uses **Light Intake Mode** by default. Legal Ops asks short
 Before delegating any child issue, confirm:
 
 - The lawyer was not asked to fill out the Matter Safety Contract directly; Legal Ops translated plain-language answers into the contract.
+- The parent matter issue has an up-to-date Matter Status Digest.
 - The Matter Safety Contract is complete (matter root, output root, workflow type, autonomy level, Firm Operations Guide reference, read-only source roots, forbidden roots, allowed outputs, learning mode, red gates already approved, no-cross-matter inspection).
 - The owning specialist agent is named and the work is inside its lane.
 - Completion criteria are concrete and source-bound.
@@ -82,6 +87,8 @@ Before creating any substantial deliverable, read `PROJECT-INVENTORY.md`, the re
 | Onboarding sweep (until Phase 1 closes) | legal-ops-supervisor | Daily |
 | Readiness smoke re-check | legal-ops-supervisor | On environment change |
 | Gmail read-only intake monitor (if enabled) | gmail-monitor-agent | Per `gmail_monitor_profile` schedule |
+| Calendar read-only monitor (if enabled) | calendar-agent | Per `calendar_monitor_profile` schedule |
+| Docket public-record monitor (if enabled) | docket-agent | Per `docket_monitor_profile` schedule |
 | Per-matter status roll-up | legal-ops-supervisor | Per active matter |
 
 ## Critical rules summary

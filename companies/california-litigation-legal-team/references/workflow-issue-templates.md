@@ -10,6 +10,7 @@ Use this when a lawyer gives a short request, a monitor routes a candidate, or s
 
 Include:
 
+- Matter Status Digest using `references/matter-status-digest.md`.
 - One-sentence understanding of the request.
 - Current safe source scope, defaulting to monitor summary or issue text only.
 - Tentative matter label, if available.
@@ -34,6 +35,7 @@ Title: Run subpoena MTC package for selected matter
 
 Include:
 
+- Matter Status Digest using `references/matter-status-digest.md`.
 - Matter Safety Contract with workflow type `MTC`.
 - Selected matter root or approved source set.
 - Output root.

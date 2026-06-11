@@ -253,6 +253,10 @@ inputs:
       kind: text
       requirement: optional
       description: Google Calendar connector status. Calendar writes require issue-level approval.
+    calendar_monitor_profile:
+      kind: text
+      requirement: optional
+      description: Read-only Calendar monitoring scope, calendar set, exclusions, lookback/lookahead windows, deadline/event categories, dedupe policy, redaction policy, routing criteria, and schedule preference. Required before enabling Calendar Agent monitor routines.
     google_drive_connector:
       kind: text
       requirement: optional
@@ -265,6 +269,18 @@ inputs:
       kind: text
       requirement: optional
       description: LASC docket access status. Authentication, paid retrieval, downloads, filing, and service require approval.
+    docket_monitor_profile:
+      kind: text
+      requirement: optional
+      description: Read-only public docket monitoring scope, authorized courts or portals, case-list source, check cadence, change-detection rule, report cadence, and red gates. Required before enabling Docket Agent monitor routines.
+    monitoring_report_policy:
+      kind: text
+      requirement: optional
+      description: Deployment policy for monitor reports to Legal Ops Supervisor, including redaction, dedupe, candidate issue creation, routine status, and review cadence.
+    matter_status_style:
+      kind: text
+      requirement: optional
+      description: Deployment preference for lawyer-facing Matter Status Digest tone, detail level, and preferred next-action phrasing.
     matter_root:
       kind: path
       requirement: runtime

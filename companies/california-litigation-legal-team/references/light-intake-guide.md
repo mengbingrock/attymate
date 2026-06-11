@@ -15,6 +15,7 @@ Start in Light Intake Mode unless the issue already contains a complete scope.
 3. Ask for the smallest next decision needed to continue.
 4. Offer 2-3 answer choices with a recommended safe default.
 5. Translate the answer into the Matter Safety Contract internally.
+6. If a parent matter issue exists, post or update the Matter Status Digest.
 
 ## Minimum Lawyer-Facing Questions
 
@@ -43,6 +44,8 @@ If no safe work remains, mark the issue `blocked` and start with:
 > I need one thing before I can continue: [plain-language missing decision].
 
 Then give 2-3 choices. Do not paste the full Matter Safety Contract checklist to the lawyer.
+
+Also update the parent Matter Status Digest so the lawyer can see whether the next step belongs to the team or to them.
 
 ## Red Gates
 
