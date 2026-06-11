@@ -18,7 +18,7 @@ Update this file after every completed deliverable. Keeping the inventory curren
 
 **Owner:** `legal-ops-supervisor`
 **Goal:** `complete-firm-onboarding-and-runtime-readiness`
-**Description:** Import-time onboarding to configure a reusable litigation AI firm — workspace, runtime, tools, connectors, SOPs, matter mapping, and policy — before any live matter work. The durable output is the private Firm Operations Guide (`firm-operations-guide`).
+**Description:** Import-time onboarding to configure a reusable litigation AI firm — workspace, runtime, tools, connectors, monitor profiles, SOPs, matter mapping, and policy — before any live matter work. The durable output is the private Firm Operations Guide (`firm-operations-guide`).
 **Success condition:** All onboarding tasks closed; Firm Operations Guide complete and current; readiness smoke test posted green; learning mode set to `off` with an explicit opt-in path documented.
 
 **Expected deliverables (onboarding tasks):**
@@ -26,6 +26,9 @@ Update this file after every completed deliverable. Keeping the inventory curren
 - Configure agent runtime (Codex/Paperclip) — `legal-ops-supervisor`
 - Configure local tools (Python, OCR/PDF, Docling) — `legal-ops-supervisor`
 - Connect external tools (BrowserOS, Gmail, Calendar, Drive, Lexis, LASC, filing) — `legal-ops-supervisor`
+- Configure Gmail monitoring profile and paused routine plan — `legal-ops-supervisor`
+- Configure Calendar monitoring profile and paused routine plan — `legal-ops-supervisor`
+- Configure Docket monitoring profile and paused routine plan — `legal-ops-supervisor`
 - Maintain Firm Operations Guide (`firm-operations-guide` issue document) — `legal-ops-supervisor`
 - Onboard firm SOPs & templates — `legal-ops-supervisor`
 - Onboard existing matters (high-level mapping, no client facts in package) — `legal-ops-supervisor`

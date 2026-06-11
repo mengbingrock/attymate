@@ -4,7 +4,7 @@ kind: company
 slug: california-litigation-legal-team
 name: California Litigation Legal Team
 description: Paperclip company for reusable California litigation workflows with supervised issue scope, approvals, and specialist agents.
-version: 0.5.1
+version: 0.5.2
 license: MIT
 tags: []
 metadata:
@@ -19,6 +19,7 @@ requirements:
     - Paperclip with codex_local adapter support.
     - Authenticated Codex CLI or an approved deployment-specific API-key auth mechanism.
     - Python and OCR/PDF tooling configured through the private Firm Operations Guide.
+    - Monitor profiles configured privately before Gmail, Calendar, or Docket routines are enabled.
     - Matter and output paths supplied at runtime through issue contracts.
 includes:
   - goals/complete-firm-onboarding-and-runtime-readiness/GOAL.md
@@ -53,7 +54,7 @@ This Paperclip company packages reusable California litigation workflows into a 
 
 Productized skills in this package must not include client confidentiality, firm-specific procedures, private URLs, credentials, account details, or hardcoded local paths. Deployment-specific behavior belongs in runtime issue contracts, deployment profiles, or local adapter configuration.
 
-The default imported project is firm onboarding. It helps the board configure workspace structure, Codex/Paperclip runtime, Python/OCR tools, external connectors, firm SOPs, templates, matter mapping, approval policy, and learning policy before live matter work.
+The default imported project is firm onboarding. It helps the board configure workspace structure, Codex/Paperclip runtime, Python/OCR tools, external connectors, Gmail/Calendar/Docket monitor profiles, firm SOPs, templates, matter mapping, approval policy, and learning policy before live matter work.
 
 The subpoena MTC workflow remains available as a specialized skill-triggered workflow inside the broader litigation team. It is handled by Legal Ops Supervisor and the unified specialists, not by an import-time MTC project or separate MTC sub-organization. Live MTC work must begin from a user-created parent issue assigned to Legal Ops Supervisor with matter selection, explicit source/output scope, autonomy level, learning mode, and red-gate approvals.
 

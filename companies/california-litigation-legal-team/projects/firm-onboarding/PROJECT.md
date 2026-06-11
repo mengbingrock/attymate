@@ -12,6 +12,9 @@ includes:
   - tasks/configure-agent-runtime/TASK.md
   - tasks/configure-local-tools/TASK.md
   - tasks/connect-external-tools/TASK.md
+  - tasks/configure-gmail-monitoring/TASK.md
+  - tasks/configure-calendar-monitoring/TASK.md
+  - tasks/configure-docket-monitoring/TASK.md
   - tasks/maintain-firm-operations-guide/TASK.md
   - tasks/onboard-firm-sops-templates/TASK.md
   - tasks/onboard-existing-matters/TASK.md
