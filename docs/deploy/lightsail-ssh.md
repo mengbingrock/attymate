@@ -58,13 +58,20 @@ docker save paperclip-server:latest | gzip -1 > /tmp/paperclip-server.tgz
 rsync -a --partial -e "ssh -i ~/.ssh/lightsail.pem" \
   /tmp/paperclip-server.tgz ubuntu@44.240.150.216:/tmp/paperclip-server.tgz
 
-# 4. Load the image + recreate the container on the VPS.
+# 4. Reclaim disk on the VPS BEFORE loading. Each deploy leaves a ~4.5 GB image
+#    behind; on a 58 GB disk they pile up fast and `docker load` eventually fails
+#    with "no space left on device". `docker image prune -f` removes only
+#    dangling/untagged images — never the running container's image, :latest,
+#    postgres, or caddy — so it is safe to run on every deploy.
+ssh -i ~/.ssh/lightsail.pem ubuntu@44.240.150.216 'docker image prune -f && df -h / | tail -1'
+
+# 5. Load the image + recreate the container on the VPS.
 ssh -i ~/.ssh/lightsail.pem ubuntu@44.240.150.216 '
   gunzip -c /tmp/paperclip-server.tgz | docker load &&
   cd /opt/paperclip && docker compose up -d paperclip
 '
 
-# 5. Verify.
+# 6. Verify.
 ssh -i ~/.ssh/lightsail.pem ubuntu@44.240.150.216 'docker inspect -f "{{.State.Health.Status}}" paperclip'
 curl -sf -o /dev/null -w "%{http_code}\n" https://paperclip.attymate.com/api/health   # → 200
 ```
@@ -109,6 +116,12 @@ effectively on via the non-TTY path).
 - **Tarball path collision:** the tarball lands at `/tmp/paperclip-server.tgz` on the
   VPS. If two people deploy at once they will clobber that file and race
   `docker compose up -d paperclip`. **Coordinate — only one deploy at a time.**
+- **Disk fills up → `docker load` fails with "no space left on device":** each deploy
+  loads a fresh ~4.5 GB image and leaves the previous one behind. On the 58 GB root
+  disk these accumulate until a load aborts mid-unpack (leaving the old image still
+  running). Step 4 (`docker image prune -f`) prevents this; if you skipped it and hit
+  the error, run the prune and re-run the load. Check headroom with `df -h /` and
+  `docker system df` (look at RECLAIMABLE).
 
 ## Rollback
 
