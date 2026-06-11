@@ -4,7 +4,7 @@ import { SchemaConfigFields } from "../schema-config-fields";
 
 export const acpxLocalUIAdapter: UIAdapterModule = {
   type: "acpx_local",
-  label: "ACPX (local)",
+  label: "ACPX (Server's Remote)",
   parseStdoutLine: parseAcpxStdoutLine,
   ConfigFields: SchemaConfigFields,
   buildAdapterConfig: buildAcpxLocalConfig,
