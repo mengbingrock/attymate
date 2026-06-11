@@ -52,7 +52,7 @@ export type AgentAdapterType = (typeof AGENT_ADAPTER_TYPES)[number] | (string & 
 
 /**
  * Local agents that the runner-client can execute, exposed in the agent picker
- * as "<Agent> (Local Runner)" options. Each maps to a `<agent>_runner` adapter
+ * as "<Agent> (User's Local)" options. Each maps to a `<agent>_runner` adapter
  * type that routes to the runner_gateway engine with this `runnerAdapterType`.
  * (cursor is omitted: its registry type is `cursor`, not `cursor_local`.)
  */

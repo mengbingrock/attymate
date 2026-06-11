@@ -21,7 +21,11 @@ const UNDERLYING: UIAdapterModule[] = [
 
 export const runnerGatewayVariantUIAdapters: UIAdapterModule[] = UNDERLYING.map((base) => ({
   type: localRunnerVariantType(base.type),
-  label: `${base.label} (Local Runner)`,
+  // Strip any "(Server's Remote)"-style suffix from the base label before
+  // tagging the runner variant, so we get "Codex (User's Local)" not
+  // "Codex (Server's Remote) (User's Local)". (The picker actually renders the
+  // label from adapter-display-registry; this keeps the module label tidy too.)
+  label: `${base.label.replace(/\s*\([^)]*\)\s*$/, "")} (User's Local)`,
   parseStdoutLine: base.parseStdoutLine,
   createStdoutParser: base.createStdoutParser,
   ConfigFields: base.ConfigFields,
