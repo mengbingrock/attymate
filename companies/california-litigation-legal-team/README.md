@@ -26,6 +26,10 @@ Hub-and-spoke around a single front door. The **Legal Ops Supervisor** is the on
 
 Identity and constraints live in [COMPANY.md](COMPANY.md); operating governance in [OPERATIONS.md](OPERATIONS.md); the deliverable ledger in [PROJECT-INVENTORY.md](PROJECT-INVENTORY.md).
 
+Default intake is **Light Intake Mode**. Legal Ops starts from the user's description, an already-approved monitor summary, or an approved source list; produces an intake summary, missing-input list, and proposed next step; and asks for only the next decision needed to continue. Legal Ops prepares the Matter Safety Contract internally from plain-language answers. Red gates still require visible approval.
+
+Active parent matter issues should also carry a **Matter Status Digest**. This is the lawyer-facing summary that explains what the matter is, what the team already did, what is blocking progress, who owns the next step, whether the lawyer needs to act, and what happens next. Technical blocker chains stay available for audit, but they should not be the first thing a lawyer has to decode.
+
 ## Org chart
 
 ```mermaid
@@ -105,7 +109,8 @@ To import the company without onboarding starter issues, omit `tasks` from `--in
 - Keep monitor routines paused until the board/operator approves the profile and schedule. Monitor reports go to Legal Ops Supervisor; monitors do not open substantive legal work directly.
 - Keep the completed Firm Operations Guide private to the deployment.
 - Start live work only from a parent issue assigned to Legal Ops Supervisor.
-- Put exact `{matter_root}`, `{output_root}`, Firm Operations Guide reference, read-only source roots, forbidden roots, allowed outputs, autonomy level, learning mode, and red gates in every live issue's Matter Safety Contract.
+- Keep the parent issue's Matter Status Digest current whenever child issues are created, blockers change, or the lawyer asks for status.
+- Let Legal Ops translate lawyer-facing intake answers into the Matter Safety Contract. A live issue should still carry `{matter_root}` or an approved source set, `{output_root}` when configured, Firm Operations Guide reference, read-only source roots, forbidden roots, allowed outputs, autonomy level, learning mode, and red gates, but lawyers should be asked for these in plain language.
 
 ## Confidentiality And Portability
 

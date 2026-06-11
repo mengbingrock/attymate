@@ -277,6 +277,10 @@ inputs:
       kind: text
       requirement: optional
       description: Deployment policy for monitor reports to Legal Ops Supervisor, including redaction, dedupe, candidate issue creation, routine status, and review cadence.
+    matter_status_style:
+      kind: text
+      requirement: optional
+      description: Deployment preference for lawyer-facing Matter Status Digest tone, detail level, and preferred next-action phrasing.
     matter_root:
       kind: path
       requirement: runtime

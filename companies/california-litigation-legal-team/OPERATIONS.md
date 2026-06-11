@@ -31,12 +31,17 @@ Specialists propose; Legal Ops Supervisor approves; red gates go to the board. W
 |---|---|---|---|
 | Onboarding readiness status | legal-ops-supervisor | Board / firm owner | Until Phase 1 closes |
 | Per-matter parent-issue status | legal-ops-supervisor | Board / supervising attorney | Per active matter |
+| Matter Status Digest | legal-ops-supervisor | Parent matter issue | On creation, blocker changes, child delegation, and lawyer status questions |
 | Readiness smoke (green/yellow/red) | legal-ops-supervisor | Board | On environment change |
 | Monitor findings | gmail-monitor-agent / calendar-agent / docket-agent | legal-ops-supervisor | Per approved monitor profile |
 
 ## Communication conventions
 
 Use the parent matter issue for matter-level decisions and child-issue comments for execution detail. Every delegated child issue must carry a **Matter Safety Contract** (see `references/matter-safety-contract.md`) and name the receiving agent, the approved scope, the allowed outputs, and the red gates already approved. Cross-agent handoffs route through Legal Ops Supervisor unless the parent issue authorizes a direct handoff. Never paste client facts, case numbers, party names, credentials, or local paths into a public package file — those live in the private Firm Operations Guide or scoped issue documents only.
+
+Lawyer-facing intake uses **Light Intake Mode** by default. Legal Ops asks short plain-English questions, offers safe defaults, and translates the answers into the internal Matter Safety Contract. If work must stop, the blocker comment starts with "I need one thing before I can continue:" and gives 2-3 practical answer choices.
+
+Every active parent matter issue also gets a **Matter Status Digest** using `references/matter-status-digest.md`. It should explain the matter, current status, work already done, blocker, next-step owner, whether the lawyer needs to act, and what happens next. Child issues may carry technical details, but the parent issue should always have one lawyer-readable summary.
 
 ## Approval and merge rules — green / yellow / red
 
@@ -49,6 +54,8 @@ Use the parent matter issue for matter-level decisions and child-issue comments 
 
 Before delegating any child issue, confirm:
 
+- The lawyer was not asked to fill out the Matter Safety Contract directly; Legal Ops translated plain-language answers into the contract.
+- The parent matter issue has an up-to-date Matter Status Digest.
 - The Matter Safety Contract is complete (matter root, output root, workflow type, autonomy level, Firm Operations Guide reference, read-only source roots, forbidden roots, allowed outputs, learning mode, red gates already approved, no-cross-matter inspection).
 - The owning specialist agent is named and the work is inside its lane.
 - Completion criteria are concrete and source-bound.

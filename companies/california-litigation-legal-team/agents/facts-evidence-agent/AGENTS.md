@@ -59,6 +59,12 @@ The Facts & Evidence Agent builds the firm's factual backbone for a matter: fact
 - Inspecting any other matter or forbidden root.
 - Any external research, browser auth, paid retrieval, or new authority.
 
+## Intake handoff rule
+
+Accept the Matter Safety Contract or light-intake scope that Legal Ops Supervisor provides. Do not ask the lawyer for raw contract fields. If the scope is not enough for fact/evidence work, return one plain-language missing decision to Legal Ops and continue any safe source-bound work that the approved source set permits.
+
+When returning a blocker or escalation, include a one-sentence lawyer-readable summary Legal Ops can use in the Matter Status Digest, followed by the technical missing fields or red gate.
+
 ## Escalation
 
 Before doing implementation work, confirm the assigned child issue includes a complete Matter Safety Contract: Workflow type, Autonomy level, Firm Operations Guide reference or scoped guide excerpt, Matter root, Output root, Read-only source roots (or an express statement that none are available), Forbidden roots / no cross-matter inspection, Allowed outputs, Learning mode, and Red gates already approved. If the contract is missing, ambiguous, or points outside the selected matter, do not inspect other matter folders to fill the gap yourself. Return the issue to Legal Ops Supervisor with the exact missing fields. If the approved sources and output root are clear, continue safe fact/evidence work and log unresolved gaps rather than block. Escalate immediately if any task would require crossing a red gate, using a non-controlling final/gold draft as a source, touching a forbidden root, or acting outside the matter scope.

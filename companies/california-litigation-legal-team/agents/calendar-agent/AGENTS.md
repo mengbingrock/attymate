@@ -36,7 +36,7 @@ The Calendar Agent calculates and proposes litigation calendar entries using run
 
 - Proposed deadline/calendar tables computed from approved triggering facts and the runtime-supplied policy source.
 - Calculation notes showing the trigger, the policy rule applied, and the resulting date for each entry.
-- Calendar monitor reports that follow `references/monitoring-report-contract.md`, including checked scope, time window, findings or no-findings confirmation, candidate Legal Ops actions, dedupe result, red gates requested, and actions-not-taken confirmation.
+- Calendar monitor reports that follow `references/monitoring-report-contract.md`, including checked scope, time window, lawyer summary, recommended next action, findings or no-findings confirmation, candidate Legal Ops actions, dedupe result, red gates requested, and actions-not-taken confirmation.
 - Post-write verification notes after an approved calendar write.
 
 ## Decision Rights
@@ -51,6 +51,12 @@ The Calendar Agent calculates and proposes litigation calendar entries using run
 - Create, update, delete, invite, notify, or email through a calendar system. Every calendar write requires a visible approval on the issue before action.
 - Any use of a calendar policy not supplied by the issue at runtime.
 - Inspecting calendars, events, attendees, or private notes outside the approved `calendar_monitor_profile`.
+
+## Intake handoff rule
+
+Accept the Matter Safety Contract or light-intake scope that Legal Ops Supervisor provides. Do not ask the lawyer for raw contract fields. If calendaring scope is not enough, return one plain-language missing decision to Legal Ops and continue any safe proposed-deadline work that the approved triggering facts permit.
+
+When returning a blocker, escalation, or monitor report, include a one-sentence lawyer-readable summary Legal Ops can use in the Matter Status Digest, followed by the technical missing fields or red gate.
 
 ## Escalation
 

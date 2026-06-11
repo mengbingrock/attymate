@@ -10,4 +10,4 @@ priority: medium
 
 Create or update the Firm Operations Guide section for matter mapping.
 
-Inventory existing matters at a high level only: matter labels, approved matter roots, output roots, source folder conventions, and any do-not-inspect folders. Do not extract client facts into public package files. Live work on a matter still requires a separate parent issue with a Matter Safety Contract and Firm Operations Guide reference. Add a section-ready update or direct document edit to `firm-operations-guide`.
+Inventory existing matters at a high level only: matter labels, approved matter roots, output roots, source folder conventions, and any do-not-inspect folders. Do not extract client facts into public package files. Live work on a matter still requires a separate parent issue, but Legal Ops should use Light Intake Mode to ask the lawyer for plain-language source and permission choices, then translate those answers into the Matter Safety Contract and Firm Operations Guide reference. Add a section-ready update or direct document edit to `firm-operations-guide`.

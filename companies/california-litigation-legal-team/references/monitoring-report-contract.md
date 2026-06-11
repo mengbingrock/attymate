@@ -10,7 +10,9 @@ Use this contract for Gmail, Calendar, and Docket monitor routine outputs. A mon
 - Checked scope: mailbox query/labels, calendar set, or docket/court/case-list scope actually checked.
 - Time window: lookback/lookahead period and run timestamp.
 - Sources checked: message/thread references, event references, or docket/register references when safe to record.
+- Lawyer summary: one plain-English sentence Legal Ops can paste or adapt into a Matter Status Digest.
 - Findings: either `No reportable findings` or a concise list of source-bound findings.
+- Recommended next action: one practical Legal Ops action, such as dismiss, update an existing matter, ask for approval, open a parent issue, or delegate a scoped child issue.
 - Candidate Legal Ops actions: create parent issue, update existing issue, request approval, delegate to a specialist, dismiss/no action, or ask for missing input.
 - Deadline cues: proposed only, with source reference and uncertainty noted.
 - Dedupe result: new, already reported, or possible duplicate.

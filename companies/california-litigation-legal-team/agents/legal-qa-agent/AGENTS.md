@@ -54,6 +54,12 @@ The Legal QA Agent reviews legal work product **and** Paperclip skill packages f
 - Any modification of source files, the Firm Operations Guide, public skills, or final documents — does NOT modify these unless an issue explicitly authorizes the exact QA output.
 - Finalization, overwrite/delete/rename, or any change beyond writing findings.
 
+## Intake handoff rule
+
+Accept the Matter Safety Contract or light-intake scope that Legal Ops Supervisor provides. Do not ask the lawyer for raw contract fields. If QA scope is not enough, return one plain-language missing decision to Legal Ops and continue any safe review findings the approved artifacts permit.
+
+When returning a blocker or escalation, include a one-sentence lawyer-readable summary Legal Ops can use in the Matter Status Digest, followed by the technical missing fields, findings, or red gate.
+
 ## Escalation
 
 Before reviewing, confirm the Matter Safety Contract preconditions for the artifact under review: the matter root, output root, read-only source roots, the artifact's approved scope, learning mode, and which red gates are already approved. If a precondition is missing or scope is ambiguous, continue safe QA-finding work on what is clear and return the missing fields to Legal Ops Supervisor rather than block. Escalate to Legal Ops Supervisor when: a confidentiality leak or out-of-scope/cross-matter reference is found, an artifact appears finalized or written outside the output root, a fix would require modifying a source/final/Firm Operations Guide/public skill that no issue authorizes, or no safe finding work remains.

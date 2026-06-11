@@ -46,6 +46,7 @@ This template is for private deployment setup through a Paperclip issue document
 - SOP sources:
 - Drafting template sources:
 - Style profile:
+- Lawyer-facing intake/status style:
 - Calendaring policy:
 - Authority policy:
 - Approval policy:
