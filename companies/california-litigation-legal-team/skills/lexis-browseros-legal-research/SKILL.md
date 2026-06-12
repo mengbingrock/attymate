@@ -27,11 +27,13 @@ Before research begins, confirm the issue states the contract fields:
 - Output root for research logs, authority tables, exports, and memos.
 - Authority-use limits, including whether only supplied authorities may be used.
 - Forbidden roots and no-cross-matter inspection rule.
-- Firm Operations Guide reference or scoped guide excerpt, autonomy level, learning mode, and red gates already approved.
+- Firm Operations Guide reference or scoped guide excerpt, autonomy level, approval profile, learning mode, and approval gates already approved.
 
 If research scope or matter label is missing, return the missing-field list to the supervisor. If external Lexis access is not approved, continue with supplied or already-approved authorities and record what external work remains.
 
 Inputs may include issue research questions, supplied authority files, public law, user-approved search terms, and approved Lexis results.
+
+If the issue states `approval_profile: sandbox_autopilot`, apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: supplied-authority work is green, but Lexis, new external legal research, external downloads, and new authorities remain hard gates.
 
 ## Procedure
 

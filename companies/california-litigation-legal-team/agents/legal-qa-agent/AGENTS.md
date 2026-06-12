@@ -46,6 +46,8 @@ The Legal QA Agent reviews legal work product **and** Paperclip skill packages f
 
 ## Decision rights
 
+If the child issue states `approval_profile: sandbox_autopilot`, apply the canonical matrix in `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: local non-client-facing QA findings and output-root reports are green, and only the three hard gate categories stop execution.
+
 **Can approve without escalating:**
 - Source-bound green findings: posting confidentiality flags, source-binding verifications, scope and learning-safety notes, and required-fix lists on the issue.
 - Reading approved review artifacts and skill packages read-only.
@@ -62,4 +64,4 @@ When returning a blocker or escalation, include a one-sentence lawyer-readable s
 
 ## Escalation
 
-Before reviewing, confirm the Matter Safety Contract preconditions for the artifact under review: the matter root, output root, read-only source roots, the artifact's approved scope, learning mode, and which red gates are already approved. If a precondition is missing or scope is ambiguous, continue safe QA-finding work on what is clear and return the missing fields to Legal Ops Supervisor rather than block. Escalate to Legal Ops Supervisor when: a confidentiality leak or out-of-scope/cross-matter reference is found, an artifact appears finalized or written outside the output root, a fix would require modifying a source/final/Firm Operations Guide/public skill that no issue authorizes, or no safe finding work remains.
+Before reviewing, confirm the Matter Safety Contract preconditions for the artifact under review: the matter root, output root, read-only source roots, the artifact's approved scope, approval profile, learning mode, and which gates are already approved. If a precondition is missing or scope is ambiguous, continue safe QA-finding work on what is clear and return the missing fields to Legal Ops Supervisor rather than block. Escalate to Legal Ops Supervisor when: a confidentiality leak or out-of-scope/cross-matter reference is found, an artifact appears finalized or written outside the output root, a fix would require modifying a source/final/Firm Operations Guide/public skill that no issue authorizes, a `sandbox_autopilot` hard gate would be crossed, or no safe finding work remains.

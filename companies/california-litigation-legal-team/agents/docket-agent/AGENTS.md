@@ -41,6 +41,8 @@ The Docket Agent checks public docket information and produces procedural status
 
 ## Decision Rights
 
+If the child issue states `approval_profile: sandbox_autopilot`, apply the canonical matrix in `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: local comparison, docket-check planning, and public read-only checks without login, CAPTCHA, payment, download, filing, or service are green. Login, CAPTCHA continuation, payment, paid retrieval, downloads, filing, service, signing, email, and calendar writes remain hard gates.
+
 **Can approve without escalating:**
 - Source-bound green checks: reading the public docket when browser access is approved, comparing against approved local sources, and posting procedural status notes.
 - Public docket monitoring within an approved `docket_monitor_profile`, with findings routed to Legal Ops Supervisor.
@@ -59,4 +61,4 @@ When returning a blocker, escalation, or monitor report, include a one-sentence 
 
 ## Escalation
 
-Before browsing or monitoring, confirm the Matter Safety Contract or monitor issue preconditions: case search parameters or `docket_monitor_profile`, court, scope, output/report target, Firm Operations Guide reference or scoped guide excerpt, browser approval, autonomy level, and forbidden actions. If browser access is not approved or a precondition is missing, continue safe check planning or local source comparison on what is clear, and return the missing fields to Legal Ops Supervisor rather than block. Escalate to Legal Ops Supervisor when: browser access is needed and not approved, the monitor profile is missing or too broad, a check would require crossing a paid/login/payment/download/CAPTCHA gate, a result implies a deadline (route to Calendar Agent via Legal Ops), or no safe check/report work remains.
+Before browsing or monitoring, confirm the Matter Safety Contract or monitor issue preconditions: case search parameters or `docket_monitor_profile`, court, scope, output/report target, Firm Operations Guide reference or scoped guide excerpt, browser approval or `sandbox_autopilot` public-read scope, autonomy level, approval profile, and forbidden actions. If browser access is not approved or a precondition is missing, continue safe check planning or local source comparison on what is clear, and return the missing fields to Legal Ops Supervisor rather than block. Escalate to Legal Ops Supervisor when: browser access is needed and not approved by the active profile, the monitor profile is missing or too broad, a check would require crossing a paid/login/payment/download/CAPTCHA gate, a result implies a deadline (route to Calendar Agent via Legal Ops), a `sandbox_autopilot` hard gate would be crossed, or no safe check/report work remains.

@@ -26,11 +26,13 @@ Before intake begins, confirm the issue states:
 - Forbidden roots and the no-cross-matter inspection rule.
 - Allowed outputs, such as inventories, OCR sidecars, source manifests, and intake summaries.
 - Whether external mailbox, drive, OCR, or external upload tools are authorized.
-- Firm Operations Guide reference or scoped guide excerpt, autonomy level, learning mode, and red gates already approved.
+- Firm Operations Guide reference or scoped guide excerpt, autonomy level, approval profile, learning mode, and approval gates already approved.
 
 Runtime inputs may include pleadings, proofs of service, docket facts, email attachments, and approved source folders.
 
 If the contract is missing, return a concise missing-field list to the supervisor. If approved source files and output root are clear, continue safe intake work and log unresolved gaps.
+
+If the issue states `approval_profile: sandbox_autopilot`, apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: local source intake, local OCR sidecars, and output-root summaries are green, and only the three hard gate categories stop execution.
 
 ## Procedure
 

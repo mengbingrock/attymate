@@ -44,6 +44,8 @@ I never hand work directly to other specialists. All proposals go up for review.
 
 ## Decision rights
 
+If the issue states `approval_profile: sandbox_autopilot`, apply the canonical matrix in `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`, but do not treat sandbox mode as learning consent. Learning still requires an explicit learning contract, allowed sources, and do-not-learn boundaries.
+
 **Can approve without escalating:**
 - Reviewing only the named issue, child issues, comments, documents, attachments, and files allowed by the learning contract.
 - Drafting the three output types above as proposals.

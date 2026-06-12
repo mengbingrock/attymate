@@ -21,4 +21,4 @@ Use this contract for Gmail, Calendar, and Docket monitor routine outputs. A mon
 
 ## Handoff Rule
 
-All monitor findings go to Legal Ops Supervisor. Monitor agents do not create substantive matter child issues, calendar entries, docket purchases, email replies, filing/service actions, or legal drafts unless Legal Ops creates a scoped issue and the required red-gate approvals are visible.
+All monitor findings go to Legal Ops Supervisor. Monitor agents do not create substantive matter child issues, calendar entries, docket purchases, email replies, filing/service actions, or legal drafts unless Legal Ops creates a scoped issue and the required approval profile and gate approvals are visible.

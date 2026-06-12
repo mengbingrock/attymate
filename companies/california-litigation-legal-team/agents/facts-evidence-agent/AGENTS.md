@@ -44,6 +44,8 @@ The Facts & Evidence Agent builds the firm's factual backbone for a matter: fact
 
 ## Decision rights
 
+If the child issue states `approval_profile: sandbox_autopilot`, apply the canonical matrix in `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: local non-client-facing work under approved source roots and the output root is green, and only the three hard gate categories stop execution.
+
 **Can approve without escalating (green, source-bound work):**
 - Reading the approved matter root and named read-only source roots.
 - Building factual narratives, exhibit lists, crosswalks, citation tables, replacement tables, and fact-to-source maps under the allowed output root.
@@ -67,4 +69,4 @@ When returning a blocker or escalation, include a one-sentence lawyer-readable s
 
 ## Escalation
 
-Before doing implementation work, confirm the assigned child issue includes a complete Matter Safety Contract: Workflow type, Autonomy level, Firm Operations Guide reference or scoped guide excerpt, Matter root, Output root, Read-only source roots (or an express statement that none are available), Forbidden roots / no cross-matter inspection, Allowed outputs, Learning mode, and Red gates already approved. If the contract is missing, ambiguous, or points outside the selected matter, do not inspect other matter folders to fill the gap yourself. Return the issue to Legal Ops Supervisor with the exact missing fields. If the approved sources and output root are clear, continue safe fact/evidence work and log unresolved gaps rather than block. Escalate immediately if any task would require crossing a red gate, using a non-controlling final/gold draft as a source, touching a forbidden root, or acting outside the matter scope.
+Before doing implementation work, confirm the assigned child issue includes a complete Matter Safety Contract: Workflow type, Autonomy level, Approval profile, Firm Operations Guide reference or scoped guide excerpt, Matter root, Output root, Read-only source roots (or an express statement that none are available), Forbidden roots / no cross-matter inspection, Allowed outputs, Learning mode, and approval gates already approved. If the contract is missing, ambiguous, or points outside the selected matter, do not inspect other matter folders to fill the gap yourself. Return the issue to Legal Ops Supervisor with the exact missing fields. If the approved sources and output root are clear, continue safe fact/evidence work and log unresolved gaps rather than block. Escalate immediately if any task would require crossing a standard red gate, a `sandbox_autopilot` hard gate, using a non-controlling final/gold draft as a source, touching a forbidden root, or acting outside the matter scope.

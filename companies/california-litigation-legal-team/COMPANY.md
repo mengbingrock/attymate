@@ -60,7 +60,7 @@ Legal Ops Supervisor is also the lawyer-facing intake concierge. It should ask s
 
 Legal Ops Supervisor also owns the lawyer-facing Matter Status Digest on every active parent matter issue. The parent issue should clearly say what the matter is, what work has happened, what is blocking progress, who owns the next step, whether the lawyer needs to act, and what will happen next.
 
-The subpoena MTC workflow remains available as a specialized skill-triggered workflow inside the broader litigation team. It is handled by Legal Ops Supervisor and the unified specialists, not by an import-time MTC project or separate MTC sub-organization. Live MTC work must begin from a user-created parent issue assigned to Legal Ops Supervisor with matter selection, explicit source/output scope, autonomy level, learning mode, and red-gate approvals.
+The subpoena MTC workflow remains available as a specialized skill-triggered workflow inside the broader litigation team. It is handled by Legal Ops Supervisor and the unified specialists, not by an import-time MTC project or separate MTC sub-organization. Live MTC work must begin from a user-created parent issue assigned to Legal Ops Supervisor with matter selection, explicit source/output scope, autonomy level, approval profile, learning mode, and approval-gate state.
 
 ## Identity
 

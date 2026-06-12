@@ -26,11 +26,13 @@ Before work begins, confirm the issue states:
 - Jurisdiction, court, triggering event, triggering date, service method, hearing date, reservation date, or other calculation facts.
 - Target calendar or a rule for asking the supervisor to choose one.
 - Forbidden roots and the no-cross-matter inspection rule.
-- Firm Operations Guide reference or scoped guide excerpt, autonomy level, learning mode, and red gates already approved.
+- Firm Operations Guide reference or scoped guide excerpt, autonomy level, approval profile, learning mode, and approval gates already approved.
 
 Runtime inputs may include PDFs, docket facts, email text, service proofs, hearing notices, reservation receipts, public court rules, and deployment-supplied policy.
 
 If a required calculation fact or policy source is missing, return a concise missing-input list. Do not infer facts from other matters. Continue with any proposed entries that can be calculated from approved facts.
+
+If the issue states `approval_profile: sandbox_autopilot`, apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: proposed deadline/calendar tables are green, but calendar writes, invites, notifications, and emails remain hard gates.
 
 ## Procedure
 

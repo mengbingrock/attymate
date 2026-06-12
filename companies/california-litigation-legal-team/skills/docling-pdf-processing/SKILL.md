@@ -25,9 +25,11 @@ Before processing begins, confirm the issue states:
 - Allowed outputs, such as page Markdown, JSON, OCR text, manifests, page images for QA, and extraction notes.
 - Tool configuration for `{pdf_pipeline_script}`, Python with `pypdf`, Azure Document Intelligence settings, authenticated Codex CLI, and the approved vision model.
 - Whether remote OCR or vision processing is approved. Azure Document Intelligence uploads PDF batches, and Codex vision correction sends rendered page images plus Azure draft text to the configured model.
-- Firm Operations Guide reference or scoped guide excerpt, autonomy level, learning mode, and red gates already approved.
+- Firm Operations Guide reference or scoped guide excerpt, autonomy level, approval profile, learning mode, and approval gates already approved.
 
 If a path, output boundary, or remote-processing approval is missing, do not start extraction. If Azure or Codex is unavailable, run only the stages that are already approved and available, then preserve the incomplete stage and current manifest state. Inputs are approved local PDFs or scanned documents only.
+
+If the issue states `approval_profile: sandbox_autopilot`, apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: local PDF/OCR sidecars under `{output_root}` are green, but Azure, Codex vision, or any external upload/remote processing remains a hard gate unless separately approved.
 
 ## Procedure
 

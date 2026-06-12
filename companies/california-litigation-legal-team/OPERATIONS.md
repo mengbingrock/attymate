@@ -37,7 +37,7 @@ Specialists propose; Legal Ops Supervisor approves; red gates go to the board. W
 
 ## Communication conventions
 
-Use the parent matter issue for matter-level decisions and child-issue comments for execution detail. Every delegated child issue must carry a **Matter Safety Contract** (see `references/matter-safety-contract.md`) and name the receiving agent, the approved scope, the allowed outputs, and the red gates already approved. Cross-agent handoffs route through Legal Ops Supervisor unless the parent issue authorizes a direct handoff. Never paste client facts, case numbers, party names, credentials, or local paths into a public package file — those live in the private Firm Operations Guide or scoped issue documents only.
+Use the parent matter issue for matter-level decisions and child-issue comments for execution detail. Every delegated child issue must carry a **Matter Safety Contract** (see `references/matter-safety-contract.md`) and name the receiving agent, the approved scope, the approval profile, the allowed outputs, and the approval gates already approved. Cross-agent handoffs route through Legal Ops Supervisor unless the parent issue authorizes a direct handoff. Never paste client facts, case numbers, party names, credentials, or local paths into a public package file — those live in the private Firm Operations Guide or scoped issue documents only.
 
 Lawyer-facing intake uses **Light Intake Mode** by default. Legal Ops asks short plain-English questions, offers safe defaults, and translates the answers into the internal Matter Safety Contract. If work must stop, the blocker comment starts with "I need one thing before I can continue:" and gives 2-3 practical answer choices.
 
@@ -47,7 +47,7 @@ Every active parent matter issue also gets a **Matter Status Digest** using `ref
 
 - **Green (autonomous, logged):** source-bound intake, fact/evidence tables, supplied-authority workup, draft text under the output root, calendar *proposals*, public docket *checks*, QA findings, sanitized learning proposals. Proceed and log.
 - **Yellow (Legal Ops may cure):** routing/scope ambiguities the parent issue already authorizes the scope for. Legal Ops cures or returns the issue; specialists do not self-expand scope.
-- **Red (board/user approval required before action):** browser auth, Lexis or any new authority, external knowledge-base/upload systems, uploads, external downloads, paid retrieval, calendar writes, email send/reply, Word writes to active drafts, strategy/relief/sanctions/privacy/protective-order changes, overwrite/delete/rename, finalization, filing, service, and signing.
+- **Red (board/user approval required before action):** follow `skills/ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`. In standard mode, all standard red gates require approval. In `approval_profile: sandbox_autopilot`, agents may proceed on local non-client-facing test work and stop only for external side effects; irreversible or source-mutating actions; and authentication, payment, or legal-authority expansion.
 - **Never autonomous:** changing the company identity, the hard constraints, the matter scope, or the confidentiality rules.
 
 ## Delegation quality checklist
@@ -56,10 +56,10 @@ Before delegating any child issue, confirm:
 
 - The lawyer was not asked to fill out the Matter Safety Contract directly; Legal Ops translated plain-language answers into the contract.
 - The parent matter issue has an up-to-date Matter Status Digest.
-- The Matter Safety Contract is complete (matter root, output root, workflow type, autonomy level, Firm Operations Guide reference, read-only source roots, forbidden roots, allowed outputs, learning mode, red gates already approved, no-cross-matter inspection).
+- The Matter Safety Contract is complete (matter root, output root, workflow type, autonomy level, approval profile, Firm Operations Guide reference, read-only source roots, forbidden roots, allowed outputs, learning mode, approval gates already approved, no-cross-matter inspection).
 - The owning specialist agent is named and the work is inside its lane.
 - Completion criteria are concrete and source-bound.
-- Handoffs and red-gate approvals are explicit.
+- Handoffs, approval profile, and gate approvals are explicit.
 - `PROJECT-INVENTORY.md` was checked so the deliverable is not a duplicate.
 
 ## Anti-drift checks
@@ -72,7 +72,7 @@ Before doing or delegating work, ask:
 - Does this accidentally make us a **cross-matter knowledge base** (inspecting, citing, or carrying facts from another matter, or learning client facts into reusable assets)? If yes, stop and escalate.
 - Constraint check: every material statement is tied to an approved source — no authorities or facts from memory.
 - Constraint check: work stays inside the named matter root and approved read-only source roots; forbidden roots are untouched.
-- Constraint check: red gates are not crossed without visible approval on the issue.
+- Constraint check: standard red gates and `sandbox_autopilot` hard gates are not crossed without visible approval on the issue.
 - Constraint check: learning is `off` unless an explicit learning contract is present.
 - Does this duplicate a deliverable already in `PROJECT-INVENTORY.md`?
 
