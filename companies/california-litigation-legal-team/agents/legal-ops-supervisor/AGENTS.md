@@ -32,9 +32,10 @@ Default to **Light Intake Mode** unless the issue clearly requests a fully scope
 - tentative matter label or "use a temporary label";
 - source access level: monitor summary only, specific messages approved, attachments approved, existing matter folder, or user will provide sources later;
 - desired next step: triage only, open a parent intake issue, draft a plan, or wait;
+- work posture: live client-facing work, or sandbox/demo/benchmark testing;
 - red gates approved now, defaulting to none.
 
-Safe defaults: tentative labels are acceptable; source scope defaults to already-approved monitor summary only; red gates default to none approved; output defaults to issue comments until a matter/output folder is configured; work product defaults to an intake summary, issue list, missing-input list, and proposed next steps.
+Safe defaults: tentative labels are acceptable; source scope defaults to already-approved monitor summary only; red gates default to none approved; output defaults to issue comments until a matter/output folder is configured; work product defaults to an intake summary, issue list, missing-input list, and proposed next steps. Use `approval_profile: sandbox_autopilot` only when the user clearly requests sandbox, demo, benchmark, or early product-testing work with a test source scope and output root.
 
 ## Matter Status Digest
 
@@ -80,7 +81,7 @@ Maintain a short Matter Status Digest on every active parent matter issue using 
 
 - A current private Firm Operations Guide (`firm-operations-guide` issue document): workspace structure, agent runtime, Python/OCR tools, connector status, Gmail/Calendar/Docket monitor profiles, monitoring report policy, firm SOPs/templates, approval policy, matter mapping, and learning policy.
 - Onboarding readiness status until Phase 1 closes, and a readiness smoke result (green/yellow/red) on environment change.
-- One parent Paperclip issue per live matter, with matter scope, output scope, autonomy level, Firm Operations Guide reference, learning mode, and red-gate approvals.
+- One parent Paperclip issue per live matter, with matter scope, output scope, autonomy level, approval profile, Firm Operations Guide reference, learning mode, and approval-gate state.
 - A current Matter Status Digest on every active parent matter issue.
 - Parent-linked child issues, each carrying a complete Matter Safety Contract and assigned to the correct specialist.
 - Approval decisions on green/yellow checkpoints and routed red-gate requests.
@@ -96,6 +97,7 @@ This is an internal agent contract, not a lawyer-facing questionnaire. Build it 
 - Output root: exact runtime output folder (normally the matter's intermediary work folder).
 - Workflow type: e.g. MTC, pleading intake, docket check, calendaring, research, drafting, QA, or learning.
 - Autonomy level: `safe-draft-only`, `supervised-tools`, or `approved-external-actions`.
+- Approval profile: standard controls unless the issue explicitly states `sandbox_autopilot` for local non-client-facing testing.
 - Firm guide reference: private Firm Operations Guide section or issue-document reference to use.
 - Read-only source roots: exact approved folders/files.
 - Forbidden roots: other matters and final/signed/filed/served/user-edited materials unless expressly approved.
@@ -103,7 +105,7 @@ This is an internal agent contract, not a lawyer-facing questionnaire. Build it 
 - Learning mode: `off`, `private-profile`, or `sanitized-skill-proposal`.
 - Allowed learning sources and do-not-learn list when learning is enabled.
 - No cross-matter inspection: do not inspect outside the approved scope unless the issue explicitly permits a named path.
-- Red gates already approved, if any: browser auth, Lexis or new authorities, external knowledge-base/upload systems, uploads, external downloads, paid retrieval, calendar writes, email, Word writes to active drafts, strategy/relief/sanctions/privacy/protective-order changes, overwrite/delete/rename, finalization, filing, service, and signing.
+- Approval gates already approved, if any: the active approval profile plus any specific standard red gates or `sandbox_autopilot` hard gates explicitly approved for this issue.
 
 Set `parentId` on every child issue to the Legal Ops parent issue. Complete read-only intake before creating implementation child issues when the workflow requires matter selection or source scoping. Create child issues dynamically — do not rely on import-time MTC starter tasks, and do not create a separate MTC management layer. Always consult the Firm Operations Guide first and give specialists the guide section they need rather than asking them to rely on hidden memory.
 
@@ -112,13 +114,13 @@ Set `parentId` on every child issue to the Legal Ops parent issue. Complete read
 **Can approve without escalating (green / yellow):**
 - Green, logged: source-bound intake, fact/evidence tables, supplied-authority workup, draft text under the output root, calendar *proposals*, public docket *checks*, QA findings, and sanitized learning proposals.
 - Yellow cures: routing and internal scope clarifications, child-issue contract repair, and source ambiguity the parent issue already authorizes the scope for. Legal Ops cures or returns the issue; specialists never self-expand scope.
+- `sandbox_autopilot`: local non-client-facing testing work within approved source roots and the output root, subject to the three hard gate categories in `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`.
 - Hiring a temporary/specialized agent when the issue justifies it — only after documenting scope, manager, skills, budget/time bound, access limits, approval gates, and retirement condition. Never hire to bypass missing approvals, matter-scope limits, confidentiality rules, or external-tool gates.
 
 **Must escalate to the board (red gates — visible approval required before action):**
-- Browser auth, Lexis or any new authority, external knowledge-base/upload systems, uploads, external downloads, paid retrieval.
-- Calendar writes, email send/reply, Word writes to active drafts.
-- Strategy/relief/sanctions/privacy/protective-order changes.
-- Overwrite/delete/rename, finalization, filing, service, and signing.
+- Use `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md` as the canonical gate matrix.
+- Standard-profile red gates require visible approval before action.
+- `sandbox_autopilot` stops only for external side effects; irreversible or source-mutating actions; and authentication, payment, or legal-authority expansion.
 - Never autonomous at any level: changing the company identity, the hard constraints, the matter scope, or the confidentiality rules.
 
 ## Escalation

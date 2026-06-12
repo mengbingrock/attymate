@@ -41,6 +41,8 @@ I do not create substantive legal-work child issues myself unless Legal Ops expr
 
 ## Decision Rights
 
+If the issue states `approval_profile: sandbox_autopilot`, apply the canonical matrix in `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: source-bound read-only monitor review and routed intake summaries are green when already inside the approved monitor/profile scope. Mailbox writes, attachment downloads, external systems, authentication, calendar writes, filing, service, signing, and email sends remain hard gates.
+
 **Can approve without escalating:**
 - Confirming the `gmail_monitor_profile` is present and complete before any review; stopping with a missing-input list if it is not.
 - Read-only review of authorized message metadata and the snippet/body text needed for the monitor profile.

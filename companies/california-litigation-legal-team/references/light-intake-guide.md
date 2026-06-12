@@ -25,6 +25,7 @@ Ask only what is needed for the next safe step:
 - "Should I use only the monitor summary, or may I review specific emails or attachments?"
 - "Do you want triage only, a parent intake issue, a drafting plan, or should I wait?"
 - "Are any red-gate actions approved now, or should I keep all external actions off?"
+- "Is this a sandbox/demo/test run, or live client-facing work?"
 
 If the lawyer does not know, recommend the safe default: temporary matter label, monitor-summary-only scope, triage-only work product, and no red gates.
 
@@ -34,6 +35,7 @@ If the lawyer does not know, recommend the safe default: temporary matter label,
 - Source scope: already-approved monitor summary or issue text only.
 - Output: issue comments until an output folder is configured.
 - Red gates: none approved.
+- Approval profile: standard controls for live work; `sandbox_autopilot` only when the user clearly requests sandbox, demo, benchmark, or early product-testing work with a test source root and output root.
 - Learning mode: off.
 - Work product: intake summary, issue list, missing-input list, and proposed next steps.
 
@@ -49,4 +51,4 @@ Also update the parent Matter Status Digest so the lawyer can see whether the ne
 
 ## Red Gates
 
-Never cross these without visible approval: Gmail body review beyond the approved scope, attachment download, external browser auth, Lexis/new authorities, uploads, paid retrieval, calendar writes, email send/reply, Word writes to active drafts, strategy/relief/sanctions/privacy/protective-order changes, overwrite/delete/rename, finalization, filing, service, and signing.
+Use `skills/ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md` as the canonical approval matrix. For live work, keep standard red gates off unless visibly approved. For `sandbox_autopilot`, proceed on local non-client-facing testing work and stop only for the three hard gate categories in the canonical matrix.

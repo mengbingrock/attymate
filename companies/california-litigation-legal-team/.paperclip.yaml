@@ -223,23 +223,28 @@ inputs:
       description: Absolute workspace root to configure as each codex_local agent cwd after import.
     codex_auth:
       kind: text
-      requirement: required
+      requirement: optional
+      default: "Use the current authenticated Codex session; no extra auth setup is required for sandbox_autopilot local testing."
       description: Configure authenticated Codex CLI access or an approved API-key based auth mechanism in the target deployment.
     python_command:
       kind: text
-      requirement: required
+      requirement: optional
+      default: "python3"
       description: Python command or environment launcher agents may use for local scripts and PDF/OCR tooling.
     pdf_ocr_runtime:
       kind: text
-      requirement: required
+      requirement: optional
+      default: "Optional local OCR/PDF tooling; disabled for sandbox runs unless already available in the workspace."
       description: Deployment-approved OCR/PDF runtime, such as Docling or another local processing tool, configured outside the public package.
     firm_operations_guide:
       kind: text
-      requirement: required
+      requirement: optional
+      default: "Use the imported onboarding guide or issue-scoped instructions until a private Firm Operations Guide is configured."
       description: Private Paperclip issue-document reference for the deployment's durable Firm Operations Guide.
     browser_tooling:
       kind: text
-      requirement: required
+      requirement: optional
+      default: "Disabled for authenticated or side-effectful browser actions; public read-only browsing may be issue-scoped."
       description: Browser automation tool status and approval policy for BrowserOS or an equivalent deployment-approved browser.
     gmail_connector:
       kind: text

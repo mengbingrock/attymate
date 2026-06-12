@@ -6,6 +6,7 @@ This is an internal coordination contract. Lawyers should not be asked to fill i
 
 - Workflow type: MTC, pleading intake, docket check, calendaring, research, drafting, QA, learning, or another named workflow.
 - Autonomy level: `safe-draft-only`, `supervised-tools`, or `approved-external-actions`.
+- Approval profile: standard green/yellow/red controls unless the issue explicitly states `sandbox_autopilot` for local non-client-facing testing.
 - Firm guide reference: private Firm Operations Guide issue-document section or scoped guide excerpt that defines workspace, tools, connectors, and approval policy.
 - Matter root: exact selected matter folder or approved source set supplied at runtime.
 - Output root: exact allowed output location, normally the matter's intermediary work folder.
@@ -16,7 +17,7 @@ This is an internal coordination contract. Lawyers should not be asked to fill i
 - Allowed learning sources: issue comments, documents, attachments, run summaries, named artifacts, or none.
 - Do-not-learn list: client facts, privileged strategy, confidential source text, local paths, credentials, private URLs, account IDs, matter identifiers, and any issue-specific exclusions.
 - No cross-matter inspection: do not inspect or use files outside the approved scope unless the issue explicitly permits a named path.
-- Red gates already approved: browser auth, Lexis or new authorities, external knowledge-base/upload systems, external uploads/downloads, paid retrieval, calendar writes, email, Word writes to active drafts, strategy/relief/sanctions/privacy/protective-order changes, overwrite/delete/rename, finalization, filing, service, and signing.
+- Approval gates already approved: the active approval profile plus any specific standard red gates or `sandbox_autopilot` hard gates explicitly approved for this issue.
 
 Supervisor delegation requirements:
 
@@ -33,4 +34,5 @@ Checkpoint policy:
 
 - Green actions proceed autonomously and are logged: reading approved sources, creating new output-root artifacts, OCR sidecars, source indexes, draft text, QA notes, research logs from supplied sources, and proposed calendar tables.
 - Yellow escalations go to Legal Ops Supervisor when the parent issue already authorizes the needed cure: routing, internal scope clarification, child issue contract repair, or source ambiguity that does not require new external action.
-- Red gates require board/user approval before action: external auth, Lexis or new authorities, uploads/downloads from external systems, paid retrieval, calendar writes, email, filing, service, signing, finalization, overwrite/delete/rename, and material strategy changes.
+- Red gates require board/user approval before action under the standard profile: external auth, Lexis or new authorities, uploads/downloads from external systems, paid retrieval, calendar writes, email, filing, service, signing, finalization, overwrite/delete/rename, and material strategy changes.
+- `sandbox_autopilot` matters may proceed on local non-client-facing testing work after Launch Intake and stop only for the three hard gate categories in `skills/ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`.
