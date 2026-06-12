@@ -96,6 +96,12 @@ npx.cmd paperclipai company import .\companies\california-litigation-legal-team 
 
 To import the company without onboarding starter issues, omit `tasks` from `--include`.
 
+## Onboarding Troubleshooting
+
+Use `references/onboarding-unblock-runbook.md` when onboarding is blocked by workspace selection, runner policy, or Paperclip status-update tooling. The active AttyMate WORKSPACE selection is the deployment source of truth; deployment-specific paths belong in the private Firm Operations Guide and must not be committed to this reusable package.
+
+If an onboarding task is substantively complete but the issue cannot be marked done, record the terminal disposition and route the technical blocker to the Paperclip/AttyMate product owner instead of rerunning the same setup task.
+
 ## Post-Import Setup
 
 - Complete the imported Firm Onboarding issues before live matter work.

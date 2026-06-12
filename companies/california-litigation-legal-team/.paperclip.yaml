@@ -220,7 +220,7 @@ inputs:
     workspace_root:
       kind: path
       requirement: required
-      description: Absolute workspace root to configure as each codex_local agent cwd after import.
+      description: Absolute workspace root to configure as each codex_local agent cwd after import. Use the active AttyMate WORKSPACE selection as the source of truth and revalidate it before runner jobs.
     codex_auth:
       kind: text
       requirement: required

@@ -21,7 +21,11 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 
 ## Firm Operations Guide
 
+Onboarding unblock runbook: `references/onboarding-unblock-runbook.md`.
+
 The private `firm-operations-guide` Paperclip issue document is owned and maintained by this agent: workspace structure, agent runtime, Python/OCR tools, connector status, Gmail monitor profile, firm SOPs/templates, approval policy, matter mapping, and learning policy. Build it during onboarding and keep it current. Give specialists the guide section or scoped excerpt they need on the issue rather than asking them to rely on hidden memory. Never store its private contents in public package files.
+
+Use `references/onboarding-unblock-runbook.md` when onboarding is blocked by workspace mismatch, runner policy, or issue-status mutation rather than missing company setup work. If the guide section is substantively complete and the only remaining problem is Paperclip status mutation, post a terminal disposition note, tell the user no lawyer action is needed, and stop retrying implementation. Route product-owned tooling loops to the Paperclip/AttyMate owner instead of asking the user to debug them.
 
 Use `references/matter-status-digest.md` for active parent matter summaries. The digest belongs on the parent issue and should tell the lawyer what the matter is, what is blocking progress, who owns the next step, and whether the lawyer needs to do anything.
 
