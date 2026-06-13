@@ -24,6 +24,7 @@ import type { Db } from "@paperclipai/db";
 import type { DeploymentMode } from "@paperclipai/shared";
 import type { BetterAuthSessionResult } from "../auth/better-auth.js";
 import { logger } from "../middleware/logger.js";
+import { documentMirrorService } from "../services/document-mirror.js";
 
 interface WsSocket {
   readyState: number;
@@ -150,7 +151,7 @@ export function isUserBridgeConnected(userId: string): boolean {
 
 export function setupLocalBridgeWebSocketServer(
   server: HttpServer,
-  _db: Db,
+  db: Db,
   opts: {
     deploymentMode: DeploymentMode;
     resolveSessionFromHeaders?: (headers: Headers) => Promise<BetterAuthSessionResult | null>;
@@ -202,6 +203,13 @@ export function setupLocalBridgeWebSocketServer(
     aliveByClient.set(socket, true);
     userIdByClient.set(socket, userId);
     logger.info({ userId }, "local bridge: client connected");
+
+    // Flush any documents queued for this user while their bridge was offline.
+    // Best-effort and non-blocking — a slow/failed flush must not stall the
+    // connection handler.
+    void documentMirrorService(db)
+      .flushForUser(userId)
+      .catch((err) => logger.error({ err, userId }, "local bridge: document mirror flush failed"));
 
     socket.on("pong", () => {
       aliveByClient.set(socket, true);

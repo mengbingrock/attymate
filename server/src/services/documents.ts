@@ -3,6 +3,8 @@ import type { Db } from "@paperclipai/db";
 import { documentRevisions, documents, issueDocuments, issues } from "@paperclipai/db";
 import { isSystemIssueDocumentKey, issueDocumentKeySchema } from "@paperclipai/shared";
 import { conflict, notFound, unprocessable } from "../errors.js";
+import { logger } from "../middleware/logger.js";
+import { documentMirrorService } from "./document-mirror.js";
 
 function normalizeDocumentKey(key: string) {
   const normalized = key.trim().toLowerCase();
@@ -85,6 +87,26 @@ const issueDocumentSelect = {
 export function documentService(db: Db) {
   const filterSystemDocuments = <T extends { key: string }>(rows: T[], includeSystem: boolean) =>
     includeSystem ? rows : rows.filter((row) => !isSystemIssueDocumentKey(row.key));
+
+  // Mirror a just-written document to the author/owner's local workspace folder.
+  // Best-effort and fire-and-forget — never blocks or fails the DB write.
+  const mirrorDocument = (doc: {
+    companyId: string;
+    issueId: string;
+    id: string;
+    key: string;
+    format: string;
+  }) => {
+    void documentMirrorService(db)
+      .enqueueForDocument({
+        companyId: doc.companyId,
+        issueId: doc.issueId,
+        documentId: doc.id,
+        key: doc.key,
+        format: doc.format,
+      })
+      .catch((err) => logger.warn({ err, issueId: doc.issueId, key: doc.key }, "document mirror enqueue failed"));
+  };
 
   return {
     getIssueDocumentPayload: async (
@@ -189,7 +211,7 @@ export function documentService(db: Db) {
       if (!issue) throw notFound("Issue not found");
 
       try {
-        return await db.transaction(async (tx) => {
+        const result = await db.transaction(async (tx) => {
           const now = new Date();
           const existing = await tx
             .select({
@@ -353,6 +375,8 @@ export function documentService(db: Db) {
             },
           };
         });
+        mirrorDocument(result.document);
+        return result;
       } catch (error) {
         if (isUniqueViolation(error)) {
           throw conflict("Document key already exists on this issue", { key });
@@ -369,7 +393,7 @@ export function documentService(db: Db) {
       createdByUserId?: string | null;
     }) => {
       const key = normalizeDocumentKey(input.key);
-      return db.transaction(async (tx) => {
+      const result = await db.transaction(async (tx) => {
         const existing = await tx
           .select(issueDocumentSelect)
           .from(issueDocuments)
@@ -453,6 +477,8 @@ export function documentService(db: Db) {
           },
         };
       });
+      mirrorDocument(result.document);
+      return result;
     },
 
     deleteIssueDocument: async (issueId: string, rawKey: string) => {

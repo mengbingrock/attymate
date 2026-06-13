@@ -1,66 +1,61 @@
 ---
+schema: agentcompanies/v1
+slug: ca-subpoena-mtc-drafting-workflow
 name: ca-subpoena-mtc-drafting-workflow
 description: Draft, revise, organize, and QA California subpoena motion-to-compel work product using source-bound artifacts, section confirmation, Word safety, and supplied-authority discipline.
 ---
 
-# California Subpoena MTC Drafting Workflow For Paperclip
+# ca-subpoena-mtc-drafting-workflow
 
-## Paperclip Role
+*How the California Litigation Legal Team drafts and QAs subpoena motion-to-compel work product — source-bound and supervised, one reviewable section at a time, never touching active Word drafts without approval.*
 
-Use this skill from Legal Ops Supervisor, Facts & Evidence Agent, Legal Research Agent, Drafting & Assembly Agent, Source Intake Agent, or Legal QA Agent when a scoped Paperclip issue involves California subpoena motion-to-compel drafting or QA.
+## When to load this skill
 
-Use this Paperclip-native wrapper as the runtime authority for drafting standards, OCR intake, intermediary artifacts, Word editing after confirmation, live change logs, deliverable templates, and subpoena MTC checklists. It is adapted from reusable workflow rules and contains no client facts, firm templates, private account details, or hardcoded paths.
+- A scoped Paperclip issue involves California subpoena motion-to-compel drafting or QA.
+- The agent is a Legal Ops Supervisor, Facts & Evidence Agent, Legal Research Agent, Drafting & Assembly Agent, Source Intake Agent, or Legal QA Agent picking up such an issue.
+- The issue needs the runtime authority for drafting standards, OCR intake, intermediary artifacts, Word editing after confirmation, live change logs, deliverable templates, and subpoena MTC checklists.
+- This Paperclip-native wrapper is adapted from reusable workflow rules and contains no client facts, firm templates, private account details, or hardcoded paths.
 
-## Required Issue Contract
+## Inputs
 
-Before drafting begins, confirm the issue states the Matter Safety Contract fields: workflow type, autonomy level, Firm Operations Guide reference or scoped excerpt, matter root, output root, read-only source roots, forbidden roots, allowed outputs, learning mode, do-not-learn list, authority limits, and red gates already approved.
+Before drafting begins, confirm the issue states the Matter Safety Contract fields: workflow type, autonomy level, approval profile, Firm Operations Guide reference or scoped excerpt, matter root, output root, read-only source roots, forbidden roots, allowed outputs, learning mode, do-not-learn list, authority limits, and approval gates already approved.
 
-If the issue lacks matter root, output root, approved source roots, no-cross-matter scope, or Firm Operations Guide reference, return the missing-field list to Legal Ops Supervisor. If those fields are present, continue green source-bound work and log unresolved inputs instead of repeatedly blocking.
-
-## Drafting Rules
-
-- Start with document intake and OCR assessment.
-- Before drafting, check approved output/intermediary sources for upstream subpoena document-review handoff artifacts, including any downstream MTC handoff memo, completeness table, usefulness table, custodian-affidavit notes, and potential additional-subpoena notes.
-- Preserve original PDF page order; OCR must be sidecar work product.
-- Build intermediary work before major drafting: document index, exhibit list, objection table, replacement table, needed inputs, TOC, TOA, and factual narrative.
-- Draft sections from source materials and approved examples, one reviewable section or artifact at a time.
-- Proceed autonomously with green work: source-bound draft text, tables, outlines, QA notes, replacement tables, and new artifacts under the approved output root.
-- Do not insert into active Word drafts unless the applicable red-gate approval is satisfied.
-- Maintain a live change log for confirmed updates.
-- Use only supplied, workspace, example-shell, authority-table, or approved-Lexis authorities.
-- Track placeholders, unresolved citations, stale shell terms, and missing page/line citations.
-- Route yellow issues to Legal Ops Supervisor, but do not stop safe drafting while approved source-bound work remains.
-
-## Approval Gates
-
-Red-gate approval is required before external research, new authorities, external uploads or downloads, external knowledge-base/upload systems, browser auth, paid retrieval, calendar writes, email, active Word writes, finalization, filing, service, signing, overwriting, deleting, renaming, source mutation, strategy changes, relief changes, sanctions changes, privacy treatment, protective-order changes, or selecting between conflicting controlling drafts.
-
-Approval for one red-gate action does not authorize any other red-gate action.
-
-## Heartbeat Workflow
-
-1. Checkout the assigned issue, parent issue, Matter Safety Contract, Firm Operations Guide excerpt, and approved source roots.
-2. Confirm whether upstream subpoena document-review artifacts exist before creating a drafting outline.
-3. Build or update intermediary tables: source index, exhibit list, objection table, replacement table, factual narrative, authority table, needed-input list, TOC, and TOA.
-4. Draft source-bound sections under `{output_root}` and identify the evidence, objection, authority, and declaration support for each section.
-5. Request approval only for red gates, including external research, new authorities, active Word writes, finalization, filing, service, email, source renaming, deletion, overwrite, or strategy/relief/sanctions/privacy changes.
-6. Post artifact paths, change log, unresolved placeholders, and QA risks.
-
-## Inputs And Outputs
+If the issue lacks matter root, output root, approved source roots, no-cross-matter scope, or Firm Operations Guide reference, return the missing-field list to the Legal Ops Supervisor. If those fields are present, continue green source-bound work and log unresolved inputs instead of repeatedly blocking.
 
 Inputs may include subpoena materials, objections, meet-and-confer records, productions, declarations, pleadings, exhibits, approved authorities, approved example shells, and upstream document-review artifacts.
 
-Outputs must be new artifacts under `{output_root}`: OCR sidecars, source indexes, exhibit/RJN lists, objection tables, replacement tables, factual narratives, draft sections, TOC/TOA drafts, proposed order text, declaration text, QA notes, and new working-copy documents only when approved.
+If the issue states `approval_profile: sandbox_autopilot`, apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: local non-client-facing draft artifacts and new output-root working copies are green, and only the three hard gate categories stop execution.
 
-## Tool Policy
+## Procedure
 
-Use local OCR/PDF tools only within the approved matter/output scope. The optional OCR helper in `scripts/ocr_pdf_intake.ps1` writes only under the approved output root and is never a substitute for source review. Use Word/document tools only for new working copies or approved active-draft updates. Use legal research tools only after a red-gate approval for external research or new authorities.
+1. **Checkout context.** Checkout the assigned issue, parent issue, Matter Safety Contract, Firm Operations Guide excerpt, and approved source roots.
+2. **Intake and OCR.** Start with document intake and OCR assessment. Preserve original PDF page order; OCR must be sidecar work product. Use local OCR/PDF tools only within the approved matter/output scope. The optional OCR helper in `scripts/ocr_pdf_intake.ps1` writes only under the approved output root and is never a substitute for source review.
+3. **Check for upstream handoffs.** Before creating a drafting outline, check approved output/intermediary sources for upstream subpoena document-review handoff artifacts — any downstream MTC handoff memo, completeness table, usefulness table, custodian-affidavit notes, and potential additional-subpoena notes.
+4. **Build intermediary work first.** Build or update intermediary tables before major drafting: source/document index, exhibit/RJN list, objection table, replacement table, factual narrative, authority table, needed-input list, TOC, and TOA.
+5. **Draft source-bound sections.** Draft sections from source materials and approved examples, one reviewable section or artifact at a time, under `{output_root}`. Identify the evidence, objection, authority, and declaration support for each section. Use only supplied, workspace, example-shell, authority-table, or approved-Lexis authorities. Track placeholders, unresolved citations, stale shell terms, and missing page/line citations. Maintain a live change log for confirmed updates.
+6. **Checkpoint and gate.** Proceed autonomously with green work: source-bound draft text, tables, outlines, QA notes, replacement tables, and new artifacts under the approved output root. Route yellow issues to the Legal Ops Supervisor when source scope, routing, or internal assumptions need repair, but do not stop safe drafting while approved source-bound work remains. Request approval only for standard red gates or `sandbox_autopilot` hard gates — and approval for one gate action never authorizes any other. In `sandbox_autopilot`, new working-copy drafts under the output root are green. Active Word writes, external research, new authorities, external uploads/downloads, browser auth, paid retrieval, calendar writes, email, finalization, filing, service, signing, overwriting, deleting, renaming, source mutation, or adopting material strategy/relief/sanctions/privacy/protective-order changes remain gated by the canonical matrix.
+7. **Post results.** Post artifact paths, change log, unresolved placeholders, and QA risks.
 
-## Handoff Rules
+## Outputs
 
-Return narrow yellow issues to Legal Ops Supervisor when source scope, routing, or internal assumptions need repair. Stop for red gates only when no safe source-bound drafting remains. Mark done only after posting the draft artifacts, live change log or change-log update, unresolved-input list, and QA risks.
+Outputs must be new artifacts under `{output_root}`: OCR sidecars, source indexes, exhibit/RJN lists, objection tables, replacement tables, factual narratives, draft sections, TOC/TOA drafts, proposed order text, declaration text, QA notes, and new working-copy documents when approved by the active profile.
 
-## Reference Files
+- Use Word/document tools only for new working copies or approved active-draft updates.
+- Return narrow yellow issues to the Legal Ops Supervisor when source scope, routing, or internal assumptions need repair. Stop for red gates only when no safe source-bound drafting remains.
+- Mark done only after posting the draft artifacts, live change log or change-log update, unresolved-input list, and QA risks.
+
+## Anti-patterns
+
+- Inserting into active Word drafts without the applicable red-gate approval.
+- Drafting from memory or unapproved authorities instead of supplied, workspace, example-shell, authority-table, or approved-Lexis sources.
+- Reordering original PDF pages or treating OCR as anything but sidecar work product.
+- Drafting major sections before the intermediary tables and index exist.
+- Treating one red-gate approval as authorization for any other red-gate action.
+- Performing external research, new-authority retrieval, uploads/downloads, browser auth, paid retrieval, calendar writes, email, finalization, filing, service, signing, overwriting, deleting, renaming, source mutation, or strategy/relief/sanctions/privacy/protective-order changes without a red-gate approval.
+- Using the OCR helper script as a substitute for source review, or running it before the required executable-script trust review.
+- Blocking repeatedly on a missing field when source-bound work remains; continue green work and log unresolved inputs.
+
+## Reference
 
 - `references/pdf-ocr-intake.md`: PDF intake, OCR sidecar, and optional script rules.
 - `references/workspace-setup.md`: matter workspace and output conventions.

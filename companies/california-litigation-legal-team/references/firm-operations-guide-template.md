@@ -5,10 +5,12 @@ This template is for private deployment setup through a Paperclip issue document
 ## Workspace
 
 - Workspace root:
+- Active workspace source of truth:
 - Matter folder convention:
 - Default output root convention:
 - Read-only source folder conventions:
 - Forbidden folder conventions:
+- Workspace recovery:
 
 ## Agent Runtime
 
@@ -19,6 +21,7 @@ This template is for private deployment setup through a Paperclip issue document
 - Model/timeout defaults:
 - Skill discovery status:
 - Legal Ops hiring policy:
+- Runner/status mutation recovery:
 
 ## Local Tools
 
@@ -46,6 +49,7 @@ This template is for private deployment setup through a Paperclip issue document
 - SOP sources:
 - Drafting template sources:
 - Style profile:
+- Lawyer-facing intake/status style:
 - Calendaring policy:
 - Authority policy:
 - Approval policy:
@@ -64,3 +68,4 @@ This template is for private deployment setup through a Paperclip issue document
 - Yellow workflows:
 - Red workflows:
 - Last readiness smoke:
+- Readiness smoke interpretation:

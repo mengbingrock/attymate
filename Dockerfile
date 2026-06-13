@@ -16,11 +16,13 @@ FROM base AS deps
 WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
 COPY cli/package.json cli/
+COPY electron/package.json electron/
 COPY server/package.json server/
 COPY ui/package.json ui/
 COPY packages/shared/package.json packages/shared/
 COPY packages/db/package.json packages/db/
 COPY packages/adapter-utils/package.json packages/adapter-utils/
+COPY packages/runner-client/package.json packages/runner-client/
 COPY packages/mcp-server/package.json packages/mcp-server/
 COPY packages/adapters/acpx-local/package.json packages/adapters/acpx-local/
 COPY packages/adapters/claude-local/package.json packages/adapters/claude-local/

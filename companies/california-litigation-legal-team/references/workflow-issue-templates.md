@@ -2,21 +2,71 @@
 
 These are reference templates only. They are not import-time starter tasks. Legal Ops Supervisor should create live child issues dynamically from a user-created parent issue and set `parentId` on each child.
 
+## Light Intake Parent Issue
+
+Title: Triage legal intake for [tentative matter label]
+
+Use this when a lawyer gives a short request, a monitor routes a candidate, or scope is not yet complete.
+
+Include:
+
+- Matter Status Digest using `references/matter-status-digest.md`.
+- One-sentence understanding of the request.
+- Current safe source scope, defaulting to monitor summary or issue text only.
+- Tentative matter label, if available.
+- Desired next step: triage only, open parent intake issue, draft a plan, or wait.
+- Red gates approved now, defaulting to none.
+- What Legal Ops can do now without more approval.
+- One plain-language question if more input is needed.
+
+Allowed first-pass output:
+
+- intake summary;
+- likely workflow type;
+- issue/missing-input list;
+- recommended next step;
+- proposed Matter Safety Contract for lawyer review if live work should begin.
+
+Do not ask the lawyer to write the Matter Safety Contract. Legal Ops drafts it internally from the answers.
+
 ## MTC Parent Issue
 
 Title: Run subpoena MTC package for selected matter
 
 Include:
 
+- Matter Status Digest using `references/matter-status-digest.md`.
 - Matter Safety Contract with workflow type `MTC`.
 - Selected matter root or approved source set.
 - Output root.
 - Read-only source roots.
 - Authority limits.
 - Autonomy level.
+- Approval profile, normally standard unless this is a local sandbox run.
 - Learning mode.
-- Red gates already approved.
+- Approval gates already approved.
 - Requested deliverables.
+
+## Sandbox Autopilot Parent Issue
+
+Title: Sandbox run for [workflow or matter label]
+
+Use this when testing the company template, running demos, exercising benchmark fixtures, or validating local workflow behavior without live client-facing output.
+
+Include:
+
+- Matter Status Digest using `references/matter-status-digest.md`.
+- Matter Safety Contract with the target workflow type.
+- `approval_profile: sandbox_autopilot`.
+- Autonomy level, normally `supervised-tools`.
+- Test matter root or approved test source set.
+- Output root for new non-client-facing sandbox artifacts.
+- Read-only source roots.
+- Forbidden roots, especially live matters, final/signed/filed/served/user-edited documents, and unrelated client files.
+- Allowed outputs: new intermediary artifacts, OCR sidecars, QA notes, draft text, proposed calendar tables, run-state updates, benchmark/demo reports, and new working-copy drafts under the output root.
+- Learning mode, normally `off` unless a sanitized skill proposal is explicitly requested.
+- Statement that outputs are sandbox artifacts and are not attorney-final, client-facing, filed, served, signed, uploaded, or shared.
+- Hard gates still requiring approval: external side effects; irreversible or source-mutating actions; authentication, payment, or legal-authority expansion.
 
 ## MTC Child Issues
 
