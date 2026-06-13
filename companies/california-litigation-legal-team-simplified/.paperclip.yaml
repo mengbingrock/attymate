@@ -1,0 +1,291 @@
+schema: paperclip/v1
+sidebar:
+  agents: [legal-ops-supervisor, source-intake-agent, facts-evidence-agent, legal-research-agent, drafting-assembly-agent, legal-qa-agent, calendar-agent, docket-agent, practice-learning-agent, gmail-monitor-agent]
+  projects: [firm-onboarding]
+agents:
+  legal-ops-supervisor:
+    permissions:
+      canCreateAgents: true
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+  source-intake-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+  facts-evidence-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+  legal-research-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+  drafting-assembly-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1800
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+  legal-qa-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+  calendar-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+  docket-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+  practice-learning-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+  gmail-monitor-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+inputs:
+  deployment:
+    workspace_root:
+      kind: path
+      requirement: required
+      description: Absolute workspace root to configure as each codex_local agent cwd after import.
+    codex_auth:
+      kind: text
+      requirement: required
+      description: Configure authenticated Codex CLI access or an approved API-key based auth mechanism in the target deployment.
+    python_command:
+      kind: text
+      requirement: required
+      description: Python command or environment launcher agents may use for local scripts and PDF/OCR tooling.
+    pdf_ocr_runtime:
+      kind: text
+      requirement: required
+      description: Deployment-approved OCR/PDF runtime, such as Docling or another local processing tool, configured outside the public package.
+    firm_operations_guide:
+      kind: text
+      requirement: required
+      description: Private Paperclip issue-document reference for the deployment's durable Firm Operations Guide.
+    browser_tooling:
+      kind: text
+      requirement: required
+      description: Browser automation tool status and approval policy for BrowserOS or an equivalent deployment-approved browser.
+    gmail_connector:
+      kind: text
+      requirement: optional
+      description: Gmail connector status. Sensitive values must use Paperclip secret references, not inline package data.
+    gmail_monitor_profile:
+      kind: text
+      requirement: optional
+      description: Read-only Gmail monitoring scope, query rules, dedupe policy, routing criteria, redaction policy, and schedule preference. Required before enabling Gmail Monitor Agent routines.
+    google_calendar_connector:
+      kind: text
+      requirement: optional
+      description: Google Calendar connector status. Calendar writes require issue-level approval.
+    calendar_monitor_profile:
+      kind: text
+      requirement: optional
+      description: Read-only Calendar monitoring scope, calendar set, exclusions, lookback/lookahead windows, deadline/event categories, dedupe policy, redaction policy, routing criteria, and schedule preference. Required before enabling Calendar Agent monitor routines.
+    google_drive_connector:
+      kind: text
+      requirement: optional
+      description: Google Drive connector status. Downloads, uploads, and sharing require issue-level approval.
+    lexis_access:
+      kind: text
+      requirement: optional
+      description: Lexis or legal research access status. External research and new authorities require issue-level approval.
+    lasc_access:
+      kind: text
+      requirement: optional
+      description: LASC docket access status. Authentication, paid retrieval, downloads, filing, and service require approval.
+    docket_monitor_profile:
+      kind: text
+      requirement: optional
+      description: Read-only public docket monitoring scope, authorized courts or portals, case-list source, check cadence, change-detection rule, report cadence, and red gates. Required before enabling Docket Agent monitor routines.
+    monitoring_report_policy:
+      kind: text
+      requirement: optional
+      description: Deployment policy for monitor reports to Legal Ops Supervisor, including redaction, dedupe, candidate issue creation, routine status, and review cadence.
+    matter_status_style:
+      kind: text
+      requirement: optional
+      description: Deployment preference for lawyer-facing Matter Status Digest tone, detail level, and preferred next-action phrasing.
+    matter_root:
+      kind: path
+      requirement: runtime
+      description: Supplied per issue through the Matter Safety Contract, not stored in the reusable package.
+    output_root:
+      kind: path
+      requirement: runtime
+      description: Supplied per issue through the Matter Safety Contract, not stored in the reusable package.
