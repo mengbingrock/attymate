@@ -20,12 +20,12 @@ agents:
           kind: plain
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
         AZURE_DOCUMENT_INTELLIGENCE_KEY:
           kind: secret
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
   source-intake-agent:
     adapter:
       type: codex_local
@@ -41,12 +41,12 @@ agents:
           kind: plain
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
         AZURE_DOCUMENT_INTELLIGENCE_KEY:
           kind: secret
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
   facts-evidence-agent:
     adapter:
       type: codex_local
@@ -62,12 +62,12 @@ agents:
           kind: plain
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
         AZURE_DOCUMENT_INTELLIGENCE_KEY:
           kind: secret
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
   legal-research-agent:
     adapter:
       type: codex_local
@@ -83,12 +83,12 @@ agents:
           kind: plain
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
         AZURE_DOCUMENT_INTELLIGENCE_KEY:
           kind: secret
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
   drafting-assembly-agent:
     adapter:
       type: codex_local
@@ -104,12 +104,12 @@ agents:
           kind: plain
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
         AZURE_DOCUMENT_INTELLIGENCE_KEY:
           kind: secret
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
   legal-qa-agent:
     adapter:
       type: codex_local
@@ -125,12 +125,12 @@ agents:
           kind: plain
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
         AZURE_DOCUMENT_INTELLIGENCE_KEY:
           kind: secret
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
   calendar-agent:
     adapter:
       type: codex_local
@@ -146,12 +146,12 @@ agents:
           kind: plain
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
         AZURE_DOCUMENT_INTELLIGENCE_KEY:
           kind: secret
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
   docket-agent:
     adapter:
       type: codex_local
@@ -167,12 +167,12 @@ agents:
           kind: plain
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
         AZURE_DOCUMENT_INTELLIGENCE_KEY:
           kind: secret
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
   practice-learning-agent:
     adapter:
       type: codex_local
@@ -188,12 +188,12 @@ agents:
           kind: plain
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
         AZURE_DOCUMENT_INTELLIGENCE_KEY:
           kind: secret
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
   gmail-monitor-agent:
     adapter:
       type: codex_local
@@ -209,12 +209,12 @@ agents:
           kind: plain
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Deployment-specific; fill in per environment.
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
         AZURE_DOCUMENT_INTELLIGENCE_KEY:
           kind: secret
           requirement: optional
           portability: system_dependent
-          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Store as a Paperclip secret; fill in per environment.
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
 inputs:
   deployment:
     workspace_root:
