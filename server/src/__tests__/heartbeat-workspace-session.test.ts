@@ -356,6 +356,19 @@ describe("shouldResetTaskSessionForWake", () => {
       }),
     ).toBe(false);
   });
+
+  it("preserves session context on chat wakes so the conversation continues", () => {
+    expect(shouldResetTaskSessionForWake({ wakeReason: "user_chat_message" })).toBe(false);
+  });
+
+  it("resets a chat session only when a fresh session is explicitly requested", () => {
+    expect(
+      shouldResetTaskSessionForWake({
+        wakeReason: "user_chat_message",
+        forceFreshSession: true,
+      }),
+    ).toBe(true);
+  });
 });
 
 describe("deriveTaskKeyWithHeartbeatFallback", () => {
@@ -379,6 +392,24 @@ describe("deriveTaskKeyWithHeartbeatFallback", () => {
 
   it("returns null for non-timer wakes with no explicit key", () => {
     expect(deriveTaskKeyWithHeartbeatFallback({ wakeSource: "on_demand" }, null)).toBeNull();
+  });
+
+  it("returns __chat__ for chat wakes with no explicit key", () => {
+    expect(
+      deriveTaskKeyWithHeartbeatFallback(
+        { wakeSource: "on_demand", wakeReason: "user_chat_message" },
+        null,
+      ),
+    ).toBe("__chat__");
+  });
+
+  it("prefers an explicit issue key over the chat fallback", () => {
+    expect(
+      deriveTaskKeyWithHeartbeatFallback(
+        { wakeReason: "user_chat_message", issueId: "issue-1" },
+        null,
+      ),
+    ).toBe("issue-1");
   });
 
   it("returns null for empty context", () => {
