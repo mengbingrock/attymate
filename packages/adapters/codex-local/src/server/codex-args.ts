@@ -48,12 +48,33 @@ export function buildCodexExecArgs(
     record.dangerouslyBypassApprovalsAndSandbox,
     asBoolean(record.dangerouslyBypassSandbox, false),
   );
+  // `codex exec` defaults to the read-only sandbox, which can neither write files
+  // nor reach the network — so agents can't call the Paperclip control-plane API
+  // ($PAPERCLIP_API_URL), e.g. `curl .../api/issues/$PAPERCLIP_TASK_ID` fails with
+  // "Could not resolve host". When we are NOT fully bypassing the sandbox, select
+  // the workspace-write sandbox (so the agent can do its job) and, by default,
+  // re-enable outbound network inside it while keeping file-write confinement.
+  // Note: the network_access override only takes effect in workspace-write mode,
+  // so both flags are required together. Skipped if the caller already pinned a
+  // sandbox mode via extraArgs.
+  const sandboxNetworkAccess = asBoolean(
+    record.sandboxNetworkAccess,
+    asBoolean(record.networkAccess, true),
+  );
   const extraArgs = readExtraArgs(record);
+  const callerPinnedSandbox = extraArgs.some((arg) => arg === "-s" || arg === "--sandbox");
 
   const args = ["exec", "--json"];
   if (options.skipGitRepoCheck) args.push("--skip-git-repo-check");
   if (search) args.unshift("--search");
-  if (bypass) args.push("--dangerously-bypass-approvals-and-sandbox");
+  if (bypass) {
+    args.push("--dangerously-bypass-approvals-and-sandbox");
+  } else if (!callerPinnedSandbox) {
+    args.push("--sandbox", "workspace-write");
+    if (sandboxNetworkAccess) {
+      args.push("-c", "sandbox_workspace_write.network_access=true");
+    }
+  }
   if (model) args.push("--model", model);
   if (modelReasoningEffort) {
     args.push("-c", `model_reasoning_effort=${JSON.stringify(modelReasoningEffort)}`);
