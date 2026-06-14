@@ -1546,6 +1546,15 @@ function parseIssueAssigneeAdapterOverrides(
  */
 const HEARTBEAT_TASK_KEY = "__heartbeat__";
 
+/**
+ * Synthetic task key for interactive chat wakes. Chat is a continuous
+ * conversation: each turn must resume the previous provider session instead of
+ * starting fresh. Giving chat its own stable task key persists its session in
+ * `agentTaskSessions` (resumed on the next turn) and keeps it isolated from
+ * timer heartbeats (`__heartbeat__`) and issue/task work.
+ */
+const CHAT_TASK_KEY = "__chat__";
+
 function deriveTaskKey(
   contextSnapshot: Record<string, unknown> | null | undefined,
   payload: Record<string, unknown> | null | undefined,
@@ -1568,7 +1577,9 @@ function deriveTaskKey(
  *
  * The synthetic key is only used when:
  * - No explicit task/issue key exists in the context
- * - The wake source is "timer" (scheduled heartbeat)
+ * - The wake source is "timer" (scheduled heartbeat), or
+ * - The wake reason is an interactive chat message (so the chat thread resumes
+ *   its own session across turns)
  */
 export function deriveTaskKeyWithHeartbeatFallback(
   contextSnapshot: Record<string, unknown> | null | undefined,
@@ -1580,6 +1591,9 @@ export function deriveTaskKeyWithHeartbeatFallback(
   const wakeSource = readNonEmptyString(contextSnapshot?.wakeSource);
   if (wakeSource === "timer") return HEARTBEAT_TASK_KEY;
 
+  const wakeReason = readNonEmptyString(contextSnapshot?.wakeReason);
+  if (wakeReason === USER_CHAT_WAKE_REASON) return CHAT_TASK_KEY;
+
   return null;
 }
 
@@ -1588,13 +1602,15 @@ export function shouldResetTaskSessionForWake(
 ) {
   if (contextSnapshot?.forceFreshSession === true) return true;
 
+  // Note: USER_CHAT_WAKE_REASON is intentionally NOT here. Chat is a continuous
+  // conversation — each turn resumes the previous session (via CHAT_TASK_KEY)
+  // rather than resetting. A fresh chat session is opt-in via forceFreshSession.
   const wakeReason = readNonEmptyString(contextSnapshot?.wakeReason);
   if (
     wakeReason === "issue_assigned" ||
     wakeReason === "execution_review_requested" ||
     wakeReason === "execution_approval_requested" ||
-    wakeReason === "execution_changes_requested" ||
-    wakeReason === USER_CHAT_WAKE_REASON
+    wakeReason === "execution_changes_requested"
   ) {
     return true;
   }
@@ -1669,7 +1685,6 @@ function describeSessionResetReason(
   if (wakeReason === "execution_review_requested") return "wake reason is execution_review_requested";
   if (wakeReason === "execution_approval_requested") return "wake reason is execution_approval_requested";
   if (wakeReason === "execution_changes_requested") return "wake reason is execution_changes_requested";
-  if (wakeReason === USER_CHAT_WAKE_REASON) return "wake reason is user_chat_message";
   return null;
 }
 
