@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { userWorkspaces } from "@paperclipai/db";
 
@@ -35,83 +35,98 @@ export function pickActiveWorkspace<T extends { grantedAt: Date; activeAt: Date 
 }
 
 /**
- * Manages the absolute paths each user has granted AttyMate access to.
+ * Manages the absolute paths granted to AttyMate, scoped per COMPANY.
  *
- * As of migration 0086 each user can have multiple workspace rows; uniqueness
- * is on (user_id, workspace_path) so the same folder can't be granted twice.
+ * Workspaces belong to a company (migration 0089): switching companies switches
+ * the folder list, and uniqueness is on (company_id, workspace_path). `user_id`
+ * is retained only as the "granted by" record / local-bridge dispatch target.
  *
- * The agent-side read/write routes still operate on a single "default" folder
- * via `getDefault()` — the user's oldest grant — until those routes learn to
- * take a workspaceId parameter. Service-layer code does only DB I/O; all path
- * validation lives in the route layer (client input) and the bridge dispatch
- * layer (agent requests, re-checked against the granted root).
+ * The agent-side read/write routes operate on a single "default" folder via
+ * `getDefault()` — the company's oldest grant. Service-layer code does only DB
+ * I/O; all path validation lives in the route layer (client input) and the
+ * bridge dispatch layer (agent requests, re-checked against the granted root).
  */
 export function userWorkspaceService(db: Db) {
   return {
-    async listByUser(userId: string): Promise<UserWorkspaceRow[]> {
+    async listByCompany(companyId: string): Promise<UserWorkspaceRow[]> {
       return db
         .select(SELECT_COLS)
         .from(userWorkspaces)
-        .where(eq(userWorkspaces.userId, userId))
+        .where(eq(userWorkspaces.companyId, companyId))
         .orderBy(asc(userWorkspaces.grantedAt));
     },
 
-    // The "default" workspace used by read/write routes when no workspaceId is
-    // supplied. Oldest grant = stable choice that doesn't shift if the user
-    // adds new folders. Returns null if the user hasn't granted any folder yet.
-    async getDefault(userId: string): Promise<UserWorkspaceRow | null> {
+    // Look up a single workspace by id (company-agnostic; ids are unguessable
+    // UUIDs and are only surfaced via a company's own list).
+    async getById(id: string): Promise<UserWorkspaceRow | null> {
       const [row] = await db
         .select(SELECT_COLS)
         .from(userWorkspaces)
-        .where(eq(userWorkspaces.userId, userId))
+        .where(eq(userWorkspaces.id, id))
+        .limit(1);
+      return row ?? null;
+    },
+
+    // The "default" workspace used by read/write routes when no workspaceId is
+    // supplied. Oldest grant for the company = stable choice that doesn't shift
+    // if new folders are added. Returns null if the company has no folder yet.
+    async getDefault(companyId: string): Promise<UserWorkspaceRow | null> {
+      const [row] = await db
+        .select(SELECT_COLS)
+        .from(userWorkspaces)
+        .where(eq(userWorkspaces.companyId, companyId))
         .orderBy(asc(userWorkspaces.grantedAt))
         .limit(1);
       return row ?? null;
     },
 
-    async add(userId: string, workspacePath: string): Promise<UserWorkspaceRow> {
-      // Idempotent: re-adding the same path returns the existing row instead of
-      // 409-ing. UI-friendly — clicking "add" twice on the same folder is a
-      // no-op rather than an error.
+    async add(
+      companyId: string,
+      workspacePath: string,
+      userId: string,
+    ): Promise<UserWorkspaceRow> {
+      // Idempotent: re-adding the same path (for the same company) returns the
+      // existing row instead of 409-ing. UI-friendly — clicking "add" twice on
+      // the same folder is a no-op rather than an error.
       const [row] = await db
         .insert(userWorkspaces)
-        .values({ userId, workspacePath })
+        .values({ userId, companyId, workspacePath })
         .onConflictDoUpdate({
-          target: [userWorkspaces.userId, userWorkspaces.workspacePath],
+          target: [userWorkspaces.companyId, userWorkspaces.workspacePath],
           set: { updatedAt: new Date() },
         })
         .returning(SELECT_COLS);
       return row;
     },
 
-    async removeById(userId: string, id: string): Promise<boolean> {
+    async removeById(id: string): Promise<boolean> {
       const result = await db
         .delete(userWorkspaces)
-        .where(and(eq(userWorkspaces.id, id), eq(userWorkspaces.userId, userId)))
+        .where(eq(userWorkspaces.id, id))
         .returning({ id: userWorkspaces.id });
       return result.length > 0;
     },
 
-    // The folder this user's local-execution-runner agents run in. Newest
-    // `activeAt` wins; if the user never marked one active, fall back to the
-    // oldest grant so a single-folder user works with zero clicks. Returns null
-    // if the user hasn't granted any folder.
-    async getActive(userId: string): Promise<UserWorkspaceRow | null> {
+    // The folder the company's local-execution-runner agents run in. Newest
+    // `activeAt` wins; if none was ever marked active, fall back to the oldest
+    // grant so a single-folder company works with zero clicks. Returns null if
+    // the company has no folder.
+    async getActive(companyId: string): Promise<UserWorkspaceRow | null> {
       const rows = await db
         .select(SELECT_COLS)
         .from(userWorkspaces)
-        .where(eq(userWorkspaces.userId, userId));
+        .where(eq(userWorkspaces.companyId, companyId));
       return pickActiveWorkspace(rows);
     },
 
     // Mark one folder active by stamping now(). Other rows keep their (older)
     // activeAt, so the latest stamp wins in getActive. Returns the updated row,
-    // or null if the id doesn't belong to this user.
-    async setActive(userId: string, id: string): Promise<UserWorkspaceRow | null> {
+    // or null if the id doesn't exist.
+    async setActive(id: string): Promise<UserWorkspaceRow | null> {
       const [row] = await db
         .update(userWorkspaces)
         .set({ activeAt: new Date() })
-        .where(and(eq(userWorkspaces.id, id), eq(userWorkspaces.userId, userId)))
+        .where(eq(userWorkspaces.id, id))
         .returning(SELECT_COLS);
       return row ?? null;
     },

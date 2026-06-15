@@ -32,6 +32,9 @@ const workspacePathSchema = z
 
 const addWorkspaceSchema = z.object({
   workspacePath: workspacePathSchema,
+  // Workspaces are scoped per company. Optional/nullable for backward compat
+  // (legacy callers create company-less rows), but the UI always supplies it.
+  companyId: z.string().trim().min(1).max(128).nullable().optional(),
 });
 
 const relativeWorkspacePathSchema = z
@@ -46,6 +49,7 @@ const relativeWorkspacePathSchema = z
 
 const readLocalFileSchema = z.object({
   path: relativeWorkspacePathSchema,
+  companyId: z.string().trim().min(1).max(128),
 });
 
 // ~8MB cap on the base64 string ≈ ~6MB raw. The bridge re-checks decoded size
@@ -55,6 +59,7 @@ const MAX_WRITE_BASE64_CHARS = 8 * 1024 * 1024;
 
 const writeLocalFileSchema = z.object({
   path: relativeWorkspacePathSchema,
+  companyId: z.string().trim().min(1).max(128),
   // Empty contents allowed — agents legitimately create empty placeholder files.
   contents: z.string().max(MAX_WRITE_BASE64_CHARS, "contents too large (base64-encoded)"),
   encoding: z.literal("base64").optional().default("base64"),
@@ -104,30 +109,52 @@ function requireBoardUserId(req: Request, res: Response): string | null {
   return req.actor.userId;
 }
 
+// Company scoping for workspaces. Read from the `companyId` query param (GET) so
+// the workspace list/active-folder is per-company. Undefined → span all of the
+// user's companies (legacy / id-addressed lookups).
+function readCompanyIdQuery(req: Request): string | undefined {
+  const raw = req.query.companyId;
+  return typeof raw === "string" && raw.trim() ? raw.trim() : undefined;
+}
+
 export function userWorkspaceRoutes(db: Db) {
   const router = Router();
   const svc = userWorkspaceService(db);
 
   // ── Workspace folder list (plural) ─────────────────────────────────────────
 
+  // Workspaces are company-scoped: the list/active folder is per company, shared
+  // by the company's members. companyId comes from the caller (UI: ?companyId=,
+  // runner: ?companyId=). Missing companyId → empty list (a runner with no
+  // company selected just falls back to its own root).
   router.get("/users/me/workspaces", async (req, res) => {
     const userId = requireBoardUserId(req, res);
     if (!userId) return;
-    const rows = await svc.listByUser(userId);
+    const companyId = readCompanyIdQuery(req);
+    if (!companyId) {
+      res.json([]);
+      return;
+    }
+    const rows = await svc.listByCompany(companyId);
     res.json(rows);
   });
 
   router.post("/users/me/workspaces", validate(addWorkspaceSchema), async (req, res) => {
     const userId = requireBoardUserId(req, res);
     if (!userId) return;
-    const row = await svc.add(userId, req.body.workspacePath);
+    const companyId = req.body.companyId as string | null | undefined;
+    if (!companyId) {
+      throw unprocessable("companyId is required to add a workspace");
+    }
+    // user_id records who granted it (bridge dispatch target); scoping is by company.
+    const row = await svc.add(companyId, req.body.workspacePath, userId);
     res.status(201).json(row);
   });
 
   router.delete("/users/me/workspaces/:id", async (req, res) => {
     const userId = requireBoardUserId(req, res);
     if (!userId) return;
-    const removed = await svc.removeById(userId, req.params.id);
+    const removed = await svc.removeById(req.params.id);
     if (!removed) {
       res.status(404).json({ error: "Workspace not found" });
       return;
@@ -135,13 +162,13 @@ export function userWorkspaceRoutes(db: Db) {
     res.status(204).end();
   });
 
-  // Mark one folder as the active workspace — where this user's
+  // Mark one folder as the active workspace — where this company's
   // local-execution-runner agents run. The runner resolves it itself via the
   // GET list; this just records the choice.
   router.post("/users/me/workspaces/:id/active", async (req, res) => {
     const userId = requireBoardUserId(req, res);
     if (!userId) return;
-    const row = await svc.setActive(userId, req.params.id);
+    const row = await svc.setActive(req.params.id);
     if (!row) {
       res.status(404).json({ error: "Workspace not found" });
       return;
@@ -156,8 +183,7 @@ export function userWorkspaceRoutes(db: Db) {
     const userId = requireBoardUserId(req, res);
     if (!userId) return;
 
-    const all = await svc.listByUser(userId);
-    const workspace = all.find((w) => w.id === req.params.id);
+    const workspace = await svc.getById(req.params.id);
     if (!workspace) {
       res.status(404).json({ error: "Workspace not found" });
       return;
@@ -202,8 +228,7 @@ export function userWorkspaceRoutes(db: Db) {
     const userId = requireBoardUserId(req, res);
     if (!userId) return;
 
-    const all = await svc.listByUser(userId);
-    const workspace = all.find((w) => w.id === req.params.id);
+    const workspace = await svc.getById(req.params.id);
     if (!workspace) {
       res.status(404).json({ error: "Workspace not found" });
       return;
@@ -249,7 +274,7 @@ export function userWorkspaceRoutes(db: Db) {
     const userId = requireBoardUserId(req, res);
     if (!userId) return;
 
-    const workspace = await svc.getDefault(userId);
+    const workspace = await svc.getDefault(req.body.companyId as string);
     if (!workspace) {
       throw unprocessable("No workspace granted. Add a folder under WORKSPACE in the sidebar first.");
     }
@@ -281,7 +306,7 @@ export function userWorkspaceRoutes(db: Db) {
     const userId = requireBoardUserId(req, res);
     if (!userId) return;
 
-    const workspace = await svc.getDefault(userId);
+    const workspace = await svc.getDefault(req.body.companyId as string);
     if (!workspace) {
       throw unprocessable("No workspace granted. Add a folder under WORKSPACE in the sidebar first.");
     }

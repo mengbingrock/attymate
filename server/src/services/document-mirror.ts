@@ -157,16 +157,26 @@ export function documentMirrorService(db: Db) {
   async function flushForUser(userId: string): Promise<void> {
     if (!isUserBridgeConnected(userId)) return;
 
-    const workspace = await workspaces.getDefault(userId);
-    if (!workspace) return;
-
     const rows = await db
       .select()
       .from(documentMirrorQueue)
       .where(and(eq(documentMirrorQueue.targetUserId, userId), eq(documentMirrorQueue.status, "pending")));
 
+    // Workspaces are company-scoped, so each queue row mirrors into its own
+    // company's default workspace. Cache per company across the batch.
+    const workspaceByCompany = new Map<string, Awaited<ReturnType<typeof workspaces.getDefault>>>();
+    async function workspaceForCompany(companyId: string) {
+      if (!workspaceByCompany.has(companyId)) {
+        workspaceByCompany.set(companyId, await workspaces.getDefault(companyId));
+      }
+      return workspaceByCompany.get(companyId) ?? null;
+    }
+
     for (const row of rows) {
       try {
+        const workspace = await workspaceForCompany(row.companyId);
+        if (!workspace) continue; // company has no workspace yet — leave pending
+
         const body = await readDocumentBody(row.issueId, row.key);
         if (body === null) {
           // Source document was deleted — drop the queue row.

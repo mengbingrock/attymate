@@ -193,7 +193,7 @@ export const queryKeys = {
     all: ["adapters"] as const,
   },
   userWorkspaces: {
-    list: ["user-workspaces"] as const,
+    list: (companyId: string) => ["user-workspaces", companyId] as const,
     files: (workspaceId: string, relativePath: string) =>
       ["user-workspaces", workspaceId, "files", relativePath] as const,
     fileContent: (workspaceId: string, relativePath: string) =>

@@ -30,9 +30,11 @@ export type WorkspaceFileContent = {
 };
 
 export const userWorkspacesApi = {
-  list: () => api.get<UserWorkspace[]>("/users/me/workspaces"),
-  add: (workspacePath: string) =>
-    api.post<UserWorkspace>("/users/me/workspaces", { workspacePath }),
+  // Workspaces are company-scoped: list/add take the active companyId.
+  list: (companyId: string) =>
+    api.get<UserWorkspace[]>(`/users/me/workspaces?companyId=${encodeURIComponent(companyId)}`),
+  add: (companyId: string, workspacePath: string) =>
+    api.post<UserWorkspace>("/users/me/workspaces", { workspacePath, companyId }),
   remove: (id: string) => api.delete<void>(`/users/me/workspaces/${id}`),
   setActive: (id: string) =>
     api.post<UserWorkspace>(`/users/me/workspaces/${id}/active`, {}),

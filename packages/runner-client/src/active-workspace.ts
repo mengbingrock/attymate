@@ -56,8 +56,9 @@ export async function resolveActiveWorkspacePath(
   const base = httpBaseFromServerUrl(config.serverUrl);
   // REST routes are mounted under /api (server app.use("/api", api); UI client
   // uses BASE="/api"). Must match or the request 404s and we wrongly conclude
-  // "no active workspace".
-  const url = `${base}/api/users/me/workspaces`;
+  // "no active workspace". Workspaces are company-scoped, so pass the runner's
+  // companyId — the server returns only that company's folders.
+  const url = `${base}/api/users/me/workspaces?companyId=${encodeURIComponent(config.companyId)}`;
   try {
     const res = await fetch(url, {
       headers: { Cookie: config.auth.cookie, Accept: "application/json" },

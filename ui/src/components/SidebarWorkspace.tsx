@@ -20,6 +20,7 @@ import {
   type WorkspaceFileEntry,
 } from "../api/userWorkspaces";
 import { useToastActions } from "../context/ToastContext";
+import { useCompany } from "../context/CompanyContext";
 import { queryKeys } from "../lib/queryKeys";
 import { cn } from "../lib/utils";
 import { SidebarSection } from "./SidebarSection";
@@ -79,19 +80,22 @@ export function SidebarWorkspace() {
   const closePreview = useCallback(() => setPreviewTarget(null), []);
   const queryClient = useQueryClient();
   const { pushToast } = useToastActions();
+  const { selectedCompanyId } = useCompany();
   const isElectron = inAttyMate();
 
   const { data: workspaces } = useQuery({
-    queryKey: queryKeys.userWorkspaces.list,
-    queryFn: () => userWorkspacesApi.list(),
-    enabled: isElectron,
+    queryKey: queryKeys.userWorkspaces.list(selectedCompanyId ?? ""),
+    queryFn: () => userWorkspacesApi.list(selectedCompanyId!),
+    enabled: isElectron && !!selectedCompanyId,
   });
 
   const invalidateList = () =>
-    queryClient.invalidateQueries({ queryKey: queryKeys.userWorkspaces.list });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.userWorkspaces.list(selectedCompanyId ?? ""),
+    });
 
   const addMutation = useMutation({
-    mutationFn: (folder: string) => userWorkspacesApi.add(folder),
+    mutationFn: (folder: string) => userWorkspacesApi.add(selectedCompanyId!, folder),
     onSuccess: invalidateList,
     onError: (err: unknown) => {
       const message =
