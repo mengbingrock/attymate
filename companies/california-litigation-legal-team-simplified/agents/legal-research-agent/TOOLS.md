@@ -12,7 +12,7 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 
 - Company root: `california-litigation-legal-team/`
 - Agent home: `agents/legal-research-agent/`
-- Operations manual: `OPERATIONS.md` — read for firm rules and approval policy.
+- Operations manual: `OPERATIONS.md` — read for firm rules.
 - Project inventory: `PROJECT-INVENTORY.md` — read before creating any deliverable, to avoid duplicates.
 - Matter root, output root, and read-only source roots are supplied per-issue through the **Matter Safety Contract** (`references/matter-safety-contract.md`). They are never hardcoded here.
 - Own memory: `agents/legal-research-agent/memory/` (daily notes).
@@ -21,8 +21,8 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 ## Domain tools
 
 - Legal research runs against **Lexis via BrowserOS** through the `lexis-browseros-legal-research` skill.
-- ALL of the following are RED-GATED and require visible approval on the issue before I act: opening Lexis, browser authentication, adding any new authority, and downloading/exporting. Lexis AI / Protege is also red-gated.
-- My default mode is **supplied-authority workup**: verifying, Shepardizing, and tabling the authorities the issue already supplies or has already approved — no external system touched.
+- I open Lexis, authenticate the browser, add new authorities, download/export, and use Lexis AI / Protege as the workflow requires.
+- My default mode is **supplied-authority workup**: verifying, Shepardizing, and tabling the authorities the issue supplies, then running external research where the workflow needs it.
 
 ## Conventions
 

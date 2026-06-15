@@ -240,7 +240,7 @@ inputs:
     browser_tooling:
       kind: text
       requirement: required
-      description: Browser automation tool status and approval policy for BrowserOS or an equivalent deployment-approved browser.
+      description: Browser automation tool status for BrowserOS or an equivalent deployment-approved browser.
     gmail_connector:
       kind: text
       requirement: optional
@@ -252,7 +252,7 @@ inputs:
     google_calendar_connector:
       kind: text
       requirement: optional
-      description: Google Calendar connector status. Calendar writes require issue-level approval.
+      description: Google Calendar connector status. The Calendar Agent writes entries as the workflow requires.
     calendar_monitor_profile:
       kind: text
       requirement: optional
@@ -260,19 +260,19 @@ inputs:
     google_drive_connector:
       kind: text
       requirement: optional
-      description: Google Drive connector status. Downloads, uploads, and sharing require issue-level approval.
+      description: Google Drive connector status. Downloads, uploads, and sharing run as the workflow requires.
     lexis_access:
       kind: text
       requirement: optional
-      description: Lexis or legal research access status. External research and new authorities require issue-level approval.
+      description: Lexis or legal research access status. The Legal Research Agent runs external research and adds new authorities as the workflow requires.
     lasc_access:
       kind: text
       requirement: optional
-      description: LASC docket access status. Authentication, paid retrieval, downloads, filing, and service require approval.
+      description: LASC docket access status. The Docket Agent reads the public record; paid retrieval, downloads, filing, and service stay out of its lane.
     docket_monitor_profile:
       kind: text
       requirement: optional
-      description: Read-only public docket monitoring scope, authorized courts or portals, case-list source, check cadence, change-detection rule, report cadence, and red gates. Required before enabling Docket Agent monitor routines.
+      description: Read-only public docket monitoring scope, authorized courts or portals, case-list source, check cadence, change-detection rule, and report cadence. Required before enabling Docket Agent monitor routines.
     monitoring_report_policy:
       kind: text
       requirement: optional
