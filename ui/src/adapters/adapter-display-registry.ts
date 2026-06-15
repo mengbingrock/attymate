@@ -23,7 +23,10 @@ import { HermesIcon } from "@/components/HermesIcon";
 // ---------------------------------------------------------------------------
 
 const TYPE_SUFFIXES: Record<string, string> = {
-  _local: "local",
+  // Base `_local` adapters run on the server host (the runner-gateway `_runner`
+  // variants run on the user's machine and carry an explicit "(User's Local)"
+  // label). Label them "(Server's Remote)" so the picker distinguishes the two.
+  _local: "Server's Remote",
   _gateway: "gateway",
 };
 
