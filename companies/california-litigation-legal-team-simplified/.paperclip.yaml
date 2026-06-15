@@ -77,6 +77,10 @@ agents:
         graceSec: 20
         extraArgs:
           - "--skip-git-repo-check"
+        # Browser automation (lexis-browseros-legal-research) launches Chrome,
+        # which the workspace-write sandbox blocks in headless runs. Bypass so
+        # BrowserOS can open/drive the browser.
+        dangerouslyBypassApprovalsAndSandbox: true
     inputs:
       env:
         AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
@@ -119,6 +123,10 @@ agents:
         graceSec: 20
         extraArgs:
           - "--skip-git-repo-check"
+        # Browser automation (lexis-browseros-legal-research) launches Chrome,
+        # which the workspace-write sandbox blocks in headless runs. Bypass so
+        # BrowserOS can open/drive the browser.
+        dangerouslyBypassApprovalsAndSandbox: true
     inputs:
       env:
         AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
@@ -161,6 +169,10 @@ agents:
         graceSec: 20
         extraArgs:
           - "--skip-git-repo-check"
+        # Browser automation (lasc-browseros-docket-check) launches Chrome,
+        # which the workspace-write sandbox blocks in headless runs. Bypass so
+        # BrowserOS can open/drive the browser.
+        dangerouslyBypassApprovalsAndSandbox: true
     inputs:
       env:
         AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
