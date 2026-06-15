@@ -10,6 +10,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Company } from "@paperclipai/shared";
 import { companiesApi } from "../api/companies";
+import { accessApi } from "../api/access";
 import { ApiError } from "../api/client";
 import { queryKeys } from "../lib/queryKeys";
 import type { CompanySelectionSource } from "../lib/company-selection";
@@ -83,7 +84,25 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     },
     retry: false,
   });
-  const companies = companiesResult.companies;
+  // The user's own company memberships. GET /companies returns ALL companies for
+  // instance admins, but the workspace switcher should only show companies the
+  // user actually belongs to. We intersect the company list with the membership
+  // set here. (For non-admins the server already returns only their companies, so
+  // the filter is a no-op; if board access can't be loaded we fall back to the
+  // server list rather than hiding everything.)
+  const { data: boardAccess } = useQuery({
+    queryKey: queryKeys.access.currentBoardAccess,
+    queryFn: () => accessApi.getCurrentBoardAccess(),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const companies = useMemo(() => {
+    const all = companiesResult.companies;
+    if (!boardAccess) return all;
+    const memberIds = new Set(boardAccess.companyIds ?? []);
+    return all.filter((company) => memberIds.has(company.id));
+  }, [companiesResult.companies, boardAccess]);
   const companyListUnauthorized = companiesResult.unauthorized;
   const sidebarCompanies = useMemo(
     () => companies.filter((company) => company.status !== "archived"),
