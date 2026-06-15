@@ -2,7 +2,7 @@
 schema: agentcompanies/v1
 kind: task
 slug: configure-agent-runtime
-name: Configure Codex and Paperclip agent runtime
+name: Configure agent runtime
 assignee: legal-ops-supervisor
 project: firm-onboarding
 priority: high
