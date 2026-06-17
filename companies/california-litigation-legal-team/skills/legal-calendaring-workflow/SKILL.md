@@ -26,13 +26,13 @@ Before work begins, confirm the issue states:
 - Jurisdiction, court, triggering event, triggering date, service method, hearing date, reservation date, or other calculation facts.
 - Target calendar or a rule for asking the supervisor to choose one.
 - Forbidden roots and the no-cross-matter inspection rule.
-- Firm Operations Guide reference or scoped guide excerpt, autonomy level, approval profile, learning mode, and approval gates already approved.
+- Firm Operations Guide reference or scoped guide excerpt, autonomy level, approval profile, learning mode, and any visible hard-gate approvals already granted.
 
 Runtime inputs may include PDFs, docket facts, email text, service proofs, hearing notices, reservation receipts, public court rules, and deployment-supplied policy.
 
 If a required calculation fact or policy source is missing, return a concise missing-input list. Do not infer facts from other matters. Continue with any proposed entries that can be calculated from approved facts.
 
-If the issue states `approval_profile: sandbox_autopilot`, apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: proposed deadline/calendar tables are green, but calendar writes, invites, notifications, and emails remain hard gates.
+Apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: proposed deadline/calendar tables are green, but calendar writes, invites, notifications, and emails remain hard gates.
 
 ## Procedure
 
@@ -44,17 +44,17 @@ If the issue states `approval_profile: sandbox_autopilot`, apply `ca-subpoena-mt
 6. Post a proposed deadline/calendar table to the issue or save a new artifact under `{output_root}` if allowed.
 7. Request approval before any calendar write, update, deletion, invite, notification, or email. Use calendar connectors only when the deployment authorizes them.
 8. After approved writes, read back the calendar entry and post verification details.
-9. **Apply the checkpoint policy.** Green work proceeds autonomously and is logged: deadline calculations from approved facts, proposed calendar tables, verification notes, and artifact creation under `{output_root}`. Yellow routes to the Legal Ops Supervisor when facts are incomplete, policy conflicts exist, or a deadline depends on strategy. Red requires visible approval before the actions listed under Anti-patterns. Return discrete yellow/red issues to the supervisor but continue safe proposed-entry work when approved facts allow it.
+9. **Apply the checkpoint policy.** Green work proceeds autonomously and is logged: deadline calculations from approved facts, proposed calendar tables, verification notes, and artifact creation under `{output_root}`. Yellow routes to the Legal Ops Supervisor when facts are incomplete, policy conflicts exist, or a deadline depends on draft strategy recommendations. Hard gates require visible approval before the actions listed under Anti-patterns. Return discrete yellow or hard-gate issues to the supervisor but continue safe proposed-entry work when approved facts allow it.
 
 ## Outputs
 
 - Proposed calendar entries, calculation notes, issue comments, verification notes, and new artifacts under `{output_root}`. Do not store passwords, PINs, account secrets, or private internal URLs.
-- Discrete yellow/red issues returned to the Legal Ops Supervisor.
+- Discrete yellow or hard-gate issues returned to the Legal Ops Supervisor.
 - Mark done only after posting the proposed entries or verified write results.
 
 ## Anti-patterns
 
-Never do any of the following without visible red-gate approval:
+Never do any of the following without visible hard-gate approval:
 
 - Creating, updating, deleting, inviting, notifying, or emailing from a calendar system.
 - Opening authenticated portals or private firm resources.

@@ -15,7 +15,7 @@ Include:
 - Current safe source scope, defaulting to monitor summary or issue text only.
 - Tentative matter label, if available.
 - Desired next step: triage only, open parent intake issue, draft a plan, or wait.
-- Red gates approved now, defaulting to none.
+- Hard gates approved now, defaulting to none.
 - What Legal Ops can do now without more approval.
 - One plain-language question if more input is needed.
 
@@ -42,9 +42,9 @@ Include:
 - Read-only source roots.
 - Authority limits.
 - Autonomy level.
-- Approval profile, normally standard unless this is a local sandbox run.
+- Approval profile, using relaxed default controls; use `sandbox_autopilot` when this is a local sandbox/demo/benchmark run.
 - Learning mode.
-- Approval gates already approved.
+- Hard gates already approved.
 - Requested deliverables.
 
 ## Sandbox Autopilot Parent Issue
@@ -66,7 +66,7 @@ Include:
 - Allowed outputs: new intermediary artifacts, OCR sidecars, QA notes, draft text, proposed calendar tables, run-state updates, benchmark/demo reports, and new working-copy drafts under the output root.
 - Learning mode, normally `off` unless a sanitized skill proposal is explicitly requested.
 - Statement that outputs are sandbox artifacts and are not attorney-final, client-facing, filed, served, signed, uploaded, or shared.
-- Hard gates still requiring approval: external side effects; irreversible or source-mutating actions; authentication, payment, or legal-authority expansion.
+- Hard gates still requiring approval: external side effects; authentication, payment, or legal-authority expansion; destructive or protected mutation.
 
 ## MTC Child Issues
 
@@ -74,7 +74,7 @@ Include:
 - Source intake/OCR: assigned to Source Intake Agent. Source manifest, OCR sidecars, document indexes, extraction QA.
 - Facts and evidence: assigned to Facts & Evidence Agent. Exhibit lists, factual narrative, source crosswalks, citation tables.
 - Legal research/authority: assigned to Legal Research Agent. Supplied-authority workup, citation verification, Shepardizing, and approved Lexis research only when authorized.
-- Drafting and assembly: assigned to Drafting & Assembly Agent. Draft text, proposed orders, declarations, and approved working-copy assembly.
+- Drafting and assembly: assigned to Drafting & Assembly Agent. Draft text, proposed orders, declarations, and new output-root working-copy assembly.
 - QA review: assigned to Legal QA Agent. Source discipline, authority discipline, placeholders, confidentiality, finalization boundaries.
 - Practice learning: assigned to Practice Learning Agent only when learning mode is enabled.
 

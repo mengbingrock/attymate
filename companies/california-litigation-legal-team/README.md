@@ -22,11 +22,11 @@ Hub-and-spoke around a single front door. The **Legal Ops Supervisor** is the on
 
 - **Green** — source-bound work proceeds autonomously and is logged.
 - **Yellow** — Legal Ops cures routing/scope ambiguity the parent issue already authorizes.
-- **Red** — filing, service, signing, email, live-draft writes, external research/auth, paid retrieval, calendar writes, and finalization require visible board approval before action.
+- **Red** — only external side effects, authentication/payment/legal-authority expansion, and destructive or protected mutation require visible board approval before action.
 
 Identity and constraints live in [COMPANY.md](COMPANY.md); operating governance in [OPERATIONS.md](OPERATIONS.md); the deliverable ledger in [PROJECT-INVENTORY.md](PROJECT-INVENTORY.md).
 
-Default intake is **Light Intake Mode**. Legal Ops starts from the user's description, an already-approved monitor summary, or an approved source list; produces an intake summary, missing-input list, and proposed next step; and asks for only the next decision needed to continue. Legal Ops prepares the Matter Safety Contract internally from plain-language answers. Red gates still require visible approval.
+Default intake is **Light Intake Mode**. Legal Ops starts from the user's description, an already-approved monitor summary, or an approved source list; produces an intake summary, missing-input list, and proposed next step; and asks for only the next decision needed to continue. Legal Ops prepares the Matter Safety Contract internally from plain-language answers. Local/source-bound work, output-root artifacts, new output-root working copies, draft recommendations, QA, issue updates, and internal routing proceed without human approval when scope is clear; hard gates still require visible approval.
 
 Active parent matter issues should also carry a **Matter Status Digest**. This is the lawyer-facing summary that explains what the matter is, what the team already did, what is blocking progress, who owns the next step, whether the lawyer needs to act, and what happens next. Technical blocker chains stay available for audit, but they should not be the first thing a lawyer has to decode.
 
@@ -110,13 +110,14 @@ If an onboarding task is substantively complete but the issue cannot be marked d
 - Configure Python, OCR/PDF tooling, Docling or equivalent local processing, and approved output roots.
 - Review executable-script trust before using repo helper scripts. The MTC drafting skill references an optional local OCR helper at `skills/ca-subpoena-mtc-drafting-workflow/scripts/ocr_pdf_intake.ps1`; it requires explicit `{matter_root}` / `{output_root}` scope, writes only under the approved output root, and must be run only in a deployment-approved Python/OCR environment. Paperclip company import stores the markdown skill/reference files; deployments that want the helper should review and copy or run it from the repository source after approval.
 - Set budgets, model choices, and approval policies appropriate for the deployment.
+- Use the relaxed default approval matrix for testing and product iteration: proceed on local/source-bound output-root work and stop only for external side effects, authentication/payment/legal-authority expansion, or destructive/protected mutation. Use `approval_profile: sandbox_autopilot` to label local non-client-facing test matters.
 - Configure external-tool access before use: BrowserOS or equivalent browser tooling, Gmail, Google Calendar, Google Drive, Lexis, LASC, external knowledge-base/upload systems, filing, service, and upload/download workflows.
 - Configure `gmail_monitor_profile`, `calendar_monitor_profile`, `docket_monitor_profile`, and `monitoring_report_policy` before enabling monitor routines.
 - Keep monitor routines paused until the board/operator approves the profile and schedule. Monitor reports go to Legal Ops Supervisor; monitors do not open substantive legal work directly.
 - Keep the completed Firm Operations Guide private to the deployment.
 - Start live work only from a parent issue assigned to Legal Ops Supervisor.
 - Keep the parent issue's Matter Status Digest current whenever child issues are created, blockers change, or the lawyer asks for status.
-- Let Legal Ops translate lawyer-facing intake answers into the Matter Safety Contract. A live issue should still carry `{matter_root}` or an approved source set, `{output_root}` when configured, Firm Operations Guide reference, read-only source roots, forbidden roots, allowed outputs, autonomy level, learning mode, and red gates, but lawyers should be asked for these in plain language.
+- Let Legal Ops translate lawyer-facing intake answers into the Matter Safety Contract. A live issue should still carry `{matter_root}` or an approved source set, `{output_root}` when configured, Firm Operations Guide reference, read-only source roots, forbidden roots, allowed outputs, autonomy level, learning mode, approval profile, and hard gates, but lawyers should be asked for these in plain language.
 
 ## Confidentiality And Portability
 

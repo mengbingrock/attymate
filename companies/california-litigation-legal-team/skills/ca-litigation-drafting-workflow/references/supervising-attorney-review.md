@@ -7,7 +7,7 @@ Use this reference when tightening, reorganizing, or implementing review comment
 - Keep changes within the approved issue scope and source record.
 - Do not delete a reviewer point merely because it is awkward; convert it into clearer supported text or flag it.
 - Preserve citation and exhibit anchors unless a source check shows they are wrong.
-- Batch questions when review comments conflict or require strategy approval.
+- Batch questions when review comments conflict or require strategy adoption approval.
 - Maintain a change log that identifies confirmed changes, rejected alternatives, and unresolved questions.
 
-If an edit would change relief, sanctions, privacy treatment, authority selection, or litigation strategy, route it as a red-gate issue before making the change.
+Draft recommended changes to relief, sanctions, privacy recommendations, authority selection, or litigation strategy when they can be expressed as local output-root work. Route for hard-gate approval before adopting those recommendations through external action or protected mutation.

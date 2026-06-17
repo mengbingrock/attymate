@@ -27,15 +27,15 @@ Ask only what is needed for the next safe step:
 - "Are any red-gate actions approved now, or should I keep all external actions off?"
 - "Is this a sandbox/demo/test run, or live client-facing work?"
 
-If the lawyer does not know, recommend the safe default: temporary matter label, monitor-summary-only scope, triage-only work product, and no red gates.
+If the lawyer does not know, recommend the safe default: temporary matter label, monitor-summary-only scope, triage-only work product, and no hard gates.
 
 ## Safe Defaults
 
 - Matter label: tentative label is acceptable.
 - Source scope: already-approved monitor summary or issue text only.
 - Output: issue comments until an output folder is configured.
-- Red gates: none approved.
-- Approval profile: standard controls for live work; `sandbox_autopilot` only when the user clearly requests sandbox, demo, benchmark, or early product-testing work with a test source root and output root.
+- Hard gates: none approved.
+- Approval profile: relaxed default controls; use `sandbox_autopilot` to label sandbox, demo, benchmark, or early product-testing work with a test source root and output root.
 - Learning mode: off.
 - Work product: intake summary, issue list, missing-input list, and proposed next steps.
 
@@ -51,4 +51,4 @@ Also update the parent Matter Status Digest so the lawyer can see whether the ne
 
 ## Red Gates
 
-Use `skills/ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md` as the canonical approval matrix. For live work, keep standard red gates off unless visibly approved. For `sandbox_autopilot`, proceed on local non-client-facing testing work and stop only for the three hard gate categories in the canonical matrix.
+Use `skills/ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md` as the canonical approval matrix. Proceed on local/source-bound work, output-root artifacts, new output-root working copies, draft recommendations, QA, issue updates, and internal routing. Stop only for external side effects; authentication, payment, or legal-authority expansion; and destructive or protected mutation.

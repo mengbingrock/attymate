@@ -22,7 +22,7 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 
 - Gmail connector (read-only), governed entirely by the runtime `gmail_monitor_profile`.
 - Monitoring outputs follow `references/monitoring-report-contract.md` and go to Legal Ops Supervisor.
-- All write actions are red-gated and require explicit approval: send, reply, forward, label, archive, delete, star, mark read/unread, download attachments, upload content, calendar entries, opening external systems, authenticating, filing, serving, signing, drafting.
+- All write or external actions are hard-gated and require explicit approval: send, reply, forward, label, archive, delete, star, mark read/unread, download attachments, upload content, calendar entries, opening external systems, authenticating, filing, serving, signing, drafting into protected/live files.
 - I have no domain skills (`skills: []`). I route, I do not act.
 
 ## Conventions

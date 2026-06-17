@@ -25,7 +25,7 @@ Use this runbook when an onboarding issue appears blocked by workspace, runner, 
 
 ## Readiness smoke interpretation
 
-- Green: the workspace exists, guide sections are current, required auth/tool probes pass, and no red-gate approval is pending.
+- Green: the workspace exists, guide sections are current, required auth/tool probes pass, and no hard-gate approval is pending.
 - Yellow: setup is usable for limited issue-comment or supplied-source work, but a connector, optional tool, or policy probe still needs owner action.
 - Red: live matter work would be unsafe because workspace, auth, source scope, output scope, or approval policy is missing.
 - Historical stale paths, denied optional probes, or completed-work status plumbing should be recorded as technical follow-up, not as a reason to ask the user to rerun completed onboarding tasks.

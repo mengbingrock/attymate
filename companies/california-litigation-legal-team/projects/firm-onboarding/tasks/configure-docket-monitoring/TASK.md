@@ -10,7 +10,7 @@ priority: medium
 
 Create or update the Firm Operations Guide section for public docket monitoring before any portal check begins.
 
-Define `docket_monitor_profile`: connector/browser status, authorized courts or portals, public-only rule, matter/case list source, case-identifier storage location, check cadence, lookback window, change-detection rule, report cadence, routine owner, routine status, and red gates. If browser access, public portal scope, or case-list scope is missing, stop with a setup checklist and docket-check plan rather than browsing.
+Define `docket_monitor_profile`: connector/browser status, authorized courts or portals, public-only rule, matter/case list source, case-identifier storage location, check cadence, lookback window, change-detection rule, report cadence, routine owner, routine status, and hard gates. If public portal scope or case-list scope is missing, stop with a setup checklist and docket-check plan rather than browsing. Public no-login checks inside the approved profile are green; login, CAPTCHA, payment, external downloads, filing, service, signing, email, calendar writes, and external upload/share are hard gates.
 
 Also define how Docket findings should be summarized for a lawyer: one-sentence lawyer summary, recommended next action, and the exact approval or source choice needed if Legal Ops must ask for more access.
 

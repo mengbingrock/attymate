@@ -8,7 +8,7 @@ Legal Ops Supervisor owns the digest. Update it when:
 - child issues are created or materially rerouted;
 - a parent issue is marked blocked;
 - a blocker changes status;
-- a specialist reports a red gate or true missing input;
+- a specialist reports a hard gate or true missing input;
 - the lawyer asks what the issue or subissues are for.
 
 ## Required Format

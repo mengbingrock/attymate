@@ -46,9 +46,9 @@ These are reusable workflows owned by Legal Ops Supervisor and the unified speci
 | Subpoena motion-to-compel run | `ca-subpoena-mtc-autonomous-runner` | legal-ops-supervisor | MTC Launch Intake → delegate to specialists. See `references/workflow-issue-templates.md`. |
 | Pleading intake & review | `ca-pleading-intake-review` | source-intake-agent | Source-bound, read-only intake. |
 | California litigation drafting | `ca-litigation-drafting-workflow` | drafting-assembly-agent | Source-bound drafts under output root. |
-| Legal calendaring | `legal-calendaring-workflow` | calendar-agent | Proposals first; writes are red-gated. |
+| Legal calendaring | `legal-calendaring-workflow` | calendar-agent | Proposals first; writes are hard-gated. |
 | Public docket check | `lasc-browseros-docket-check` | docket-agent | Public records only; paid/login/CAPTCHA gates not crossed. |
-| Lexis research & citation verification | `lexis-browseros-legal-research` | legal-research-agent | External research red-gated. |
+| Lexis research & citation verification | `lexis-browseros-legal-research` | legal-research-agent | External research hard-gated. |
 | Opt-in workflow learning | `practice-workflow-learning` | practice-learning-agent | Off by default; explicit learning contract required. |
 
 ## In-flight deliverables

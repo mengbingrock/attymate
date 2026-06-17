@@ -26,13 +26,13 @@ Before intake begins, confirm the issue states:
 - Forbidden roots and the no-cross-matter inspection rule.
 - Allowed outputs, such as inventories, OCR sidecars, source manifests, and intake summaries.
 - Whether external mailbox, drive, OCR, or external upload tools are authorized.
-- Firm Operations Guide reference or scoped guide excerpt, autonomy level, approval profile, learning mode, and approval gates already approved.
+- Firm Operations Guide reference or scoped guide excerpt, autonomy level, approval profile, learning mode, and any visible hard-gate approvals already granted.
 
 Runtime inputs may include pleadings, proofs of service, docket facts, email attachments, and approved source folders.
 
 If the contract is missing, return a concise missing-field list to the supervisor. If approved source files and output root are clear, continue safe intake work and log unresolved gaps.
 
-If the issue states `approval_profile: sandbox_autopilot`, apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: local source intake, local OCR sidecars, and output-root summaries are green, and only the three hard gate categories stop execution.
+Apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md` in both standard and `sandbox_autopilot` modes: local source intake, local OCR sidecars, and output-root summaries are green, and only the three hard gate categories stop execution.
 
 ## Procedure
 
@@ -43,17 +43,17 @@ If the issue states `approval_profile: sandbox_autopilot`, apply `ca-subpoena-mt
 5. Summarize pleadings with source page, paragraph, exhibit, filing, or service references where available.
 6. Flag extraction gaps, visual-verification needs, missing proofs, caption inconsistencies, and unresolved party issues.
 7. Prepare an external-upload handoff manifest only if approved; do not upload.
-8. **Apply the checkpoint policy.** Green work proceeds autonomously and is logged: local source inventories, extraction/OCR need assessment, source manifests, intake summaries, and approved sidecar artifacts under `{output_root}`. Yellow routes to the Legal Ops Supervisor when filing/service facts conflict, source scope needs repair, or a drafting handoff needs clearer routing. Red requires visible approval before the actions listed under Anti-patterns. Return discrete yellow/red issues to the supervisor but continue safe intake when approved sources and output boundaries allow it.
+8. **Apply the checkpoint policy.** Green work proceeds autonomously and is logged: local source inventories, extraction/OCR need assessment, source manifests, intake summaries, and approved sidecar artifacts under `{output_root}`. Yellow routes to the Legal Ops Supervisor when filing/service facts conflict, source scope needs repair, or a drafting handoff needs clearer routing. Hard gates require visible approval before the actions listed under Anti-patterns. Return discrete yellow or hard-gate issues to the supervisor but continue safe intake when approved sources and output boundaries allow it.
 
 ## Outputs
 
 - Pleading inventories, POS review notes, allegation/procedural summaries, extraction-gap logs, OCR sidecars, and source manifests under `{output_root}`.
-- Discrete yellow/red issues returned to the Legal Ops Supervisor for resolution.
+- Discrete yellow or hard-gate issues returned to the Legal Ops Supervisor for resolution.
 - A drafting handoff to the Drafting & Assembly Agent when work moves beyond intake summaries.
 
 ## Anti-patterns
 
-Never do any of the following without visible red-gate approval:
+Never do any of the following without visible hard-gate approval:
 
 - Downloading from email/drive systems unless the issue authorizes it.
 - Uploading to any external system.

@@ -25,11 +25,11 @@ Before processing begins, confirm the issue states:
 - Allowed outputs, such as page Markdown, JSON, OCR text, manifests, page images for QA, and extraction notes.
 - Tool configuration for `{pdf_pipeline_script}`, Python with `pypdf`, Azure Document Intelligence settings, authenticated Codex CLI, and the approved vision model.
 - Whether remote OCR or vision processing is approved. Azure Document Intelligence uploads PDF batches, and Codex vision correction sends rendered page images plus Azure draft text to the configured model.
-- Firm Operations Guide reference or scoped guide excerpt, autonomy level, approval profile, learning mode, and approval gates already approved.
+- Firm Operations Guide reference or scoped guide excerpt, autonomy level, approval profile, learning mode, and any visible hard-gate approvals already granted.
 
 If a path, output boundary, or remote-processing approval is missing, do not start extraction. If Azure or Codex is unavailable, run only the stages that are already approved and available, then preserve the incomplete stage and current manifest state. Inputs are approved local PDFs or scanned documents only.
 
-If the issue states `approval_profile: sandbox_autopilot`, apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: local PDF/OCR sidecars under `{output_root}` are green, but Azure, Codex vision, or any external upload/remote processing remains a hard gate unless separately approved.
+Apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md` in both standard and `sandbox_autopilot` modes: local PDF/OCR sidecars under `{output_root}` are green, but Azure, Codex vision, or any external upload/remote processing remains a hard gate unless separately approved.
 
 ## Procedure
 
@@ -54,7 +54,7 @@ If the issue states `approval_profile: sandbox_autopilot`, apply `ca-subpoena-mt
    - Azure pages are routed to vision review when mean confidence is below 0.93, p10 confidence is below 0.75, more than 12% of words are below 0.80 confidence, there are no confident words, or extracted text is below 50 characters.
    - Script defaults: Azure batch size `200`, rendered image size `2400`, batched vision workers `3`, batch size `4`, max attempts `3`, and timeout `1200` seconds for batched vision.
 8. **Reuse existing checkpoint outputs** when the script detects them. Keep the complete pipeline output tree under `{output_root}`.
-9. **Hit the red gate before any of these** — request approval first:
+9. **Stop at hard gates before any of these** — request approval first:
    - Installing Python dependencies, configuring Azure or Codex, or changing runtime configuration.
    - Uploading source or derived content to Azure, Codex vision models, or any external service.
    - Modifying, splitting, merging, renaming, deleting, or overwriting source PDFs.

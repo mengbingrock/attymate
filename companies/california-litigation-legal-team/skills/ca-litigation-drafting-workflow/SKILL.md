@@ -26,13 +26,13 @@ Before drafting begins, confirm the issue states:
 - Allowed outputs, such as new draft sections, tables, QA notes, or new working-copy documents.
 - Authority source limits.
 - Drafting profile or style policy, if deployment-specific style is required.
-- Firm Operations Guide reference or scoped guide excerpt, autonomy level, approval profile, learning mode, and approval gates already approved.
+- Firm Operations Guide reference or scoped guide excerpt, autonomy level, approval profile, learning mode, and any visible hard-gate approvals already granted.
 
 If scope, source, or output boundaries are missing, return the missing-field list to the supervisor. If approved sources and output root are clear, continue safe draft work and log unresolved issues instead of blocking.
 
 Inputs may also include source pleadings, exhibits, declarations, discovery, authority tables, public law, approved examples, and drafting profiles.
 
-If the issue states `approval_profile: sandbox_autopilot`, apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: local non-client-facing draft artifacts and new output-root working copies are green, and only the three hard gate categories stop execution.
+Apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: local/source-bound draft artifacts and new output-root working copies are green, and only the three hard gate categories stop execution.
 
 ## Procedure
 
@@ -41,15 +41,15 @@ If the issue states `approval_profile: sandbox_autopilot`, apply `ca-subpoena-mt
 3. **Draft only from approved source facts and approved authorities.** Never introduce authorities from memory. Keep internal drafting notes separate from court-facing text.
 4. **Consult references before format-sensitive work.** When a task involves a court-facing Word filing, consult the pleading-paper reference before any formatting work. When a task involves an existing draft with supervising-attorney edits, consult the supervising-attorney and Word editing references before changing organization, wording, or formatting.
 5. **Post draft text, issue tables, or artifact paths for review.**
-6. **Hit the checkpoint before any standard red-gate or `sandbox_autopilot` hard-gate action** (see gates below). Proceed autonomously on green drafting work — source-bound draft text, outlines, issue tables, QA notes, change logs, and new artifacts under `{output_root}`. In `sandbox_autopilot`, new working-copy drafts under `{output_root}` are also green. Route yellow issues to the Legal Ops Supervisor when facts conflict, child scope needs repair, or a strategy question can be separated from safe drafting. Request approval before:
+6. **Hit the checkpoint before any hard-gate action** (see gates below). Proceed autonomously on green drafting work — source-bound draft text, outlines, issue tables, QA notes, change logs, new artifacts, and new working-copy drafts under `{output_root}`. Route yellow issues to the Legal Ops Supervisor when facts conflict, child scope needs repair, or a strategy question can be separated from safe drafting. Request approval before:
    - Updating a Word file or active draft.
    - Using new authorities beyond supplied/approved sources.
-   - Making strategy, relief, sanctions, privacy, or protective-order changes.
+   - Applying strategy, relief, sanctions, privacy, or protective-order decisions through external action or protected mutation.
    - Overwriting, deleting, renaming, finalizing, signing, filing, serving, emailing, or uploading.
    - Relying on examples or prior drafts outside the approved source roots.
 
-   Approval for one action does not authorize different external tools, new authorities, active draft writes, finalization, filing, service, signing, email, source mutation, or adopted strategy changes.
-7. **Use tooling within policy.** Use document tooling only for new working copies or approved active-draft updates. Use legal research tools only after approval. Use OCR/PDF tools through a scoped PDF/OCR issue when extraction quality matters.
+   Approval for one action does not authorize different external tools, new authorities, active draft writes, finalization, filing, service, signing, email, source mutation, or adopting draft strategy recommendations.
+7. **Use tooling within policy.** Use document tooling for new output-root working copies or approved active-draft updates. Use legal research tools only after approval. Use OCR/PDF tools through a scoped PDF/OCR issue when extraction quality matters.
 8. **Preserve formatting and existing user edits** when a Word update is approved.
 9. **Post a change log,** remaining placeholders, unresolved citations, and QA risks.
 
@@ -57,16 +57,16 @@ If the issue states `approval_profile: sandbox_autopilot`, apply `ca-subpoena-mt
 
 - Source-bound work product only: draft text, tables, outlines, QA notes, change logs, and new working-copy documents under `{output_root}`.
 - Keep internal drafting notes separate from court-facing text.
-- Return discrete yellow/red issues to the supervisor, but do not stop safe drafting when approved sources and output boundaries support continued work.
+- Return discrete yellow or hard-gate issues to the supervisor, but do not stop safe drafting when approved sources and output boundaries support continued work.
 - Mark done only after posting the draft artifact and the unresolved-issue list.
 
 ## Anti-patterns
 
 - Introducing authorities from memory or beyond the approved source roots.
-- Updating a Word file, active draft, or relying on examples/prior drafts outside approved roots without red-gate approval.
+- Updating an active Word file, protected draft, or relying on examples/prior drafts outside approved roots without hard-gate approval.
 - Overwriting, deleting, renaming, finalizing, signing, filing, serving, emailing, or uploading without approval.
-- Making strategy, relief, sanctions, privacy, or protective-order changes without approval.
-- Treating approval for one action as authorization for a different external tool, new authority, or red-gate action.
+- Applying strategy, relief, sanctions, privacy, or protective-order decisions through external action or protected mutation without approval.
+- Treating approval for one action as authorization for a different external tool, new authority, or hard-gate action.
 - Using document tooling on active drafts, or legal research tools, before approval.
 - Blocking on a missing field when approved sources and output root already support safe work — log it instead.
 

@@ -9,6 +9,6 @@ Workflow:
 3. Separate public procedural facts from privileged strategy.
 4. Draft source-bound analysis of whether the cases appear related under the applicable public rule supplied or approved for the issue.
 5. Flag missing dockets, service facts, hearing dates, or judge/department information.
-6. Stop before filing, service, or strategy changes unless approved.
+6. Draft strategy recommendations locally when source-bound; stop before filing, service, or adopting strategy through external action unless approved.
 
 Outputs should be a comparison table, draft response language if requested, and an unresolved-input list.

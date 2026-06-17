@@ -2,7 +2,7 @@
 
 Use this sequence unless the parent issue gives a different approved plan.
 
-1. Confirm launch intake, matter scope, output scope, authority limits, and red gates.
+1. Confirm launch intake, matter scope, output scope, authority limits, and hard gates.
 2. Review upstream subpoena document-review handoff artifacts if present.
 3. Build source, subpoena, objection, exhibit, authority, and replacement tables.
 4. Draft factual narrative and need/relevance theory from source citations.

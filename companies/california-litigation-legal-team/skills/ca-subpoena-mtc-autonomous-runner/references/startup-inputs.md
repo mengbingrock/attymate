@@ -12,6 +12,6 @@ Collect or discover within approved scope:
 - Drafting sources: pleadings, exhibits, declarations, example shells, authority tables, and prior approved work product.
 - Authority limits: supplied authorities, example-shell authorities, approved external research, or no external research.
 - Tool readiness: Codex cwd, Python/OCR runtime, document tooling, browser tooling, connectors, and Firm Operations Guide reference.
-- Approval profile, approval gates already approved, and gates still requiring approval.
+- Approval profile, visible hard-gate approvals already granted, and hard gates still requiring approval.
 
 If any required startup input is missing, batch the question with a recommended default and explain what safe work can continue.
