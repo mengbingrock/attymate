@@ -1,0 +1,55 @@
+# Matter Planning Playbook
+
+Legal Ops Supervisor uses this playbook whenever a user request, monitor finding, new source, or litigation event may affect a matter. The goal is to identify the matter, map the event, and plan all triggered workstreams at once.
+
+## Matter Resolution
+
+1. Check the parent issue, Firm Operations Guide matter mapping, and any supplied issue context for an existing matter match.
+2. Match by lawyer-provided label, case number, court, parties, source summary, or existing matter context index. Do not inspect unrelated matter folders to guess.
+3. If the match is reliable, attach the event to the existing parent matter issue and update the Matter Status Digest.
+4. If no reliable match exists but the user clearly wants new matter setup, create a new parent matter issue with a tentative label and safe source scope.
+5. If neither is clear, ask one plain-language question with practical choices before creating specialist child issues.
+
+## Event Plan
+
+For each matter event, create or update a concise Matter Plan on the parent issue. Classify each possible workstream as:
+
+- `create now` - safe, source-bound work can begin with the current scope.
+- `schedule/monitor` - timing should be tracked through a proposed deadline table, issue monitor, or routine where supported.
+- `conditional on lawyer strategy` - prepare the question or recommendation, but do not draft or launch the strategy-dependent work until confirmed.
+- `blocked on source/approval` - name the missing source, profile, or hard-gate approval.
+- `no action with reason` - explain why the workstream is not needed.
+
+Use the active Matter Safety Contract, not hidden memory, as the source of authority for child issues. Each child issue should include the relevant matter context artifact paths from `references/matter-context-artifacts.md`, not the full folder by default.
+
+## Common Event Patterns
+
+| Event | Workstreams to consider |
+| --- | --- |
+| New complaint or amended complaint | Source intake, pleading/service index, party/counsel/court info, procedural history, responsive deadline proposal, strategy questions, possible research, drafting plan |
+| Answer received | Source intake, procedural history update, deadline review, discovery planning, form interrogatories if strategy confirms, demurrer/strike or other response only if strategy confirms, party/counsel updates |
+| Discovery served or received | Source index, discovery tracker, response deadline proposal, deficiency review, meet-and-confer plan, motion-to-compel pathway if strategy confirms |
+| New order or hearing notice | Source intake, procedural history, calendar proposal, court/rules check, drafting or compliance tasks if required |
+| Docket change | Docket report, procedural history update, calendar proposal if deadlines may change, Legal Ops triage before substantive child issues |
+| Email or calendar monitor finding | Triage summary, matter match/new matter decision, source approval question if needed, then scoped child issues |
+
+## Child Issue Rules
+
+- Set `parentId` to the matter parent issue.
+- Assign the correct specialist agent.
+- Include the focused Matter Safety Contract fields needed for the child.
+- Include a small relevant artifact set, based on the tiered context rules.
+- Do not create every possible downstream drafting issue as active work when it depends on lawyer strategy. Create a strategy-confirmation question or a blocked/conditional planning item instead.
+- Use Calendar Agent for proposed deadlines and pre-deadline reminders. Calendar writes, invites, notifications, and emails remain hard gates.
+
+## Completion Standard
+
+A matter planning pass is complete when the parent issue shows:
+
+- existing matter match or new matter creation decision;
+- the event being planned;
+- all plausible workstreams classified;
+- child issues created for safe work now;
+- scheduled/monitor items recorded where supported;
+- strategy, source, or approval blockers batched into the smallest useful lawyer question;
+- Matter Status Digest updated with whether the lawyer needs to act.

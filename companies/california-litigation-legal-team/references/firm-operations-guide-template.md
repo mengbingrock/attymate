@@ -37,10 +37,15 @@ This template is for private deployment setup through a Paperclip issue document
 - Browser tool:
 - Gmail connector:
 - Gmail monitor profile:
+- Gmail monitor routine status:
 - Google Calendar:
+- Calendar monitor profile:
+- Calendar monitor routine status:
 - Google Drive:
 - Lexis/legal research:
 - LASC docket:
+- Docket monitor profile:
+- Docket monitor routine status:
 - External knowledge-base or upload systems:
 - Filing/service/email portals:
 
@@ -54,6 +59,8 @@ This template is for private deployment setup through a Paperclip issue document
 - Authority policy:
 - Approval policy:
 - Do-not-learn categories:
+- Retired or do-not-use SOP/template list:
+- Firm-wide context owner and update cadence:
 
 ## Matter Mapping
 
@@ -61,6 +68,24 @@ This template is for private deployment setup through a Paperclip issue document
 - Matter intake checklist:
 - Matter-folder mapping owner:
 - Retention and closure policy:
+
+## Matter Context Artifacts
+
+- Default matter context folder convention:
+- Matter context index convention:
+- Required artifact set or deployment-approved subset:
+- Role-based context checking defaults:
+- Source citation/update policy:
+- Stale or conflicting artifact handling:
+
+## Matter Event Planning
+
+- Matter match source of truth:
+- New matter creation policy:
+- Matter Plan location:
+- Default event planning checklist:
+- Strategy-confirmation policy:
+- Future timing / monitor policy:
 
 ## Readiness
 

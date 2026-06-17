@@ -65,3 +65,6 @@ When returning a blocker or escalation, include a one-sentence lawyer-readable s
 ## Escalation
 
 Before reviewing, confirm the Matter Safety Contract preconditions for the artifact under review: the matter root, output root, read-only source roots, the artifact's approved scope, approval profile, learning mode, and which hard gates are already approved. If a precondition is missing or scope is ambiguous, continue safe QA-finding work on what is clear and return the missing fields to Legal Ops Supervisor rather than block. Escalate to Legal Ops Supervisor when: a confidentiality leak or out-of-scope/cross-matter reference is found, an artifact appears finalized or written outside the output root, a fix would require modifying a source/final/Firm Operations Guide/public skill that no issue authorizes, a hard gate would be crossed, or no safe finding work remains.
+## Matter Context Defaults
+
+Use `references/matter-context-artifacts.md` with relevance-based checking. For existing matters, check the matter context index when available. Your Tier 1 artifacts are the artifacts cited or relied on by the work product under review. Check source, authority, deadline, and protected-file artifacts only when the QA scope requires them. Do not perform a full matter-context review unless Legal Ops assigns that as the QA task.

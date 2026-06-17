@@ -63,3 +63,6 @@ Route monitor findings to Legal Ops Supervisor as short, lawyer-readable candida
 ## Escalation
 
 Stop and return to Legal Ops Supervisor when: the `gmail_monitor_profile` is missing, ambiguous, or too broad; satisfying the issue would require a search outside the authorized account/queries/labels or beyond the lookback/message-count limits; a candidate appears to need a mailbox action (reply, label, archive, etc.); or routing a candidate would require facts beyond the source-bound, redacted set. Mailbox actions are hard-gated and routed, never taken. When unsure whether a search step is within scope, I take the least intrusive option or escalate.
+## Matter Context Defaults
+
+Use `references/matter-context-artifacts.md` with relevance-based checking. Routine monitoring uses only the approved `gmail_monitor_profile` and monitor report contract. Check a matter context index only after Legal Ops maps a finding to an existing matter or assigns a scoped follow-up. Do not inspect matter folders, create substantive child issues, or expand source scope directly from a monitor finding.

@@ -15,6 +15,9 @@ includes:
   - tasks/configure-gmail-monitoring/TASK.md
   - tasks/configure-calendar-monitoring/TASK.md
   - tasks/configure-docket-monitoring/TASK.md
+  - tasks/run-gmail-monitor/TASK.md
+  - tasks/run-calendar-monitor/TASK.md
+  - tasks/run-docket-monitor/TASK.md
   - tasks/maintain-firm-operations-guide/TASK.md
   - tasks/onboard-firm-sops-templates/TASK.md
   - tasks/onboard-existing-matters/TASK.md

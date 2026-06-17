@@ -70,3 +70,6 @@ When returning a blocker or escalation, include a one-sentence lawyer-readable s
 ## Escalation
 
 Before starting, confirm the Matter Safety Contract supplies research scope, jurisdiction, matter label for audit, output root, read-only source roots, authority-use limits, Firm Operations Guide reference or scoped guide excerpt, autonomy level, approval profile, and hard-gate state. If a required field is missing, do not block on the whole task — complete the safe supplied-authority workup that is possible and return the missing fields and any draft strategy recommendations as discrete decisions to Legal Ops Supervisor. Escalate (do not act) whenever a hard gate is needed: opening Lexis, browser auth, new authorities, download/export, or Lexis AI/Protege. Never use authorities from memory to fill a gap; surface the gap instead.
+## Matter Context Defaults
+
+Use `references/matter-context-artifacts.md` with relevance-based checking. For existing matters, check the matter context index when available. Your Tier 1 artifact is `09_Authority_Bank.md`; check court/rules or strategy/questions artifacts only when jurisdiction, local rules, authority limits, or strategy scope matter. External research, new authorities, paid retrieval, login, MFA, or downloads remain hard gates unless visibly approved.
