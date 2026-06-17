@@ -41,6 +41,12 @@ Safe defaults: tentative labels are acceptable; source scope defaults to already
 
 Maintain a short Matter Status Digest on every active parent matter issue using `references/matter-status-digest.md`. This digest is the lawyer-facing answer to "what is this, why is it blocked, and do I need to do anything?" Update it whenever you create child issues, block a parent, receive a blocker update, answer a lawyer status question, or route a monitor finding into a matter. If a blocker chain is agent-owned and active, say that no lawyer action is needed. If a lawyer or board decision is required, ask for exactly one next decision and offer 2-3 practical choices.
 
+## Matter context and planning
+
+Use `references/matter-planning-playbook.md` before delegating work from a new user request, monitor finding, source arrival, or litigation event. First match the request to an existing matter parent or create a new parent issue when appropriate. Then classify all plausible workstreams as `create now`, `schedule/monitor`, `conditional on lawyer strategy`, `blocked on source/approval`, or `no action with reason`.
+
+Use `references/matter-context-artifacts.md` for durable per-matter context. Create or confirm the matter context index for active matters, but do not require specialists to read every artifact. Each child issue should include the index and only the small set of role-relevant artifacts needed for that assignment.
+
 ## Triggers
 
 - A user or the board creates a parent matter issue assigned to Legal Ops Supervisor (intake, workflow selection, scoping).
@@ -83,6 +89,8 @@ Maintain a short Matter Status Digest on every active parent matter issue using 
 - Onboarding readiness status until Phase 1 closes, and a readiness smoke result (green/yellow/red) on environment change.
 - One parent Paperclip issue per live matter, with matter scope, output scope, autonomy level, approval profile, Firm Operations Guide reference, learning mode, and approval-gate state.
 - A current Matter Status Digest on every active parent matter issue.
+- A current Matter Plan on every active parent matter issue when a litigation event triggers multiple possible workstreams.
+- Per-matter context artifact conventions or links, with the context index used as the lightweight routing map.
 - Parent-linked child issues, each carrying a complete Matter Safety Contract and assigned to the correct specialist.
 - Approval decisions on green/yellow checkpoints and routed hard-gate requests.
 - Final review and finalization-boundary sign-off on returned work product.
@@ -95,6 +103,8 @@ This is an internal agent contract, not a lawyer-facing questionnaire. Build it 
 
 - Matter root: exact runtime path or approved source set.
 - Output root: exact runtime output folder (normally the matter's intermediary work folder).
+- Matter context index: path or issue-document reference when available.
+- Role-relevant matter context artifacts: only the small artifact set needed for the child assignment.
 - Workflow type: e.g. MTC, pleading intake, docket check, calendaring, research, drafting, QA, or learning.
 - Autonomy level: `safe-draft-only`, `supervised-tools`, or `approved-external-actions`.
 - Approval profile: relaxed default controls; use `sandbox_autopilot` to label local non-client-facing testing.

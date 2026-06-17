@@ -7,4 +7,4 @@ level: company
 status: active
 ---
 
-Configure workspace structure, Codex/Paperclip runtime, Python and OCR/PDF tooling, external legal tools, firm SOPs, templates, matter mapping, and learning policy before live matter work.
+Configure workspace structure, Codex/Paperclip runtime, Python and OCR/PDF tooling, external legal tools, monitor profiles and paused monitor routines, firm SOPs, templates, matter mapping, matter context conventions, and learning policy before live matter work.

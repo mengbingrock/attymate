@@ -14,6 +14,6 @@ Define `calendar_monitor_profile`: connector status, authorized calendars or cal
 
 Also define how Calendar findings should be summarized for a lawyer: one-sentence lawyer summary, recommended next action, and the exact approval or source choice needed if Legal Ops must ask for more access.
 
-If the profile is approved, propose or create a Paperclip routine assigned to `calendar-agent` with status `paused` until the board/operator enables it. Use `coalesce_if_active` and `skip_missed` unless the profile says otherwise. The routine output must follow `references/monitoring-report-contract.md` and report findings to Legal Ops Supervisor.
+Verify the imported Paperclip routine `run-calendar-monitor` exists, is assigned to `calendar-agent`, has a schedule trigger, uses `coalesce_if_active` and `skip_missed`, and remains `paused` until the board/operator enables it. If the routine is missing, create it from the company package defaults or mark this setup issue blocked with a product/setup note; do not mark Calendar monitoring configured when no routine exists. The routine output must follow `references/monitoring-report-contract.md` and report findings to Legal Ops Supervisor.
 
 Calendar monitoring is read-only. Do not create, update, delete, invite, notify, email, or otherwise write to any calendar system without visible hard-gate approval on the issue. Add a section-ready update or direct document edit to `firm-operations-guide`.

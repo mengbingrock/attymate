@@ -12,7 +12,7 @@ It packages one board-facing Legal Ops Supervisor, reusable specialist agents, a
 | Tone | `green` |
 | Agents | 10 |
 | Projects | 1 (Firm Onboarding) |
-| Tasks | 12 (onboarding) |
+| Tasks | 15 (onboarding and paused monitor routines) |
 | Goals | 4 |
 | Skills | 9 |
 
@@ -29,6 +29,8 @@ Identity and constraints live in [COMPANY.md](COMPANY.md); operating governance 
 Default intake is **Light Intake Mode**. Legal Ops starts from the user's description, an already-approved monitor summary, or an approved source list; produces an intake summary, missing-input list, and proposed next step; and asks for only the next decision needed to continue. Legal Ops prepares the Matter Safety Contract internally from plain-language answers. Local/source-bound work, output-root artifacts, new output-root working copies, draft recommendations, QA, issue updates, and internal routing proceed without human approval when scope is clear; hard gates still require visible approval.
 
 Active parent matter issues should also carry a **Matter Status Digest**. This is the lawyer-facing summary that explains what the matter is, what the team already did, what is blocking progress, who owns the next step, whether the lawyer needs to act, and what happens next. Technical blocker chains stay available for audit, but they should not be the first thing a lawyer has to decode.
+
+Matter context is reusable but relevance-based. Legal Ops should create or confirm a matter context index for active matters, and specialists should check only the context artifacts relevant to their role and assignment. See `references/matter-context-artifacts.md` for the tiered checking rule and role defaults.
 
 ## Org chart
 
@@ -72,7 +74,7 @@ Each agent is defined by four files: `AGENTS.md` (role, triggers, handoffs, deli
 
 ## Projects
 
-- [Firm Onboarding](projects/firm-onboarding/PROJECT.md) — import-time onboarding to configure workspace, runtime, local tools, connectors, Gmail/Calendar/Docket monitor profiles, SOPs, matter mapping, and policy before any live matter work. Twelve onboarding tasks, all owned by the Legal Ops Supervisor.
+- [Firm Onboarding](projects/firm-onboarding/PROJECT.md) — import-time onboarding to configure workspace, runtime, local tools, connectors, Gmail/Calendar/Docket monitor profiles, SOPs, matter mapping, and policy before any live matter work. Twelve setup tasks are owned by the Legal Ops Supervisor, and three paused recurring monitor tasks are imported for Gmail, Calendar, and Docket monitoring.
 
 The subpoena motion-to-compel workflow is a skill-triggered workflow owned by Legal Ops and the unified specialists — not an import-time project or a separate sub-organization. Live work begins only from a user-created parent issue with a complete Matter Safety Contract.
 
@@ -114,6 +116,8 @@ If an onboarding task is substantively complete but the issue cannot be marked d
 - Configure external-tool access before use: BrowserOS or equivalent browser tooling, Gmail, Google Calendar, Google Drive, Lexis, LASC, external knowledge-base/upload systems, filing, service, and upload/download workflows.
 - Configure `gmail_monitor_profile`, `calendar_monitor_profile`, `docket_monitor_profile`, and `monitoring_report_policy` before enabling monitor routines.
 - Keep monitor routines paused until the board/operator approves the profile and schedule. Monitor reports go to Legal Ops Supervisor; monitors do not open substantive legal work directly.
+- Use `references/matter-planning-playbook.md` when a new event arrives. Legal Ops should match or create the matter parent, classify all plausible workstreams, create child issues for safe work now, and record strategy/source/approval blockers in one batched plan.
+- Use `references/matter-context-artifacts.md` to create or maintain matter context. Agents should check the matter context index plus role-relevant artifacts, not the entire context folder by default.
 - Keep the completed Firm Operations Guide private to the deployment.
 - Start live work only from a parent issue assigned to Legal Ops Supervisor.
 - Keep the parent issue's Matter Status Digest current whenever child issues are created, blockers change, or the lawyer asks for status.

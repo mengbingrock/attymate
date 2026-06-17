@@ -11,6 +11,7 @@ Use this when a lawyer gives a short request, a monitor routes a candidate, or s
 Include:
 
 - Matter Status Digest using `references/matter-status-digest.md`.
+- Matter Plan using `references/matter-planning-playbook.md` if the intake may trigger multiple workstreams.
 - One-sentence understanding of the request.
 - Current safe source scope, defaulting to monitor summary or issue text only.
 - Tentative matter label, if available.
@@ -36,6 +37,7 @@ Title: Run subpoena MTC package for selected matter
 Include:
 
 - Matter Status Digest using `references/matter-status-digest.md`.
+- Matter Plan that classifies all known MTC-related workstreams.
 - Matter Safety Contract with workflow type `MTC`.
 - Selected matter root or approved source set.
 - Output root.
@@ -56,6 +58,7 @@ Use this when testing the company template, running demos, exercising benchmark 
 Include:
 
 - Matter Status Digest using `references/matter-status-digest.md`.
+- Matter Plan for the test event or workflow.
 - Matter Safety Contract with the target workflow type.
 - `approval_profile: sandbox_autopilot`.
 - Autonomy level, normally `supervised-tools`.
@@ -78,4 +81,4 @@ Include:
 - QA review: assigned to Legal QA Agent. Source discipline, authority discipline, placeholders, confidentiality, finalization boundaries.
 - Practice learning: assigned to Practice Learning Agent only when learning mode is enabled.
 
-Each child issue must include a focused Matter Safety Contract. Do not create these children during package import.
+Each child issue must include a focused Matter Safety Contract and the role-relevant matter context artifacts from `references/matter-context-artifacts.md`. Do not create these children during package import.

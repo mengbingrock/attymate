@@ -10,6 +10,8 @@ This is an internal coordination contract. Lawyers should not be asked to fill i
 - Firm guide reference: private Firm Operations Guide issue-document section or scoped guide excerpt that defines workspace, tools, connectors, and approval policy.
 - Matter root: exact selected matter folder or approved source set supplied at runtime.
 - Output root: exact allowed output location, normally the matter's intermediary work folder.
+- Matter context index: optional path or issue-document reference to `00_Matter_Context_Index.md` for existing matters.
+- Role-relevant matter context artifacts: optional small artifact set selected under `references/matter-context-artifacts.md`; do not require every agent to read the whole matter context folder.
 - Read-only source roots: explicit folders or files the child may inspect, such as exhibits, context, authorities, examples, pleadings, or docket materials.
 - Forbidden roots: all other matters; gold, final, signed, filed, served, or user-edited documents unless expressly approved.
 - Allowed outputs: new intermediary artifacts, OCR sidecars, QA notes, research logs, proposed calendar tables, draft text, or new working draft copies appropriate to the child issue.
@@ -25,6 +27,8 @@ Supervisor delegation requirements:
 - If a contract field is missing, ask one natural-language question or offer 2-3 concrete choices instead of returning the full checklist to the lawyer.
 - Start every live matter workflow from one parent Paperclip issue assigned to Legal Ops Supervisor.
 - Complete read-only intake before implementation child issues are created when the workflow requires matter selection or source scoping.
+- Use `references/matter-planning-playbook.md` to classify all plausible workstreams before delegating isolated child issues from a new event.
+- Use `references/matter-context-artifacts.md` to pass only the context index and role-relevant artifacts each child needs.
 - Create child issues dynamically from the parent issue; do not rely on import-time MTC starter tasks.
 - Set `parentId` on every child issue to the Legal Ops parent issue.
 - Assign each child issue to the correct specialist agent.

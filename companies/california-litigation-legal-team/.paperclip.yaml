@@ -294,3 +294,31 @@ inputs:
       kind: path
       requirement: runtime
       description: Supplied per issue through the Matter Safety Contract, not stored in the reusable package.
+routines:
+  run-gmail-monitor:
+    status: "paused"
+    priority: "medium"
+    concurrencyPolicy: "coalesce_if_active"
+    catchUpPolicy: "skip_missed"
+    triggers:
+      - kind: schedule
+        cronExpression: "0 8-18 * * 1-5"
+        timezone: "America/Los_Angeles"
+  run-calendar-monitor:
+    status: "paused"
+    priority: "medium"
+    concurrencyPolicy: "coalesce_if_active"
+    catchUpPolicy: "skip_missed"
+    triggers:
+      - kind: schedule
+        cronExpression: "0 8 * * 1-5"
+        timezone: "America/Los_Angeles"
+  run-docket-monitor:
+    status: "paused"
+    priority: "medium"
+    concurrencyPolicy: "coalesce_if_active"
+    catchUpPolicy: "skip_missed"
+    triggers:
+      - kind: schedule
+        cronExpression: "0 9 * * 1"
+        timezone: "America/Los_Angeles"

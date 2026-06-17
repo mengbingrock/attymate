@@ -42,3 +42,9 @@ BrowserOS, Lexis, LASC, Gmail, Google Calendar, Google Drive, Word / live-draft 
 - Hiring a temporary/specialized agent requires a documented scope, manager, skills, budget/time bound, access limits, approval gates, and retirement condition — never to bypass a missing approval, a matter-scope limit, a confidentiality rule, or an external-tool gate.
 - Check `PROJECT-INVENTORY.md` before creating or delegating a deliverable so work is not duplicated.
 - If a matter or output scope is unclear and no safe work remains, mark the issue `blocked` and ask for one concrete next answer with 2-3 practical choices.
+## Matter Planning Tools
+
+- Matter context artifacts: `references/matter-context-artifacts.md`.
+- Matter planning playbook: `references/matter-planning-playbook.md`.
+- For every new event, match or create the matter parent first, then classify all plausible workstreams before delegating isolated child issues.
+- Pass specialists the matter context index plus the small role-relevant artifact set; do not force them to read every context file.
