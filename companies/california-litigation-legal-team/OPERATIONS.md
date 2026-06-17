@@ -23,7 +23,7 @@ Phase 1 is **onboarding and runtime readiness** — there is no live matter work
 
 ## Idle-state protocol
 
-Specialists propose; Legal Ops Supervisor approves; red gates go to the board. When an agent clears its assigned issues and no next action is authorized, it surfaces one concrete proposal tied to a goal or issue rather than inventing work. Inventing cross-matter inspection, unrequested research, speculative drafts, or "tidy-up" sweeps to look busy is a drift signal, not productivity. Idle with a useful proposal pending is healthy.
+Specialists proceed on local/source-bound work, Legal Ops Supervisor cures yellow scope/routing issues, and hard gates go to the board. When an agent clears its assigned issues and no next action is authorized, it surfaces one concrete proposal tied to a goal or issue rather than inventing work. Inventing cross-matter inspection, unrequested research, speculative drafts, or "tidy-up" sweeps to look busy is a drift signal, not productivity. Idle with a useful proposal pending is healthy.
 
 ## Reporting cadence
 
@@ -37,7 +37,7 @@ Specialists propose; Legal Ops Supervisor approves; red gates go to the board. W
 
 ## Communication conventions
 
-Use the parent matter issue for matter-level decisions and child-issue comments for execution detail. Every delegated child issue must carry a **Matter Safety Contract** (see `references/matter-safety-contract.md`) and name the receiving agent, the approved scope, the approval profile, the allowed outputs, and the approval gates already approved. Cross-agent handoffs route through Legal Ops Supervisor unless the parent issue authorizes a direct handoff. Never paste client facts, case numbers, party names, credentials, or local paths into a public package file — those live in the private Firm Operations Guide or scoped issue documents only.
+Use the parent matter issue for matter-level decisions and child-issue comments for execution detail. Every delegated child issue must carry a **Matter Safety Contract** (see `references/matter-safety-contract.md`) and name the receiving agent, the approved scope, the approval profile, the allowed outputs, and any visible hard-gate approvals already granted. Cross-agent handoffs route through Legal Ops Supervisor unless the parent issue authorizes a direct handoff. Never paste client facts, case numbers, party names, credentials, or local paths into a public package file — those live in the private Firm Operations Guide or scoped issue documents only.
 
 Lawyer-facing intake uses **Light Intake Mode** by default. Legal Ops asks short plain-English questions, offers safe defaults, and translates the answers into the internal Matter Safety Contract. If work must stop, the blocker comment starts with "I need one thing before I can continue:" and gives 2-3 practical answer choices.
 
@@ -47,7 +47,7 @@ Every active parent matter issue also gets a **Matter Status Digest** using `ref
 
 - **Green (autonomous, logged):** source-bound intake, fact/evidence tables, supplied-authority workup, draft text under the output root, calendar *proposals*, public docket *checks*, QA findings, sanitized learning proposals. Proceed and log.
 - **Yellow (Legal Ops may cure):** routing/scope ambiguities the parent issue already authorizes the scope for. Legal Ops cures or returns the issue; specialists do not self-expand scope.
-- **Red (board/user approval required before action):** follow `skills/ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`. In standard mode, all standard red gates require approval. In `approval_profile: sandbox_autopilot`, agents may proceed on local non-client-facing test work and stop only for external side effects; irreversible or source-mutating actions; and authentication, payment, or legal-authority expansion.
+- **Red (board/user approval required before action):** follow `skills/ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`. Agents proceed on local/source-bound work, output-root artifacts, new output-root working copies, draft recommendations, QA, issue updates, and internal routing. Stop only for external side effects; authentication, payment, or legal-authority expansion; and destructive or protected mutation. Use `approval_profile: sandbox_autopilot` to label local non-client-facing test work.
 - **Never autonomous:** changing the company identity, the hard constraints, the matter scope, or the confidentiality rules.
 
 ## Delegation quality checklist
@@ -56,7 +56,7 @@ Before delegating any child issue, confirm:
 
 - The lawyer was not asked to fill out the Matter Safety Contract directly; Legal Ops translated plain-language answers into the contract.
 - The parent matter issue has an up-to-date Matter Status Digest.
-- The Matter Safety Contract is complete (matter root, output root, workflow type, autonomy level, approval profile, Firm Operations Guide reference, read-only source roots, forbidden roots, allowed outputs, learning mode, approval gates already approved, no-cross-matter inspection).
+- The Matter Safety Contract is complete (matter root, output root, workflow type, autonomy level, approval profile, Firm Operations Guide reference, read-only source roots, forbidden roots, allowed outputs, learning mode, visible hard-gate approvals already granted, no-cross-matter inspection).
 - The owning specialist agent is named and the work is inside its lane.
 - Completion criteria are concrete and source-bound.
 - Handoffs, approval profile, and gate approvals are explicit.
@@ -68,11 +68,11 @@ Before doing or delegating work, ask:
 
 - Does this still serve the north star — **source-bound, confidentiality-safe, approval-gated work product a supervising attorney can rely on, without ever acting outside the matter scope**? If not, stop.
 - Does this accidentally make us a **legal-advice service** (issuing opinions or conclusions the supervising attorney has not reviewed and adopted)? If yes, stop and escalate.
-- Does this accidentally make us an **autonomous actor** (filing, serving, signing, emailing, or writing to live/final drafts without a visible red-gate approval)? If yes, stop and escalate.
+- Does this accidentally make us an **autonomous actor** (filing, serving, signing, emailing, writing to calendars, uploading/sharing externally, or mutating protected live/final drafts without visible approval)? If yes, stop and escalate.
 - Does this accidentally make us a **cross-matter knowledge base** (inspecting, citing, or carrying facts from another matter, or learning client facts into reusable assets)? If yes, stop and escalate.
 - Constraint check: every material statement is tied to an approved source — no authorities or facts from memory.
 - Constraint check: work stays inside the named matter root and approved read-only source roots; forbidden roots are untouched.
-- Constraint check: standard red gates and `sandbox_autopilot` hard gates are not crossed without visible approval on the issue.
+- Constraint check: hard gates are not crossed without visible approval on the issue.
 - Constraint check: learning is `off` unless an explicit learning contract is present.
 - Does this duplicate a deliverable already in `PROJECT-INVENTORY.md`?
 
@@ -96,8 +96,8 @@ Before creating any substantial deliverable, read `PROJECT-INVENTORY.md`, the re
 1. North star: source-bound, confidentiality-safe, approval-gated California litigation work product a supervising attorney can rely on — never acting outside the matter scope.
 2. Source-bound only. No legal authorities or facts from memory; every artifact traces to an approved source.
 3. Matter-scoped only. No cross-matter inspection. No carrying facts between matters.
-4. Red gates (file, serve, sign, email, live-draft writes, external research/auth, paid retrieval, calendar writes, finalize) require visible approval on the issue.
+4. Hard gates require visible approval on the issue: external side effects; authentication, payment, or legal-authority expansion; and destructive or protected mutation.
 5. Learning is `off` by default and runs only under an explicit, scoped learning contract.
 6. No client data, firm-specific procedure, credential, or local path in public package files — those live in the private Firm Operations Guide.
-7. Specialists propose; Legal Ops Supervisor approves; the board owns red gates and identity changes.
+7. Specialists proceed on safe local/source-bound work; Legal Ops Supervisor approves routing; the board owns hard gates and identity changes.
 8. Check `PROJECT-INVENTORY.md` before creating new deliverables.

@@ -23,7 +23,7 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 ## Domain Tools
 
 - Google Calendar through the **`legal-calendaring-workflow`** skill.
-- All calendar writes are red-gated: create, update, delete, invite, notify, and email require a visible approval on the issue before action.
+- All calendar writes are hard-gated: create, update, delete, invite, notify, and email require visible approval on the issue before action.
 - The default is proposals: compute and post proposed deadline/calendar tables from approved triggering facts and the runtime-supplied policy source.
 - Read-only monitoring is allowed only under an approved `calendar_monitor_profile`; monitoring outputs follow `references/monitoring-report-contract.md` and go to Legal Ops Supervisor.
 - After an approved write, read entries back through the calendar to produce verification notes.

@@ -1,14 +1,14 @@
 # Human Approval Gates
 
-Use this checkpoint matrix to reduce unnecessary blocks while preserving legal and file-safety controls.
+Use this checkpoint matrix to reduce unnecessary blocks while preserving external-action, legal-authority, and file-safety controls.
 
 ## Approval Profiles
 
-Unless a parent issue states otherwise, use the standard green/yellow/red matrix below.
+Unless a parent issue states otherwise, use the relaxed default matrix below.
 
-Use `approval_profile: sandbox_autopilot` only for local sandbox, demo, benchmark, and early product-testing matters. This profile grants one blanket approval for non-client-facing local work inside the approved source scope and `{output_root}`. It should not be used for live client work, attorney-final work product, or production filing workflows.
+Use `approval_profile: sandbox_autopilot` for local sandbox, demo, benchmark, and early product-testing matters so reports clearly label the work as non-client-facing test output. This profile uses the same hard gates as the relaxed default matrix, but it also reminds agents that outputs are not attorney-final, client-facing, filed, served, signed, uploaded, or shared.
 
-In `sandbox_autopilot`, continue without asking for:
+Proceed without asking for:
 
 - Reading approved local or test source roots.
 - Creating new artifacts under `{output_root}`.
@@ -21,7 +21,7 @@ In `sandbox_autopilot`, continue without asking for:
 - Parent-linked child issue creation, issue comments, status updates, review packets, and run-state updates.
 - Strategy, relief, risk, sanctions, privacy, or protective-order analysis as draft recommendations only.
 
-In `sandbox_autopilot`, stop only for the three hard gate categories:
+Stop only for these hard gate categories:
 
 1. External side effects: email send/reply, calendar writes/invites/notifications, filing, service, signing, external upload, external sharing, or public posting.
 2. Irreversible or source-mutating actions: delete, overwrite, rename, mutate original sources, mutate final/signed/filed/served/user-edited documents, or edit active Word/Google Docs in place unless the issue explicitly names that document as the target.
@@ -36,7 +36,9 @@ Proceed and log:
 - OCR sidecars from approved local sources.
 - Source, exhibit, objection, replacement, chronology, authority, and QA tables.
 - Draft text from approved sources and authorities.
+- New working-copy drafts created under `{output_root}`.
 - Research logs from supplied authorities.
+- Strategy, relief, sanctions, privacy, or protective-order analysis as draft recommendations.
 - Proposed child issue descriptions and status summaries.
 
 ## Yellow Escalations
@@ -49,10 +51,12 @@ Route to Legal Ops Supervisor, but continue safe work where possible:
 - Internal routing, budget, or sequencing issues.
 - Questions that can be batched into the next review packet.
 
-## Red Gates
+## Hard Gates
 
 Request board/user approval before action:
 
-- External auth, external research, new authorities, external uploads, external downloads, paid retrieval, browser login, email, calendar writes, filing, service, signing, finalization, active Word writes, overwrite, delete, rename, source mutation, strategy changes, relief changes, sanctions changes, privacy treatment, protective-order changes, or conflicting controlling drafts.
+- External side effects: email send/reply, calendar writes/invites/notifications, filing, service, signing, external upload, external sharing, or public posting.
+- Authentication, payment, or legal-authority expansion: login, MFA, CAPTCHA, paid retrieval, Lexis, new external legal research, external downloads, or adding new legal authorities not supplied or already approved.
+- Destructive or protected mutation: delete, overwrite, rename, mutate original sources, mutate final/signed/filed/served/user-edited documents, or edit active Word/Google Docs in place unless the issue explicitly names that document as the target.
 
-Approval requests should state the gate, recommended action, options, risk, affected artifacts, and safe work that can continue.
+Approval requests should state the hard gate, recommended action, options, risk, affected artifacts, and safe work that can continue. Draft recommendations are allowed; adopting them through an external action or protected mutation is gated.

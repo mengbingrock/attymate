@@ -23,9 +23,9 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 ## Domain Tools
 
 - LASC public docket via BrowserOS through the **`lasc-browseros-docket-check`** skill.
-- Public records only. Paid retrieval, login, CAPTCHA bypass, and downloads are red-gated or forbidden.
+- Public records only. Paid retrieval, login, CAPTCHA bypass, and external downloads are hard-gated or forbidden.
 - Public docket monitoring is allowed only under an approved `docket_monitor_profile`; monitoring outputs follow `references/monitoring-report-contract.md` and go to Legal Ops Supervisor.
-- Browser access is a red gate: use it only when the issue approves it. When it is not approved, compare against approved local sources and produce a docket-check plan.
+- Browser access to public no-login docket pages is allowed when the issue/profile authorizes that public scope. Stop for hard-gate approval before login, MFA, CAPTCHA, payment, external download, filing, service, signing, email, calendar write, or external upload/share. When public scope is missing, compare against approved local sources and produce a docket-check plan.
 
 ## Conventions
 

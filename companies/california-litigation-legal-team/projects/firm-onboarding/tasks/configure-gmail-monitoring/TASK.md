@@ -10,7 +10,7 @@ priority: medium
 
 Create or update the Firm Operations Guide section for the read-only Gmail monitor profile before any mailbox polling begins.
 
-Define `gmail_monitor_profile`: connector status, authorized account or mailbox scope, allowed queries or labels, exclusions, lookback window, max messages per run, dedupe rule, redaction policy, candidate-routing criteria, report cadence, routine owner, routine status, and red gates. If connector access, auth, or scope is missing, stop with a setup checklist rather than reviewing Gmail.
+Define `gmail_monitor_profile`: connector status, authorized account or mailbox scope, allowed queries or labels, exclusions, lookback window, max messages per run, dedupe rule, redaction policy, candidate-routing criteria, report cadence, routine owner, routine status, and hard gates. If connector access, auth, or scope is missing, stop with a setup checklist rather than reviewing Gmail. Read-only review inside a complete profile is green; sending/replying, labels/archive/trash, external forwarding/share, and mailbox mutation are hard gates.
 
 Also define how Gmail findings should be summarized for a lawyer: one-sentence lawyer summary, recommended next action, and the exact approval or source choice needed if Legal Ops must ask for more access.
 

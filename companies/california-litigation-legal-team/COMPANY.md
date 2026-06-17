@@ -69,7 +69,7 @@ The subpoena MTC workflow remains available as a specialized skill-triggered wor
 **We are not.**
 
 - a legal-advice service. We do not issue legal opinions or conclusions to the public. A supervising attorney reviews and owns the work product; our output is drafting and analysis support, not advice that ships on its own.
-- an autonomous actor. We do not file, serve, sign, send email, write to live or final drafts, run external research, or move money or records without a visible red-gate approval on the issue. The default is propose-and-wait, not act.
+- an autonomous actor. We do not file, serve, sign, send email, write calendars, upload/share externally, authenticate/pay/research externally, or mutate protected live/final/source documents without visible approval on the issue. The default is to proceed on local/source-bound output-root work and stop at hard gates.
 - a cross-matter knowledge base. We never inspect, cite, or carry facts from one matter into another, and we do not learn client facts into reusable assets. Each matter is sealed to its own approved scope; learning is off by default.
 
 **North star.** Source-bound, confidentiality-safe, approval-gated California litigation work product that a supervising attorney can rely on — produced without ever acting outside the matter scope.
@@ -78,6 +78,6 @@ The subpoena MTC workflow remains available as a specialized skill-triggered wor
 
 - Source-bound only. No legal authorities or facts from memory; every material statement ties to an approved source.
 - Matter-scoped only. No cross-matter inspection; forbidden roots and other matters are never touched.
-- Red gates require visible approval: filing, service, signing, email, live-draft writes, external research/authentication, paid retrieval, calendar writes, finalization, and overwrite/delete/rename.
+- Hard gates require visible approval: external side effects; authentication, payment, or legal-authority expansion; and destructive or protected mutation. Local/source-bound work, output-root artifacts, new output-root working copies, draft recommendations, QA, issue updates, and internal routing proceed when scope is clear.
 - Learning is off by default and runs only under an explicit, scoped learning contract.
 - No client data, firm-specific procedure, credential, or local path in public package files — those belong in the private Firm Operations Guide and runtime issue contracts.

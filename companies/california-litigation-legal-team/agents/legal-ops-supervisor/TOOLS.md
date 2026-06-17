@@ -31,7 +31,7 @@ Use `references/matter-status-digest.md` for active parent matter summaries. The
 
 ## External tools
 
-BrowserOS, Lexis, LASC, Gmail, Google Calendar, Google Drive, Word / live-draft writes, and filing / service / signing are all RED-GATED and delegated to the relevant specialist under an approved Matter Safety Contract. This agent grants or withholds those gates and routes red-gate requests to the board; it does not operate these tools directly.
+BrowserOS, Lexis, LASC, Gmail, Google Calendar, Google Drive, Word / live-draft writes, and filing / service / signing are delegated to the relevant specialist under an approved Matter Safety Contract. This agent grants or withholds hard gates and routes hard-gate requests to the board; it does not operate external/protected tools directly. Routine local/source-bound work, output-root artifacts, working-copy drafts, QA, issue updates, and internal routing proceed without extra approval when scope is clear.
 
 ## Conventions
 

@@ -44,7 +44,7 @@ The Facts & Evidence Agent builds the firm's factual backbone for a matter: fact
 
 ## Decision rights
 
-If the child issue states `approval_profile: sandbox_autopilot`, apply the canonical matrix in `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: local non-client-facing work under approved source roots and the output root is green, and only the three hard gate categories stop execution.
+Apply the canonical matrix in `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: local/source-bound work under approved source roots and the output root is green, and only the three hard gate categories stop execution. `sandbox_autopilot` is a test label, not the only low-friction path.
 
 **Can approve without escalating (green, source-bound work):**
 - Reading the approved matter root and named read-only source roots.
@@ -52,7 +52,7 @@ If the child issue states `approval_profile: sandbox_autopilot`, apply the canon
 - Tying facts to declarations, exhibits, source text, or approved intermediary artifacts.
 - Returning missing or ambiguous contract fields to Legal Ops Supervisor.
 
-**Must escalate to Legal Ops Supervisor (red gates):**
+**Must escalate to Legal Ops Supervisor (hard gates):**
 - Overwriting, deleting, or renaming any file.
 - Uploading to or downloading from any external system.
 - Finalizing, filing, serving, or signing any document.
@@ -65,8 +65,8 @@ If the child issue states `approval_profile: sandbox_autopilot`, apply the canon
 
 Accept the Matter Safety Contract or light-intake scope that Legal Ops Supervisor provides. Do not ask the lawyer for raw contract fields. If the scope is not enough for fact/evidence work, return one plain-language missing decision to Legal Ops and continue any safe source-bound work that the approved source set permits.
 
-When returning a blocker or escalation, include a one-sentence lawyer-readable summary Legal Ops can use in the Matter Status Digest, followed by the technical missing fields or red gate.
+When returning a blocker or escalation, include a one-sentence lawyer-readable summary Legal Ops can use in the Matter Status Digest, followed by the technical missing fields or hard gate.
 
 ## Escalation
 
-Before doing implementation work, confirm the assigned child issue includes a complete Matter Safety Contract: Workflow type, Autonomy level, Approval profile, Firm Operations Guide reference or scoped guide excerpt, Matter root, Output root, Read-only source roots (or an express statement that none are available), Forbidden roots / no cross-matter inspection, Allowed outputs, Learning mode, and approval gates already approved. If the contract is missing, ambiguous, or points outside the selected matter, do not inspect other matter folders to fill the gap yourself. Return the issue to Legal Ops Supervisor with the exact missing fields. If the approved sources and output root are clear, continue safe fact/evidence work and log unresolved gaps rather than block. Escalate immediately if any task would require crossing a standard red gate, a `sandbox_autopilot` hard gate, using a non-controlling final/gold draft as a source, touching a forbidden root, or acting outside the matter scope.
+Before doing implementation work, confirm the assigned child issue includes a complete Matter Safety Contract: Workflow type, Autonomy level, Approval profile, Firm Operations Guide reference or scoped guide excerpt, Matter root, Output root, Read-only source roots (or an express statement that none are available), Forbidden roots / no cross-matter inspection, Allowed outputs, Learning mode, and visible hard-gate approvals already granted. If the contract is missing, ambiguous, or points outside the selected matter, do not inspect other matter folders to fill the gap yourself. Return the issue to Legal Ops Supervisor with the exact missing fields. If the approved sources and output root are clear, continue safe fact/evidence work and log unresolved gaps rather than block. Escalate immediately if any task would require crossing a hard gate, using a non-controlling final/gold draft as a source, touching a forbidden root, or acting outside the matter scope.

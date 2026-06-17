@@ -18,13 +18,13 @@ description: Draft, revise, organize, and QA California subpoena motion-to-compe
 
 ## Inputs
 
-Before drafting begins, confirm the issue states the Matter Safety Contract fields: workflow type, autonomy level, approval profile, Firm Operations Guide reference or scoped excerpt, matter root, output root, read-only source roots, forbidden roots, allowed outputs, learning mode, do-not-learn list, authority limits, and approval gates already approved.
+Before drafting begins, confirm the issue states the Matter Safety Contract fields: workflow type, autonomy level, approval profile, Firm Operations Guide reference or scoped excerpt, matter root, output root, read-only source roots, forbidden roots, allowed outputs, learning mode, do-not-learn list, authority limits, and any visible hard-gate approvals already granted.
 
 If the issue lacks matter root, output root, approved source roots, no-cross-matter scope, or Firm Operations Guide reference, return the missing-field list to the Legal Ops Supervisor. If those fields are present, continue green source-bound work and log unresolved inputs instead of repeatedly blocking.
 
 Inputs may include subpoena materials, objections, meet-and-confer records, productions, declarations, pleadings, exhibits, approved authorities, approved example shells, and upstream document-review artifacts.
 
-If the issue states `approval_profile: sandbox_autopilot`, apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: local non-client-facing draft artifacts and new output-root working copies are green, and only the three hard gate categories stop execution.
+Apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md` in both standard and `sandbox_autopilot` modes: local/source-bound draft artifacts and new output-root working copies are green, and only the three hard gate categories stop execution. `sandbox_autopilot` labels test/demo matters; it is not the only low-friction path.
 
 ## Procedure
 
@@ -33,25 +33,25 @@ If the issue states `approval_profile: sandbox_autopilot`, apply `ca-subpoena-mt
 3. **Check for upstream handoffs.** Before creating a drafting outline, check approved output/intermediary sources for upstream subpoena document-review handoff artifacts — any downstream MTC handoff memo, completeness table, usefulness table, custodian-affidavit notes, and potential additional-subpoena notes.
 4. **Build intermediary work first.** Build or update intermediary tables before major drafting: source/document index, exhibit/RJN list, objection table, replacement table, factual narrative, authority table, needed-input list, TOC, and TOA.
 5. **Draft source-bound sections.** Draft sections from source materials and approved examples, one reviewable section or artifact at a time, under `{output_root}`. Identify the evidence, objection, authority, and declaration support for each section. Use only supplied, workspace, example-shell, authority-table, or approved-Lexis authorities. Track placeholders, unresolved citations, stale shell terms, and missing page/line citations. Maintain a live change log for confirmed updates.
-6. **Checkpoint and gate.** Proceed autonomously with green work: source-bound draft text, tables, outlines, QA notes, replacement tables, and new artifacts under the approved output root. Route yellow issues to the Legal Ops Supervisor when source scope, routing, or internal assumptions need repair, but do not stop safe drafting while approved source-bound work remains. Request approval only for standard red gates or `sandbox_autopilot` hard gates — and approval for one gate action never authorizes any other. In `sandbox_autopilot`, new working-copy drafts under the output root are green. Active Word writes, external research, new authorities, external uploads/downloads, browser auth, paid retrieval, calendar writes, email, finalization, filing, service, signing, overwriting, deleting, renaming, source mutation, or adopting material strategy/relief/sanctions/privacy/protective-order changes remain gated by the canonical matrix.
+6. **Checkpoint and gate.** Proceed autonomously with green work: source-bound draft text, tables, outlines, QA notes, replacement tables, draft recommendations, new artifacts, and new working-copy drafts under the approved output root. Route yellow issues to the Legal Ops Supervisor when source scope, routing, or internal assumptions need repair, but do not stop safe drafting while approved source-bound work remains. Request approval only for the three hard gate categories — and approval for one gate action never authorizes any other. Active in-place Word/Google Docs edits, external side effects, new external legal research, new authorities, external uploads/downloads, browser auth, paid retrieval, calendar writes, email, finalization, filing, service, signing, overwriting, deleting, renaming, source mutation, or adopting material strategy/relief/sanctions/privacy/protective-order recommendations through external action or protected mutation remain gated by the canonical matrix.
 7. **Post results.** Post artifact paths, change log, unresolved placeholders, and QA risks.
 
 ## Outputs
 
-Outputs must be new artifacts under `{output_root}`: OCR sidecars, source indexes, exhibit/RJN lists, objection tables, replacement tables, factual narratives, draft sections, TOC/TOA drafts, proposed order text, declaration text, QA notes, and new working-copy documents when approved by the active profile.
+Outputs must be new artifacts under `{output_root}`: OCR sidecars, source indexes, exhibit/RJN lists, objection tables, replacement tables, factual narratives, draft sections, TOC/TOA drafts, proposed order text, declaration text, QA notes, draft recommendations, and new output-root working-copy documents.
 
 - Use Word/document tools only for new working copies or approved active-draft updates.
-- Return narrow yellow issues to the Legal Ops Supervisor when source scope, routing, or internal assumptions need repair. Stop for red gates only when no safe source-bound drafting remains.
+- Return narrow yellow issues to the Legal Ops Supervisor when source scope, routing, or internal assumptions need repair. Stop for hard gates only when no safe source-bound drafting remains.
 - Mark done only after posting the draft artifacts, live change log or change-log update, unresolved-input list, and QA risks.
 
 ## Anti-patterns
 
-- Inserting into active Word drafts without the applicable red-gate approval.
+- Inserting into active Word/Google Docs drafts without the applicable hard-gate approval.
 - Drafting from memory or unapproved authorities instead of supplied, workspace, example-shell, authority-table, or approved-Lexis sources.
 - Reordering original PDF pages or treating OCR as anything but sidecar work product.
 - Drafting major sections before the intermediary tables and index exist.
-- Treating one red-gate approval as authorization for any other red-gate action.
-- Performing external research, new-authority retrieval, uploads/downloads, browser auth, paid retrieval, calendar writes, email, finalization, filing, service, signing, overwriting, deleting, renaming, source mutation, or strategy/relief/sanctions/privacy/protective-order changes without a red-gate approval.
+- Treating one hard-gate approval as authorization for any other hard-gate action.
+- Performing external research, new-authority retrieval, uploads/downloads, browser auth, paid retrieval, calendar writes, email, finalization, filing, service, signing, overwriting, deleting, renaming, source mutation, or applying strategy/relief/sanctions/privacy/protective-order recommendations through external action or protected mutation without hard-gate approval.
 - Using the OCR helper script as a substitute for source review, or running it before the required executable-script trust review.
 - Blocking repeatedly on a missing field when source-bound work remains; continue green work and log unresolved inputs.
 

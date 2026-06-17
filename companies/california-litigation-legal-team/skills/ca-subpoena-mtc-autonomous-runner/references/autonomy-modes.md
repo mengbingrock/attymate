@@ -4,11 +4,11 @@ Use the parent issue's autonomy level.
 
 ## safe-draft-only
 
-Agents may read approved sources, create new output-root artifacts, prepare OCR sidecars, tables, outlines, draft text, QA notes, and proposed child issues. They stop before external tools, active Word writes, finalization, filing, service, email, signing, overwrite, deletion, rename, or strategy changes.
+Agents may read approved sources, create new output-root artifacts, prepare OCR sidecars, tables, outlines, draft text, QA notes, proposed child issues, draft recommendations, and new output-root working copies. They stop only before hard gates: external side effects; authentication, payment, or legal-authority expansion; and destructive or protected mutation.
 
 ## supervised-tools
 
-Agents may use local tools already approved in the Firm Operations Guide and issue contract, such as local OCR or document inspection, while still stopping at external-tool and finalization red gates.
+Agents may use local tools already approved in the Firm Operations Guide and issue contract, such as local OCR or document inspection, while still stopping at hard gates.
 
 ## approved-external-actions
 

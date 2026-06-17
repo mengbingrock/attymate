@@ -7,7 +7,7 @@ Preconditions:
 - Exact Word file and output location are approved.
 - Source draft text is review-ready.
 - Caption, court, parties, case number, hearing, judge, department, and reservation fields are supplied or intentionally placeholdered.
-- A finalization or formatting red gate has been approved.
+- Formatting is for a new output-root working copy, or a protected active/final document edit has been approved.
 
 Checks:
 
