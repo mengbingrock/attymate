@@ -1,21 +1,53 @@
 # Matter Context Artifacts
 
-Matter context artifacts are durable, matter-scoped working references that help agents find case context quickly without rereading every source or asking the lawyer for information already organized elsewhere. They live under the approved output root, normally `{approved_output_root}/Matter Context/`, and are private runtime artifacts. Do not commit completed matter context files to this public package.
+Matter context artifacts are durable, matter-scoped working references that help agents find case context quickly without rereading every source or asking the lawyer for information already organized elsewhere. They live in the matter's approved Matter Home when one exists; otherwise they live temporarily as parent issue documents until Legal Ops creates or approves a Matter Home. Do not commit completed matter context files to this public package.
+
+## Matter Home Convention
+
+Default lawyer-facing folder:
+
+```text
+{workspace}/Matters/{matter-short-name}/
+```
+
+Default subfolders:
+
+```text
+00_Context/
+01_Pleadings/
+02_Discovery/
+03_Docket/
+04_Calendar/
+05_Research/
+06_Drafts/
+07_Service_Filing/
+_paperclip_issues/
+```
+
+Use this structure as the default for solo/small-firm deployments:
+
+- Human-facing matter work lives in the matter folders above.
+- Paperclip audit outputs may live under `_paperclip_issues/{issue-identifier}/`.
+- Issue folders such as `{issue-identifier}/` are acceptable temporary execution folders, but Legal Ops should link or move lawyer-facing outputs into the Matter Home once a matter/output root is approved.
+- If no Matter Home is approved yet, use parent issue documents and mark the Matter Dashboard as `not yet filed into Matter Home`.
+- Never create, move, overwrite, or rename live matter folders unless the issue approves the matter/output root and the action is local/source-bound. Protected/final/source-file mutation remains a hard gate.
 
 ## Artifact Set
 
-- `00_Matter_Context_Index.md` - routing map for the matter context folder, owner notes, last-updated summary, and which artifacts are authoritative or stale.
-- `01_Matter_Overview.md` - short matter summary, current posture, active workstreams, and known open questions.
-- `02_Procedural_History.md` - source-cited procedural timeline, filings, orders, service events, hearings, and deadlines that affect posture.
-- `03_Parties_Counsel_Court.md` - party names, counsel, court, department, judge, case number, service contacts, and source notes.
-- `04_Court_Rules_And_Standing_Orders.md` - approved court/local-rule/standing-order references, effective dates, and use limits.
-- `05_Deadline_And_Calendar_Tracker.md` - proposed deadlines, trigger facts, pre-deadline reminders, calendar-write status, and verification notes.
-- `06_Discovery_Tracker.md` - discovery served/received, response dates, deficiencies, meet-and-confer status, motions, and source notes.
-- `07_Pleadings_And_Service_Index.md` - pleadings, proofs of service, service dates/methods, responsive pleading status, and amendment history.
-- `08_Source_Index.md` - approved source sets, file manifests, OCR sidecars, source quality notes, and excluded/forbidden sources.
-- `09_Authority_Bank.md` - supplied or approved authorities, treatment notes, jurisdiction limits, and research approvals.
-- `10_Strategy_Questions_And_Decisions.md` - lawyer questions, draft recommendations, approved decisions, and items that remain conditional on strategy.
-- `11_Drafting_And_Work_Product_Log.md` - drafts created, working-copy locations, QA status, finalization boundary, and user-edited/final/protected file warnings.
+- `00_Context/00_Matter_Context_Index.md` - routing map, owner notes, last-updated summary, and authoritative/stale flags.
+- `00_Context/01_Matter_Overview.md` - short matter summary, current posture, active workstreams, and known open questions.
+- `00_Context/02_Procedural_History.md` - source-cited procedural timeline, filings, orders, service events, hearings, and deadlines that affect posture.
+- `00_Context/03_Parties_Counsel_Court.md` - party names, counsel, court, department, judge, case number, service contacts, and source notes.
+- `00_Context/04_Court_Rules_And_Standing_Orders.md` - approved court/local-rule/standing-order references, effective dates, and use limits.
+- `04_Calendar/05_Deadline_And_Calendar_Tracker.md` - proposed deadlines, trigger facts, pre-deadline reminders, calendar-write status, and verification notes.
+- `02_Discovery/06_Discovery_Tracker.md` - discovery served/received, response dates, deficiencies, meet-and-confer status, motions, and source notes.
+- `01_Pleadings/07_Pleadings_And_Service_Index.md` - pleadings, proofs of service, service dates/methods, responsive pleading status, and amendment history.
+- `00_Context/08_Source_Index.md` - approved source sets, file manifests, OCR sidecars, source quality notes, and excluded/forbidden sources.
+- `05_Research/09_Authority_Bank.md` - supplied or approved authorities, treatment notes, jurisdiction limits, and research approvals.
+- `00_Context/10_Strategy_Questions_And_Decisions.md` - lawyer questions, draft recommendations, approved decisions, and items that remain conditional on strategy.
+- `06_Drafts/11_Drafting_And_Work_Product_Log.md` - drafts created, working-copy locations, QA status, finalization boundary, and user-edited/final/protected file warnings.
+
+When the matter is still issue-document-only, use the same artifact names as document keys or titles and record the Matter Home status in the Matter Dashboard.
 
 ## Tiered Checking Rule
 
@@ -43,8 +75,9 @@ Agents should not read every context artifact on every issue. Use this relevance
 
 ## Update Rules
 
-- Legal Ops creates or confirms the context folder and index when opening a matter parent issue.
+- Legal Ops creates or confirms the Matter Home, context folder, issue-output subfolder, and context index when opening a matter parent issue whenever a matter/output root is approved.
 - Specialists may update matter context artifacts within their lane when the issue allows output-root artifacts and the update is source-bound.
 - Every substantive update should include a source note, author/agent, date, and unresolved assumptions.
 - Do not overwrite, rename, delete, or mutate original sources, final/signed/filed/served documents, user-edited files, or protected drafts without visible hard-gate approval.
 - If an artifact is stale or conflicts with a source, preserve both facts, flag the conflict, and route the issue to Legal Ops rather than silently replacing history.
+- Keep issue-audit detail under `_paperclip_issues/`; keep lawyer-facing summaries in the matter folders.

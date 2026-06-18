@@ -58,9 +58,9 @@ The default imported project is firm onboarding. It helps the board configure wo
 
 Legal Ops Supervisor is also the lawyer-facing intake concierge. It should ask short plain-English questions, use safe defaults, and translate the lawyer's answers into Matter Safety Contracts and specialist child issues instead of asking the lawyer to fill internal checklists.
 
-Legal Ops Supervisor also owns the lawyer-facing Matter Status Digest on every active parent matter issue. The parent issue should clearly say what the matter is, what work has happened, what is blocking progress, who owns the next step, whether the lawyer needs to act, and what will happen next.
+Legal Ops Supervisor also owns the lawyer-facing Matter Dashboard on every active parent matter issue. The parent issue should clearly say what the matter is, what workstreams are covered, where the latest artifacts live, what is blocking progress, who owns the next step, whether the lawyer needs to act, and what will happen next.
 
-Legal Ops Supervisor also owns matter-event planning and matter context routing. New events should be mapped to an existing matter or a new matter parent, planned across all plausible workstreams, and delegated with only the role-relevant matter context artifacts needed for each specialist.
+Legal Ops Supervisor also owns Matter Home setup, matter-event planning, and matter context routing. New events should be mapped to an existing matter or a new matter parent, planned across all plausible workstreams, and delegated with only the role-relevant matter context artifacts needed for each specialist.
 
 The subpoena MTC workflow remains available as a specialized skill-triggered workflow inside the broader litigation team. It is handled by Legal Ops Supervisor and the unified specialists, not by an import-time MTC project or separate MTC sub-organization. Live MTC work must begin from a user-created parent issue assigned to Legal Ops Supervisor with matter selection, explicit source/output scope, autonomy level, approval profile, learning mode, and approval-gate state.
 

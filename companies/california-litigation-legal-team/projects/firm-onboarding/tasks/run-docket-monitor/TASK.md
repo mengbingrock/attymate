@@ -17,6 +17,6 @@ Preconditions:
 - The profile names the authorized courts or portals, public-only rule, matter/case list source, check cadence, lookback window, change-detection rule, redaction policy, and routing criteria.
 - The routine is enabled by the board/operator after onboarding confirms the profile is ready.
 
-If the profile is missing, disabled, too broad, or would require login, CAPTCHA, payment, paid retrieval, download, filing, service, email, calendar writes, or external upload/share, do not browse past the approved public scope. Post a blocked monitor report that names the missing setup field or hard gate and asks Legal Ops for the one next configuration step.
+If the profile is missing, disabled, too broad, or would require login, CAPTCHA, payment, paid retrieval, download, filing, service, email, calendar writes, or external upload/share, do not browse past the approved public scope. Write a `monitor-report` issue document that names the missing setup field or hard gate and asks Legal Ops for the one next configuration step.
 
-Allowed work is public, read-only review within the approved profile and a report under `references/monitoring-report-contract.md`. Do not create substantive legal-work child issues directly. Route all candidate matter actions to Legal Ops Supervisor.
+Allowed work is public, read-only review within the approved profile and a durable `monitor-report` under `references/monitoring-report-contract.md`. Dedupe before creating anything. If there are no reportable or duplicate findings, write the report and close. If there is an actionable candidate, create or update a non-substantive Legal Ops triage issue linked to the report. Do not create substantive legal-work child issues directly.

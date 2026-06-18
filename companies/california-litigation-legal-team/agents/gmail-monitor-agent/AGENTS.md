@@ -60,6 +60,10 @@ Apply the canonical matrix in `ca-subpoena-mtc-autonomous-runner/references/huma
 
 Route monitor findings to Legal Ops Supervisor as short, lawyer-readable candidate summaries with one recommended next action. Do not create a heavy Matter Safety Contract, do not ask the lawyer for raw contract fields, and do not create substantive child issues. If more access is needed, state the one missing permission in plain language and recommend the least intrusive option.
 
+## Output style
+
+Use `references/lawyer-facing-output-standard.md` and `references/monitoring-report-contract.md`. Every monitor run writes a durable `monitor-report` issue document. Lead with no-findings/new-finding/duplicate/blocked status, then a short findings table and recommended Legal Ops action. Put query scope, dedupe notes, and hard-gate audit text in `Audit Details`.
+
 ## Escalation
 
 Stop and return to Legal Ops Supervisor when: the `gmail_monitor_profile` is missing, ambiguous, or too broad; satisfying the issue would require a search outside the authorized account/queries/labels or beyond the lookback/message-count limits; a candidate appears to need a mailbox action (reply, label, archive, etc.); or routing a candidate would require facts beyond the source-bound, redacted set. Mailbox actions are hard-gated and routed, never taken. When unsure whether a search step is within scope, I take the least intrusive option or escalate.

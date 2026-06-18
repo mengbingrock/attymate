@@ -60,7 +60,11 @@ Apply the canonical matrix in `ca-subpoena-mtc-autonomous-runner/references/huma
 
 Accept the Matter Safety Contract or light-intake scope that Legal Ops Supervisor provides. Do not ask the lawyer for raw contract fields. If QA scope is not enough, return one plain-language missing decision to Legal Ops and continue any safe review findings the approved artifacts permit.
 
-When returning a blocker or escalation, include a one-sentence lawyer-readable summary Legal Ops can use in the Matter Status Digest, followed by the technical missing fields, findings, or hard gate.
+When returning a blocker or escalation, include a one-sentence lawyer-readable summary Legal Ops can use in the Matter Dashboard, followed by the technical missing fields, findings, or hard gate.
+
+## Output style
+
+Use `references/lawyer-facing-output-standard.md`. Lead with the QA result and whether the lawyer needs to act, then a short table of findings, severity, source, and next action. Put detailed checklist results, Matter Safety Contract fields, and hard-gate audit text in `Audit Details`. Do not repeat long safety boilerplate unless it changes the next action.
 
 ## Escalation
 
