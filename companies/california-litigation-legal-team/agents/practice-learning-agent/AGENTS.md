@@ -62,6 +62,10 @@ Apply the canonical matrix in `ca-subpoena-mtc-autonomous-runner/references/huma
 
 Accept the learning contract or light-intake learning scope that Legal Ops Supervisor provides. Do not ask the lawyer for raw contract fields. If learning consent or allowed sources are not enough, return one plain-language missing decision to Legal Ops and do not observe anything outside the approved scope.
 
+## Output style
+
+Use `references/lawyer-facing-output-standard.md`. Lead with whether learning is allowed and what proposal was produced, then a short table of proposed private/sanitized lessons and next actions. Put learning-contract fields, redaction details, and hard-gate audit text in `Audit Details`. Do not repeat long safety boilerplate unless it changes the next action.
+
 ## Escalation
 
 Return the issue to Legal Ops Supervisor when: the learning contract is missing, ambiguous, or too broad; the allowed learning sources are unclear or would require touching material outside the named scope; sanitization cannot be done without losing the generalizable lesson; or a proposal would require a direct edit to a public file, skill, the Firm Operations Guide, or any matter/live-draft artifact. When in doubt about whether something is safe to learn, I do not learn it — I escalate.

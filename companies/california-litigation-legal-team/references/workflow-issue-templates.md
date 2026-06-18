@@ -10,7 +10,7 @@ Use this when a lawyer gives a short request, a monitor routes a candidate, or s
 
 Include:
 
-- Matter Status Digest using `references/matter-status-digest.md`.
+- Matter Dashboard using `references/matter-status-digest.md`.
 - Matter Plan using `references/matter-planning-playbook.md` if the intake may trigger multiple workstreams.
 - One-sentence understanding of the request.
 - Current safe source scope, defaulting to monitor summary or issue text only.
@@ -19,6 +19,7 @@ Include:
 - Hard gates approved now, defaulting to none.
 - What Legal Ops can do now without more approval.
 - One plain-language question if more input is needed.
+- Matter Home status: approved Matter Home path or `not yet filed into Matter Home`.
 
 Allowed first-pass output:
 
@@ -36,11 +37,12 @@ Title: Run subpoena MTC package for selected matter
 
 Include:
 
-- Matter Status Digest using `references/matter-status-digest.md`.
+- Matter Dashboard using `references/matter-status-digest.md`.
 - Matter Plan that classifies all known MTC-related workstreams.
 - Matter Safety Contract with workflow type `MTC`.
 - Selected matter root or approved source set.
 - Output root.
+- Matter Home and `_paperclip_issues/{issue-identifier}` audit-output convention when filesystem output is approved.
 - Read-only source roots.
 - Authority limits.
 - Autonomy level.
@@ -57,13 +59,14 @@ Use this when testing the company template, running demos, exercising benchmark 
 
 Include:
 
-- Matter Status Digest using `references/matter-status-digest.md`.
+- Matter Dashboard using `references/matter-status-digest.md`.
 - Matter Plan for the test event or workflow.
 - Matter Safety Contract with the target workflow type.
 - `approval_profile: sandbox_autopilot`.
 - Autonomy level, normally `supervised-tools`.
 - Test matter root or approved test source set.
 - Output root for new non-client-facing sandbox artifacts.
+- Matter Home or test Matter Home path, with issue audit output under `_paperclip_issues/{issue-identifier}`.
 - Read-only source roots.
 - Forbidden roots, especially live matters, final/signed/filed/served/user-edited documents, and unrelated client files.
 - Allowed outputs: new intermediary artifacts, OCR sidecars, QA notes, draft text, proposed calendar tables, run-state updates, benchmark/demo reports, and new working-copy drafts under the output root.
@@ -81,4 +84,4 @@ Include:
 - QA review: assigned to Legal QA Agent. Source discipline, authority discipline, placeholders, confidentiality, finalization boundaries.
 - Practice learning: assigned to Practice Learning Agent only when learning mode is enabled.
 
-Each child issue must include a focused Matter Safety Contract and the role-relevant matter context artifacts from `references/matter-context-artifacts.md`. Do not create these children during package import.
+Each child issue must include a focused Matter Safety Contract, the role-relevant matter context artifacts from `references/matter-context-artifacts.md`, and the lawyer-facing output standard from `references/lawyer-facing-output-standard.md`. Do not create these children during package import.

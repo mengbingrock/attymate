@@ -31,7 +31,7 @@ Specialists proceed on local/source-bound work, Legal Ops Supervisor cures yello
 |---|---|---|---|
 | Onboarding readiness status | legal-ops-supervisor | Board / firm owner | Until Phase 1 closes |
 | Per-matter parent-issue status | legal-ops-supervisor | Board / supervising attorney | Per active matter |
-| Matter Status Digest | legal-ops-supervisor | Parent matter issue | On creation, blocker changes, child delegation, and lawyer status questions |
+| Matter Dashboard | legal-ops-supervisor | Parent matter issue | On creation, blocker changes, child delegation, monitor routing, and lawyer status questions |
 | Readiness smoke (green/yellow/red) | legal-ops-supervisor | Board | On environment change |
 | Monitor findings | gmail-monitor-agent / calendar-agent / docket-agent | legal-ops-supervisor | Per approved monitor profile |
 
@@ -39,11 +39,13 @@ Specialists proceed on local/source-bound work, Legal Ops Supervisor cures yello
 
 Use the parent matter issue for matter-level decisions and child-issue comments for execution detail. Every delegated child issue must carry a **Matter Safety Contract** (see `references/matter-safety-contract.md`) and name the receiving agent, the approved scope, the approval profile, the allowed outputs, and any visible hard-gate approvals already granted. Cross-agent handoffs route through Legal Ops Supervisor unless the parent issue authorizes a direct handoff. Never paste client facts, case numbers, party names, credentials, or local paths into a public package file — those live in the private Firm Operations Guide or scoped issue documents only.
 
-For every new matter event, Legal Ops uses `references/matter-planning-playbook.md` to match or create the matter parent and classify all plausible workstreams before delegating child issues. Matter context artifacts are reusable but relevance-based: agents check the matter context index and the role-relevant artifacts named in the child issue, not the entire context folder by default. See `references/matter-context-artifacts.md`.
+For every new matter event, Legal Ops uses `references/matter-planning-playbook.md` to match or create the matter parent, update the Matter Dashboard, and classify all plausible workstreams before delegating child issues. Matter context artifacts are reusable but relevance-based: agents check the matter context index and the role-relevant artifacts named in the child issue, not the entire context folder by default. When a matter/output root is approved, use the Matter Home convention in `references/matter-context-artifacts.md`.
 
 Lawyer-facing intake uses **Light Intake Mode** by default. Legal Ops asks short plain-English questions, offers safe defaults, and translates the answers into the internal Matter Safety Contract. If work must stop, the blocker comment starts with "I need one thing before I can continue:" and gives 2-3 practical answer choices.
 
-Every active parent matter issue also gets a **Matter Status Digest** using `references/matter-status-digest.md`. It should explain the matter, current status, work already done, blocker, next-step owner, whether the lawyer needs to act, and what happens next. Child issues may carry technical details, but the parent issue should always have one lawyer-readable summary.
+Every active parent matter issue also gets a **Matter Dashboard** using `references/matter-status-digest.md`. It should explain the matter, current status, covered workstreams, latest artifacts, blocker, next-step owner, whether the lawyer needs to act, and what happens next. Child issues may carry technical details, but the parent issue should always have one lawyer-readable dashboard.
+
+Use `references/lawyer-facing-output-standard.md` for comments, reports, and handoffs: lawyer summary first, short tables for findings or coverage, and technical safety details in `Audit Details`.
 
 ## Approval and merge rules — green / yellow / red
 
@@ -57,7 +59,7 @@ Every active parent matter issue also gets a **Matter Status Digest** using `ref
 Before delegating any child issue, confirm:
 
 - The lawyer was not asked to fill out the Matter Safety Contract directly; Legal Ops translated plain-language answers into the contract.
-- The parent matter issue has an up-to-date Matter Status Digest.
+- The parent matter issue has an up-to-date Matter Dashboard with a Coverage table.
 - The Matter Safety Contract is complete (matter root, output root, workflow type, autonomy level, approval profile, Firm Operations Guide reference, read-only source roots, forbidden roots, allowed outputs, learning mode, visible hard-gate approvals already granted, no-cross-matter inspection).
 - The owning specialist agent is named and the work is inside its lane.
 - Completion criteria are concrete and source-bound.
@@ -92,6 +94,8 @@ Before creating any substantial deliverable, read `PROJECT-INVENTORY.md`, the re
 | Calendar read-only monitor (if enabled) | calendar-agent | Per `calendar_monitor_profile` schedule |
 | Docket public-record monitor (if enabled) | docket-agent | Per `docket_monitor_profile` schedule |
 | Per-matter status roll-up | legal-ops-supervisor | Per active matter |
+
+Monitor runs must write a durable `monitor-report` issue document. Actionable findings are deduped and routed to Legal Ops triage; no-findings reports close without creating unnecessary work.
 
 ## Critical rules summary
 

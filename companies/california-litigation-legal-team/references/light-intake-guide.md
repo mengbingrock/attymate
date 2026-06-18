@@ -4,40 +4,44 @@ Use this guide when Legal Ops Supervisor receives a monitor finding, a user-crea
 
 ## Goal
 
-Make intake feel like a short conversation with a capable assistant. The lawyer should answer ordinary questions. Legal Ops translates those answers into the internal Matter Safety Contract, approval posture, and child issues.
+Make intake feel like a short conversation with a capable assistant. The lawyer should answer ordinary questions, not fill out scope forms. Legal Ops translates answers into the internal Matter Safety Contract, Matter Dashboard, Matter Home, approval posture, and child issues.
 
 ## Default Path
 
 Start in Light Intake Mode unless the issue already contains a complete scope.
 
 1. Restate what Legal Ops understands in one sentence.
-2. Say the safest thing the team can do now.
-3. Ask for the smallest next decision needed to continue.
-4. Offer 2-3 answer choices with a recommended safe default.
-5. Translate the answer into the Matter Safety Contract internally.
-6. If a parent matter issue exists, post or update the Matter Status Digest.
+2. Say what the team can do now without more approval.
+3. Create or update the Matter Dashboard when this is a parent matter.
+4. Continue safe local/source-bound work instead of asking, if there is useful safe work.
+5. If a decision is needed, ask one batched question with 2-3 choices and a recommended safe default.
+6. Translate the answer into the Matter Safety Contract internally.
 
 ## Minimum Lawyer-Facing Questions
 
-Ask only what is needed for the next safe step:
+Ask only what is needed for the next safe step. Prefer one batched question over serial confirmations:
 
 - "What should I call this matter for now?"
-- "Should I use only the monitor summary, or may I review specific emails or attachments?"
-- "Do you want triage only, a parent intake issue, a drafting plan, or should I wait?"
-- "Are any red-gate actions approved now, or should I keep all external actions off?"
-- "Is this a sandbox/demo/test run, or live client-facing work?"
+- "Should I use only the monitor summary, review the specific source you identified, or wait for a source package?"
+- "Should I close this, proceed with safe local work, or pause for strategy?"
+- "Do you approve this one named hard-gate action, or should I keep all external actions off?"
 
-If the lawyer does not know, recommend the safe default: temporary matter label, monitor-summary-only scope, triage-only work product, and no hard gates.
+If the lawyer does not know, recommend the safe default: temporary matter label, monitor-summary-only scope, safe local work only, no hard gates, and no external action.
 
 ## Safe Defaults
 
 - Matter label: tentative label is acceptable.
 - Source scope: already-approved monitor summary or issue text only.
-- Output: issue comments until an output folder is configured.
+- Matter Home: create or use `{workspace}/Matters/{matter-short-name}/` when an output root is approved; otherwise mark the Matter Dashboard `not yet filed into Matter Home`.
+- Output: parent issue documents until a Matter Home/output folder is configured.
 - Hard gates: none approved.
-- Approval profile: relaxed default controls; use `sandbox_autopilot` to label sandbox, demo, benchmark, or early product-testing work with a test source root and output root.
-- Learning mode: off.
-- Work product: intake summary, issue list, missing-input list, and proposed next steps.
+- Approval profile: relaxed default controls; `sandbox_autopilot` is only a test/demo label, not the only low-friction path.
+- Learning mode: `off`.
+- Work product: Matter Dashboard, intake summary, coverage table, missing-input list, and proposed next steps.
+
+## Low-Friction Rule
+
+Do not ask the lawyer to approve routine local/source-bound steps, issue documents, Matter Dashboard updates, local draft recommendations, QA notes, or internal routing when scope is clear. Ask only for external side effects, authentication/payment/new-authority expansion, destructive/protected mutation, or a real source/strategy choice that blocks all useful safe work.
 
 ## Stop Language
 
@@ -47,7 +51,7 @@ If no safe work remains, mark the issue `blocked` and start with:
 
 Then give 2-3 choices. Do not paste the full Matter Safety Contract checklist to the lawyer.
 
-Also update the parent Matter Status Digest so the lawyer can see whether the next step belongs to the team or to them.
+Also update the parent Matter Dashboard so the lawyer can see whether the next step belongs to the team or to them.
 
 ## Red Gates
 

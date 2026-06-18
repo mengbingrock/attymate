@@ -42,7 +42,7 @@ Update this file after every completed deliverable. Keeping the inventory curren
 
 ## Matter workflows (skill-triggered, not import-time projects)
 
-These are reusable workflows owned by Legal Ops Supervisor and the unified specialists. They are **not** import-time starter projects and do **not** create a separate sub-organization. Live work begins only from a user-created parent issue with a complete Matter Safety Contract. For each new event, use `references/matter-planning-playbook.md` to map the matter and classify all plausible workstreams before delegating individual child issues.
+These are reusable workflows owned by Legal Ops Supervisor and the unified specialists. They are **not** import-time starter projects and do **not** create a separate sub-organization. Live work begins only from a user-created parent issue with a complete Matter Safety Contract and a lawyer-facing Matter Dashboard. For each new event, use `references/matter-planning-playbook.md` to map the matter, confirm the Matter Home or issue-document fallback, and classify all plausible workstreams before delegating individual child issues.
 
 | Workflow | Entry skill | Owner | Notes |
 |---|---|---|---|
