@@ -7,6 +7,12 @@ export const SANDBOX_INSTALL_COMMAND = "npm install -g @openai/codex";
 
 export const DEFAULT_CODEX_LOCAL_MODEL = "gpt-5.3-codex";
 export const DEFAULT_CODEX_LOCAL_BYPASS_APPROVALS_AND_SANDBOX = true;
+// Surface Codex "Apps" (connectors like Google Calendar/Gmail/Drive) to
+// `codex exec`. The desktop TUI enables these by default; `codex exec` does not,
+// so agents fall back to whatever generic MCP servers are registered. Passing
+// `-c apps_enabled=true` exposes the native `codex_apps` connectors (with their
+// proper hosted OAuth) in headless runs. On by default to match the TUI.
+export const DEFAULT_CODEX_LOCAL_APPS_ENABLED = true;
 export const CODEX_LOCAL_FAST_MODE_SUPPORTED_MODELS = ["gpt-5.4"] as const;
 
 function normalizeModelId(model: string | null | undefined): string {
@@ -71,6 +77,7 @@ Core fields:
 - search (boolean, optional): run codex with --search
 - fastMode (boolean, optional): enable Codex Fast mode; supported on GPT-5.4 and passed through for manual model IDs
 - dangerouslyBypassApprovalsAndSandbox (boolean, optional): run with bypass flag
+- appsEnabled (boolean, optional): expose Codex Apps/connectors (Google Calendar, Gmail, Drive, ...) to codex exec via -c apps_enabled=true; defaults to true. Set false to withhold connectors from this agent.
 - command (string, optional): defaults to "codex"
 - extraArgs (string[], optional): additional CLI args
 - env (object, optional): KEY=VALUE environment variables

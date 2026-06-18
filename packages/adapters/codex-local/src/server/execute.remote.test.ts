@@ -266,6 +266,8 @@ describe("codex remote execution", () => {
       "workspace-write",
       "-c",
       "sandbox_workspace_write.network_access=true",
+      "-c",
+      "apps_enabled=true",
       "-",
     ]);
   });
@@ -341,6 +343,8 @@ describe("codex remote execution", () => {
       "workspace-write",
       "-c",
       "sandbox_workspace_write.network_access=true",
+      "-c",
+      "apps_enabled=true",
       "resume",
       "session-123",
       "-",
@@ -424,6 +428,8 @@ describe("codex remote execution", () => {
       "workspace-write",
       "-c",
       "sandbox_workspace_write.network_access=true",
+      "-c",
+      "apps_enabled=true",
       "resume",
       "session-123",
       "-",

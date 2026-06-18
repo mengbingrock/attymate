@@ -26,6 +26,8 @@ describe("buildCodexExecArgs", () => {
       'service_tier="fast"',
       "-c",
       "features.fast_mode=true",
+      "-c",
+      "apps_enabled=true",
       "-",
     ]);
   });
@@ -52,6 +54,8 @@ describe("buildCodexExecArgs", () => {
       'service_tier="fast"',
       "-c",
       "features.fast_mode=true",
+      "-c",
+      "apps_enabled=true",
       "-",
     ]);
   });
@@ -76,6 +80,8 @@ describe("buildCodexExecArgs", () => {
       "sandbox_workspace_write.network_access=true",
       "--model",
       "gpt-5.3-codex",
+      "-c",
+      "apps_enabled=true",
       "-",
     ]);
   });
@@ -98,6 +104,8 @@ describe("buildCodexExecArgs", () => {
       "sandbox_workspace_write.network_access=true",
       "--model",
       "gpt-5.3-codex",
+      "-c",
+      "apps_enabled=true",
       "-",
     ]);
   });
@@ -114,6 +122,8 @@ describe("buildCodexExecArgs", () => {
       "sandbox_workspace_write.network_access=true",
       "--model",
       "gpt-5.3-codex",
+      "-c",
+      "apps_enabled=true",
       "-",
     ]);
   });
@@ -130,6 +140,8 @@ describe("buildCodexExecArgs", () => {
       "--dangerously-bypass-approvals-and-sandbox",
       "--model",
       "gpt-5.3-codex",
+      "-c",
+      "apps_enabled=true",
       "-",
     ]);
     expect(result.args).not.toContain("workspace-write");
@@ -149,6 +161,8 @@ describe("buildCodexExecArgs", () => {
       "workspace-write",
       "--model",
       "gpt-5.3-codex",
+      "-c",
+      "apps_enabled=true",
       "-",
     ]);
     expect(result.args).not.toContain("sandbox_workspace_write.network_access=true");
@@ -165,10 +179,35 @@ describe("buildCodexExecArgs", () => {
       "--json",
       "--model",
       "gpt-5.3-codex",
+      "-c",
+      "apps_enabled=true",
       "--sandbox",
       "read-only",
       "-",
     ]);
     expect(result.args).not.toContain("workspace-write");
+  });
+
+  it("enables Codex Apps (codex_apps connectors) by default", () => {
+    const result = buildCodexExecArgs({ model: "gpt-5.3-codex" });
+    const i = result.args.indexOf("apps_enabled=true");
+    expect(i).toBeGreaterThan(0);
+    expect(result.args[i - 1]).toBe("-c");
+  });
+
+  it("omits apps_enabled when appsEnabled is false", () => {
+    const result = buildCodexExecArgs({ model: "gpt-5.3-codex", appsEnabled: false });
+    expect(result.args).not.toContain("apps_enabled=true");
+  });
+
+  it("lets extraArgs override apps_enabled (codex last-wins)", () => {
+    const result = buildCodexExecArgs({
+      model: "gpt-5.3-codex",
+      extraArgs: ["-c", "apps_enabled=false"],
+    });
+    // both present; the caller's override is appended after, so codex resolves it last
+    expect(result.args.lastIndexOf("apps_enabled=false")).toBeGreaterThan(
+      result.args.indexOf("apps_enabled=true"),
+    );
   });
 });
