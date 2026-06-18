@@ -1,6 +1,7 @@
 import { asBoolean, asString, asStringArray } from "@paperclipai/adapter-utils/server-utils";
 import {
   CODEX_LOCAL_FAST_MODE_SUPPORTED_MODELS,
+  DEFAULT_CODEX_LOCAL_APPS_ENABLED,
   isCodexLocalFastModeSupported,
 } from "../index.js";
 
@@ -61,6 +62,7 @@ export function buildCodexExecArgs(
     record.sandboxNetworkAccess,
     asBoolean(record.networkAccess, true),
   );
+  const appsEnabled = asBoolean(record.appsEnabled, DEFAULT_CODEX_LOCAL_APPS_ENABLED);
   const extraArgs = readExtraArgs(record);
   const callerPinnedSandbox = extraArgs.some((arg) => arg === "-s" || arg === "--sandbox");
 
@@ -81,6 +83,11 @@ export function buildCodexExecArgs(
   }
   if (fastModeApplied) {
     args.push("-c", 'service_tier="fast"', "-c", "features.fast_mode=true");
+  }
+  // Expose native Codex Apps/connectors (codex_apps) in headless exec. Pushed
+  // before extraArgs so a caller can override with `-c apps_enabled=false`.
+  if (appsEnabled) {
+    args.push("-c", "apps_enabled=true");
   }
   if (extraArgs.length > 0) args.push(...extraArgs);
   if (options.resumeSessionId) args.push("resume", options.resumeSessionId, "-");
