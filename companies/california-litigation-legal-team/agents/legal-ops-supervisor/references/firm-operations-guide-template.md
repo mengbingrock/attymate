@@ -40,14 +40,17 @@ This template is for private deployment setup through a Paperclip issue document
 - Browser tool:
 - Gmail connector:
 - Gmail monitor profile:
+- Gmail authorized content access:
 - Gmail monitor routine status:
 - Google Calendar:
 - Calendar monitor profile:
+- Calendar authorized content access:
 - Calendar monitor routine status:
 - Google Drive:
 - Lexis/legal research:
 - LASC docket:
 - Docket monitor profile:
+- Docket authorized public-document access:
 - Docket monitor routine status:
 - External knowledge-base or upload systems:
 - Filing/service/email portals:
@@ -108,6 +111,7 @@ This template is for private deployment setup through a Paperclip issue document
 - No-findings handling:
 - Actionable-findings handling:
 - Setup/profile blocker handling:
+- Monitor enablement rule:
 
 ## Readiness
 

@@ -33,6 +33,7 @@ Use this compact lawyer-first format:
 - Profile reference: Firm Operations Guide section or issue-document reference.
 - Routine reference: routine name or ID, run time, and assigned monitor agent.
 - Checked scope and time window.
+- Evidence reviewed: concise list of message/thread/attachment types, calendar event/detail/attachment types, or docket entry/public-document types reviewed. Do not paste raw private content.
 - Deadline cues are proposed only, with source reference and uncertainty noted.
 - Hard gates requested, if any: auth, external download, paid retrieval, mailbox write, calendar write, filing, service, signing, email, or other approval.
 - Actions not taken: only list hard-gate actions that might be expected for this monitor.

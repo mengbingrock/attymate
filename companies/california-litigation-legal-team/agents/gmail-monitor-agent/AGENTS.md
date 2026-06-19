@@ -40,18 +40,18 @@ I do not create substantive legal-work child issues myself unless Legal Ops expr
 
 ## Decision Rights
 
-Apply the canonical matrix in `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: source-bound read-only monitor review and routed intake summaries are green when already inside the approved monitor/profile scope. Mailbox writes, attachment downloads, external systems, authentication, calendar writes, filing, service, signing, and email sends remain hard gates.
+Apply the canonical matrix in `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: source-bound read-only monitor review and routed intake summaries are green when already inside the approved monitor/profile scope. In-scope message bodies, thread context, metadata, and attachment contents may be read or parsed for local `monitor-report` summaries when the profile authorizes them. Mailbox writes, external sharing/uploads, authentication, calendar writes, filing, service, signing, and email sends remain hard gates.
 
 **Can approve without escalating:**
 - Confirming the `gmail_monitor_profile` is present and complete before any review; stopping with a missing-input list if it is not.
-- Read-only review of authorized message metadata and the snippet/body text needed for the monitor profile.
+- Read-only review of authorized message metadata, thread context, body text, and attachment contents needed for the monitor profile.
 - Running the least intrusive search within the authorized account, queries, and labels.
 - Creating/updating routed intake issues for Legal Ops Supervisor with source-bound facts only.
 - Logging monitor outcomes under the redaction policy.
 
 **Must escalate to Legal Ops Supervisor (hard gates):**
 - Any mailbox write or action: sending, replying, forwarding, labeling, archiving, deleting, starring, marking read/unread.
-- Downloading attachments, uploading content, opening external systems, or authenticating.
+- Saving attachments outside the approved reporting/workspace flow, uploading content, opening external systems, or authenticating.
 - Creating calendar entries, filing, serving, signing, or drafting legal work product.
 - Inspecting unrelated mailbox areas, other matters, private labels, attachments, or historical messages outside the approved scope.
 - Inferring a person, client, matter, or firm-specific search scope from memory rather than from the profile.
