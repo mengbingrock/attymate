@@ -657,6 +657,7 @@ export async function ensureAdapterExecutionTargetRuntimeCommandInstalled(input:
   target: AdapterExecutionTarget | null | undefined;
   installCommand?: string | null;
   localInstallCommand?: string | null;
+  localInstallNpmPackage?: string | null;
   detectCommand?: string | null;
   cwd: string;
   env: Record<string, string>;
@@ -664,18 +665,68 @@ export async function ensureAdapterExecutionTargetRuntimeCommandInstalled(input:
   graceSec?: number;
   onLog?: AdapterExecutionTargetShellOptions["onLog"];
 }): Promise<void> {
-  // Pick the install snippet appropriate to the execution target:
-  //   - remote sandbox: the Linux/image-shaped `installCommand`.
-  //   - local (runner / this host): the host-appropriate `localInstallCommand`,
-  //     so a missing CLI is auto-installed via the user's own npm.
-  //   - remote ssh: no auto-install (don't mutate someone's server silently).
   const target = input.target;
-  const installCommand = (() => {
-    if (target?.kind === "remote" && target.transport === "sandbox") {
-      return input.installCommand?.trim();
+
+  // ── Local runner (the user's own machine) ──────────────────────────────────
+  // Install cross-platform: resolve the command via Node (handles Windows
+  // .cmd/.exe) and, if missing, run a STRUCTURED `npm install -g <pkg>` rather
+  // than a POSIX `sh -lc` / `command -v` snippet. This makes auto-install work
+  // on Windows runners, not just macOS/Linux. (npm is the cross-platform Codex
+  // install method per https://developers.openai.com/codex/cli.)
+  if (!target || target.kind === "local") {
+    const npmPackage = input.localInstallNpmPackage?.trim();
+    if (!npmPackage) return; // nothing locally auto-installable (e.g. custom command)
+    const detectName = input.detectCommand?.trim();
+    const isResolvable = async (): Promise<boolean> => {
+      if (!detectName) return false;
+      try {
+        await ensureCommandResolvable(detectName, input.cwd, input.env);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    if (await isResolvable()) return; // already installed
+    if (input.onLog) {
+      await input.onLog(
+        "stdout",
+        `[paperclip] ${detectName ?? npmPackage} not found; installing ${npmPackage} via "npm install -g"…\n`,
+      );
     }
-    if (!target || target.kind === "local") {
-      return input.localInstallCommand?.trim();
+    let installResult: RunProcessResult;
+    try {
+      installResult = await runChildProcess(input.runId, "npm", ["install", "-g", npmPackage], {
+        cwd: input.cwd,
+        env: input.env,
+        timeoutSec: input.timeoutSec && input.timeoutSec > 0 ? input.timeoutSec : 300,
+        graceSec: input.graceSec ?? 10,
+        onLog: input.onLog ?? (async () => {}),
+      });
+    } catch (err) {
+      // npm itself missing / spawn failed. Re-check in case the CLI is present
+      // anyway; otherwise surface a clear, actionable error.
+      if (await isResolvable()) return;
+      throw new Error(
+        `Failed to install ${npmPackage}: ${err instanceof Error ? err.message : String(err)}. Is Node/npm installed and on PATH?`,
+      );
+    }
+    // A failed install isn't necessarily fatal — the CLI may already be on PATH.
+    if (await isResolvable()) return;
+    if (installResult.timedOut) {
+      throw new Error(`Timed out installing ${npmPackage} via "npm install -g".`);
+    }
+    if ((installResult.exitCode ?? 0) !== 0) {
+      throw new Error(`Failed to install ${npmPackage} via "npm install -g" (exit ${installResult.exitCode ?? "?"}).`);
+    }
+    return; // installed (no detectCommand to confirm against — assume success)
+  }
+
+  // ── Remote sandbox (ephemeral Linux image): POSIX shell install ────────────
+  //   - sandbox: the Linux/image-shaped `installCommand`.
+  //   - ssh: no auto-install (don't mutate someone's server silently).
+  const installCommand = (() => {
+    if (target.kind === "remote" && target.transport === "sandbox") {
+      return input.installCommand?.trim();
     }
     return undefined;
   })();

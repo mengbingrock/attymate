@@ -168,6 +168,10 @@ function buildNpmRuntimeCommandSpec(
     localInstallCommand: canSelfInstall
       ? `if ! ${guard}; then npm install -g ${shellQuote(packageName)}; fi`
       : null,
+    // Cross-platform local install: the runner installs this via structured
+    // `npm install -g <pkg>` (no POSIX shell), so codex/claude/etc. auto-install
+    // on Windows runners too — not just macOS/Linux.
+    localInstallNpmPackage: canSelfInstall ? packageName : null,
   };
 }
 

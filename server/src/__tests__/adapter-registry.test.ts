@@ -251,24 +251,28 @@ describe("server adapter registry", () => {
       detectCommand: "claude",
       installCommand: expectedClaudeInstall,
       localInstallCommand: expectedClaudeLocalInstall,
+      localInstallNpmPackage: "@anthropic-ai/claude-code",
     });
     expect(findActiveServerAdapter("codex_local")?.getRuntimeCommandSpec?.({})).toEqual({
       command: "codex",
       detectCommand: "codex",
       installCommand: expectedCodexInstall,
       localInstallCommand: expectedCodexLocalInstall,
+      localInstallNpmPackage: "@openai/codex",
     });
     expect(findActiveServerAdapter("gemini_local")?.getRuntimeCommandSpec?.({})).toEqual({
       command: "gemini",
       detectCommand: "gemini",
       installCommand: expectedGeminiInstall,
       localInstallCommand: expectedGeminiLocalInstall,
+      localInstallNpmPackage: "@google/gemini-cli",
     });
     expect(findActiveServerAdapter("opencode_local")?.getRuntimeCommandSpec?.({})).toEqual({
       command: "opencode",
       detectCommand: "opencode",
       installCommand: expectedOpenCodeInstall,
       localInstallCommand: expectedOpenCodeLocalInstall,
+      localInstallNpmPackage: "opencode-ai",
     });
   });
 

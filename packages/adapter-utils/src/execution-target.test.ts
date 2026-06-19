@@ -359,78 +359,88 @@ describe("ensureAdapterExecutionTargetRuntimeCommandInstalled", () => {
   });
 
   describe("local targets", () => {
-    const markers: string[] = [];
-    const newMarker = () => {
-      const marker = path.join(
-        os.tmpdir(),
-        `paperclip-localinstall-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      );
-      markers.push(marker);
-      return marker;
+    const okResult = {
+      exitCode: 0,
+      signal: null,
+      timedOut: false,
+      stdout: "",
+      stderr: "",
+      pid: 1,
+      startedAt: new Date().toISOString(),
     };
 
     afterEach(() => {
-      for (const marker of markers.splice(0)) {
-        try {
-          fs.rmSync(marker, { force: true });
-        } catch {
-          // best effort
-        }
-      }
+      vi.restoreAllMocks();
     });
 
-    it("auto-installs a missing command using localInstallCommand", async () => {
-      const marker = newMarker();
+    it("auto-installs a missing command via structured `npm install -g` (cross-platform, no shell)", async () => {
       const missing = `paperclip-missing-${Math.random().toString(16).slice(2)}`;
+      const runChildProcessSpy = vi
+        .spyOn(serverUtils, "runChildProcess")
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .mockResolvedValue(okResult as any);
 
       await ensureAdapterExecutionTargetRuntimeCommandInstalled({
         runId: "run-local-install",
         target: null,
         // The remote/sandbox installCommand must be ignored on local targets.
-        installCommand: `touch ${JSON.stringify(marker)}.sandbox`,
-        localInstallCommand: `touch ${JSON.stringify(marker)}`,
+        installCommand: "npm install -g @scope/sandbox-only",
+        localInstallNpmPackage: "@scope/pkg",
         detectCommand: missing,
         cwd: os.tmpdir(),
         env: { PATH: process.env.PATH ?? "/usr/bin:/bin" },
         timeoutSec: 30,
       });
 
-      expect(fs.existsSync(marker)).toBe(true);
-      expect(fs.existsSync(`${marker}.sandbox`)).toBe(false);
+      // npm spawned directly (no `sh -lc` / `command -v`) so it works on Windows.
+      expect(runChildProcessSpy).toHaveBeenCalledWith(
+        "run-local-install",
+        "npm",
+        ["install", "-g", "@scope/pkg"],
+        expect.objectContaining({ cwd: os.tmpdir() }),
+      );
     });
 
     it("skips install when the command already resolves", async () => {
-      const marker = newMarker();
+      const runChildProcessSpy = vi
+        .spyOn(serverUtils, "runChildProcess")
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .mockResolvedValue(okResult as any);
 
       await ensureAdapterExecutionTargetRuntimeCommandInstalled({
         runId: "run-local-present",
         target: { kind: "local" },
-        localInstallCommand: `touch ${JSON.stringify(marker)}`,
-        detectCommand: "sh", // always on PATH
+        localInstallNpmPackage: "@scope/pkg",
+        detectCommand: "node", // always on PATH in the test runner
         cwd: os.tmpdir(),
         env: { PATH: process.env.PATH ?? "/usr/bin:/bin" },
         timeoutSec: 30,
       });
 
-      expect(fs.existsSync(marker)).toBe(false);
+      expect(runChildProcessSpy).not.toHaveBeenCalled();
     });
 
-    it("does nothing on local targets when no localInstallCommand is provided", async () => {
-      const marker = newMarker();
+    it("does nothing on local targets when no localInstallNpmPackage is provided", async () => {
       const missing = `paperclip-missing-${Math.random().toString(16).slice(2)}`;
+      const runChildProcessSpy = vi
+        .spyOn(serverUtils, "runChildProcess")
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .mockResolvedValue(okResult as any);
 
       await ensureAdapterExecutionTargetRuntimeCommandInstalled({
         runId: "run-local-noop",
         target: null,
-        // Only the sandbox installCommand is set; it must not run locally.
-        installCommand: `touch ${JSON.stringify(marker)}`,
+        // Only the sandbox installCommand / POSIX localInstallCommand are set;
+        // neither auto-installs locally without a structured npm package.
+        installCommand: "npm install -g @scope/sandbox-only",
+        localInstallCommand: "if ! command -v x; then npm install -g x; fi",
         detectCommand: missing,
         cwd: os.tmpdir(),
         env: { PATH: process.env.PATH ?? "/usr/bin:/bin" },
         timeoutSec: 30,
       });
 
-      expect(fs.existsSync(marker)).toBe(false);
+      expect(runChildProcessSpy).not.toHaveBeenCalled();
     });
   });
 });

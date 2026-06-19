@@ -351,8 +351,19 @@ export interface AdapterRuntimeCommandSpec {
    * ephemeral Linux images (bootstraps a Node tarball, falls back to a
    * `$HOME/.local` prefix) which would not land on a typical local PATH. It
    * should be idempotent (guard with `command -v`).
+   *
+   * POSIX-only (uses `command -v` / `sh`); the local runner prefers
+   * `localInstallNpmPackage` below, which installs cross-platform without a shell.
    */
   localInstallCommand?: string | null;
+  /**
+   * npm package to globally install (`npm install -g <pkg>`) on a *local*
+   * execution target when the command is missing. Preferred over
+   * `localInstallCommand` because it runs cross-platform (macOS AND Windows) via
+   * structured `npm` resolution — no POSIX shell or `command -v`. Null when the
+   * adapter command isn't npm-installable (or a custom command was configured).
+   */
+  localInstallNpmPackage?: string | null;
 }
 
 export interface ServerAdapterModule {

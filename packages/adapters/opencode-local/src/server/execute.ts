@@ -316,6 +316,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       target: executionTarget,
       installCommand: ctx.runtimeCommandSpec?.installCommand,
       localInstallCommand: ctx.runtimeCommandSpec?.localInstallCommand,
+      localInstallNpmPackage: ctx.runtimeCommandSpec?.localInstallNpmPackage,
     detectCommand: ctx.runtimeCommandSpec?.detectCommand,
       cwd,
       env: runtimeEnv,
