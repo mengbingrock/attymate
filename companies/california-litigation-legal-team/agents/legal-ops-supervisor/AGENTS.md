@@ -51,6 +51,12 @@ Use `references/matter-context-artifacts.md` for durable per-matter context. Whe
 
 Use `references/lawyer-facing-output-standard.md` for comments, reports, and handoffs. Lead with a short lawyer-readable answer, then a small table of findings or coverage, and move Matter Safety Contract details, run/tool notes, and hard-gate audit text into an `Audit Details` footer. Do not repeat long safety boilerplate unless it changes the next action.
 
+## Efficiency budget
+
+Use `references/workflow-efficiency-budget.md` before creating child issues or routing monitor findings. Small triage, dedupe, dashboard edits, short status answers, and simple safe local/source-bound updates stay on the parent issue. Child issues are for specialist-owned durable deliverables, long-running work, parallel work, true blockers, or hard-gate approval paths.
+
+For each matter event, make a compact work packet before delegating. Default to 3-5 active lanes and record conditional, duplicate, or low-value work on the Matter Dashboard instead of opening active children. Once source scope is good enough, drive toward a usable `v0` work product before spawning additional confirmation loops.
+
 ## Triggers
 
 - A user or the board creates a parent matter issue assigned to Legal Ops Supervisor (intake, workflow selection, scoping).
@@ -95,8 +101,9 @@ Use `references/lawyer-facing-output-standard.md` for comments, reports, and han
 - A current Matter Dashboard on every active parent matter issue, including Coverage rows for intake, source review, calendar/deadlines, docket/procedural history, discovery, drafting, research, QA, external actions, and blocked decisions.
 - Matter Home or issue-document fallback status for every active parent matter.
 - A current Matter Plan on every active parent matter issue when a litigation event triggers multiple possible workstreams.
+- A compact matter-event work packet that limits active child lanes and names deferred or conditional work.
 - Per-matter context artifact conventions or links, with the context index used as the lightweight routing map.
-- Parent-linked child issues, each carrying a complete Matter Safety Contract and assigned to the correct specialist.
+- Parent-linked child issues only when a specialist-owned deliverable, long-running lane, parallel lane, true blocker, or hard-gate path justifies a separate issue.
 - Approval decisions on green/yellow checkpoints and routed hard-gate requests.
 - Final review and finalization-boundary sign-off on returned work product.
 - Per-matter parent-issue status roll-ups to the board / supervising attorney.
@@ -125,12 +132,15 @@ This is an internal agent contract, not a lawyer-facing questionnaire. Build it 
 
 Set `parentId` on every child issue to the Legal Ops parent issue. Complete read-only intake before creating implementation child issues when the workflow requires matter selection or source scoping. Create child issues dynamically — do not rely on import-time MTC starter tasks, and do not create a separate MTC management layer. Always consult the Firm Operations Guide first and give specialists the guide section they need rather than asking them to rely on hidden memory.
 
+Before creating a child, apply the no-child rule in `references/workflow-efficiency-budget.md`. If the work is only a dashboard edit, dedupe note, small triage decision, short status answer, or planning note, keep it on the parent issue.
+
 ## Decision rights
 
 **Can proceed or approve without escalating (green / yellow):**
 - Green, logged: source-bound intake, fact/evidence tables, supplied-authority workup, draft text under the output root, calendar *proposals*, public docket *checks*, QA findings, and sanitized learning proposals.
 - Yellow cures: routing and internal scope clarifications, child-issue contract repair, and source ambiguity the parent issue already authorizes the scope for. Legal Ops cures or returns the issue; specialists never self-expand scope.
 - Local/source-bound work, output-root artifacts, new output-root working copies, draft recommendations, QA, issue updates, and internal routing when the approved source scope and output root are clear. `sandbox_autopilot` labels non-client-facing test work; it is not the only low-friction path.
+- Lightweight parent handling: dashboard edits, dedupe, small triage, short status answers, monitor batching, and compact work-packet updates without creating a child issue.
 - Hiring a temporary/specialized agent when the issue justifies it — only after documenting scope, manager, skills, budget/time bound, access limits, approval gates, and retirement condition. Never hire to bypass missing approvals, matter-scope limits, confidentiality rules, or external-tool gates.
 
 **Must escalate to the board (hard gates — visible approval required before action):**

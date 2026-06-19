@@ -32,6 +32,8 @@ Active parent matter issues should carry a **Matter Dashboard** using `reference
 
 Matter context is reusable but relevance-based. Legal Ops should create or confirm a Matter Home at `{workspace}/Matters/{matter-short-name}/` when a matter/output root is approved, with issue audit output under `_paperclip_issues/{issue-identifier}/`. Specialists should check only the context artifacts relevant to their role and assignment. See `references/matter-context-artifacts.md` for the folder convention, tiered checking rule, and role defaults.
 
+The template is also efficiency-first. Legal Ops should use one Matter Dashboard, one Matter Plan, and a compact work packet before opening child issues. Small triage, dedupe, dashboard edits, and short status answers stay on the parent issue; active child issues are reserved for specialist-owned durable deliverables, longer tool runs, parallel lanes, true blockers, and hard-gate paths.
+
 ## Org chart
 
 ```mermaid
@@ -117,6 +119,7 @@ If an onboarding task is substantively complete but the issue cannot be marked d
 - Configure `gmail_monitor_profile`, `calendar_monitor_profile`, `docket_monitor_profile`, and `monitoring_report_policy` before enabling monitor routines.
 - Keep monitor routines paused until the board/operator approves the profile and schedule. Every monitor run writes a durable `monitor-report` issue document. Actionable findings are deduped and routed to Legal Ops triage; monitors do not open substantive legal work directly.
 - Use `references/matter-planning-playbook.md` when a new event arrives. Legal Ops should match or create the matter parent, classify all plausible workstreams, create child issues for safe work now, and record strategy/source/approval blockers in one batched plan.
+- Use `agents/legal-ops-supervisor/references/workflow-efficiency-budget.md` to keep matter work compact: default to 3-5 active lanes, batch monitor candidates, and avoid child issues for coordination-only work.
 - Use `references/matter-context-artifacts.md` to create or maintain matter context. Agents should check the matter context index plus role-relevant artifacts, not the entire context folder by default.
 - Use `references/lawyer-facing-output-standard.md` so reports start with plain-English summaries and place technical scope details in an `Audit Details` footer.
 - Keep the completed Firm Operations Guide private to the deployment.

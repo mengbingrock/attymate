@@ -2,7 +2,7 @@
 
 Use this contract for Gmail, Calendar, and Docket monitor routine outputs. A monitor report is a routed finding for Legal Ops Supervisor, not substantive legal work.
 
-Every monitor run must leave a durable issue document with key `monitor-report`. Do not rely on comments alone for the report. If the monitor finds an actionable candidate, it must create or update a non-substantive Legal Ops triage issue after dedupe. Monitor agents still do not create substantive legal-work child issues directly.
+Every monitor run must leave a durable issue document with key `monitor-report`. Do not rely on comments alone for the report. If the monitor finds actionable candidates, batch them in the report and create or update one non-substantive Legal Ops triage packet after dedupe. Monitor agents still do not create substantive legal-work child issues directly.
 
 ## Required Fields
 
@@ -46,7 +46,7 @@ All monitor findings go to Legal Ops Supervisor.
 
 - No reportable findings: write `monitor-report`, mark the monitor issue done, and do not create a triage issue.
 - Duplicate findings: write `monitor-report`, link the prior issue or matter, and avoid creating a duplicate unless Legal Ops needs a dedupe audit issue.
-- Actionable findings: write `monitor-report`, dedupe against open/recent matter parents and monitor candidates, then create or update a Legal Ops triage issue with the report linked.
+- Actionable findings: write `monitor-report`, dedupe against open/recent matter parents and monitor candidates, then create or update one batched Legal Ops triage issue with the report linked. Do not open one triage issue per minor cue unless each cue maps to a different matter or a distinct substantive workstream.
 - Setup/profile blockers: write `monitor-report`, ask for one setup decision, and set the monitor issue to `blocked` only if no pending interaction or Legal Ops triage path exists.
 
 Monitor agents do not create substantive matter child issues, calendar entries, docket purchases, email replies, filing/service actions, or legal drafts unless Legal Ops creates a scoped issue and the required approval profile and gate approvals are visible.

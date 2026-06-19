@@ -24,6 +24,21 @@ For each matter event, create or update a concise Matter Plan on the parent issu
 
 Use the active Matter Safety Contract, not hidden memory, as the source of authority for child issues. Each child issue should include the relevant matter context artifact paths from `references/matter-context-artifacts.md`, not the full folder by default.
 
+## Work Packet Before Child Issues
+
+Before creating children, write a compact work packet on the parent Matter Plan:
+
+- event;
+- one-line legal/work-product objective;
+- available source scope;
+- planned active lanes;
+- deferred or conditional lanes;
+- next lawyer decision, if any.
+
+Default active child lanes are capped at `3-5`. More than five active children for one matter event requires an explicit reason in the Matter Dashboard.
+
+Use the no-child rule from `references/workflow-efficiency-budget.md`: dashboard edits, dedupe, monitor triage, short status answers, and small safe local updates stay on the parent issue.
+
 ## Matter Dashboard Coverage
 
 Every planning pass must update the parent Matter Dashboard from `references/matter-status-digest.md`. The dashboard is the lawyer-facing source of truth and must include a Coverage table with these rows:
@@ -72,6 +87,8 @@ If safe local/source-bound work can continue, create or update the relevant chil
 - Include the focused Matter Safety Contract fields needed for the child.
 - Include a small relevant artifact set, based on the tiered context rules.
 - Place or link lawyer-facing outputs in the Matter Home when approved; keep issue audit output under `_paperclip_issues/{issue-identifier}` when filesystem output is used.
+- Create children only for specialist-owned durable deliverables, longer specialist/tool runs, parallel lanes, true blockers, hard-gate approval paths, or review of an existing draft/artifact.
+- Do not create child issues for coordination-only work, dashboard edits, dedupe notes, minor monitor cues, or another plan with no deliverable.
 - Do not create every possible downstream drafting issue as active work when it depends on lawyer strategy. Create a strategy-confirmation question or a blocked/conditional planning item instead.
 - Use Calendar Agent for proposed deadlines and pre-deadline reminders. Calendar writes, invites, notifications, and emails remain hard gates.
 
