@@ -2,7 +2,35 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { codexDesktopAppInstalled } from "./codex-desktop-app.js";
+import { codexDesktopAppInstalled, parseNodeReplCommand } from "./codex-desktop-app.js";
+
+describe("parseNodeReplCommand", () => {
+  it("returns null when there's no node_repl command", () => {
+    expect(parseNodeReplCommand("[mcp_servers.other]\ncommand = \"/x\"\n")).toBeNull();
+  });
+
+  it("parses a POSIX path", () => {
+    const cfg = '[mcp_servers.node_repl]\ncommand = "/Applications/Codex.app/Contents/Resources/cua_node/bin/node_repl"\n';
+    expect(parseNodeReplCommand(cfg)).toBe(
+      "/Applications/Codex.app/Contents/Resources/cua_node/bin/node_repl",
+    );
+  });
+
+  it("parses a Windows path with escaped backslashes (TOML basic string)", () => {
+    const cfg = '[mcp_servers.node_repl]\ncommand = "C:\\\\Users\\\\me\\\\AppData\\\\Codex\\\\node_repl.exe"\nenabled = true\n';
+    expect(parseNodeReplCommand(cfg)).toBe("C:\\Users\\me\\AppData\\Codex\\node_repl.exe");
+  });
+
+  it("parses a Windows path with forward slashes", () => {
+    const cfg = '[mcp_servers.node_repl]\ncommand = "C:/Users/me/AppData/Codex/node_repl.exe"\n';
+    expect(parseNodeReplCommand(cfg)).toBe("C:/Users/me/AppData/Codex/node_repl.exe");
+  });
+
+  it("parses a Windows path from a TOML literal string (no escaping)", () => {
+    const cfg = "[mcp_servers.node_repl]\ncommand = 'C:\\Users\\me\\AppData\\Codex\\node_repl.exe'\n";
+    expect(parseNodeReplCommand(cfg)).toBe("C:\\Users\\me\\AppData\\Codex\\node_repl.exe");
+  });
+});
 
 describe("codexDesktopAppInstalled", () => {
   const dirs: string[] = [];

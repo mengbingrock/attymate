@@ -25,18 +25,36 @@ const MAC_NODE_REPL_PATH = "/Applications/Codex.app/Contents/Resources/cua_node/
 const ATTEMPT_INTERVAL_MS = 12 * 60 * 60 * 1000;
 
 /**
+ * Extract the `node_repl` MCP command path from a Codex `config.toml`. Handles
+ * both TOML string forms so Windows paths survive:
+ *   - basic strings: `command = "C:\\Users\\me\\...\\node_repl.exe"` (backslashes
+ *     are escaped in TOML; we unescape them) or with forward slashes.
+ *   - literal strings: `command = 'C:\Users\me\...\node_repl.exe'` (no escaping).
+ * Returns the native path, or null if there's no node_repl command. Pure +
+ * unit-testable (no fs).
+ */
+export function parseNodeReplCommand(configText: string): string | null {
+  const basic = configText.match(/node_repl[\s\S]{0,600}?command\s*=\s*"((?:[^"\\]|\\.)*)"/);
+  if (basic) {
+    return basic[1].replace(/\\(["\\nrt])/g, (_, c: string) =>
+      c === "n" ? "\n" : c === "r" ? "\r" : c === "t" ? "\t" : c,
+    );
+  }
+  const literal = configText.match(/node_repl[\s\S]{0,600}?command\s*=\s*'([^']*)'/);
+  if (literal) return literal[1];
+  return null;
+}
+
+/**
  * Whether the Codex desktop app (which bundles `node_repl`) appears installed.
  * Cross-platform: a fast macOS path check, else the `node_repl` MCP command the
  * app registers in `config.toml` — if that binary exists, the app is installed.
- * Pure + unit-testable.
  */
 export function codexDesktopAppInstalled(codexHome: string): boolean {
   if (process.platform === "darwin" && existsSync(MAC_NODE_REPL_PATH)) return true;
   try {
-    const text = readFileSync(path.join(codexHome, "config.toml"), "utf8");
-    // [mcp_servers.node_repl] … command = "<path-to>/node_repl"
-    const match = text.match(/node_repl[\s\S]{0,600}?command\s*=\s*"([^"]+)"/);
-    if (match && existsSync(match[1])) return true;
+    const command = parseNodeReplCommand(readFileSync(path.join(codexHome, "config.toml"), "utf8"));
+    if (command && existsSync(command)) return true;
   } catch {
     // no config / unreadable — treat as not installed
   }
