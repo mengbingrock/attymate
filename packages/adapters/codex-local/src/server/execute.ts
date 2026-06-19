@@ -47,6 +47,7 @@ import {
 import { pathExists, prepareManagedCodexHome, resolveManagedCodexHomeDir, resolveSharedCodexHomeDir } from "./codex-home.js";
 import { resolveCodexDesiredSkillNames } from "./skills.js";
 import { buildCodexExecArgs } from "./codex-args.js";
+import { ensureCodexDesktopApp } from "./codex-desktop-app.js";
 import { SANDBOX_INSTALL_COMMAND } from "../index.js";
 
 const __moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -522,6 +523,17 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     env: runtimeEnv,
     timeoutSec,
     graceSec,
+    onLog,
+  });
+  // The CLI alone can't drive the Browser/Chrome plugins — those need node_repl
+  // from the Codex desktop app. Best-effort install it on the local runner.
+  await ensureCodexDesktopApp({
+    runId,
+    executionTarget,
+    command,
+    cwd,
+    env: runtimeEnv,
+    codexHome: effectiveCodexHome,
     onLog,
   });
   await ensureAdapterExecutionTargetCommandResolvable(command, executionTarget, cwd, runtimeEnv);
