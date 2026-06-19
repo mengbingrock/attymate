@@ -14,7 +14,7 @@
 // company. Suspend/resume and device crypto are later slices.
 // ---------------------------------------------------------------------------
 
-import type { AdapterExecutionResult } from "./types.js";
+import type { AdapterExecutionResult, AdapterRuntimeCommandSpec } from "./types.js";
 
 /** Wire protocol version — bump on breaking frame/spec changes. */
 export const RUNNER_PROTOCOL_VERSION = 1;
@@ -82,6 +82,14 @@ export interface RunnerExecutionSpec {
   workspace: RunnerWorkspaceSpec;
   /** Local-agent JWT injected as PAPERCLIP_API_KEY, when the adapter supports it. */
   authToken?: string | null;
+  /**
+   * The underlying adapter's runtime command spec (command / detectCommand /
+   * install snippets), resolved on the control plane where the adapter registry
+   * lives. The client cannot derive this itself, so the server ships it here.
+   * The client uses `localInstallCommand` to auto-install a missing CLI on the
+   * user's machine before the run.
+   */
+  runtimeCommandSpec?: AdapterRuntimeCommandSpec | null;
 }
 
 // ---------------------------------------------------------------------------

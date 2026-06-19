@@ -344,6 +344,15 @@ export interface AdapterRuntimeCommandSpec {
    * fresh remote runtime. It should be idempotent.
    */
   installCommand?: string | null;
+  /**
+   * Optional shell snippet to install the adapter command on a *local*
+   * execution target (the user's own machine / runner). Distinct from
+   * `installCommand` because the remote/sandbox variant is shaped for
+   * ephemeral Linux images (bootstraps a Node tarball, falls back to a
+   * `$HOME/.local` prefix) which would not land on a typical local PATH. It
+   * should be idempotent (guard with `command -v`).
+   */
+  localInstallCommand?: string | null;
 }
 
 export interface ServerAdapterModule {

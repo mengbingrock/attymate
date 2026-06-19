@@ -172,6 +172,9 @@ export async function executeRun(
     },
     config,
     context,
+    // Resolved on the control plane (the runner has no adapter registry). Drives
+    // local auto-install of a missing CLI via localInstallCommand.
+    runtimeCommandSpec: spec.runtimeCommandSpec ?? null,
     onLog: async (stream, chunk) => {
       cb.emit({ kind: "log", stream, chunk });
     },
