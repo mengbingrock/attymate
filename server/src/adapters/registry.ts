@@ -153,11 +153,20 @@ function buildNpmRuntimeCommandSpec(
   const command = readConfiguredCommand(config, fallbackCommand);
   const canSelfInstall = !hasPathSeparator(command) && command === fallbackCommand;
   const installLine = buildSandboxNpmInstallCommand(packageName);
+  const guard = `command -v ${shellQuote(command)} >/dev/null 2>&1`;
   return {
     command,
     detectCommand: command,
     installCommand: canSelfInstall
-      ? `if ! command -v ${shellQuote(command)} >/dev/null 2>&1; then ${installLine}; fi`
+      ? `if ! ${guard}; then ${installLine}; fi`
+      : null,
+    // On a local runner we use the user's existing npm and global prefix
+    // (Homebrew / nvm / Volta), which is on PATH — a plain `npm install -g`
+    // is the only variant that reliably lands the binary where the runner
+    // will find it. The sandbox installLine's sudo/$HOME/.local fallbacks are
+    // for ephemeral Linux images and would miss a typical local PATH.
+    localInstallCommand: canSelfInstall
+      ? `if ! ${guard}; then npm install -g ${shellQuote(packageName)}; fi`
       : null,
   };
 }

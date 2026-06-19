@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as ssh from "./ssh.js";
 import * as serverUtils from "./server-utils.js";
@@ -353,6 +356,82 @@ describe("ensureAdapterExecutionTargetRuntimeCommandInstalled", () => {
     });
 
     expect(runSshCommandSpy).not.toHaveBeenCalled();
+  });
+
+  describe("local targets", () => {
+    const markers: string[] = [];
+    const newMarker = () => {
+      const marker = path.join(
+        os.tmpdir(),
+        `paperclip-localinstall-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      );
+      markers.push(marker);
+      return marker;
+    };
+
+    afterEach(() => {
+      for (const marker of markers.splice(0)) {
+        try {
+          fs.rmSync(marker, { force: true });
+        } catch {
+          // best effort
+        }
+      }
+    });
+
+    it("auto-installs a missing command using localInstallCommand", async () => {
+      const marker = newMarker();
+      const missing = `paperclip-missing-${Math.random().toString(16).slice(2)}`;
+
+      await ensureAdapterExecutionTargetRuntimeCommandInstalled({
+        runId: "run-local-install",
+        target: null,
+        // The remote/sandbox installCommand must be ignored on local targets.
+        installCommand: `touch ${JSON.stringify(marker)}.sandbox`,
+        localInstallCommand: `touch ${JSON.stringify(marker)}`,
+        detectCommand: missing,
+        cwd: os.tmpdir(),
+        env: { PATH: process.env.PATH ?? "/usr/bin:/bin" },
+        timeoutSec: 30,
+      });
+
+      expect(fs.existsSync(marker)).toBe(true);
+      expect(fs.existsSync(`${marker}.sandbox`)).toBe(false);
+    });
+
+    it("skips install when the command already resolves", async () => {
+      const marker = newMarker();
+
+      await ensureAdapterExecutionTargetRuntimeCommandInstalled({
+        runId: "run-local-present",
+        target: { kind: "local" },
+        localInstallCommand: `touch ${JSON.stringify(marker)}`,
+        detectCommand: "sh", // always on PATH
+        cwd: os.tmpdir(),
+        env: { PATH: process.env.PATH ?? "/usr/bin:/bin" },
+        timeoutSec: 30,
+      });
+
+      expect(fs.existsSync(marker)).toBe(false);
+    });
+
+    it("does nothing on local targets when no localInstallCommand is provided", async () => {
+      const marker = newMarker();
+      const missing = `paperclip-missing-${Math.random().toString(16).slice(2)}`;
+
+      await ensureAdapterExecutionTargetRuntimeCommandInstalled({
+        runId: "run-local-noop",
+        target: null,
+        // Only the sandbox installCommand is set; it must not run locally.
+        installCommand: `touch ${JSON.stringify(marker)}`,
+        detectCommand: missing,
+        cwd: os.tmpdir(),
+        env: { PATH: process.env.PATH ?? "/usr/bin:/bin" },
+        timeoutSec: 30,
+      });
+
+      expect(fs.existsSync(marker)).toBe(false);
+    });
   });
 });
 

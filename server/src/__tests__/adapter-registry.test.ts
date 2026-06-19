@@ -239,25 +239,36 @@ describe("server adapter registry", () => {
     const expectedGeminiInstall = `if ! command -v 'gemini' >/dev/null 2>&1; then ${buildSandboxNpmInstallCommand("@google/gemini-cli")}; fi`;
     const expectedOpenCodeInstall = `if ! command -v 'opencode' >/dev/null 2>&1; then ${buildSandboxNpmInstallCommand("opencode-ai")}; fi`;
 
+    // The local install snippet is a plain guarded `npm install -g` — no sudo /
+    // $HOME/.local fallbacks, so it lands on a typical local PATH.
+    const expectedClaudeLocalInstall = `if ! command -v 'claude' >/dev/null 2>&1; then npm install -g '@anthropic-ai/claude-code'; fi`;
+    const expectedCodexLocalInstall = `if ! command -v 'codex' >/dev/null 2>&1; then npm install -g '@openai/codex'; fi`;
+    const expectedGeminiLocalInstall = `if ! command -v 'gemini' >/dev/null 2>&1; then npm install -g '@google/gemini-cli'; fi`;
+    const expectedOpenCodeLocalInstall = `if ! command -v 'opencode' >/dev/null 2>&1; then npm install -g 'opencode-ai'; fi`;
+
     expect(findActiveServerAdapter("claude_local")?.getRuntimeCommandSpec?.({})).toEqual({
       command: "claude",
       detectCommand: "claude",
       installCommand: expectedClaudeInstall,
+      localInstallCommand: expectedClaudeLocalInstall,
     });
     expect(findActiveServerAdapter("codex_local")?.getRuntimeCommandSpec?.({})).toEqual({
       command: "codex",
       detectCommand: "codex",
       installCommand: expectedCodexInstall,
+      localInstallCommand: expectedCodexLocalInstall,
     });
     expect(findActiveServerAdapter("gemini_local")?.getRuntimeCommandSpec?.({})).toEqual({
       command: "gemini",
       detectCommand: "gemini",
       installCommand: expectedGeminiInstall,
+      localInstallCommand: expectedGeminiLocalInstall,
     });
     expect(findActiveServerAdapter("opencode_local")?.getRuntimeCommandSpec?.({})).toEqual({
       command: "opencode",
       detectCommand: "opencode",
       installCommand: expectedOpenCodeInstall,
+      localInstallCommand: expectedOpenCodeLocalInstall,
     });
   });
 

@@ -69,6 +69,25 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     log: (msg) => logger.warn({ companyId, runId: ctx.runId }, `runner-gateway: ${msg}`),
   });
 
+  // Resolve the underlying adapter's runtime command spec here, where the
+  // adapter registry lives. The runner-client cannot derive it (it only holds
+  // each adapter's execute()), so we ship it in the spec — chiefly for
+  // `localInstallCommand`, which lets the client auto-install a missing CLI
+  // (e.g. `codex`) on the user's machine. Lazy import avoids a static cycle:
+  // registry.ts imports this gateway module at load time.
+  const runtimeCommandSpec = await (async () => {
+    try {
+      const { findActiveServerAdapter } = await import("../registry.js");
+      return findActiveServerAdapter(runnerAdapterType)?.getRuntimeCommandSpec?.(ctx.config) ?? null;
+    } catch (err) {
+      logger.warn(
+        { companyId, runId: ctx.runId, runnerAdapterType, err },
+        "runner-gateway: failed to resolve runtime command spec",
+      );
+      return null;
+    }
+  })();
+
   const spec: RunnerExecutionSpec = {
     protocolVersion: RUNNER_PROTOCOL_VERSION,
     runId: ctx.runId,
@@ -97,6 +116,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     context: ctx.context,
     workspace: buildWorkspaceSpec(ctx.config),
     authToken: ctx.authToken ?? null,
+    runtimeCommandSpec,
   };
 
   try {

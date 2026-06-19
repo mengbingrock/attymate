@@ -656,6 +656,7 @@ export async function ensureAdapterExecutionTargetRuntimeCommandInstalled(input:
   runId: string;
   target: AdapterExecutionTarget | null | undefined;
   installCommand?: string | null;
+  localInstallCommand?: string | null;
   detectCommand?: string | null;
   cwd: string;
   env: Record<string, string>;
@@ -663,8 +664,22 @@ export async function ensureAdapterExecutionTargetRuntimeCommandInstalled(input:
   graceSec?: number;
   onLog?: AdapterExecutionTargetShellOptions["onLog"];
 }): Promise<void> {
-  const installCommand = input.installCommand?.trim();
-  if (!installCommand || input.target?.kind !== "remote" || input.target.transport !== "sandbox") {
+  // Pick the install snippet appropriate to the execution target:
+  //   - remote sandbox: the Linux/image-shaped `installCommand`.
+  //   - local (runner / this host): the host-appropriate `localInstallCommand`,
+  //     so a missing CLI is auto-installed via the user's own npm.
+  //   - remote ssh: no auto-install (don't mutate someone's server silently).
+  const target = input.target;
+  const installCommand = (() => {
+    if (target?.kind === "remote" && target.transport === "sandbox") {
+      return input.installCommand?.trim();
+    }
+    if (!target || target.kind === "local") {
+      return input.localInstallCommand?.trim();
+    }
+    return undefined;
+  })();
+  if (!installCommand) {
     return;
   }
 
