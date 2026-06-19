@@ -1,4 +1,11 @@
 export { execute, ensureCodexSkillsInjected } from "./execute.js";
+export {
+  resolveSharedCodexHomeDir,
+  readSharedCodexAuthRaw,
+  writeSharedCodexAuthRaw,
+  writeServerCodexAuth,
+  restoreLocalCodexAuth,
+} from "./codex-home.js";
 export { listCodexSkills, syncCodexSkills } from "./skills.js";
 export { testEnvironment } from "./test.js";
 export { parseCodexJsonl, isCodexTransientUpstreamError, isCodexUnknownSessionError } from "./parse.js";

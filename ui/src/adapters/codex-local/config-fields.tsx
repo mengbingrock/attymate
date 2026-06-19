@@ -117,6 +117,22 @@ export function CodexLocalConfigFields({
             : mark("adapterConfig", "fastMode", v)
         }
       />
+      {adapterType === "codex_local_runner" && (
+        <ToggleField
+          label="Use the server's Codex login"
+          hint="Run Codex on this machine using the control plane's Codex account instead of the machine's own login. Your local Codex login is backed up and restored when you turn this off."
+          checked={
+            isCreate
+              ? Boolean(values!.useServerCodexAuth)
+              : eff("adapterConfig", "useServerCodexAuth", !!config.useServerCodexAuth)
+          }
+          onChange={(v) =>
+            isCreate
+              ? set!({ useServerCodexAuth: v })
+              : mark("adapterConfig", "useServerCodexAuth", v)
+          }
+        />
+      )}
       {fastModeEnabled && (
         <div className="rounded-md border border-amber-300/70 bg-amber-50/80 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
           {fastModeMessage}

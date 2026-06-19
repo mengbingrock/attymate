@@ -87,6 +87,119 @@ export async function writeApiKeyAuthJson(home: string, apiKey: string): Promise
   await fs.writeFile(target, JSON.stringify({ OPENAI_API_KEY: apiKey }), { mode: 0o600 });
 }
 
+/**
+ * Read the raw `auth.json` text from the shared Codex home (CODEX_HOME or
+ * ~/.codex), validating that it parses as JSON. Returns null when the file is
+ * absent or unreadable/invalid. Used to distribute the server's codex login to
+ * a paired runner-client so the client's codex runs as the same account.
+ *
+ * Returns the bytes verbatim so a ChatGPT-OAuth login (`tokens` block) survives
+ * the round-trip, not just API-key (`OPENAI_API_KEY`) credentials.
+ */
+export async function readSharedCodexAuthRaw(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string | null> {
+  const file = path.join(resolveSharedCodexHomeDir(env), "auth.json");
+  try {
+    const text = await fs.readFile(file, "utf8");
+    JSON.parse(text);
+    return text;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Write raw `auth.json` text into the shared Codex home (CODEX_HOME or ~/.codex)
+ * with mode 0600. The text must be valid JSON (codex reads it as JSON). The
+ * paired runner-client uses this to install the auth fetched from the control
+ * plane so the local codex CLI authenticates as the server's account.
+ */
+export async function writeSharedCodexAuthRaw(
+  raw: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string> {
+  JSON.parse(raw); // fail fast on non-JSON rather than poisoning auth.json
+  const home = resolveSharedCodexHomeDir(env);
+  await fs.mkdir(home, { recursive: true });
+  const target = path.join(home, "auth.json");
+  await fs.rm(target, { force: true });
+  await fs.writeFile(target, raw, { mode: 0o600 });
+  return target;
+}
+
+// Sidecar files the runner uses to track auth provenance in the shared codex
+// home. Codex itself only reads `auth.json`, so these are inert to the CLI.
+const LOCAL_BACKUP_SUFFIX = ".paperclip-local-backup";
+const SERVER_MARKER_SUFFIX = ".paperclip-source";
+
+function sharedCodexAuthPaths(env: NodeJS.ProcessEnv) {
+  const home = resolveSharedCodexHomeDir(env);
+  const auth = path.join(home, "auth.json");
+  return {
+    home,
+    auth,
+    backup: `${auth}${LOCAL_BACKUP_SUFFIX}`,
+    marker: `${auth}${SERVER_MARKER_SUFFIX}`,
+  };
+}
+
+/**
+ * Install the control-plane's codex auth into the shared codex home so the
+ * local CLI runs as the server's account.
+ *
+ * Before overwriting, the user's *own* local auth.json is preserved once into a
+ * backup sidecar so {@link restoreLocalCodexAuth} can put it back. We only back
+ * up a genuine local login: if the current auth.json is already one we wrote
+ * from the server (marker present) or a backup already exists, we don't clobber
+ * the saved local. A marker is written so we can tell server-provisioned auth
+ * apart from the user's own later.
+ *
+ * Returns whether a local auth was backed up on this call.
+ */
+export async function writeServerCodexAuth(
+  raw: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{ backedUp: boolean }> {
+  JSON.parse(raw); // fail fast rather than poisoning auth.json
+  const { home, auth, backup, marker } = sharedCodexAuthPaths(env);
+  await fs.mkdir(home, { recursive: true });
+
+  let backedUp = false;
+  const backupExists = await pathExists(backup);
+  const markerExists = await pathExists(marker);
+  const authExists = await pathExists(auth);
+  if (!backupExists && authExists && !markerExists) {
+    // Genuine user-local login — preserve it once so the user can switch back.
+    await fs.copyFile(auth, backup);
+    backedUp = true;
+  }
+
+  await fs.rm(auth, { force: true });
+  await fs.writeFile(auth, raw, { mode: 0o600 });
+  await fs.writeFile(marker, "server", { mode: 0o600 });
+  return { backedUp };
+}
+
+/**
+ * Restore the user's backed-up local codex auth (undoing a previous
+ * {@link writeServerCodexAuth}). Moves the backup back over auth.json and clears
+ * the server marker. Returns whether a backup existed and was restored — false
+ * means there was no saved local login (e.g. the machine never had one).
+ */
+export async function restoreLocalCodexAuth(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{ restored: boolean }> {
+  const { auth, backup, marker } = sharedCodexAuthPaths(env);
+  if (!(await pathExists(backup))) {
+    return { restored: false };
+  }
+  await fs.rm(auth, { force: true });
+  await fs.rename(backup, auth);
+  await fs.rm(marker, { force: true });
+  return { restored: true };
+}
+
 export async function prepareManagedCodexHome(
   env: NodeJS.ProcessEnv,
   onLog: AdapterExecutionContext["onLog"],

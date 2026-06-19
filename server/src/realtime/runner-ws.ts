@@ -121,7 +121,7 @@ function headersFromIncomingMessage(req: IncomingMessage): Headers {
 }
 
 /** Active membership of the company, or instance-admin override. */
-async function userIsCompanyMember(db: Db, userId: string, companyId: string): Promise<boolean> {
+export async function userIsCompanyMember(db: Db, userId: string, companyId: string): Promise<boolean> {
   const [roleRow, memberRow] = await Promise.all([
     db
       .select({ id: instanceUserRoles.id })

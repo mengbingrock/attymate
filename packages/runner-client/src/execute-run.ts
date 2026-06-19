@@ -19,6 +19,7 @@ import { materializeRunnerConfig } from "@paperclipai/adapter-utils/runner-mater
 import { resolveLocalExecute } from "./adapters.js";
 import type { RunnerClientConfig } from "./config.js";
 import { resolveActiveWorkspacePath } from "./active-workspace.js";
+import { ensureCodexAuthProvisioned } from "./codex-auth.js";
 
 export interface RunExecutionCallbacks {
   /** Emit a streamed event back to the control plane. `seq` is assigned by the caller. */
@@ -197,6 +198,14 @@ export async function executeRun(
     },
     authToken: spec.authToken ?? undefined,
   };
+
+  // Reconcile codex auth with the agent's configured source (useServerCodexAuth):
+  // pull the server's auth (backing up the user's local), restore the local on
+  // switch-back, or provision when a fresh machine has no login. Best-effort; the
+  // adapter's own auto-install handles the binary.
+  await ensureCodexAuthProvisioned(env.config, spec.adapterType, spec.config, (chunk) =>
+    cb.emit({ kind: "log", stream: "lifecycle", chunk }),
+  );
 
   return await localExecute(ctx);
 }
