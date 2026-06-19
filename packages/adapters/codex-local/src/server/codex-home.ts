@@ -45,15 +45,45 @@ async function ensureParentDir(target: string): Promise<void> {
   await fs.mkdir(path.dirname(target), { recursive: true });
 }
 
-async function ensureSymlink(target: string, source: string): Promise<void> {
+function isSymlinkPermissionError(err: unknown): boolean {
+  const code =
+    typeof err === "object" && err !== null && "code" in err
+      ? String((err as NodeJS.ErrnoException).code ?? "")
+      : "";
+  if (code === "EPERM" || code === "EACCES") return true;
+
+  const message = err instanceof Error ? err.message : String(err);
+  return /administrator privilege|required privilege|operation not permitted|access is denied/i.test(message);
+}
+
+async function copySharedFile(target: string, source: string): Promise<void> {
+  await ensureParentDir(target);
+  await fs.copyFile(source, target);
+  await fs.chmod(target, 0o600).catch(() => {});
+}
+
+async function createSymlinkOrCopyFile(target: string, source: string): Promise<void> {
+  await ensureParentDir(target);
+  try {
+    await fs.symlink(source, target);
+  } catch (err) {
+    if (!isSymlinkPermissionError(err)) throw err;
+    await copySharedFile(target, source);
+  }
+}
+
+async function ensureSymlinkOrCopyFile(target: string, source: string): Promise<void> {
   const existing = await fs.lstat(target).catch(() => null);
   if (!existing) {
-    await ensureParentDir(target);
-    await fs.symlink(source, target);
+    await createSymlinkOrCopyFile(target, source);
     return;
   }
 
   if (!existing.isSymbolicLink()) {
+    if (!existing.isFile()) {
+      throw new Error(`Managed Codex home entry exists and is not a file or symlink: ${target}`);
+    }
+    await copySharedFile(target, source);
     return;
   }
 
@@ -64,7 +94,7 @@ async function ensureSymlink(target: string, source: string): Promise<void> {
   if (resolvedLinkedPath === source) return;
 
   await fs.unlink(target);
-  await fs.symlink(source, target);
+  await createSymlinkOrCopyFile(target, source);
 }
 
 async function ensureCopiedFile(target: string, source: string): Promise<void> {
@@ -214,14 +244,14 @@ export async function prepareManagedCodexHome(
 
   await fs.mkdir(targetHome, { recursive: true });
 
-  // If a previous run wrote an apikey-mode auth.json (regular file) and this
-  // run has no apiKey, remove it so the chatgpt-mode symlink can be restored.
-  // Without this cleanup, ensureSymlink bails on a non-symlink and Codex keeps
-  // authenticating with the stale key after it is removed from configuration.
+  // If a previous run wrote an apikey-mode auth.json and shared auth no longer
+  // exists, remove the stale managed file. When shared auth exists, the seeding
+  // step below refreshes any copied fallback file in place.
   if (!apiKey && seedFromShared) {
+    const sourceAuthPath = path.join(sourceHome, "auth.json");
     const authPath = path.join(targetHome, "auth.json");
     const existing = await fs.lstat(authPath).catch(() => null);
-    if (existing && !existing.isSymbolicLink()) {
+    if (existing && !existing.isSymbolicLink() && !(await pathExists(sourceAuthPath))) {
       await fs.rm(authPath, { force: true });
     }
   }
@@ -230,7 +260,7 @@ export async function prepareManagedCodexHome(
     for (const name of SYMLINKED_SHARED_FILES) {
       const source = path.join(sourceHome, name);
       if (!(await pathExists(source))) continue;
-      await ensureSymlink(path.join(targetHome, name), source);
+      await ensureSymlinkOrCopyFile(path.join(targetHome, name), source);
     }
 
     for (const name of COPIED_SHARED_FILES) {

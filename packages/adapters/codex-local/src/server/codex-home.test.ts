@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
+  prepareManagedCodexHome,
   readSharedCodexAuthRaw,
   writeSharedCodexAuthRaw,
   writeServerCodexAuth,
@@ -41,7 +42,11 @@ describe("shared codex auth raw read/write", () => {
     const env = { CODEX_HOME: home } as NodeJS.ProcessEnv;
     await writeSharedCodexAuthRaw(JSON.stringify({ OPENAI_API_KEY: "sk-test" }), env);
     const mode = (await fs.stat(path.join(home, "auth.json"))).mode & 0o777;
-    expect(mode).toBe(0o600);
+    if (process.platform === "win32") {
+      expect(mode).not.toBe(0);
+    } else {
+      expect(mode).toBe(0o600);
+    }
   });
 
   it("returns null when no auth.json exists", async () => {
@@ -130,5 +135,87 @@ describe("writeServerCodexAuth / restoreLocalCodexAuth", () => {
     const res = await restoreLocalCodexAuth(env);
     expect(res.restored).toBe(false);
     expect(await read(auth())).toBe(server);
+  });
+});
+
+describe("prepareManagedCodexHome auth seeding", () => {
+  const dirs: string[] = [];
+  const companyId = "company-1";
+  const onLog = async () => {};
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    for (const dir of dirs.splice(0)) {
+      await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  async function freshEnv() {
+    const sharedHome = await tmpHome();
+    const paperclipHome = await tmpHome();
+    dirs.push(sharedHome, paperclipHome);
+    const env = {
+      CODEX_HOME: sharedHome,
+      PAPERCLIP_HOME: paperclipHome,
+      PAPERCLIP_INSTANCE_ID: "default",
+    } as NodeJS.ProcessEnv;
+    return { env, sharedHome, paperclipHome };
+  }
+
+  it("falls back to copying auth.json when symlink privilege is unavailable", async () => {
+    const { env, sharedHome } = await freshEnv();
+    const raw = JSON.stringify({ tokens: { access_token: "shared" } });
+    await fs.writeFile(path.join(sharedHome, "auth.json"), raw);
+    vi.spyOn(fs, "symlink").mockRejectedValueOnce(
+      Object.assign(new Error("A required privilege is not held by the client"), { code: "EPERM" }),
+    );
+
+    const managedHome = await prepareManagedCodexHome(env, onLog, companyId);
+    const target = path.join(managedHome, "auth.json");
+
+    expect(await fs.readFile(target, "utf8")).toBe(raw);
+    const targetStat = await fs.lstat(target);
+    expect(targetStat.isFile()).toBe(true);
+    expect(targetStat.isSymbolicLink()).toBe(false);
+  });
+
+  it("refreshes a copied auth.json fallback when shared auth changes", async () => {
+    const { env, sharedHome } = await freshEnv();
+    const managedHome = await prepareManagedCodexHome(env, onLog, companyId);
+    const target = path.join(managedHome, "auth.json");
+    await fs.mkdir(managedHome, { recursive: true });
+    await fs.writeFile(target, JSON.stringify({ OPENAI_API_KEY: "stale" }));
+    const raw = JSON.stringify({ tokens: { access_token: "fresh" } });
+    await fs.writeFile(path.join(sharedHome, "auth.json"), raw);
+
+    await prepareManagedCodexHome(env, onLog, companyId);
+
+    expect(await fs.readFile(target, "utf8")).toBe(raw);
+  });
+
+  it("does not hide non-permission symlink failures", async () => {
+    const { env, sharedHome } = await freshEnv();
+    await fs.writeFile(path.join(sharedHome, "auth.json"), JSON.stringify({ tokens: { access_token: "shared" } }));
+    vi.spyOn(fs, "symlink").mockRejectedValueOnce(
+      Object.assign(new Error("disk is unavailable"), { code: "EIO" }),
+    );
+
+    await expect(prepareManagedCodexHome(env, onLog, companyId)).rejects.toThrow("disk is unavailable");
+  });
+
+  it("keeps configured API-key auth ahead of shared auth seeding", async () => {
+    const { env, sharedHome } = await freshEnv();
+    await fs.writeFile(path.join(sharedHome, "auth.json"), JSON.stringify({ tokens: { access_token: "shared" } }));
+    vi.spyOn(fs, "symlink").mockRejectedValueOnce(
+      Object.assign(new Error("operation not permitted"), { code: "EPERM" }),
+    );
+
+    const managedHome = await prepareManagedCodexHome(env, onLog, companyId, {
+      apiKey: "sk-managed",
+    });
+
+    expect(await fs.readFile(path.join(managedHome, "auth.json"), "utf8")).toBe(
+      JSON.stringify({ OPENAI_API_KEY: "sk-managed" }),
+    );
   });
 });
