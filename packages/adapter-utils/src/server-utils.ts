@@ -1142,6 +1142,18 @@ function windowsPathExts(env: NodeJS.ProcessEnv): string[] {
   return (env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";").filter(Boolean);
 }
 
+function getEnvCaseInsensitive(env: NodeJS.ProcessEnv, key: string): string | undefined {
+  const exact = env[key];
+  if (typeof exact === "string" && exact.length > 0) return exact;
+  const lowerKey = key.toLowerCase();
+  for (const [candidateKey, value] of Object.entries(env)) {
+    if (candidateKey.toLowerCase() === lowerKey && typeof value === "string" && value.length > 0) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 async function pathExists(candidate: string) {
   try {
     await fs.access(candidate, process.platform === "win32" ? fsConstants.F_OK : fsConstants.X_OK);
@@ -1149,6 +1161,65 @@ async function pathExists(candidate: string) {
   } catch {
     return false;
   }
+}
+
+function isBareCodexCommand(command: string) {
+  const normalized = command.trim().toLowerCase();
+  return normalized === "codex" || normalized === "codex.exe";
+}
+
+function normalizeWindowsPathForMatch(candidate: string) {
+  return candidate.replace(/\//g, "\\").toLowerCase();
+}
+
+function isWindowsAppsCodexPackagePath(candidate: string) {
+  const normalized = normalizeWindowsPathForMatch(candidate);
+  return (
+    normalized.includes("\\program files\\windowsapps\\openai.codex_") &&
+    normalized.includes("\\app\\resources\\") &&
+    /\\codex(?:\.exe)?$/.test(normalized)
+  );
+}
+
+function unusableWindowsAppsCodexMessage(candidate: string) {
+  return [
+    `Codex command is not executable: Access is denied (${candidate}).`,
+    "Windows resolved `codex` to the Microsoft Store package resource path.",
+    "Install or select a user-local Codex CLI under %LOCALAPPDATA%\\OpenAI\\Codex\\bin, or set the adapter command to that codex.exe path.",
+  ].join(" ");
+}
+
+async function findWindowsLocalCodexCommand(env: NodeJS.ProcessEnv) {
+  const localAppData = getEnvCaseInsensitive(env, "LOCALAPPDATA") ?? process.env.LOCALAPPDATA;
+  if (!localAppData) return null;
+
+  const binRoot = path.join(localAppData, "OpenAI", "Codex", "bin");
+  const candidates: Array<{ file: string; mtimeMs: number }> = [];
+  const addCandidate = async (file: string) => {
+    try {
+      const stats = await fs.stat(file);
+      if (stats.isFile()) candidates.push({ file, mtimeMs: stats.mtimeMs });
+    } catch {
+      // Missing or inaccessible local Codex installs are ignored here. The
+      // caller reports the original WindowsApps path if no usable fallback is found.
+    }
+  };
+
+  await addCandidate(path.join(binRoot, "codex.exe"));
+
+  try {
+    const entries = await fs.readdir(binRoot, { withFileTypes: true });
+    await Promise.all(
+      entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => addCandidate(path.join(binRoot, entry.name, "codex.exe"))),
+    );
+  } catch {
+    return candidates[0]?.file ?? null;
+  }
+
+  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return candidates[0]?.file ?? null;
 }
 
 async function resolveCommandPath(command: string, cwd: string, env: NodeJS.ProcessEnv): Promise<string | null> {
@@ -1172,7 +1243,11 @@ async function resolveCommandPath(command: string, cwd: string, env: NodeJS.Proc
           : exts.map((ext) => path.join(dir, `${command}${ext}`))
         : [path.join(dir, command)];
     for (const candidate of candidates) {
-      if (await pathExists(candidate)) return candidate;
+      if (!(await pathExists(candidate))) continue;
+      if (process.platform === "win32" && isBareCodexCommand(command) && isWindowsAppsCodexPackagePath(candidate)) {
+        return (await findWindowsLocalCodexCommand(env)) ?? candidate;
+      }
+      return candidate;
     }
   }
 
@@ -1249,6 +1324,10 @@ async function resolveSpawnTarget(
 
   if (process.platform !== "win32") {
     return { command: executable, args };
+  }
+
+  if (resolved && isBareCodexCommand(command) && isWindowsAppsCodexPackagePath(resolved)) {
+    throw new Error(unusableWindowsAppsCodexMessage(resolved));
   }
 
   if (/\.(cmd|bat)$/i.test(executable)) {
@@ -1887,7 +1966,12 @@ export async function ensureCommandResolvable(
     throw new Error('Command not found in PATH: "ssh"');
   }
   const resolved = await resolveCommandPath(command, cwd, env);
-  if (resolved) return;
+  if (resolved) {
+    if (process.platform === "win32" && isBareCodexCommand(command) && isWindowsAppsCodexPackagePath(resolved)) {
+      throw new Error(unusableWindowsAppsCodexMessage(resolved));
+    }
+    return;
+  }
   if (command.includes("/") || command.includes("\\")) {
     const absolute = path.isAbsolute(command) ? command : path.resolve(cwd, command);
     throw new Error(`Command is not executable: "${command}" (resolved: "${absolute}")`);

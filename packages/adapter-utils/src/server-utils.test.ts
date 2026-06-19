@@ -8,9 +8,11 @@ import {
   appendWithByteCap,
   buildInvocationEnvForLogs,
   DEFAULT_PAPERCLIP_AGENT_PROMPT_TEMPLATE,
+  ensureCommandResolvable,
   materializePaperclipSkillCopy,
   refreshPaperclipWorkspaceEnvForExecution,
   renderPaperclipWakePrompt,
+  resolveCommandForLogs,
   runningProcesses,
   runChildProcess,
   sanitizeSshRemoteEnv,
@@ -141,6 +143,71 @@ describe("sanitizeSshRemoteEnv", () => {
         },
       ),
     ).toEqual({ PATH: "/explicit/remote/bin" });
+  });
+});
+
+describe("Windows Codex command resolution", () => {
+  const itOnWindows = process.platform === "win32" ? it : it.skip;
+
+  itOnWindows("prefers a user-local Codex executable over an inaccessible WindowsApps package path", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-path-"));
+    try {
+      const windowsAppsResourceDir = path.join(
+        root,
+        "Program Files",
+        "WindowsApps",
+        "OpenAI.Codex_26.616.4196.0_x64__2p2nqsd0c76g0",
+        "app",
+        "resources",
+      );
+      await fs.mkdir(windowsAppsResourceDir, { recursive: true });
+      await fs.writeFile(path.join(windowsAppsResourceDir, "codex.exe"), "windows-apps-stub", "utf8");
+
+      const localAppData = path.join(root, "LocalAppData");
+      const directCodex = path.join(localAppData, "OpenAI", "Codex", "bin", "codex.exe");
+      const versionedCodex = path.join(localAppData, "OpenAI", "Codex", "bin", "5d35d2790d1d3d7b", "codex.exe");
+      await fs.mkdir(path.dirname(directCodex), { recursive: true });
+      await fs.writeFile(directCodex, "older-local-codex", "utf8");
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      await fs.mkdir(path.dirname(versionedCodex), { recursive: true });
+      await fs.writeFile(versionedCodex, "newer-local-codex", "utf8");
+
+      await expect(
+        resolveCommandForLogs("codex", root, {
+          Path: windowsAppsResourceDir,
+          PATHEXT: ".exe",
+          LOCALAPPDATA: localAppData,
+        }),
+      ).resolves.toBe(versionedCodex);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  itOnWindows("fails preflight clearly when only the WindowsApps Codex package path is available", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-path-"));
+    try {
+      const windowsAppsResourceDir = path.join(
+        root,
+        "Program Files",
+        "WindowsApps",
+        "OpenAI.Codex_26.616.4196.0_x64__2p2nqsd0c76g0",
+        "app",
+        "resources",
+      );
+      await fs.mkdir(windowsAppsResourceDir, { recursive: true });
+      await fs.writeFile(path.join(windowsAppsResourceDir, "codex.exe"), "windows-apps-stub", "utf8");
+
+      await expect(
+        ensureCommandResolvable("codex", root, {
+          Path: windowsAppsResourceDir,
+          PATHEXT: ".exe",
+          LOCALAPPDATA: path.join(root, "missing-local-appdata"),
+        }),
+      ).rejects.toThrow(/Codex command is not executable: Access is denied/);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 });
 
