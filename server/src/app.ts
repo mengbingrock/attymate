@@ -27,6 +27,7 @@ import { activityRoutes } from "./routes/activity.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { userProfileRoutes } from "./routes/user-profiles.js";
 import { userWorkspaceRoutes } from "./routes/user-workspace.js";
+import { runnerRoutes } from "./routes/runner.js";
 import { sidebarBadgeRoutes } from "./routes/sidebar-badges.js";
 import { sidebarPreferenceRoutes } from "./routes/sidebar-preferences.js";
 import { inboxDismissalRoutes } from "./routes/inbox-dismissals.js";
@@ -209,6 +210,7 @@ export async function createApp(
   api.use(dashboardRoutes(db));
   api.use(userProfileRoutes(db));
   api.use(userWorkspaceRoutes(db));
+  api.use(runnerRoutes(db));
   api.use(sidebarBadgeRoutes(db));
   api.use(sidebarPreferenceRoutes(db));
   api.use(inboxDismissalRoutes(db));

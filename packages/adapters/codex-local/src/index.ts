@@ -79,6 +79,7 @@ Core fields:
 - dangerouslyBypassApprovalsAndSandbox (boolean, optional): run with bypass flag
 - appsEnabled (boolean, optional): expose Codex Apps/connectors (Google Calendar, Gmail, Drive, ...) to codex exec via -c apps_enabled=true; defaults to true. Set false to withhold connectors from this agent.
 - command (string, optional): defaults to "codex"
+- useServerCodexAuth (boolean, optional): runner agents only (codex_local_runner). When true, the runner authenticates the local codex CLI with the control plane's codex login (same account as the server), backing up the machine's own login first and restoring it when turned off. Defaults to false (use the machine's local login; a fresh machine with no login still falls back to the server's).
 - extraArgs (string[], optional): additional CLI args
 - env (object, optional): KEY=VALUE environment variables
 - workspaceStrategy (object, optional): execution workspace strategy; currently supports { type: "git_worktree", baseRef?, branchTemplate?, worktreeParentDir? }

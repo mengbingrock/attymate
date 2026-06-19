@@ -491,6 +491,12 @@ export interface CreateConfigValues {
   dangerouslySkipPermissions: boolean;
   search: boolean;
   fastMode: boolean;
+  /**
+   * codex runner agents: authenticate the local codex CLI with the control
+   * plane's codex login (same account as the server) instead of the machine's
+   * own login. The runner backs up and restores the user's local login.
+   */
+  useServerCodexAuth?: boolean;
   dangerouslyBypassSandbox: boolean;
   command: string;
   args: string;
