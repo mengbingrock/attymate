@@ -2,6 +2,11 @@ import path from "node:path";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
+import {
+  hasWorkspacePathTraversal,
+  isAbsoluteWorkspacePath,
+  isWindowsWorkspacePath,
+} from "@paperclipai/shared/workspace-path";
 import { validate } from "../middleware/validate.js";
 import { unprocessable } from "../errors.js";
 import { dispatchToUserBridge, isUserBridgeConnected } from "../realtime/local-bridge-ws.js";
@@ -27,8 +32,15 @@ const workspacePathSchema = z
   .trim()
   .min(1, "workspacePath required")
   .max(1024, "workspacePath too long")
-  .refine((value) => value.startsWith("/"), "workspacePath must be absolute (start with /)")
-  .refine((value) => !value.split("/").includes(".."), "workspacePath must not contain .. segments");
+  // Accept absolute paths on any platform — POSIX (/Users/...) AND Windows
+  // (C:\..., C:/..., \\server\share). The desktop picker returns a native path
+  // for the user's OS, which may differ from the server's OS, so we can't use
+  // Node's POSIX-only path.isAbsolute here. See @paperclipai/shared/workspace-path.
+  .refine(
+    (value) => isAbsoluteWorkspacePath(value),
+    "workspacePath must be an absolute path (e.g. /Users/you/folder or C:\\Users\\you\\folder)",
+  )
+  .refine((value) => !hasWorkspacePathTraversal(value), "workspacePath must not contain .. segments");
 
 const addWorkspaceSchema = z.object({
   workspacePath: workspacePathSchema,
@@ -44,8 +56,8 @@ const relativeWorkspacePathSchema = z
   .max(1024, "path too long")
   // Reject any absolute path; the agent should always express paths relative
   // to the user's workspace root. Absolute paths from agents are a smell.
-  .refine((value) => !value.startsWith("/"), "path must be relative to the workspace root")
-  .refine((value) => !value.split("/").includes(".."), "path must not contain .. segments");
+  .refine((value) => !isAbsoluteWorkspacePath(value), "path must be relative to the workspace root")
+  .refine((value) => !hasWorkspacePathTraversal(value), "path must not contain .. segments");
 
 const readLocalFileSchema = z.object({
   path: relativeWorkspacePathSchema,
@@ -92,8 +104,8 @@ interface BridgeListdirResponse {
 const listdirPathSchema = z
   .string()
   .max(1024, "path too long")
-  .refine((value) => !value.startsWith("/"), "path must be relative to the workspace root")
-  .refine((value) => !value.split("/").includes(".."), "path must not contain .. segments")
+  .refine((value) => !isAbsoluteWorkspacePath(value), "path must be relative to the workspace root")
+  .refine((value) => !hasWorkspacePathTraversal(value), "path must not contain .. segments")
   .default("");
 
 // Relative file path for the per-workspace read endpoint — must be non-empty
@@ -115,6 +127,25 @@ function requireBoardUserId(req: Request, res: Response): string | null {
 function readCompanyIdQuery(req: Request): string | undefined {
   const raw = req.query.companyId;
   return typeof raw === "string" && raw.trim() ? raw.trim() : undefined;
+}
+
+/**
+ * Resolve a workspace-relative path against the stored workspace root and confirm
+ * it stays inside that root. The workspace root may be a Windows path even though
+ * the server runs on POSIX, so we pick `path.win32` vs `path.posix` semantics
+ * based on the root rather than using the server's own `path`. The returned
+ * `resolvedAbs` is a native path for the workspace's platform — exactly what the
+ * desktop bridge expects.
+ */
+function resolveWorkspaceChildPath(
+  workspaceRoot: string,
+  relativePath: string,
+): { resolvedAbs: string; rel: string; escapes: boolean } {
+  const p = isWindowsWorkspacePath(workspaceRoot) ? path.win32 : path.posix;
+  const resolvedAbs = relativePath ? p.resolve(workspaceRoot, relativePath) : workspaceRoot;
+  const rel = p.relative(workspaceRoot, resolvedAbs);
+  const escapes = rel.startsWith("..") || p.isAbsolute(rel);
+  return { resolvedAbs, rel, escapes };
 }
 
 export function userWorkspaceRoutes(db: Db) {
@@ -199,9 +230,8 @@ export function userWorkspaceRoutes(db: Db) {
     }
 
     const relativePath = parseResult.data;
-    const resolvedAbs = path.resolve(workspace.workspacePath, relativePath);
-    const rel = path.relative(workspace.workspacePath, resolvedAbs);
-    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    const { resolvedAbs, escapes } = resolveWorkspaceChildPath(workspace.workspacePath, relativePath);
+    if (escapes) {
       throw unprocessable("path escapes the granted workspace root");
     }
 
@@ -243,11 +273,8 @@ export function userWorkspaceRoutes(db: Db) {
       return;
     }
     const relativePath = parseResult.data;
-    const resolvedAbs = relativePath
-      ? path.resolve(workspace.workspacePath, relativePath)
-      : workspace.workspacePath;
-    const rel = path.relative(workspace.workspacePath, resolvedAbs);
-    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    const { resolvedAbs, escapes } = resolveWorkspaceChildPath(workspace.workspacePath, relativePath);
+    if (escapes) {
       throw unprocessable("path escapes the granted workspace root");
     }
 
@@ -283,9 +310,8 @@ export function userWorkspaceRoutes(db: Db) {
     }
 
     const relativePath = req.body.path as string;
-    const resolvedAbs = path.resolve(workspace.workspacePath, relativePath);
-    const rel = path.relative(workspace.workspacePath, resolvedAbs);
-    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    const { resolvedAbs, escapes } = resolveWorkspaceChildPath(workspace.workspacePath, relativePath);
+    if (escapes) {
       throw unprocessable("path escapes the granted workspace root");
     }
 
@@ -315,9 +341,8 @@ export function userWorkspaceRoutes(db: Db) {
     }
 
     const relativePath = req.body.path as string;
-    const resolvedAbs = path.resolve(workspace.workspacePath, relativePath);
-    const rel = path.relative(workspace.workspacePath, resolvedAbs);
-    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    const { resolvedAbs, rel, escapes } = resolveWorkspaceChildPath(workspace.workspacePath, relativePath);
+    if (escapes) {
       throw unprocessable("path escapes the granted workspace root");
     }
 

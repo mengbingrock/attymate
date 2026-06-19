@@ -595,6 +595,9 @@ importers:
       '@paperclipai/adapter-utils':
         specifier: workspace:*
         version: link:../adapter-utils
+      '@paperclipai/shared':
+        specifier: workspace:*
+        version: link:../shared
       ws:
         specifier: ^8.19.0
         version: 8.19.0

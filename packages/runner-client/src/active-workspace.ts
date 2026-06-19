@@ -9,6 +9,7 @@
 // grant (matches the server's getActive precedence), so a single-folder user
 // needs zero clicks.
 
+import { normalizeLegacyWindowsWorkspacePath } from "@paperclipai/shared/workspace-path";
 import type { RunnerClientConfig } from "./config.js";
 
 interface UserWorkspaceRow {
@@ -41,7 +42,11 @@ function pickActive(rows: UserWorkspaceRow[]): UserWorkspaceRow | null {
 
 /** Exposed for unit testing the precedence logic without a network call. */
 export function selectActiveWorkspacePath(rows: UserWorkspaceRow[]): string | null {
-  return pickActive(rows)?.workspacePath ?? null;
+  const raw = pickActive(rows)?.workspacePath ?? null;
+  // Repair legacy "/C:/Users/..." records (from the old workaround) back to a
+  // native Windows path "C:/Users/..." so fs.stat / cwd work on the Windows
+  // runner. No-op for genuine POSIX and native Windows paths.
+  return raw === null ? null : normalizeLegacyWindowsWorkspacePath(raw);
 }
 
 /**

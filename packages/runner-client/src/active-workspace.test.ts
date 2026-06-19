@@ -57,4 +57,16 @@ describe("selectActiveWorkspacePath", () => {
     ];
     expect(selectActiveWorkspacePath(rows)).toBe("/b");
   });
+
+  it("repairs a legacy /C:/ workaround record to a native Windows path", () => {
+    const rows = [
+      row({ id: "win", workspacePath: "/C:/Users/DL5420B-103-USER/AttyMateWorkspace" }),
+    ];
+    expect(selectActiveWorkspacePath(rows)).toBe("C:/Users/DL5420B-103-USER/AttyMateWorkspace");
+  });
+
+  it("passes through a native Windows path unchanged", () => {
+    const rows = [row({ id: "win", workspacePath: "C:\\Users\\DL5420B-103-USER\\AttyMateWorkspace" })];
+    expect(selectActiveWorkspacePath(rows)).toBe("C:\\Users\\DL5420B-103-USER\\AttyMateWorkspace");
+  });
 });
