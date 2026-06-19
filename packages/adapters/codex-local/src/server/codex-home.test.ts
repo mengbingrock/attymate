@@ -162,6 +162,68 @@ describe("prepareManagedCodexHome auth seeding", () => {
     return { env, sharedHome, paperclipHome };
   }
 
+  it("writes a minimal managed config instead of copying desktop plugin and sandbox settings", async () => {
+    const { env, sharedHome } = await freshEnv();
+    await fs.writeFile(
+      path.join(sharedHome, "config.toml"),
+      [
+        'model = "gpt-5"',
+        'model_provider = "openai"',
+        'model_reasoning_effort = "high"',
+        'notify = ["powershell.exe", "-Command", "toast"]',
+        "",
+        "[windows]",
+        'sandbox = "elevated"',
+        "",
+        '[plugins."gmail@openai-curated"]',
+        "enabled = true",
+        'model = "plugin-model"',
+        "",
+        "[mcp_servers.browseros]",
+        'command = "browseros"',
+        "",
+      ].join("\n"),
+    );
+
+    const managedHome = await prepareManagedCodexHome(env, onLog, companyId);
+    const managedConfig = await fs.readFile(path.join(managedHome, "config.toml"), "utf8");
+
+    expect(managedConfig).toContain('model = "gpt-5"');
+    expect(managedConfig).toContain('model_provider = "openai"');
+    expect(managedConfig).toContain('model_reasoning_effort = "high"');
+    expect(managedConfig).not.toContain("plugin-model");
+    expect(managedConfig).toContain("[windows]");
+    expect(managedConfig).toContain('sandbox = "unelevated"');
+    expect(managedConfig).not.toContain("notify");
+    expect(managedConfig).not.toContain("[plugins");
+    expect(managedConfig).not.toContain("[mcp_servers");
+    expect(managedConfig).not.toContain('sandbox = "elevated"');
+  });
+
+  it("replaces a previously copied desktop config with the managed minimal config", async () => {
+    const { env, paperclipHome } = await freshEnv();
+    const managedHome = path.join(paperclipHome, "instances", "default", "companies", companyId, "codex-home");
+    await fs.mkdir(managedHome, { recursive: true });
+    const copiedDesktopConfig = [
+      'notify = ["toast"]',
+      "[windows]",
+      'sandbox = "elevated"',
+      "[mcp_servers.browseros]",
+    ].join(String.fromCharCode(10));
+    await fs.writeFile(
+      path.join(managedHome, "config.toml"),
+      copiedDesktopConfig,
+    );
+
+    await prepareManagedCodexHome(env, onLog, companyId);
+
+    const managedConfig = await fs.readFile(path.join(managedHome, "config.toml"), "utf8");
+    expect(managedConfig).toContain('sandbox = "unelevated"');
+    expect(managedConfig).not.toContain("notify");
+    expect(managedConfig).not.toContain("[mcp_servers");
+    expect(managedConfig).not.toContain('sandbox = "elevated"');
+  });
+
   it("falls back to copying auth.json when symlink privilege is unavailable", async () => {
     const { env, sharedHome } = await freshEnv();
     const raw = JSON.stringify({ tokens: { access_token: "shared" } });
