@@ -19,7 +19,7 @@ requirements:
     - Paperclip with codex_local adapter support.
     - Authenticated Codex CLI or an approved deployment-specific API-key auth mechanism.
     - Python and OCR/PDF tooling configured through the private Firm Operations Guide.
-    - Monitor profiles configured privately before Gmail, Calendar, or Docket routines are enabled.
+    - Monitor profiles configured privately before Gmail, Calendar, or Docket routines are enabled; setup-ready/paused is not the same as enabled/runnable.
     - Matter and output paths supplied at runtime through issue contracts.
 includes:
   - goals/complete-firm-onboarding-and-runtime-readiness/GOAL.md
