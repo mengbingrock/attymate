@@ -252,6 +252,7 @@ describe("server adapter registry", () => {
       installCommand: expectedClaudeInstall,
       localInstallCommand: expectedClaudeLocalInstall,
       localInstallNpmPackage: "@anthropic-ai/claude-code",
+      localInstallCommandWindows: null,
     });
     expect(findActiveServerAdapter("codex_local")?.getRuntimeCommandSpec?.({})).toEqual({
       command: "codex",
@@ -259,6 +260,9 @@ describe("server adapter registry", () => {
       installCommand: expectedCodexInstall,
       localInstallCommand: expectedCodexLocalInstall,
       localInstallNpmPackage: "@openai/codex",
+      // Codex ships an official Windows standalone installer (used over npm on win32).
+      localInstallCommandWindows:
+        "$env:CODEX_NON_INTERACTIVE=1; irm https://chatgpt.com/codex/install.ps1 | iex",
     });
     expect(findActiveServerAdapter("gemini_local")?.getRuntimeCommandSpec?.({})).toEqual({
       command: "gemini",
@@ -266,6 +270,7 @@ describe("server adapter registry", () => {
       installCommand: expectedGeminiInstall,
       localInstallCommand: expectedGeminiLocalInstall,
       localInstallNpmPackage: "@google/gemini-cli",
+      localInstallCommandWindows: null,
     });
     expect(findActiveServerAdapter("opencode_local")?.getRuntimeCommandSpec?.({})).toEqual({
       command: "opencode",
@@ -273,6 +278,7 @@ describe("server adapter registry", () => {
       installCommand: expectedOpenCodeInstall,
       localInstallCommand: expectedOpenCodeLocalInstall,
       localInstallNpmPackage: "opencode-ai",
+      localInstallCommandWindows: null,
     });
   });
 

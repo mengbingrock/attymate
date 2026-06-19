@@ -401,6 +401,42 @@ describe("ensureAdapterExecutionTargetRuntimeCommandInstalled", () => {
       );
     });
 
+    it("uses the PowerShell installer on Windows when provided (over npm)", async () => {
+      const missing = `paperclip-missing-${Math.random().toString(16).slice(2)}`;
+      const psInstall =
+        "$env:CODEX_NON_INTERACTIVE=1; irm https://chatgpt.com/codex/install.ps1 | iex";
+      const origPlatform = process.platform;
+      Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+      // Missing before install, resolvable after (so no fresh-PATH error).
+      vi.spyOn(serverUtils, "ensureCommandResolvable")
+        .mockRejectedValueOnce(new Error("not found"))
+        .mockResolvedValue(undefined);
+      const runChildProcessSpy = vi
+        .spyOn(serverUtils, "runChildProcess")
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .mockResolvedValue(okResult as any);
+      try {
+        await ensureAdapterExecutionTargetRuntimeCommandInstalled({
+          runId: "run-win-install",
+          target: { kind: "local" },
+          localInstallNpmPackage: "@openai/codex",
+          localInstallCommandWindows: psInstall,
+          detectCommand: missing,
+          cwd: "C:/work",
+          env: { PATH: "C:/Windows/System32" },
+          timeoutSec: 30,
+        });
+      } finally {
+        Object.defineProperty(process, "platform", { value: origPlatform, configurable: true });
+      }
+      expect(runChildProcessSpy).toHaveBeenCalledWith(
+        "run-win-install",
+        "powershell.exe",
+        ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psInstall],
+        expect.objectContaining({ cwd: "C:/work" }),
+      );
+    });
+
     it("skips install when the command already resolves", async () => {
       const runChildProcessSpy = vi
         .spyOn(serverUtils, "runChildProcess")

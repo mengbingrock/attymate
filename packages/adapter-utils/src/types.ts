@@ -364,6 +364,14 @@ export interface AdapterRuntimeCommandSpec {
    * adapter command isn't npm-installable (or a custom command was configured).
    */
   localInstallNpmPackage?: string | null;
+  /**
+   * PowerShell command to install the adapter command on a local *Windows*
+   * runner, run via `powershell.exe -Command`. Takes precedence over
+   * `localInstallNpmPackage` on win32 — e.g. Codex's official standalone
+   * installer (https://developers.openai.com/codex/cli). Null → fall back to the
+   * npm package on Windows.
+   */
+  localInstallCommandWindows?: string | null;
 }
 
 export interface ServerAdapterModule {

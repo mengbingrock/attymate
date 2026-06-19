@@ -149,6 +149,7 @@ function buildNpmRuntimeCommandSpec(
   config: Record<string, unknown>,
   fallbackCommand: string,
   packageName: string,
+  windowsInstallCommand?: string | null,
 ): AdapterRuntimeCommandSpec {
   const command = readConfiguredCommand(config, fallbackCommand);
   const canSelfInstall = !hasPathSeparator(command) && command === fallbackCommand;
@@ -172,8 +173,16 @@ function buildNpmRuntimeCommandSpec(
     // `npm install -g <pkg>` (no POSIX shell), so codex/claude/etc. auto-install
     // on Windows runners too — not just macOS/Linux.
     localInstallNpmPackage: canSelfInstall ? packageName : null,
+    // Optional Windows-specific installer (PowerShell), preferred over npm on
+    // win32 — e.g. Codex's official standalone installer.
+    localInstallCommandWindows: canSelfInstall ? (windowsInstallCommand ?? null) : null,
   };
 }
+
+// Codex's official Windows install method (https://developers.openai.com/codex/cli).
+// Runs the standalone installer non-interactively via PowerShell.
+const CODEX_WINDOWS_INSTALL_COMMAND =
+  "$env:CODEX_NON_INTERACTIVE=1; irm https://chatgpt.com/codex/install.ps1 | iex";
 
 function buildCursorRuntimeCommandSpec(config: Record<string, unknown>): AdapterRuntimeCommandSpec {
   const command = readConfiguredCommand(config, "agent");
@@ -305,7 +314,8 @@ const codexLocalAdapter: ServerAdapterModule = {
   supportsInstructionsBundle: true,
   instructionsPathKey: "instructionsFilePath",
   requiresMaterializedRuntimeSkills: false,
-  getRuntimeCommandSpec: (config) => buildNpmRuntimeCommandSpec(config, "codex", "@openai/codex"),
+  getRuntimeCommandSpec: (config) =>
+    buildNpmRuntimeCommandSpec(config, "codex", "@openai/codex", CODEX_WINDOWS_INSTALL_COMMAND),
   agentConfigurationDoc: codexAgentConfigurationDoc,
   getQuotaWindows: codexGetQuotaWindows,
 };

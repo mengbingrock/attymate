@@ -658,6 +658,7 @@ export async function ensureAdapterExecutionTargetRuntimeCommandInstalled(input:
   installCommand?: string | null;
   localInstallCommand?: string | null;
   localInstallNpmPackage?: string | null;
+  localInstallCommandWindows?: string | null;
   detectCommand?: string | null;
   cwd: string;
   env: Record<string, string>;
@@ -668,14 +669,41 @@ export async function ensureAdapterExecutionTargetRuntimeCommandInstalled(input:
   const target = input.target;
 
   // ── Local runner (the user's own machine) ──────────────────────────────────
-  // Install cross-platform: resolve the command via Node (handles Windows
-  // .cmd/.exe) and, if missing, run a STRUCTURED `npm install -g <pkg>` rather
-  // than a POSIX `sh -lc` / `command -v` snippet. This makes auto-install work
-  // on Windows runners, not just macOS/Linux. (npm is the cross-platform Codex
-  // install method per https://developers.openai.com/codex/cli.)
+  // Install cross-platform without a POSIX shell: resolve the command via Node
+  // (handles Windows .cmd/.exe) and, if missing, run the host-appropriate
+  // installer — so auto-install works on Windows runners, not just macOS/Linux.
+  //   - Windows: a PowerShell installer when provided (e.g. Codex's official
+  //     standalone installer per https://developers.openai.com/codex/cli),
+  //     else a structured `npm install -g <pkg>`.
+  //   - macOS/Linux: `npm install -g <pkg>`.
   if (!target || target.kind === "local") {
+    const isWindows = process.platform === "win32";
     const npmPackage = input.localInstallNpmPackage?.trim();
-    if (!npmPackage) return; // nothing locally auto-installable (e.g. custom command)
+    const windowsInstall = input.localInstallCommandWindows?.trim();
+    const method:
+      | { spawn: [string, string[]]; label: string; hint: string; freshPathRisk: boolean }
+      | null =
+      isWindows && windowsInstall
+        ? {
+            spawn: ["powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", windowsInstall]],
+            label: "the Windows installer",
+            hint: "Is PowerShell available?",
+            // The standalone installer lands the binary in a new dir + updates the
+            // user PATH, which this already-running process won't see until restart.
+            freshPathRisk: true,
+          }
+        : npmPackage
+          ? {
+              spawn: ["npm", ["install", "-g", npmPackage]],
+              label: `npm install -g ${npmPackage}`,
+              hint: "Is Node/npm installed and on PATH?",
+              // npm's global bin is already on PATH, so a fresh install is visible
+              // immediately.
+              freshPathRisk: false,
+            }
+          : null;
+    if (!method) return; // nothing locally auto-installable (e.g. a custom command)
+
     const detectName = input.detectCommand?.trim();
     const isResolvable = async (): Promise<boolean> => {
       if (!detectName) return false;
@@ -690,12 +718,12 @@ export async function ensureAdapterExecutionTargetRuntimeCommandInstalled(input:
     if (input.onLog) {
       await input.onLog(
         "stdout",
-        `[paperclip] ${detectName ?? npmPackage} not found; installing ${npmPackage} via "npm install -g"…\n`,
+        `[paperclip] ${detectName ?? "adapter command"} not found; installing via ${method.label}…\n`,
       );
     }
     let installResult: RunProcessResult;
     try {
-      installResult = await runChildProcess(input.runId, "npm", ["install", "-g", npmPackage], {
+      installResult = await runChildProcess(input.runId, method.spawn[0], method.spawn[1], {
         cwd: input.cwd,
         env: input.env,
         timeoutSec: input.timeoutSec && input.timeoutSec > 0 ? input.timeoutSec : 300,
@@ -703,22 +731,33 @@ export async function ensureAdapterExecutionTargetRuntimeCommandInstalled(input:
         onLog: input.onLog ?? (async () => {}),
       });
     } catch (err) {
-      // npm itself missing / spawn failed. Re-check in case the CLI is present
-      // anyway; otherwise surface a clear, actionable error.
+      // The installer itself failed to spawn (e.g. npm/powershell missing).
+      // Re-check in case the CLI is present anyway; otherwise surface a clear,
+      // actionable error.
       if (await isResolvable()) return;
       throw new Error(
-        `Failed to install ${npmPackage}: ${err instanceof Error ? err.message : String(err)}. Is Node/npm installed and on PATH?`,
+        `Failed to install via ${method.label}: ${err instanceof Error ? err.message : String(err)}. ${method.hint}`,
       );
     }
     // A failed install isn't necessarily fatal — the CLI may already be on PATH.
     if (await isResolvable()) return;
     if (installResult.timedOut) {
-      throw new Error(`Timed out installing ${npmPackage} via "npm install -g".`);
+      throw new Error(`Timed out installing via ${method.label}.`);
     }
     if ((installResult.exitCode ?? 0) !== 0) {
-      throw new Error(`Failed to install ${npmPackage} via "npm install -g" (exit ${installResult.exitCode ?? "?"}).`);
+      throw new Error(`Failed to install via ${method.label} (exit ${installResult.exitCode ?? "?"}).`);
     }
-    return; // installed (no detectCommand to confirm against — assume success)
+    // Installed, but a freshly-installed CLI (e.g. the Codex standalone
+    // installer) may have landed in a dir not yet on this process's PATH, so the
+    // run can't find it until the app restarts. Surface that clearly instead of a
+    // vague downstream "command not found". (npm's global bin is already on PATH,
+    // so it doesn't hit this.)
+    if (method.freshPathRisk && detectName) {
+      throw new Error(
+        `Installed ${detectName} via ${method.label}, but it isn't on PATH yet — restart AttyMate and retry.`,
+      );
+    }
+    return;
   }
 
   // ── Remote sandbox (ephemeral Linux image): POSIX shell install ────────────
