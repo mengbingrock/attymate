@@ -32,6 +32,18 @@ Lead with the useful answer:
 - Do not lead with run IDs, API details, local paths, tool stack, full safety contracts, or long forbidden-source lists.
 - Keep technical scope and safety details in `Audit Details`.
 
+## Handoff Budget
+
+Routine specialist handoffs should fit on one screen:
+
+- result;
+- latest artifact link;
+- source or confidence note;
+- next action / owner;
+- blocker, if any.
+
+Do not repeat full Matter Safety Contracts, sibling issue histories, or approval boilerplate unless they change the next action.
+
 ## Safety Language
 
 Use hard-gate language only when it changes the next action. Routine local/source-bound work, issue updates, Matter Dashboard updates, local draft recommendations, QA notes, and internal routing do not need repeated approval boilerplate.

@@ -41,6 +41,8 @@ Use the parent matter issue for matter-level decisions and child-issue comments 
 
 For every new matter event, Legal Ops uses `references/matter-planning-playbook.md` to match or create the matter parent, update the Matter Dashboard, and classify all plausible workstreams before delegating child issues. Matter context artifacts are reusable but relevance-based: agents check the matter context index and the role-relevant artifacts named in the child issue, not the entire context folder by default. When a matter/output root is approved, use the Matter Home convention in `references/matter-context-artifacts.md`.
 
+Legal Ops also uses `agents/legal-ops-supervisor/references/workflow-efficiency-budget.md` before creating child issues. The default matter-event shape is one dashboard, one plan, and a compact work packet with 3-5 active lanes. Small triage, dedupe, dashboard edits, short status answers, and coordination-only notes stay on the parent issue. Child issues are for specialist-owned durable deliverables, longer tool runs, parallel lanes, true blockers, or hard-gate paths.
+
 Lawyer-facing intake uses **Light Intake Mode** by default. Legal Ops asks short plain-English questions, offers safe defaults, and translates the answers into the internal Matter Safety Contract. If work must stop, the blocker comment starts with "I need one thing before I can continue:" and gives 2-3 practical answer choices.
 
 Every active parent matter issue also gets a **Matter Dashboard** using `references/matter-status-digest.md`. It should explain the matter, current status, covered workstreams, latest artifacts, blocker, next-step owner, whether the lawyer needs to act, and what happens next. Child issues may carry technical details, but the parent issue should always have one lawyer-readable dashboard.
@@ -96,6 +98,8 @@ Before creating any substantial deliverable, read `PROJECT-INVENTORY.md`, the re
 | Per-matter status roll-up | legal-ops-supervisor | Per active matter |
 
 Monitor runs must write a durable `monitor-report` issue document. Actionable findings are deduped and routed to Legal Ops triage; no-findings reports close without creating unnecessary work.
+
+Monitor findings should be batched. One monitor run should create one report and, when needed, one Legal Ops triage packet per matter or run. Do not open one issue per minor email, calendar, or docket cue unless it becomes distinct substantive work.
 
 ## Critical rules summary
 
