@@ -30,6 +30,7 @@
     "@paperclipai/adapter-gemini-local": "workspace:*",
     "@paperclipai/adapter-opencode-local": "workspace:*",
     "@paperclipai/adapter-pi-local": "workspace:*",
+    "@paperclipai/shared": "workspace:*",
     "ws": "^8.19.0"
   },
   "devDependencies": {

@@ -15,6 +15,10 @@ import { and, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { companyMemberships, documentMirrorQueue, documents, issueDocuments, issues } from "@paperclipai/db";
 import { isSystemIssueDocumentKey } from "@paperclipai/shared";
+import {
+  isWindowsWorkspacePath,
+  normalizeLegacyWindowsWorkspacePath,
+} from "@paperclipai/shared/workspace-path";
 import { logger } from "../middleware/logger.js";
 import { dispatchToUserBridge, isUserBridgeConnected } from "../realtime/local-bridge-ws.js";
 import { userWorkspaceService } from "./user-workspaces.js";
@@ -184,9 +188,14 @@ export function documentMirrorService(db: Db) {
           continue;
         }
 
-        const resolvedAbs = path.resolve(workspace.workspacePath, row.relativePath);
-        const rel = path.relative(workspace.workspacePath, resolvedAbs);
-        if (rel.startsWith("..") || path.isAbsolute(rel)) {
+        // The workspace root may be a Windows path even though the server runs
+        // on POSIX, so resolve with the matching path flavor and repair any
+        // legacy "/C:/..." record to a native Windows path the desktop can write.
+        const workspaceRoot = normalizeLegacyWindowsWorkspacePath(workspace.workspacePath);
+        const p = isWindowsWorkspacePath(workspaceRoot) ? path.win32 : path.posix;
+        const resolvedAbs = p.resolve(workspaceRoot, row.relativePath);
+        const rel = p.relative(workspaceRoot, resolvedAbs);
+        if (rel.startsWith("..") || p.isAbsolute(rel)) {
           // Defense-in-depth: paths are sanitized at enqueue, so this is unexpected.
           // Mark failed (don't retry) rather than risk an escaping write.
           await db
@@ -198,7 +207,7 @@ export function documentMirrorService(db: Db) {
 
         await dispatchToUserBridge(userId, "write", {
           path: resolvedAbs,
-          workspaceRoot: workspace.workspacePath,
+          workspaceRoot,
           contents: Buffer.from(body, "utf-8").toString("base64"),
           encoding: "base64",
           createParents: true,
