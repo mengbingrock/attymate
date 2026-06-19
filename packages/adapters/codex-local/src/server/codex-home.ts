@@ -5,8 +5,15 @@ import type { AdapterExecutionContext } from "@paperclipai/adapter-utils";
 import { resolvePaperclipInstanceRootForAdapter } from "@paperclipai/adapter-utils/server-utils";
 
 const TRUTHY_ENV_RE = /^(1|true|yes|on)$/i;
-const COPIED_SHARED_FILES = ["config.json", "config.toml", "instructions.md"] as const;
+const COPIED_SHARED_FILES = ["config.json", "instructions.md"] as const;
 const SYMLINKED_SHARED_FILES = ["auth.json"] as const;
+const SAFE_SHARED_CONFIG_KEYS = [
+  "model",
+  "model_provider",
+  "model_reasoning_effort",
+  "model_reasoning_summary",
+  "reasoning_effort",
+] as const;
 
 function nonEmpty(value: string | undefined): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
@@ -102,6 +109,47 @@ async function ensureCopiedFile(target: string, source: string): Promise<void> {
   if (existing) return;
   await ensureParentDir(target);
   await fs.copyFile(source, target);
+}
+
+function extractSafeSharedConfigDefaults(configToml: string): string[] {
+  const safeKeys = new Set<string>(SAFE_SHARED_CONFIG_KEYS);
+  const defaults: string[] = [];
+  let inTopLevel = true;
+
+  for (const line of configToml.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    if (trimmed.startsWith("[")) {
+      inTopLevel = false;
+      continue;
+    }
+    if (!inTopLevel) continue;
+
+    const match = trimmed.match(/^([A-Za-z0-9_.-]+)\s*=\s*(.+)$/);
+    if (!match) continue;
+
+    const [, key, value] = match;
+    if (!safeKeys.has(key)) continue;
+    defaults.push(`${key} = ${value.trim()}`);
+  }
+
+  return defaults;
+}
+
+async function writeManagedCodexConfig(targetHome: string, sourceHome: string): Promise<void> {
+  const sourceConfig = await fs.readFile(path.join(sourceHome, "config.toml"), "utf8").catch(() => "");
+  const safeDefaults = extractSafeSharedConfigDefaults(sourceConfig);
+  const managedConfig = [
+    "# Paperclip-managed Codex config for headless runner execution.",
+    "# Desktop integration settings are intentionally not copied here.",
+    ...safeDefaults,
+    "",
+    "[windows]",
+    'sandbox = "unelevated"',
+    "",
+  ].join("\n");
+
+  await fs.writeFile(path.join(targetHome, "config.toml"), managedConfig, "utf8");
 }
 
 /**
@@ -268,6 +316,8 @@ export async function prepareManagedCodexHome(
       if (!(await pathExists(source))) continue;
       await ensureCopiedFile(path.join(targetHome, name), source);
     }
+
+    await writeManagedCodexConfig(targetHome, sourceHome);
 
     await onLog(
       "stdout",
