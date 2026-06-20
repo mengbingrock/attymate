@@ -98,12 +98,15 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   });
 
   const companies = useMemo(() => {
-    const all = companiesResult.companies;
+    // Defensive: `?? []` guards against the companies.all cache entry ever
+    // holding a non-wrapper shape (e.g. a plain Company[] written by another
+    // consumer), which would otherwise make `all` undefined and crash `.filter`.
+    const all = companiesResult.companies ?? [];
     if (!boardAccess) return all;
     const memberIds = new Set(boardAccess.companyIds ?? []);
     return all.filter((company) => memberIds.has(company.id));
   }, [companiesResult.companies, boardAccess]);
-  const companyListUnauthorized = companiesResult.unauthorized;
+  const companyListUnauthorized = companiesResult.unauthorized ?? false;
   const sidebarCompanies = useMemo(
     () => companies.filter((company) => company.status !== "archived"),
     [companies],

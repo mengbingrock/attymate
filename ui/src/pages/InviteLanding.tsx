@@ -247,8 +247,11 @@ export function InviteLandingPage() {
     retry: false,
   });
 
+  // Distinct key from CompanyContext's companies.all (which stores a
+  // { companies, unauthorized } wrapper, not a Company[]). Sharing the key
+  // corrupts the cache and crashes one side's `.filter`/`.some`.
   const companiesQuery = useQuery({
-    queryKey: queryKeys.companies.all,
+    queryKey: queryKeys.companies.inviteMembership,
     queryFn: () => companiesApi.list(),
     enabled: !!sessionQuery.data && !!inviteQuery.data?.companyId,
     retry: false,
@@ -375,8 +378,12 @@ export function InviteLandingPage() {
       setAuthFeedback(null);
       rememberPendingInviteToken(token);
       await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
+      // Refresh CompanyContext's own companies.all (wrapper shape) so the sidebar
+      // picks up the new membership; fetch the plain list under the distinct
+      // invite key for the membership check below.
+      await queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
       const companies = await queryClient.fetchQuery({
-        queryKey: queryKeys.companies.all,
+        queryKey: queryKeys.companies.inviteMembership,
         queryFn: () => companiesApi.list(),
         retry: false,
       });

@@ -192,4 +192,27 @@ describe("CompanyProvider", () => {
     expect(seen).toEqual([null, "company-1"]);
     expect(localStorage.getItem("paperclip.selectedCompanyId")).toBe("company-1");
   });
+
+  it("does not crash when companies.all holds a plain array (cache-shape collision)", async () => {
+    // Regression: the invite page used to write a plain Company[] to companies.all,
+    // colliding with CompanyContext's { companies, unauthorized } shape and
+    // crashing `companiesResult.companies.filter` with "reading 'filter' of
+    // undefined". The provider must tolerate the wrong shape.
+    queryClient.setQueryData(queryKeys.companies.all, [makeCompany("company-1")]);
+    mockCompaniesApi.list.mockImplementation(() => new Promise(() => {}));
+    const seen: Array<string | null> = [];
+
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <CompanyProvider>
+            <Probe onSelectedCompanyId={(companyId) => seen.push(companyId)} />
+          </CompanyProvider>
+        </QueryClientProvider>,
+      );
+    });
+
+    // No throw — the provider rendered. The mismatched shape yields no companies.
+    expect(seen).toEqual([null]);
+  });
 });
