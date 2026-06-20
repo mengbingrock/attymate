@@ -1,6 +1,12 @@
 export const queryKeys = {
   companies: {
     all: ["companies"] as const,
+    // Distinct cache entry for the invite page's membership check. CompanyContext
+    // owns `all` with a { companies, unauthorized } shape; the invite page needs a
+    // plain Company[]. Sharing `all` between the two shapes corrupts the cache and
+    // crashes whichever reads the other's shape. This child key stays a separate
+    // entry (no shape clash) while still being invalidated by `all` (prefix match).
+    inviteMembership: ["companies", "invite-membership"] as const,
     detail: (id: string) => ["companies", id] as const,
     stats: ["companies", "stats"] as const,
   },
