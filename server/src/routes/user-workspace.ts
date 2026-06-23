@@ -137,7 +137,7 @@ function readCompanyIdQuery(req: Request): string | undefined {
  * `resolvedAbs` is a native path for the workspace's platform — exactly what the
  * desktop bridge expects.
  */
-function resolveWorkspaceChildPath(
+export function resolveWorkspaceChildPath(
   workspaceRoot: string,
   relativePath: string,
 ): { resolvedAbs: string; rel: string; escapes: boolean } {

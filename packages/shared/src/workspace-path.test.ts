@@ -76,3 +76,29 @@ describe("normalizeLegacyWindowsWorkspacePath", () => {
     );
   });
 });
+
+describe("workspace paths containing spaces", () => {
+  it("accepts POSIX and Windows paths with spaces as absolute", () => {
+    expect(isAbsoluteWorkspacePath("/Users/martin/My Workspace")).toBe(true);
+    expect(isAbsoluteWorkspacePath("C:\\Users\\Jane Doe\\My Workspace")).toBe(true);
+    expect(isAbsoluteWorkspacePath("C:/Users/Jane Doe/My Workspace")).toBe(true);
+    expect(isAbsoluteWorkspacePath("\\\\server\\team share\\My Workspace")).toBe(true);
+  });
+
+  it("does not flag a space-containing path as traversal (but still catches real ..)", () => {
+    expect(hasWorkspacePathTraversal("/Users/martin/My Workspace/sub dir")).toBe(false);
+    expect(hasWorkspacePathTraversal("C:\\Users\\Jane Doe\\My Workspace")).toBe(false);
+    expect(hasWorkspacePathTraversal("/Users/martin/My Workspace/../escape")).toBe(true);
+  });
+
+  it("classifies space-containing Windows paths as Windows", () => {
+    expect(isWindowsWorkspacePath("C:\\Users\\Jane Doe\\My Workspace")).toBe(true);
+    expect(isWindowsWorkspacePath("/Users/martin/My Workspace")).toBe(false);
+  });
+
+  it("normalizes a legacy Windows path that has spaces", () => {
+    expect(normalizeLegacyWindowsWorkspacePath("/C:/Users/Jane Doe/My Workspace")).toBe(
+      "C:/Users/Jane Doe/My Workspace",
+    );
+  });
+});
