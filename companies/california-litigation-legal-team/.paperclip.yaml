@@ -1,6 +1,6 @@
 schema: paperclip/v1
 sidebar:
-  agents: [legal-ops-supervisor, source-intake-agent, facts-evidence-agent, legal-research-agent, drafting-assembly-agent, legal-qa-agent, calendar-agent, docket-agent, practice-learning-agent, gmail-monitor-agent]
+  agents: [legal-ops-supervisor, source-intake-agent, facts-evidence-agent, legal-research-agent, drafting-assembly-agent, legal-qa-agent, calendar-agent, docket-agent, practice-learning-agent, email-monitor-agent]
   projects: [firm-onboarding]
 agents:
   legal-ops-supervisor:
@@ -194,7 +194,7 @@ agents:
           requirement: optional
           portability: system_dependent
           description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
-  gmail-monitor-agent:
+  email-monitor-agent:
     adapter:
       type: codex_local
       config:
@@ -246,22 +246,34 @@ inputs:
       requirement: optional
       default: "Disabled for authenticated or side-effectful browser actions; public read-only browsing may be issue-scoped."
       description: Browser automation tool status and approval policy for BrowserOS or an equivalent deployment-approved browser.
+    email_connector:
+      kind: text
+      requirement: optional
+      description: Provider-neutral email connector status for gmail, outlook, or other/manual-source deployments. Sensitive values must use Paperclip secret references, not inline package data. Live Outlook/Microsoft monitoring requires a deployment-provided connector; otherwise record pending connector or manual-source mode.
+    email_monitor_profile:
+      kind: text
+      requirement: optional
+      description: Read-only email monitoring profile including provider, connector_status, authorized account/mailbox scope, Gmail labels/query or Outlook folders/categories/search terms or manual-export source, authorized body/thread/attachment access, dedupe policy, routing criteria, redaction policy, cadence, routine status, and hard gates. Required before enabling Email Monitor Agent routines.
     gmail_connector:
       kind: text
       requirement: optional
-      description: Gmail connector status. Sensitive values must use Paperclip secret references, not inline package data.
+      description: Deprecated compatibility alias for email_connector when the provider is Gmail. New imports should use email_connector.
     gmail_monitor_profile:
       kind: text
       requirement: optional
-      description: Read-only Gmail monitoring scope, query rules, authorized body/thread/attachment access, dedupe policy, routing criteria, redaction policy, and schedule preference. Required before enabling Gmail Monitor Agent routines.
-    google_calendar_connector:
+      description: Deprecated compatibility alias for email_monitor_profile when the provider is Gmail. New imports should use email_monitor_profile.
+    calendar_connector:
       kind: text
       requirement: optional
-      description: Google Calendar connector status. Calendar writes require issue-level approval.
+      description: Provider-neutral calendar connector status for google_calendar, outlook_calendar, or other/manual-source deployments. Calendar writes require issue-level approval. Live Outlook Calendar monitoring requires a deployment-provided connector; otherwise record pending connector or manual-source mode.
     calendar_monitor_profile:
       kind: text
       requirement: optional
-      description: Read-only Calendar monitoring scope, calendar set, authorized event-detail and attachment access, exclusions, lookback/lookahead windows, deadline/event categories, dedupe policy, redaction policy, routing criteria, and schedule preference. Required before enabling Calendar Agent monitor routines.
+      description: Read-only calendar monitoring profile including provider, connector_status, authorized calendars/shared calendars/groups, authorized event-detail and attachment/link access, exclusions, lookback/lookahead windows, deadline/event categories, dedupe policy, redaction policy, routing criteria, cadence, routine status, and hard gates. Required before enabling Calendar Agent monitor routines.
+    google_calendar_connector:
+      kind: text
+      requirement: optional
+      description: Deprecated compatibility alias for calendar_connector when the provider is Google Calendar. New imports should use calendar_connector.
     google_drive_connector:
       kind: text
       requirement: optional
@@ -295,7 +307,7 @@ inputs:
       requirement: runtime
       description: Supplied per issue through the Matter Safety Contract, not stored in the reusable package.
 routines:
-  run-gmail-monitor:
+  run-email-monitor:
     status: "paused"
     priority: "medium"
     concurrencyPolicy: "coalesce_if_active"

@@ -12,10 +12,10 @@ includes:
   - tasks/configure-agent-runtime/TASK.md
   - tasks/configure-local-tools/TASK.md
   - tasks/connect-external-tools/TASK.md
-  - tasks/configure-gmail-monitoring/TASK.md
+  - tasks/configure-email-monitoring/TASK.md
   - tasks/configure-calendar-monitoring/TASK.md
   - tasks/configure-docket-monitoring/TASK.md
-  - tasks/run-gmail-monitor/TASK.md
+  - tasks/run-email-monitor/TASK.md
   - tasks/run-calendar-monitor/TASK.md
   - tasks/run-docket-monitor/TASK.md
   - tasks/maintain-firm-operations-guide/TASK.md

@@ -17,13 +17,14 @@ Proceed without asking for:
 - Draft text, memos, proposed orders, declarations, and working-copy drafts created as new artifacts under `{output_root}`.
 - Research logs and citation workups from supplied authorities.
 - Proposed calendar and deadline tables that do not write to a real calendar.
+- Read-only review inside an approved monitor profile, including in-scope email message bodies, thread/conversation context, metadata, authorized attachment contents, calendar event details and event attachments/links, public docket entries, and free public docket documents.
 - Public read-only browser checks and free public docket documents inside the approved public scope, when they do not require login, CAPTCHA, payment, upload, sharing, filing, or service.
 - Parent-linked child issue creation, issue comments, status updates, review packets, and run-state updates.
 - Strategy, relief, risk, sanctions, privacy, or protective-order analysis as draft recommendations only.
 
 Stop only for these hard gate categories:
 
-1. External side effects: email send/reply, calendar writes/invites/notifications, filing, service, signing, external upload, external sharing, or public posting.
+1. External side effects and system writes: email send/reply/forward, mailbox mutation, calendar writes/invites/notifications, filing, service, signing, external upload, external sharing, or public posting.
 2. Irreversible or source-mutating actions: delete, overwrite, rename, mutate original sources, mutate final/signed/filed/served/user-edited documents, or edit active Word/Google Docs in place unless the issue explicitly names that document as the target.
 3. Authentication, payment, or legal-authority expansion: login, MFA, CAPTCHA, paid retrieval, Lexis, new external legal research, external downloads outside the approved public/read-only scope, or adding new legal authorities not supplied in the test package.
 
@@ -39,6 +40,7 @@ Proceed and log:
 - New working-copy drafts created under `{output_root}`.
 - Research logs from supplied authorities.
 - Strategy, relief, sanctions, privacy, or protective-order analysis as draft recommendations.
+- Read-only monitor reports from approved email, calendar, or docket profiles.
 - Proposed child issue descriptions and status summaries.
 
 ## Yellow Escalations
@@ -55,7 +57,7 @@ Route to Legal Ops Supervisor, but continue safe work where possible:
 
 Request board/user approval before action:
 
-- External side effects: email send/reply, calendar writes/invites/notifications, filing, service, signing, external upload, external sharing, or public posting.
+- External side effects and system writes: email send/reply/forward, mailbox mutation, calendar writes/invites/notifications, filing, service, signing, external upload, external sharing, or public posting.
 - Authentication, payment, or legal-authority expansion: login, MFA, CAPTCHA, paid retrieval, Lexis, new external legal research, external downloads outside the approved public/read-only scope, or adding new legal authorities not supplied or already approved.
 - Destructive or protected mutation: delete, overwrite, rename, mutate original sources, mutate final/signed/filed/served/user-edited documents, or edit active Word/Google Docs in place unless the issue explicitly names that document as the target.
 

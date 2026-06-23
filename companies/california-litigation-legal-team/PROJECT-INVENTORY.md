@@ -19,17 +19,17 @@ Update this file after every completed deliverable. Keeping the inventory curren
 **Owner:** `legal-ops-supervisor`
 **Goal:** `complete-firm-onboarding-and-runtime-readiness`
 **Description:** Import-time onboarding to configure a reusable litigation AI firm — workspace, runtime, tools, connectors, monitor profiles, imported monitor routines, SOPs, matter mapping, matter context conventions, and policy — before any live matter work. The durable output is the private Firm Operations Guide (`firm-operations-guide`).
-**Success condition:** All one-time setup tasks closed; Gmail/Calendar/Docket monitor routines imported and left paused until enabled; Firm Operations Guide complete and current; readiness smoke test posted green; learning mode set to `off` with an explicit opt-in path documented.
+**Success condition:** All one-time setup tasks closed; Email/Calendar/Docket monitor routines imported and left paused until enabled; Firm Operations Guide complete and current; readiness smoke test posted green; learning mode set to `off` with an explicit opt-in path documented.
 
 **Expected deliverables (onboarding tasks):**
 - Configure workspace structure — `legal-ops-supervisor`
 - Configure agent runtime (Codex/Paperclip) — `legal-ops-supervisor`
 - Configure local tools (Python, OCR/PDF, Docling) — `legal-ops-supervisor`
-- Connect external tools (BrowserOS, Gmail, Calendar, Drive, Lexis, LASC, filing) — `legal-ops-supervisor`
-- Configure Gmail monitoring profile and verify paused routine — `legal-ops-supervisor`
+- Connect external tools (BrowserOS, email provider, calendar provider, Drive, Lexis, LASC, filing) — `legal-ops-supervisor`
+- Configure Email monitoring profile and verify paused routine — `legal-ops-supervisor`
 - Configure Calendar monitoring profile and verify paused routine — `legal-ops-supervisor`
 - Configure Docket monitoring profile and verify paused routine — `legal-ops-supervisor`
-- Run Gmail monitor routine (paused until enabled) — `gmail-monitor-agent`
+- Run Email monitor routine (paused until enabled) — `email-monitor-agent`
 - Run Calendar monitor routine (paused until enabled) — `calendar-agent`
 - Run Docket monitor routine (paused until enabled) — `docket-agent`
 - Maintain Firm Operations Guide (`firm-operations-guide` issue document) — `legal-ops-supervisor`

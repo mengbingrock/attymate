@@ -38,12 +38,18 @@ This template is for private deployment setup through a Paperclip issue document
 ## External Tools
 
 - Browser tool:
-- Gmail connector:
-- Gmail monitor profile:
-- Gmail authorized content access:
-- Gmail monitor routine status:
-- Google Calendar:
+- Email provider:
+- Email connector:
+- Email monitor profile:
+- Email authorized account/mailbox scope:
+- Email authorized folders/labels/categories/search terms or manual-source export:
+- Email authorized content access:
+- Email attachment policy:
+- Email monitor routine status:
+- Calendar provider:
+- Calendar connector:
 - Calendar monitor profile:
+- Calendar authorized calendar/shared-calendar/group scope:
 - Calendar authorized content access:
 - Calendar monitor routine status:
 - Google Drive:

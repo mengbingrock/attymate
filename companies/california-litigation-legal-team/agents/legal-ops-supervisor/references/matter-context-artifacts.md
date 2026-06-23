@@ -70,7 +70,7 @@ Agents should not read every context artifact on every issue. Use this relevance
 | Legal Research Agent | `09_Authority_Bank.md` | `04_Court_Rules_And_Standing_Orders.md`, `10_Strategy_Questions_And_Decisions.md` when jurisdiction, local rules, or strategy scope matter |
 | Drafting & Assembly Agent | `01_Matter_Overview.md`, `11_Drafting_And_Work_Product_Log.md` | Pleading, procedural, discovery, authority, and calendar artifacts only as needed for the document type |
 | Legal QA Agent | Artifacts cited or relied on by the work product | Source, authority, deadline, and protected-file artifacts when QA scope requires them |
-| Gmail Monitor Agent | Approved monitor profile and `00_Matter_Context_Index.md` only after Legal Ops maps the finding to a matter | Matter-specific artifacts only when Legal Ops assigns a scoped follow-up |
+| Email Monitor Agent | Approved monitor profile and `00_Matter_Context_Index.md` only after Legal Ops maps the finding to a matter | Matter-specific artifacts only when Legal Ops assigns a scoped follow-up |
 | Practice Learning Agent | Issue-authorized learning sources and do-not-learn list | Matter artifacts only if explicitly allowed by the learning contract |
 
 ## Update Rules

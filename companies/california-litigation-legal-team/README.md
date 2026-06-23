@@ -2,7 +2,7 @@
 
 > Reusable Paperclip `agentcompanies/v1` package for California litigation workflows with supervised issue scope, approvals, and specialist agents — source-bound, matter-scoped, and confidentiality-first.
 
-It packages one board-facing Legal Ops Supervisor, reusable specialist agents, a read-only Gmail Monitor Agent, one opt-in Practice Learning Agent, onboarding tasks, and reusable legal skills for intake, OCR, research, drafting, docket checks, calendaring, QA, workflow learning, and subpoena motion-to-compel work. Paperclip owns coordination (issues, assignment, heartbeats, approvals, audit trail); the legal skills own domain workflow discipline.
+It packages one board-facing Legal Ops Supervisor, reusable specialist agents, a read-only Email Monitor Agent, one opt-in Practice Learning Agent, onboarding tasks, and reusable legal skills for intake, OCR, research, drafting, docket checks, calendaring, QA, workflow learning, and subpoena motion-to-compel work. Paperclip owns coordination (issues, assignment, heartbeats, approvals, audit trail); the legal skills own domain workflow discipline.
 
 ## Overview
 
@@ -47,7 +47,7 @@ graph TD
   LOS --> CAL[Calendar Agent]
   LOS --> DOC[Docket Agent]
   LOS --> PLA[Practice Learning Agent]
-  LOS --> GMA[Gmail Monitor Agent]
+  LOS --> GMA[Email Monitor Agent]
 ```
 
 ## Agents
@@ -65,7 +65,7 @@ Each agent is defined by four files: `AGENTS.md` (role, triggers, handoffs, deli
 | [Calendar Agent](agents/calendar-agent/AGENTS.md) | Litigation Calendar Proposal Specialist | legal-ops-supervisor | legal-calendaring-workflow |
 | [Docket Agent](agents/docket-agent/AGENTS.md) | Public Docket Check Specialist | legal-ops-supervisor | lasc-browseros-docket-check |
 | [Practice Learning Agent](agents/practice-learning-agent/AGENTS.md) | Private Workflow Learning Specialist | legal-ops-supervisor | practice-workflow-learning |
-| [Gmail Monitor Agent](agents/gmail-monitor-agent/AGENTS.md) | Read-Only Legal Intake Monitor | legal-ops-supervisor | — (read-only routing) |
+| [Email Monitor Agent](agents/email-monitor-agent/AGENTS.md) | Read-Only Legal Intake Monitor | legal-ops-supervisor | — (read-only routing) |
 
 ## Goals
 
@@ -76,7 +76,7 @@ Each agent is defined by four files: `AGENTS.md` (role, triggers, handoffs, deli
 
 ## Projects
 
-- [Firm Onboarding](projects/firm-onboarding/PROJECT.md) — import-time onboarding to configure workspace, runtime, local tools, connectors, Gmail/Calendar/Docket monitor profiles, SOPs, matter mapping, and policy before any live matter work. Twelve setup tasks are owned by the Legal Ops Supervisor, and three paused recurring monitor tasks are imported for Gmail, Calendar, and Docket monitoring.
+- [Firm Onboarding](projects/firm-onboarding/PROJECT.md) — import-time onboarding to configure workspace, runtime, local tools, connectors, Email/Calendar/Docket monitor profiles, SOPs, matter mapping, and policy before any live matter work. Twelve setup tasks are owned by the Legal Ops Supervisor, and three paused recurring monitor tasks are imported for Email, Calendar, and Docket monitoring.
 
 The subpoena motion-to-compel workflow is a skill-triggered workflow owned by Legal Ops and the unified specialists — not an import-time project or a separate sub-organization. Live work begins only from a user-created parent issue with a complete Matter Safety Contract.
 
@@ -115,9 +115,9 @@ If an onboarding task is substantively complete but the issue cannot be marked d
 - Review executable-script trust before using repo helper scripts. The MTC drafting skill references an optional local OCR helper at `skills/ca-subpoena-mtc-drafting-workflow/scripts/ocr_pdf_intake.ps1`; it requires explicit `{matter_root}` / `{output_root}` scope, writes only under the approved output root, and must be run only in a deployment-approved Python/OCR environment. Paperclip company import stores the markdown skill/reference files; deployments that want the helper should review and copy or run it from the repository source after approval.
 - Set budgets, model choices, and approval policies appropriate for the deployment.
 - Use the relaxed default approval matrix for testing and product iteration: proceed on local/source-bound output-root work and stop only for external side effects, authentication/payment/legal-authority expansion, or destructive/protected mutation. Use `approval_profile: sandbox_autopilot` to label local non-client-facing test matters.
-- Configure external-tool access before use: BrowserOS or equivalent browser tooling, Gmail, Google Calendar, Google Drive, Lexis, LASC, external knowledge-base/upload systems, filing, service, and upload/download workflows.
-- Configure `gmail_monitor_profile`, `calendar_monitor_profile`, `docket_monitor_profile`, and `monitoring_report_policy` before enabling monitor routines.
-- Keep monitor routines paused until the board/operator approves the profile and schedule. Treat `setup-ready / paused` and `enabled / runnable` as separate states: setup can be done while monitoring is still off. Within an enabled approved profile, monitors may read full in-scope content needed for local reports, including Gmail bodies/threads/attachments, Calendar event details/attachments, and free public docket documents. Every monitor run writes a durable `monitor-report` issue document. Actionable findings are deduped and routed to Legal Ops triage; monitors do not open substantive legal work directly.
+- Configure external-tool access before use: BrowserOS or equivalent browser tooling, email provider, calendar provider, Google Drive, Lexis, LASC, external knowledge-base/upload systems, filing, service, and upload/download workflows.
+- Configure `email_monitor_profile`, `calendar_monitor_profile`, `docket_monitor_profile`, and `monitoring_report_policy` before enabling monitor routines.
+- Keep monitor routines paused until the board/operator approves the profile and schedule. Treat `setup-ready / paused` and `enabled / runnable` as separate states: setup can be done while monitoring is still off. Within an enabled approved profile, monitors may read full in-scope content needed for local reports, including Email bodies/threads/attachments, Calendar event details/attachments, and free public docket documents. Every monitor run writes a durable `monitor-report` issue document. Actionable findings are deduped and routed to Legal Ops triage; monitors do not open substantive legal work directly.
 - Use `references/matter-planning-playbook.md` when a new event arrives. Legal Ops should match or create the matter parent, classify all plausible workstreams, create child issues for safe work now, and record strategy/source/approval blockers in one batched plan.
 - Use `agents/legal-ops-supervisor/references/workflow-efficiency-budget.md` to keep matter work compact: default to 3-5 active lanes, batch monitor candidates, and avoid child issues for coordination-only work.
 - Use `references/matter-context-artifacts.md` to create or maintain matter context. Agents should check the matter context index plus role-relevant artifacts, not the entire context folder by default.
@@ -131,7 +131,7 @@ If an onboarding task is substantively complete but the issue cannot be marked d
 
 This package is intended for public reuse. Do not add client names, matter identifiers, case numbers, firm-specific procedures, private URLs, credentials, account IDs, knowledge-base IDs, calendar IDs, hardcoded local paths, or source matter files.
 
-Deployment-specific behavior belongs in issue contracts, the private Firm Operations Guide, local adapter configuration, or private firm policy documents supplied at runtime. MTC remains a workflow owned by Legal Ops and the unified specialists, not an import-time project or separate sub-organization. Gmail monitoring is optional and read-only until configured. Practice learning is opt-in and private by default.
+Deployment-specific behavior belongs in issue contracts, the private Firm Operations Guide, local adapter configuration, or private firm policy documents supplied at runtime. MTC remains a workflow owned by Legal Ops and the unified specialists, not an import-time project or separate sub-organization. Email monitoring is optional and read-only until configured. Practice learning is opt-in and private by default.
 
 ## References
 

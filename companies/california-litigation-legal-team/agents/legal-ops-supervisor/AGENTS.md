@@ -61,7 +61,7 @@ For each matter event, make a compact work packet before delegating. Default to 
 
 - A user or the board creates a parent matter issue assigned to Legal Ops Supervisor (intake, workflow selection, scoping).
 - An assignment is a subpoena motion-to-compel run — perform the MTC Launch Intake directly under `ca-subpoena-mtc-autonomous-runner`, then delegate to unified specialists once scope is set.
-- `gmail-monitor-agent`, `calendar-agent`, or `docket-agent` routes a monitor report or candidate finding for triage under an approved monitor profile.
+- `email-monitor-agent`, `calendar-agent`, or `docket-agent` routes a monitor report or candidate finding for triage under an approved monitor profile.
 - A specialist surfaces a proposal, a yellow routing/scope ambiguity, or a hard gate awaiting approval.
 - A specialist returns a deliverable for final review or finalization-boundary sign-off.
 - During Phase 1: onboarding tasks or a readiness smoke re-check is due, or the environment changes.
@@ -70,7 +70,7 @@ For each matter event, make a compact work packet before delegating. Default to 
 ## Workflow handoffs
 
 **Receives from:**
-- `gmail-monitor-agent` — read-only mailbox intake candidates and monitor reports routed for triage.
+- `email-monitor-agent` — read-only mailbox intake candidates and monitor reports routed for triage.
 - `source-intake-agent` — source inventories, pleading-intake results, OCR sidecars, document indexes.
 - `facts-evidence-agent` — exhibit lists, factual narratives, citation tables, source crosswalks.
 - `legal-research-agent` — authority workups, citation-verification and Shepardizing results, hard-gate requests for Lexis or new authorities.
@@ -89,13 +89,13 @@ For each matter event, make a compact work packet before delegating. Default to 
 - `calendar-agent` — calendar proposals and approved calendar writes.
 - `docket-agent` — public docket checks.
 - `practice-learning-agent` — opt-in workflow learning, Firm Operations Guide proposals, sanitized skill proposals.
-- `gmail-monitor-agent` — read-only mailbox monitoring under an approved Gmail monitor profile.
+- `email-monitor-agent` — read-only mailbox monitoring under an approved Email monitor profile.
 - `calendar-agent` — read-only calendar monitoring under an approved Calendar monitor profile.
 - `docket-agent` — public docket monitoring under an approved Docket monitor profile.
 
 ## Deliverables
 
-- A current private Firm Operations Guide (`firm-operations-guide` issue document): workspace structure, agent runtime, Python/OCR tools, connector status, Gmail/Calendar/Docket monitor profiles, monitoring report policy, firm SOPs/templates, approval policy, matter mapping, and learning policy.
+- A current private Firm Operations Guide (`firm-operations-guide` issue document): workspace structure, agent runtime, Python/OCR tools, connector status, Email/Calendar/Docket monitor profiles, monitoring report policy, firm SOPs/templates, approval policy, matter mapping, and learning policy.
 - Onboarding readiness status until Phase 1 closes, and a readiness smoke result (green/yellow/red) on environment change.
 - One parent Paperclip issue per live matter, with matter scope, output scope, autonomy level, approval profile, Firm Operations Guide reference, learning mode, and approval-gate state.
 - A current Matter Dashboard on every active parent matter issue, including Coverage rows for intake, source review, calendar/deadlines, docket/procedural history, discovery, drafting, research, QA, external actions, and blocked decisions.

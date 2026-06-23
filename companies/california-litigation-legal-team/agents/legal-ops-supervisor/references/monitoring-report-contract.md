@@ -1,6 +1,6 @@
 # Monitoring Report Contract
 
-Use this contract for Gmail, Calendar, and Docket monitor routine outputs. A monitor report is a routed finding for Legal Ops Supervisor, not substantive legal work.
+Use this contract for Email, Calendar, and Docket monitor routine outputs. A monitor report is a routed finding for Legal Ops Supervisor, not substantive legal work.
 
 Every monitor run must leave a durable issue document with key `monitor-report`. Do not rely on comments alone for the report. If the monitor finds actionable candidates, batch them in the report and create or update one non-substantive Legal Ops triage packet after dedupe. Monitor agents still do not create substantive legal-work child issues directly.
 
@@ -29,11 +29,11 @@ Use this compact lawyer-first format:
 
 ## Audit Details
 
-- Monitor type: `gmail`, `calendar`, or `docket`.
+- Monitor type: `email`, `calendar`, or `docket`.
 - Profile reference: Firm Operations Guide section or issue-document reference.
 - Routine reference: routine name or ID, run time, and assigned monitor agent.
 - Checked scope and time window.
-- Evidence reviewed: concise list of message/thread/attachment types, calendar event/detail/attachment types, or docket entry/public-document types reviewed. Do not paste raw private content.
+- Evidence reviewed: concise list of message/thread/conversation/attachment types, calendar event/detail/attachment types, or docket entry/public-document types reviewed. Do not paste raw private content.
 - Deadline cues are proposed only, with source reference and uncertainty noted.
 - Hard gates requested, if any: auth, external download, paid retrieval, mailbox write, calendar write, filing, service, signing, email, or other approval.
 - Actions not taken: only list hard-gate actions that might be expected for this monitor.
