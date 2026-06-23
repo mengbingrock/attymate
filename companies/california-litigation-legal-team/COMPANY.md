@@ -19,7 +19,7 @@ requirements:
     - Paperclip with codex_local adapter support.
     - Authenticated Codex CLI or an approved deployment-specific API-key auth mechanism.
     - Python and OCR/PDF tooling configured through the private Firm Operations Guide.
-    - Monitor profiles configured privately before Gmail, Calendar, or Docket routines are enabled; setup-ready/paused is not the same as enabled/runnable.
+    - Monitor profiles configured privately before Email, Calendar, or Docket routines are enabled; setup-ready/paused is not the same as enabled/runnable.
     - Matter and output paths supplied at runtime through issue contracts.
 includes:
   - goals/complete-firm-onboarding-and-runtime-readiness/GOAL.md
@@ -35,7 +35,7 @@ includes:
   - agents/calendar-agent/AGENTS.md
   - agents/legal-qa-agent/AGENTS.md
   - agents/practice-learning-agent/AGENTS.md
-  - agents/gmail-monitor-agent/AGENTS.md
+  - agents/email-monitor-agent/AGENTS.md
   - projects/firm-onboarding/PROJECT.md
   - skills/legal-calendaring-workflow/SKILL.md
   - skills/lexis-browseros-legal-research/SKILL.md
@@ -54,7 +54,7 @@ This Paperclip company packages reusable California litigation workflows into a 
 
 Productized skills in this package must not include client confidentiality, firm-specific procedures, private URLs, credentials, account details, or hardcoded local paths. Deployment-specific behavior belongs in runtime issue contracts, deployment profiles, or local adapter configuration.
 
-The default imported project is firm onboarding. It helps the board configure workspace structure, Codex/Paperclip runtime, Python/OCR tools, external connectors, Gmail/Calendar/Docket monitor profiles, firm SOPs, templates, matter mapping, approval policy, and learning policy before live matter work.
+The default imported project is firm onboarding. It helps the board configure workspace structure, Codex/Paperclip runtime, Python/OCR tools, external connectors, Email/Calendar/Docket monitor profiles, firm SOPs, templates, matter mapping, approval policy, and learning policy before live matter work.
 
 Legal Ops Supervisor is also the lawyer-facing intake concierge. It should ask short plain-English questions, use safe defaults, and translate the lawyer's answers into Matter Safety Contracts and specialist child issues instead of asking the lawyer to fill internal checklists.
 

@@ -10,7 +10,7 @@ priority: high
 
 Create and maintain the canonical private Firm Operations Guide as a Paperclip issue document.
 
-Use document key `firm-operations-guide` and title `Firm Operations Guide`. Consolidate onboarding outputs into stable sections for workspace structure, agent runtime, local tools, external tools, Gmail monitor profile, Calendar monitor profile, Docket monitor profile, imported monitor routine status, monitoring report policy, firm SOPs/templates, firm-wide context sources, matter mapping, matter context artifact conventions, matter event planning defaults, approval policy, learning policy, readiness status, Light Intake defaults, and lawyer-facing matter status style.
+Use document key `firm-operations-guide` and title `Firm Operations Guide`. Consolidate onboarding outputs into stable sections for workspace structure, agent runtime, local tools, external tools, Email monitor profile, Calendar monitor profile, Docket monitor profile, imported monitor routine status, monitoring report policy, firm SOPs/templates, firm-wide context sources, matter mapping, matter context artifact conventions, matter event planning defaults, approval policy, learning policy, readiness status, Light Intake defaults, and lawyer-facing matter status style.
 
 Do not store the guide in public package files. Do not include client facts, matter identifiers, credentials, OAuth artifacts, private URLs, account IDs, local absolute paths in exported packages, or confidential source text. Future live matter parent issues should cite the relevant guide sections or include scoped excerpts in their Matter Safety Contract, but lawyer-facing intake should remain conversational and should not ask the lawyer to complete the contract manually.
 

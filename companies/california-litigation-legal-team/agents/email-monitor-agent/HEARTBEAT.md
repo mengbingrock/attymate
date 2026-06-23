@@ -1,4 +1,4 @@
-# Gmail Monitor Agent HEARTBEAT — California Litigation Legal Team
+# Email Monitor Agent HEARTBEAT — California Litigation Legal Team
 
 *This is your runtime journal. It is intentionally near-empty at import time.*
 
@@ -21,7 +21,7 @@ Over time, this file becomes your personal heartbeat procedure — the steps you
 - Role identity → that's `SOUL.md`.
 - Tool references → that's `TOOLS.md`.
 - Firm rules → that's `OPERATIONS.md` and `COMPANY.md`.
-- Daily activity notes → that's `agents/gmail-monitor-agent/memory/<date>.md`.
+- Daily activity notes → that's `agents/email-monitor-agent/memory/<date>.md`.
 
 ---
 
