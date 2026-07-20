@@ -1,24 +1,31 @@
 name: Desktop Release (Electron)
 
 # Builds the AttyMate desktop app on CI runners (native macOS arm64 + Windows
-# x64) and uploads the installers to an existing GitHub release. Building on the
+# x64) and uploads the installers to the matching GitHub release. Building on the
 # runners avoids shipping locally-produced binaries and keeps the arm64 app
 # ad-hoc signed on a real macOS host so it is not flagged as "damaged".
+#
+# Triggered by pushing to a release/electron-** branch, or manually. The target
+# release is v<electron package version> unless a tag input overrides it, and the
+# release must already exist.
 
 on:
+  push:
+    branches:
+      - "release/electron-**"
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing git tag / release to build and attach assets to (e.g. v0.3.1)
-        required: true
+        description: Existing release tag to attach assets to (defaults to v<electron version>)
+        required: false
         type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: desktop-release-${{ inputs.tag }}
-  cancel-in-progress: false
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -39,11 +46,19 @@ jobs:
         shell: bash
 
     steps:
-      - name: Checkout release ref
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag }}
           fetch-depth: 0
+
+      - name: Resolve release tag
+        run: |
+          tag="${{ github.event.inputs.tag }}"
+          if [ -z "$tag" ]; then
+            tag="v$(node -p "require('./electron/package.json').version")"
+          fi
+          echo "REL_TAG=$tag" >> "$GITHUB_ENV"
+          echo "Target release: $tag"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -69,7 +84,7 @@ jobs:
       - name: Build desktop app (${{ matrix.platform }})
         run: pnpm --filter attymate-electron ${{ matrix.build_script }}
 
-      - name: Upload installers to release ${{ inputs.tag }}
+      - name: Upload installers to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -81,6 +96,6 @@ jobs:
           else
             assets=( "AttyMate Setup "*.exe )
           fi
-          echo "Uploading: ${assets[*]}"
+          echo "Uploading to $REL_TAG: ${assets[*]}"
           [ ${#assets[@]} -gt 0 ] || { echo "no build artifacts found" >&2; exit 1; }
-          gh release upload "${{ inputs.tag }}" "${assets[@]}" --clobber
+          gh release upload "$REL_TAG" "${assets[@]}" --clobber
