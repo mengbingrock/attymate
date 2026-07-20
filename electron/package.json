@@ -8,7 +8,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
-    "build:main": "node --input-type=module -e \"import esbuild from 'esbuild'; import c from './esbuild.config.mjs'; await esbuild.build(c)\" && cp preload.cjs build/preload.cjs",
+    "build:main": "node --input-type=module -e \"import esbuild from 'esbuild'; import fs from 'node:fs'; import c from './esbuild.config.mjs'; await esbuild.build(c); fs.copyFileSync('preload.cjs', 'build/preload.cjs')\"",
     "dist": "pnpm build:main && electron-builder --mac --arm64",
     "dist:mac-arm64": "bash scripts/build-mac-arm64.sh",
     "dist:win": "pnpm build:main && electron-builder --win --x64"

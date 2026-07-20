@@ -1,0 +1,86 @@
+name: Desktop Release (Electron)
+
+# Builds the AttyMate desktop app on CI runners (native macOS arm64 + Windows
+# x64) and uploads the installers to an existing GitHub release. Building on the
+# runners avoids shipping locally-produced binaries and keeps the arm64 app
+# ad-hoc signed on a real macOS host so it is not flagged as "damaged".
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing git tag / release to build and attach assets to (e.g. v0.3.1)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: mac-arm64
+            build_script: dist:mac-arm64
+          - os: windows-latest
+            platform: win-x64
+            build_script: dist:win
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout release ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build runner-client bundle
+        # electron-builder bundles packages/runner-client/dist/runner-bundle.mjs
+        # as an extraResource, so it must exist before packaging.
+        run: |
+          pnpm --filter "@paperclipai/runner-client..." build
+          pnpm --filter @paperclipai/runner-client build:bundle
+
+      - name: Build desktop app (${{ matrix.platform }})
+        run: pnpm --filter attymate-electron ${{ matrix.build_script }}
+
+      - name: Upload installers to release ${{ inputs.tag }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd electron/dist
+          shopt -s nullglob
+          if [ "${{ matrix.platform }}" = "mac-arm64" ]; then
+            assets=( AttyMate-*-arm64.dmg AttyMate-*-arm64-mac.zip )
+          else
+            assets=( "AttyMate Setup "*.exe )
+          fi
+          echo "Uploading: ${assets[*]}"
+          [ ${#assets[@]} -gt 0 ] || { echo "no build artifacts found" >&2; exit 1; }
+          gh release upload "${{ inputs.tag }}" "${assets[@]}" --clobber
