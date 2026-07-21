@@ -37,14 +37,17 @@ function isInside(path: string, root: string): boolean {
 
 function guardWrite(path: string, cwd: string, msc: MatterSafetyContract): void {
 	const target = canonicalize(path, cwd);
-	if (!isInside(target, msc.outputRoot)) {
+	// Canonicalize the contract roots too: on macOS /var and /tmp are symlinks
+	// (/var -> /private/var), so comparing a realpathed target against a raw
+	// root both falsely blocks in-scope writes and misses forbidden reads.
+	if (!isInside(target, canonicalize(msc.outputRoot, cwd))) {
 		throw new Error(
 			`Matter Safety Contract violation: write target ${target} is outside the output root ${msc.outputRoot}. ` +
 				"Writes are only allowed under the output root; escalate if you believe this file is in scope.",
 		);
 	}
 	for (const forbidden of msc.forbiddenRoots) {
-		if (isInside(target, forbidden)) {
+		if (isInside(target, canonicalize(forbidden, cwd))) {
 			throw new Error(`Matter Safety Contract violation: ${target} is inside forbidden root ${forbidden}.`);
 		}
 	}
@@ -53,7 +56,7 @@ function guardWrite(path: string, cwd: string, msc: MatterSafetyContract): void 
 function guardRead(path: string, cwd: string, msc: MatterSafetyContract): void {
 	const target = canonicalize(path, cwd);
 	for (const forbidden of msc.forbiddenRoots) {
-		if (isInside(target, forbidden)) {
+		if (isInside(target, canonicalize(forbidden, cwd))) {
 			throw new Error(
 				`Matter Safety Contract violation: ${target} is inside forbidden root ${forbidden}. ` +
 					"Never inspect other matters or protected roots.",
