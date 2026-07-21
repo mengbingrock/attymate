@@ -1,0 +1,19 @@
+---
+schema: agentcompanies/v1
+kind: task
+slug: configure-email-monitoring
+name: Configure Email monitoring
+assignee: legal-ops-supervisor
+project: firm-onboarding
+priority: medium
+---
+
+Create or update the Firm Operations Guide section for the read-only email monitor profile before any mailbox polling begins.
+
+Define `email_monitor_profile`: provider, connector status, authorized mailbox scope, allowed labels/folders/queries or manual source, exclusions, lookback, run limit, attachment policy, dedupe and redaction rules, candidate criteria, schedule, owner, and status. If access or scope is missing, record an Operational Interruption for the tool owner. Read-only review and permitted attachment downloads proceed within an enabled profile. Sending, forwarding, mailbox mutation, and external sharing require an Attorney Decision and an authorized actor.
+
+Also define silent no-change behavior and how a material finding is summarized: change, practical or legal effect, recommended action, and one decision only if required.
+
+Verify the imported Paperclip routine `run-email-monitor` exists, is assigned to `email-monitor-agent`, has a schedule trigger, uses `coalesce_if_active` and `skip_missed`, and is either `setup-ready / paused`, `setup-ready / pending connector`, `manual-source`, or explicitly `enabled / runnable`. If it remains paused, say plainly that setup is complete but monitoring is not live, and leave one next action: enable the routine under this approved profile, connect the missing provider, use manual-source intake, or keep it paused. If the routine is missing, create it from the company package defaults or mark this setup issue blocked with a product/setup note; do not mark Email monitoring configured when no routine exists. The routine output must follow `references/monitoring-report-contract.md` and report findings to Legal Ops Supervisor.
+
+Do not send, reply, forward, label, archive, delete, mark read/unread, save attachments outside the approved reporting/workspace flow, upload content, create calendar entries, file, serve, sign, or draft legal work product. Add a section-ready update or direct document edit to `firm-operations-guide`.
