@@ -1,0 +1,44 @@
+{
+	"name": "@attymate/legal-team",
+	"version": "0.1.0",
+	"private": true,
+	"description": "California litigation legal team rebuilt natively on the pi coding agent SDK",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"bin": {
+		"legal-team": "dist/cli.js"
+	},
+	"files": [
+		"dist",
+		"company",
+		"README.md"
+	],
+	"scripts": {
+		"clean": "shx rm -rf dist",
+		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
+		"build": "tsgo -p tsconfig.build.json && shx chmod +x dist/cli.js",
+		"test": "node --test --experimental-strip-types test/*.test.ts"
+	},
+	"author": "attymate",
+	"license": "MIT",
+	"engines": {
+		"node": ">=22.19.0"
+	},
+	"dependencies": {
+		"@earendil-works/pi-ai": "^0.80.10",
+		"@earendil-works/pi-coding-agent": "^0.80.10",
+		"googleapis": "144.0.0",
+		"node-cron": "4.2.1",
+		"typebox": "1.1.38"
+	},
+	"devDependencies": {
+		"shx": "0.4.0"
+	}
+}
