@@ -1,16 +1,23 @@
 # Pleading Intake Output Format
 
-## Source Inventory
+```md
+## Bottom Line
 
-| Source | Type | Date | Filing/Service Fact | Text Quality | Action Needed |
-| --- | --- | --- | --- | --- | --- |
+[One or two sentences identifying the pleading, procedural significance, and any immediate action.]
 
-## Pleading Summary
+## Material Points
 
-- Parties and caption issues:
-- Filing/service facts:
-- Key allegations or denials:
-- Verification/signature/POS status:
-- Source citations:
-- Extraction gaps:
-- Recommended handoffs:
+| Point | Reliable source | Legal/practical significance |
+| --- | --- | --- |
+| [Only facts material to review] | [Document/page] | [Why it matters] |
+
+## Gaps Or Exceptions
+
+- [Illegible, missing, inconsistent, or unsupported item that affects legal review. Omit immaterial extraction details.]
+
+## Recommended Next Action
+
+[Owner and action.]
+```
+
+Store the full source inventory and OCR/extraction detail in the internal intake artifact.

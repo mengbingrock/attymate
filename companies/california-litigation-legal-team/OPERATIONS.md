@@ -1,113 +1,87 @@
-# Operations — California Litigation Legal Team
+# Operations - California Litigation Legal Team
 
-*How this firm works, what gets shipped, and where decisions live.*
+This file is the firm's operating manual. `COMPANY.md` defines identity and constraints, the skills define legal-work discipline, and Paperclip provides issues, assignments, decisions, and the audit trail.
 
-This file is the firm's operating manual. `COMPANY.md` is the constitution (identity and hard constraints), the skills are the domain authority (legal workflow discipline), and Paperclip is the control plane (issues, approvals, audit trail). When those three disagree, escalate to the board rather than guessing.
+## Phase Model
 
-## Phase model
+Phase 1 is onboarding and runtime readiness. Configure workspace structure, Codex/Paperclip runtime, local PDF/OCR tools, connectors, monitor profiles, firm procedures, matter mapping, and the private Firm Operations Guide before live matter work. Phase 2 begins after readiness is confirmed and a supervising attorney owns the work product.
 
-Phase 1 is **onboarding and runtime readiness** — there is no live matter work until it is done. Turn the company intent into a configured deployment: workspace structure, Codex/Paperclip runtime, Python/OCR tooling, external connectors, Email/Calendar/Docket monitor profiles, firm SOPs and templates, matter mapping, approval policy, and learning policy, all consolidated into the private Firm Operations Guide (`firm-operations-guide`). Phase 2 — live, matter-scoped litigation work — begins only after the readiness smoke test is green and a supervising attorney owns the work product.
+## Matter Control
 
-| Function | Phase 1 "done" when |
-|---|---|
-| Legal Ops Supervisor | Firm Operations Guide exists and is current; onboarding tasks closed; readiness smoke test posted green. |
-| Source Intake Agent | Knows its approved source roots and output root, and has run one source-bound intake end to end. |
-| Facts & Evidence Agent | Can tie every fact to a source from the approved set; no reliance on gold/final drafts. |
-| Legal Research Agent | Knows its authority-use limits; runs on supplied/approved authorities with external research gated. |
-| Drafting & Assembly Agent | Produces source-bound draft text under the output root without touching live/final files. |
-| Legal QA Agent | Has a working confidentiality/source/authority/approval checklist and applies it to one artifact. |
-| Calendar Agent | Has a calendar policy source, optional `calendar_monitor_profile`, and posts proposals before any approved write. |
-| Docket Agent | Knows the public-docket scope, optional `docket_monitor_profile`, and the paid/login/CAPTCHA gates it must not cross. |
-| Practice Learning Agent | Learning mode default `off`; activates only under an explicit learning contract. |
-| Email Monitor Agent | An `email_monitor_profile` exists; runs read-only and routes candidates to Legal Ops. |
+Legal Ops creates one Matter Authorization Package on the parent issue. It identifies the matter, permitted sources and outputs, budget, configured tools, material limits, and governing private references. Descendant issues inherit that authorization until the attorney revokes it, the scope changes, or the budget is exhausted.
 
-## Idle-state protocol
+A child work order contains only:
 
-Specialists proceed on local/source-bound work, Legal Ops Supervisor cures yellow scope/routing issues, and hard gates go to the board. When an agent clears its assigned issues and no next action is authorized, it surfaces one concrete proposal tied to a goal or issue rather than inventing work. Inventing cross-matter inspection, unrequested research, speculative drafts, or "tidy-up" sweeps to look busy is a drift signal, not productivity. Idle with a useful proposal pending is healthy.
+- objective and completion standard;
+- relevant sources or context;
+- expected output; and
+- any exception from the parent authorization.
 
-## Reporting cadence
+Agents may autonomously read approved sources, use configured read-only connectors, process PDF/OCR locally, organize facts, conduct routine legal research, add verified authorities, download permitted materials, create and revise working copies, run QA, repair scope within the parent authorization, and coordinate with other agents.
 
-| Report | From | To | Cadence |
-|---|---|---|---|
-| Onboarding readiness status | legal-ops-supervisor | Board / firm owner | Until Phase 1 closes |
-| Per-matter parent-issue status | legal-ops-supervisor | Board / supervising attorney | Per active matter |
-| Matter Dashboard | legal-ops-supervisor | Parent matter issue | On creation, blocker changes, child delegation, monitor routing, and lawyer status questions |
-| Readiness smoke (green/yellow/red) | legal-ops-supervisor | Board | On environment change |
-| Monitor findings | email-monitor-agent / calendar-agent / docket-agent | legal-ops-supervisor | Per approved monitor profile |
+`skills/legal-matter-intake/references/human-approval-gates.md` is the sole authorization matrix. An Attorney Decision is required only for:
 
-## Communication conventions
+- filing, service, signature, email or message sending, calendar writes, and external upload or sharing;
+- payment, paid retrieval, or work beyond the authorized budget;
+- alteration of source evidence or final, filed, signed, or user-edited material;
+- matter/source expansion or cross-matter use; and
+- material legal strategy, including claims or defenses, requested relief, waiver, settlement, sanctions, and significant privacy or protective-order positions.
 
-Use the parent matter issue for matter-level decisions and child-issue comments for execution detail. Every delegated child issue must carry a **Matter Safety Contract** (see `references/matter-safety-contract.md`) and name the receiving agent, the approved scope, the approval profile, the allowed outputs, and any visible hard-gate approvals already granted. Cross-agent handoffs route through Legal Ops Supervisor unless the parent issue authorizes a direct handoff. Never paste client facts, case numbers, party names, credentials, or local paths into a public package file — those live in the private Firm Operations Guide or scoped issue documents only.
+Login expiration, MFA, CAPTCHA, unavailable connectors, and tool failures are Operational Interruptions. Route them to Legal Ops or the tool owner without presenting them as legal decisions.
 
-For every new matter event, Legal Ops uses `references/matter-planning-playbook.md` to match or create the matter parent, update the Matter Dashboard, and classify all plausible workstreams before delegating child issues. Matter context artifacts are reusable but relevance-based: agents check the matter context index and the role-relevant artifacts named in the child issue, not the entire context folder by default. When a matter/output root is approved, use the Matter Home convention in `references/matter-context-artifacts.md`.
+## Attorney Communication
 
-Legal Ops also uses `agents/legal-ops-supervisor/references/workflow-efficiency-budget.md` before creating child issues. The default matter-event shape is one dashboard, one plan, and a compact work packet with 3-5 active lanes. Small triage, dedupe, dashboard edits, short status answers, and coordination-only notes stay on the parent issue. Child issues are for specialist-owned durable deliverables, longer tool runs, parallel lanes, true blockers, or hard-gate paths.
+The lawyer routinely reviews only the Matter Dashboard and the controlling work product. Follow `agents/legal-ops-supervisor/references/lawyer-facing-output-standard.md`:
 
-Lawyer-facing intake uses **Light Intake Mode** by default. Legal Ops asks short plain-English questions, offers safe defaults, and translates the answers into the internal Matter Safety Contract. If work must stop, the blocker comment starts with "I need one thing before I can continue:" and gives 2-3 practical answer choices.
+- write substantive analysis once in an issue document or work product and link to it elsewhere;
+- keep a lawyer-visible comment to about 120 words using `Status`, `Bottom line`, `Next action`, and the review link;
+- keep the run result to two lines with terminal status and the artifact link;
+- keep tool output, internal handoffs, run state, manifests, and audit detail in the child issue or `_paperclip_issues`; and
+- do not comment for startup, routing, ordinary progress, safe work continuing, or a no-change check.
 
-Every active parent matter issue also gets a **Matter Dashboard** using `references/matter-status-digest.md`. It should explain the matter, current status, covered workstreams, latest artifacts, blocker, next-step owner, whether the lawyer needs to act, and what happens next. Child issues may carry technical details, but the parent issue should always have one lawyer-readable dashboard.
+Only comment when a deliverable is ready, a material risk or deadline changed, an Attorney Decision is needed, the lawyer owns a blocker, or the matter is complete.
 
-Use `references/lawyer-facing-output-standard.md` for comments, reports, and handoffs: lawyer summary first, short tables for findings or coverage, and technical safety details in `Audit Details`.
+## Matter Dashboard
 
-## Approval and merge rules — green / yellow / red
+Every active parent matter uses `agents/legal-ops-supervisor/references/matter-status-digest.md`. The Dashboard leads with posture, bottom line, and whether the lawyer must act. It shows no more than five relevant workstreams, three recent substantive items, and one batched open decision. Update it only when there is a material change.
 
-- **Green (autonomous, logged):** source-bound intake, fact/evidence tables, supplied-authority workup, draft text under the output root, calendar *proposals*, public docket *checks*, QA findings, sanitized learning proposals. Proceed and log.
-- **Yellow (Legal Ops may cure):** routing/scope ambiguities the parent issue already authorizes the scope for. Legal Ops cures or returns the issue; specialists do not self-expand scope.
-- **Red (board/user approval required before action):** follow `skills/legal-matter-intake/references/human-approval-gates.md`. Agents proceed on local/source-bound work, output-root artifacts, new output-root working copies, draft recommendations, QA, issue updates, and internal routing. Stop only for external side effects; authentication, payment, or legal-authority expansion; and destructive or protected mutation. Use `approval_profile: sandbox_autopilot` to label local non-client-facing test work.
-- **Never autonomous:** changing the company identity, the hard constraints, the matter scope, or the confidentiality rules.
+## Delegation
 
-## Delegation quality checklist
+Use `agents/legal-ops-supervisor/references/matter-planning-playbook.md` and `workflow-efficiency-budget.md` before opening child issues. Default to one Dashboard, one matter plan, and three to five active lanes. Keep triage, dedupe, short status answers, and internal coordination on the parent. Open child issues for durable specialist deliverables, long tool runs, parallel lanes, material blockers, or review of an existing work product.
 
-Before delegating any child issue, confirm:
+Internal delegation, handoff, and scope repair within the parent authorization do not require attorney approval. One matter may have only one pending first-class decision interaction; combine related choices into a decision card with the recommendation, two or three practical options, legal effect, and deadline.
 
-- The lawyer was not asked to fill out the Matter Safety Contract directly; Legal Ops translated plain-language answers into the contract.
-- The parent matter issue has an up-to-date Matter Dashboard with a Coverage table.
-- The Matter Safety Contract is complete (matter root, output root, workflow type, autonomy level, approval profile, Firm Operations Guide reference, read-only source roots, forbidden roots, allowed outputs, learning mode, visible hard-gate approvals already granted, no-cross-matter inspection).
-- The owning specialist agent is named and the work is inside its lane.
-- Completion criteria are concrete and source-bound.
-- Handoffs, approval profile, and gate approvals are explicit.
-- `PROJECT-INVENTORY.md` was checked so the deliverable is not a duplicate.
+## Monitoring
 
-## Anti-drift checks
+Email, Calendar, and Docket monitoring remains disabled until its profile and schedule are configured. Within an enabled profile, read-only review is authorized. A no-change or duplicate-only run ends silently with one line in the run or routine result; it does not create a report, comment, triage issue, or Dashboard update.
 
-Before doing or delegating work, ask:
+When a monitor finds a material change or a configuration interruption that requires owner action, create or update one batched `monitor-report` for the matter and route it to Legal Ops. The lawyer-facing portion states only the change, legal or practical effect, and recommended action.
 
-- Does this still serve the north star — **source-bound, confidentiality-safe, approval-gated work product a supervising attorney can rely on, without ever acting outside the matter scope**? If not, stop.
-- Does this accidentally make us a **legal-advice service** (issuing opinions or conclusions the supervising attorney has not reviewed and adopted)? If yes, stop and escalate.
-- Does this accidentally make us an **autonomous actor** (filing, serving, signing, emailing, writing to calendars, uploading/sharing externally, or mutating protected live/final drafts without visible approval)? If yes, stop and escalate.
-- Does this accidentally make us a **cross-matter knowledge base** (inspecting, citing, or carrying facts from another matter, or learning client facts into reusable assets)? If yes, stop and escalate.
-- Constraint check: every material statement is tied to an approved source — no authorities or facts from memory.
-- Constraint check: work stays inside the named matter root and approved read-only source roots; forbidden roots are untouched.
-- Constraint check: hard gates are not crossed without visible approval on the issue.
-- Constraint check: learning is `off` unless an explicit learning contract is present.
-- Does this duplicate a deliverable already in `PROJECT-INVENTORY.md`?
+## Quality And Drift Checks
 
-## Duplicate prevention
+Before delivery, confirm:
 
-Before creating any substantial deliverable, read `PROJECT-INVENTORY.md`, the relevant project/matter folder, and the owning agent's notes. If it already exists, reference it instead of creating a second copy. Update the inventory when work is completed.
+- every material factual or legal statement is traceable to a permitted source;
+- work stays within the named matter and source/output scope;
+- no protected file was altered and no external act occurred without the required Attorney Decision;
+- the controlling analysis exists in only one place;
+- any lawyer comment and run result do not repeat that analysis;
+- no child duplicates an existing deliverable; and
+- learning remains off unless an explicit, scoped learning contract authorizes it.
 
-## Routine slots
+The supervising attorney reviews and owns final legal work product. Agents may analyze and recommend any issue, but they do not choose material legal strategy or take external action on the attorney's behalf.
 
-| Routine | Owner | Suggested cadence |
+## Routine Slots
+
+| Routine | Owner | Cadence |
 |---|---|---|
-| Onboarding sweep (until Phase 1 closes) | legal-ops-supervisor | Daily |
-| Readiness smoke re-check | legal-ops-supervisor | On environment change |
-| Email read-only intake monitor (if enabled) | email-monitor-agent | Per `email_monitor_profile` schedule |
-| Calendar read-only monitor (if enabled) | calendar-agent | Per `calendar_monitor_profile` schedule |
-| Docket public-record monitor (if enabled) | docket-agent | Per `docket_monitor_profile` schedule |
-| Per-matter status roll-up | legal-ops-supervisor | Per active matter |
+| Onboarding sweep | legal-ops-supervisor | Until onboarding closes |
+| Readiness re-check | legal-ops-supervisor | On environment change |
+| Email monitor | email-monitor-agent | Per enabled profile |
+| Calendar monitor | calendar-agent | Per enabled profile |
+| Docket monitor | docket-agent | Per enabled profile |
+| Matter status roll-up | legal-ops-supervisor | On material change |
 
-Monitor runs must write a durable `monitor-report` issue document. Actionable findings are deduped and routed to Legal Ops triage; no-findings reports close without creating unnecessary work.
+## Confidentiality And Portability
 
-Monitor findings should be batched. One monitor run should create one report and, when needed, one Legal Ops triage packet per matter or run. Do not open one issue per minor email, calendar, or docket cue unless it becomes distinct substantive work.
-
-## Critical rules summary
-
-1. North star: source-bound, confidentiality-safe, approval-gated California litigation work product a supervising attorney can rely on — never acting outside the matter scope.
-2. Source-bound only. No legal authorities or facts from memory; every artifact traces to an approved source.
-3. Matter-scoped only. No cross-matter inspection. No carrying facts between matters.
-4. Hard gates require visible approval on the issue: external side effects; authentication, payment, or legal-authority expansion; and destructive or protected mutation.
-5. Learning is `off` by default and runs only under an explicit, scoped learning contract.
-6. No client data, firm-specific procedure, credential, or local path in public package files — those live in the private Firm Operations Guide.
-7. Specialists proceed on safe local/source-bound work; Legal Ops Supervisor approves routing; the board owns hard gates and identity changes.
-8. Check `PROJECT-INVENTORY.md` before creating new deliverables.
+Never put client facts, case identifiers, credentials, private URLs, account IDs, or local paths in this public package. Deployment details belong in the private Firm Operations Guide, issue documents, or local adapter configuration. Never inspect or reuse material across matters unless an Attorney Decision expressly expands the scope.

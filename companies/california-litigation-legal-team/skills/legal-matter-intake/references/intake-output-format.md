@@ -1,32 +1,23 @@
 # Launch Intake Output Format
 
-## Matter Summary
+```md
+## Matter Objective
 
-- Matter/workflow requested:
-- Requested deliverable:
-- Selected matter and no-cross-matter boundary:
-- Known deadlines or urgency:
+**Requested work:** [Plain-language legal objective and deliverable.]
+**Current posture/deadline:** [Only material timing or posture.]
 
-## Scope
+## Authorized Work
 
-- Approved source roots/files:
-- Forbidden roots:
-- Output root and allowed outputs:
-- Authority limits:
-- Learning mode and do-not-learn list:
+[One or two sentences stating what the team can do now and the source set it may use.]
 
-## Runtime And Gates
+## Material Gaps
 
-- Available local tools:
-- External connectors and authentication state:
-- Approval profile:
-- Visible hard-gate approvals:
-- Open approvals or missing inputs:
+- [Only a source, budget, scope, or major strategy gap that changes available work. Omit when none.]
 
-## Routing
+## Next
 
-- Recommended next skill:
-- Parent issue owner:
-- Child issues needed:
-- Safe work that can continue now:
-- Next decision or handoff:
+**Owner:** [Agent/lawyer/third party.]
+**Action:** [One concrete next action.]
+```
+
+Keep paths, connector status, package fields, and internal routing in the Matter Authorization Package, not the attorney-facing intake.

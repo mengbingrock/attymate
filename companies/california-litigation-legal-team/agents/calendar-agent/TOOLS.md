@@ -15,7 +15,7 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 - Operations manual: `OPERATIONS.md`
 - Project inventory: `PROJECT-INVENTORY.md` (read before creating a deliverable).
 - Monitoring report contract: `references/monitoring-report-contract.md`.
-- Matter root, output root, and read-only source roots: supplied per-issue through the Matter Safety Contract, never hardcoded here.
+- Matter root, output root, and read-only source roots: supplied per-issue through the Matter Authorization Package, never hardcoded here.
 - Calendar policy source, target calendar, and `calendar_monitor_profile`: supplied per issue or through the private Firm Operations Guide.
 - Own memory: `agents/calendar-agent/memory/` (daily notes).
 - Own runtime journal: `agents/calendar-agent/HEARTBEAT.md`.
@@ -23,7 +23,7 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 ## Domain Tools
 
 - Calendar provider through the **`legal-calendaring-workflow`** skill. Monitoring profiles may name `google_calendar`, `outlook_calendar`, `other`, or an approved manual-source export.
-- All calendar writes are hard-gated: create, update, delete, invite, notify, and email require visible approval on the issue before action.
+- Calendar create, update, delete, invite, notify, and email actions require an Attorney Decision. Configured read-only access proceeds within the authorized profile; login or tool failure is an Operational Interruption.
 - The default is proposals: compute and post proposed deadline/calendar tables from approved triggering facts and the runtime-supplied policy source.
 - Read-only monitoring is allowed only under an approved `calendar_monitor_profile`; event title/body/description/location/attendees/recurrence/notes and event attachments or linked files may be read only when the profile authorizes them. If the provider connector is unavailable, report pending-connector or manual-source mode instead of pretending monitoring is live. Monitoring outputs follow `references/monitoring-report-contract.md` and go to Legal Ops Supervisor.
 - After an approved write, read entries back through the calendar to produce verification notes.

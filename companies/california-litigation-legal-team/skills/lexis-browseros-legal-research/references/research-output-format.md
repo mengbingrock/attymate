@@ -1,13 +1,27 @@
-# Research Output Format
+# Legal Research Output Format
 
-## Research Log
+```md
+## Question Presented
 
-| Time | Query Or Source | Filters | Result Opened | Accepted/Rejected | Reason | Treatment Checked |
-| --- | --- | --- | --- | --- | --- | --- |
+[Narrow legal question.]
 
-## Authority Table
+## Short Answer
 
-| Authority | Type | Jurisdiction | Proposition | Source Pinpoint | Treatment | Use In Draft | Notes |
-| --- | --- | --- | --- | --- | --- | --- | --- |
+[Direct answer, qualification, and confidence in no more than one short paragraph.]
 
-Do not include credentials, account identifiers, private URLs, or confidential client facts in the reusable skill package.
+## Controlling And Persuasive Authority
+
+| Authority | Proposition / treatment | Application here |
+| --- | --- | --- |
+| [Verified authority and pinpoint] | [Rule and current treatment] | [Matter-specific application] |
+
+## Material Counterpoint Or Gap
+
+- [Adverse authority, unresolved factual predicate, split, or source limitation.]
+
+## Recommendation
+
+[Recommended drafting or litigation step; identify a material attorney decision separately.]
+```
+
+Keep queries, filters, rejected results, tool steps, and the full research log in the internal research artifact.

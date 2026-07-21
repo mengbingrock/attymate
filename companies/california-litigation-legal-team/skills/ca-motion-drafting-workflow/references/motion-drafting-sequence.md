@@ -1,15 +1,15 @@
 # Motion Drafting Sequence
 
-Use this sequence for subpoena MTC motions unless the motion profile or parent issue gives a different approved plan. Adapt the evidence and package components to other motion types; do not carry MTC-specific assumptions into them.
+Use this sequence for any authorized motion. Load `subpoena-mtc-checklists.md` only when the selected profile is subpoena MTC.
 
-1. Confirm the completed matter intake, motion profile, matter scope, output scope, authority limits, and hard gates.
-2. Review upstream subpoena document-review handoff artifacts if present.
-3. Build source, issue, exhibit, authority, and replacement tables. For MTC work, add subpoena and objection tables.
-4. Draft factual narrative and need/relevance theory from source citations.
-5. Draft separate statement items when required, using approved source text for the relevant requests, issues, and objections.
-6. Draft motion and memorandum sections tied to the same source/authority tables.
-7. Draft declarations, RJN, proposed order, TOC, and TOA as needed for the approved motion profile.
-8. Assemble a new working copy only after approval.
-9. Run QA for source support, authority discipline, stale shell terms, numbering, placeholders, and finalization boundaries.
+1. Confirm the parent Matter Authorization Package, focused work order, motion profile, procedural posture, requested objective, sources, output, budget, and recorded material decisions.
+2. Review only the relevant upstream intake, fact, research, deadline, and draft artifacts.
+3. Build the minimum source, issue/fact, exhibit/RJN, authority, chronology, and replacement tables needed for the motion.
+4. Draft the factual and procedural narrative from source citations, including material adverse facts.
+5. Draft the memorandum and any required separate statement, declarations, exhibits/RJN, proposed order, TOC, and TOA for the selected profile.
+6. Conduct routine research and treatment review as needed within scope and budget.
+7. Assemble and revise the designated working copy.
+8. Run QA for evidentiary support, authority treatment, procedural fit, requested relief, package consistency, numbering, placeholders, and protected/final boundaries.
+9. Present one controlling review package that identifies material revisions, unresolved legal issues, and any batched Attorney Decision.
 
-Do not invent legal authorities, hearing facts, procedural posture, sanctions basis, privacy facts, protective-order terms, or compliance history. MTC-specific facts must come from the approved subpoena and meet-and-confer sources.
+Do not invent authority, procedural facts, evidentiary support, requested relief, sanctions basis, privacy facts, protective-order terms, or compliance history. The supervising attorney decides material legal strategy and owns the final work product.

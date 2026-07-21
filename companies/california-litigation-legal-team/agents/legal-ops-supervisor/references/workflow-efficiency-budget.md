@@ -1,95 +1,48 @@
 # Workflow Efficiency Budget
 
-Use this reference whenever Legal Ops plans, routes, or reviews matter work. The goal is to preserve the safety model while reducing issue churn, repeated context replay, and back-and-forth that does not move the lawyer closer to usable work product.
+Use one parent Matter Dashboard and one Matter Authorization Package as the control surface. Create a child issue only when it produces specialist-owned work product, needs a longer or parallel run, tracks a real dependency, or carries a distinct attorney decision.
 
-## Operating Rule
+## No-Child Work
 
-Use one parent Matter Dashboard and one Matter Plan as the control surface. Create child issues only when they make the work faster, safer, or genuinely parallel. Do not create child issues for routine coordination that Legal Ops can finish or record directly on the parent.
+Keep short triage, dedupe, internal routing, scope repair, dashboard edits, and small authorized updates on the parent. Do not create an issue whose main output is another plan, status note, approval echo, or handoff.
 
-## No-Child Rule
+## Child Work Order
 
-Keep the work on the parent issue when the next step is:
+Each child contains only:
 
-- a short status answer, dashboard update, dedupe note, or coverage-table edit;
-- monitor triage that only dismisses, links, or batches candidates;
-- a small safe local/source-bound update Legal Ops can complete in the same heartbeat;
-- a planning or sequencing note that does not require a specialist-owned deliverable;
-- a scope clarification that can be asked as one batched lawyer decision.
+- objective and completion standard;
+- relevant sources/context;
+- output to create or update;
+- exceptions to inherited parent authority.
 
-When using the no-child path, update the Matter Dashboard and name the next owner. Do not open a new issue just to say the parent needs an update.
+Do not replay the parent package, full Firm Operations Guide, sibling history, or approval matrix.
 
-## Child Issue Rule
+Default to three to five active lanes. More than five requires a concrete parallelism or specialist-tool reason, recorded internally rather than explained to the lawyer.
 
-Create a child issue only for:
+## Communication Budget
 
-- specialist-owned durable work product, such as OCR/source intake, facts table, draft section, authority table, docket report, calendar proposal, or QA review;
-- work likely to require a longer run or specialist tools;
-- work that can proceed in parallel with another lane;
-- a true blocker or hard-gate approval path that must be tracked separately;
-- review of an existing draft or artifact that has enough substance to review.
+- One controlling substantive document or work product.
+- One short comment only when the attorney-facing output standard permits it.
+- One Matter Dashboard link/update for a material state change.
+- A terminal run result of no more than two lines.
 
-Every child must have a concrete deliverable, a small context set, and a completion standard. If the child would mostly restate the parent plan, keep it on the parent.
+Internal handoffs fit on one screen: result, artifact, material source/confidence limitation, next owner, and real blocker. Process narration and repeated safety language are not handoff content.
 
-## Matter-Event Work Packet
+## Monitor Budget
 
-Before creating children, Legal Ops writes a compact work packet in the Matter Plan:
+- No new or reportable finding: finish silently with a one-line run/routine result. Do not create a report, comment, triage issue, or dashboard revision.
+- Actionable finding: create or update one batched `monitor-report`, then route one triage item after dedupe.
+- Setup or tool interruption: create a report only when a named owner must act; route it to Legal Ops/tool owner, not as a lawyer approval.
 
-- event;
-- one-line legal/work-product objective;
-- available source scope;
-- planned active lanes;
-- deferred or conditional lanes;
-- next lawyer decision, if any.
+## Work-Product Priority
 
-Default active lanes are capped at `3-5`:
-
-- source / OCR / source index;
-- calendar / docket / procedural status;
-- drafting / research, only when source scope supports it;
-- facts / evidence or QA, when tied to a concrete draft or packet;
-- hard-gate approval or source request, only when unavoidable.
-
-More than five active child issues for one matter event requires an explicit reason in the Matter Dashboard.
-
-## Monitor Batching
-
-One monitor run should produce one durable `monitor-report`. When there are multiple findings, Legal Ops should create or update one batched triage packet per matter or monitor run, not one issue per minor cue.
-
-Create substantive child issues only after triage decides that the item is real work. Duplicate, premature, low-value, or informational monitor findings stay in the monitor report and dashboard.
-
-## Context Budget
-
-Use compact sources first:
-
-1. Matter Dashboard.
-2. Matter Context Index.
-3. The changed artifact or source named by the issue.
-4. The narrow Firm Operations Guide section needed for the task.
-
-Do not replay the full Firm Operations Guide, full Matter Safety Contract, full sibling issue chain, or entire approval matrix unless it changes the next action. Link audit detail instead.
-
-## Handoff Budget
-
-Specialist handoffs should fit on one screen:
-
-- result;
-- latest artifact link;
-- source or confidence note;
-- next action / owner;
-- blocker, if any.
-
-Avoid long safety boilerplate, repeated contract fields, and process narration unless a hard gate or source limit changes what happens next.
-
-## Final Work-Product Priority
-
-Once source scope is good enough, drive toward a usable `v0` work product before spawning additional confirmation loops. Source verification and QA should improve a concrete draft or packet, not indefinitely precede it unless the source gap makes drafting impossible.
-
-The Matter Dashboard should always show the latest lawyer-usable artifact, even if it is rough, partial, or for review only.
+Drive toward a usable `v0` work product once source scope is sufficient. Research, verification, and QA should improve a concrete legal product rather than create indefinite process loops.
 
 ## Anti-Patterns
 
-- Opening one issue per email, docket cue, calendar cue, or small dashboard update.
-- Creating a specialist issue whose main deliverable is another plan.
-- Repeating the same hard-gate language in every comment when no hard gate is being crossed.
-- Leaving a parent blocked while child issues are done and no lawyer decision is pending.
-- Spending a run summarizing process without creating, updating, or linking a lawyer-facing artifact.
+- One issue per minor cue or internal handoff.
+- One approval per agent or tool step.
+- Repeating the same analysis in comment, document, dashboard, and result.
+- Mandatory status tables full of inactive workstreams.
+- Lawyer-facing logs, tool parameters, path lists, or contract fields.
+- Reporting no change as if it were a substantive event.

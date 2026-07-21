@@ -14,15 +14,15 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 - Agent home: `agents/legal-research-agent/`
 - Operations manual: `OPERATIONS.md` — read for firm rules and approval policy.
 - Project inventory: `PROJECT-INVENTORY.md` — read before creating any deliverable, to avoid duplicates.
-- Matter root, output root, and read-only source roots are supplied per-issue through the **Matter Safety Contract** (`references/matter-safety-contract.md`). They are never hardcoded here.
+- Matter root, output root, and read-only source roots are supplied per-issue through the **Matter Authorization Package** (`references/matter-authorization-package.md`). They are never hardcoded here.
 - Own memory: `agents/legal-research-agent/memory/` (daily notes).
 - Own runtime journal: `agents/legal-research-agent/HEARTBEAT.md`.
 
 ## Domain tools
 
 - Legal research runs against **Lexis via BrowserOS** through the `lexis-browseros-legal-research` skill.
-- ALL of the following are hard-gated and require visible approval on the issue before I act: opening Lexis, browser authentication, adding any new authority, and downloading/exporting externally. Lexis AI / Protege is also hard-gated.
-- My default mode is **supplied-authority workup**: verifying, Shepardizing, and tabling the authorities the issue already supplies or has already approved — no external system touched.
+- Configured Lexis/browser research, citation verification, treatment review, new verified authorities, and permitted downloads are authorized within the parent matter scope and budget.
+- Payment, paid retrieval outside the budget, scope expansion, cross-matter use, external sharing, and material strategy require an Attorney Decision. Login expiration, MFA, CAPTCHA, and tool failure are routed as Operational Interruptions.
 
 ## Conventions
 

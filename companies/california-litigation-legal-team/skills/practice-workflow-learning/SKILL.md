@@ -72,4 +72,4 @@ Use this concise Learning Report structure:
 
 ## Reference
 
-Pair this skill with the workflow skills it observes — `ca-motion-drafting-workflow` and `lexis-browseros-legal-research` — and route all profile writes and public-package edits through the Legal Ops Supervisor and the required human approval gates.
+Pair this skill with the workflow skills it observes — `ca-motion-drafting-workflow` and `lexis-browseros-legal-research` — and route profile writes and public-package edits through Legal Ops under the canonical authorization matrix.

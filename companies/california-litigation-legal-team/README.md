@@ -18,21 +18,19 @@ It packages one board-facing Legal Ops Supervisor, reusable specialist agents, a
 
 ## How the firm operates
 
-Hub-and-spoke around a single front door. The **Legal Ops Supervisor** is the only board-facing role: it runs onboarding, takes in each matter, selects the workflow, and creates parent-linked child issues — each carrying a complete **Matter Safety Contract** — for the specialists. Specialists do source-bound work inside their lane, propose, and hand results back; they never self-expand scope. Every action is graded green / yellow / red:
+Hub-and-spoke around a single front door. The **Legal Ops Supervisor** runs onboarding, creates one **Matter Authorization Package** on each parent matter, and delegates focused child work orders that inherit it. Within that authorization, specialists may use configured read-only tools, conduct routine legal research, add verified authorities, process PDF/OCR, revise working copies, run QA, and coordinate internally without repeated approvals.
 
-- **Green** — source-bound work proceeds autonomously and is logged.
-- **Yellow** — Legal Ops cures routing/scope ambiguity the parent issue already authorizes.
-- **Red** — only external side effects, authentication/payment/legal-authority expansion, and destructive or protected mutation require visible board approval before action.
+The supervising attorney decides only external acts, payment or budget expansion, protected-file mutation, matter/source expansion or cross-matter use, and material legal strategy. Login, MFA, CAPTCHA, and tool failures go to Legal Ops or the tool owner as operational interruptions.
 
 Identity and constraints live in [COMPANY.md](COMPANY.md); operating governance in [OPERATIONS.md](OPERATIONS.md); the deliverable ledger in [PROJECT-INVENTORY.md](PROJECT-INVENTORY.md).
 
-Default intake is **Light Intake Mode**. Legal Ops starts from the user's description, an already-approved monitor summary, or an approved source list; produces an intake summary, missing-input list, and proposed next step; and asks for only the next decision needed to continue. Legal Ops prepares the Matter Safety Contract internally from plain-language answers. Local/source-bound work, output-root artifacts, new output-root working copies, draft recommendations, QA, issue updates, and internal routing proceed without human approval when scope is clear; hard gates still require visible approval.
+Default intake is **Light Intake Mode**. Legal Ops starts from the lawyer's description, prepares the Matter Authorization Package from plain-language answers, and asks only for the next material decision needed. The parent authorization persists for descendants until revoked, changed, or exhausted.
 
 Active parent matter issues should carry a **Matter Dashboard** using `references/matter-status-digest.md`. This is the lawyer-facing control page that explains what the matter is, what workstreams are covered, what is waiting, who owns the next step, whether the lawyer needs to act, and where the latest artifacts live. Technical blocker chains stay available for audit, but they should not be the first thing a lawyer has to decode.
 
 Matter context is reusable but relevance-based. Legal Ops should create or confirm a Matter Home at `{workspace}/Matters/{matter-short-name}/` when a matter/output root is approved, with issue audit output under `_paperclip_issues/{issue-identifier}/`. Specialists should check only the context artifacts relevant to their role and assignment. See `references/matter-context-artifacts.md` for the folder convention, tiered checking rule, and role defaults.
 
-The template is also efficiency-first. Legal Ops should use one Matter Dashboard, one Matter Plan, and a compact work packet before opening child issues. Small triage, dedupe, dashboard edits, and short status answers stay on the parent issue; active child issues are reserved for specialist-owned durable deliverables, longer tool runs, parallel lanes, true blockers, and hard-gate paths.
+The template is also efficiency-first. Legal Ops uses one Matter Dashboard, one Matter Plan, and a compact work packet before opening child issues. Small triage, dedupe, Dashboard edits, and short status answers stay on the parent issue; active child issues are reserved for specialist-owned durable deliverables, longer tool runs, parallel lanes, material blockers, and review work.
 
 ## Org chart
 
@@ -78,7 +76,7 @@ Each agent is defined by four files: `AGENTS.md` (role, triggers, handoffs, deli
 
 - [Firm Onboarding](projects/firm-onboarding/PROJECT.md) — import-time onboarding to configure workspace, runtime, local tools, connectors, Email/Calendar/Docket monitor profiles, SOPs, matter mapping, and policy before any live matter work. Twelve setup tasks are owned by the Legal Ops Supervisor, and three paused recurring monitor tasks are imported for Email, Calendar, and Docket monitoring.
 
-Matter launch intake is a standalone skill-triggered front door owned by Legal Ops. Motion drafting is a separate downstream workflow, and subpoena MTC is one motion profile rather than a separate intake system or sub-organization. Live work begins only from a user-created parent issue with a complete Matter Safety Contract.
+Matter launch intake is a standalone skill-triggered front door owned by Legal Ops. Motion drafting is a separate downstream workflow, and subpoena MTC is one motion profile rather than a separate intake system or sub-organization. Live work begins from a user-created parent issue with a Matter Authorization Package; child issues reference it rather than copying it.
 
 ## Skills
 
@@ -114,18 +112,20 @@ If an onboarding task is substantively complete but the issue cannot be marked d
 - Configure a local PDF/OCR toolchain appropriate to the deployment, and approved output roots. Use `skills/legal-pdf-processing/scripts/pdf_runtime_probe.sh` to discover capabilities; no single PDF vendor is required.
 - Review executable-script trust before using repo helper scripts. The PDF skill includes an optional local OCR helper at `skills/legal-pdf-processing/scripts/ocr_pdf_intake.ps1`; it requires explicit `{matter_root}` / `{output_root}` scope, writes only under the approved output root, and must be run only in a deployment-approved Python/OCR environment. Paperclip company import stores the markdown skill/reference files; deployments that want the helper should review or run it from the repository source after approval.
 - Set budgets, model choices, and approval policies appropriate for the deployment.
-- Use the relaxed default approval matrix for testing and product iteration: proceed on local/source-bound output-root work and stop only for external side effects, authentication/payment/legal-authority expansion, or destructive/protected mutation. Use `approval_profile: sandbox_autopilot` to label local non-client-facing test matters.
+- Use the canonical authorization matrix in `skills/legal-matter-intake/references/human-approval-gates.md`. Routine research, permitted downloads, configured read-only connectors, working-copy edits, QA, and internal coordination proceed within the parent authorization.
 - Configure external-tool access before use: BrowserOS or equivalent browser tooling, email provider, calendar provider, Google Drive, Lexis, LASC, external knowledge-base/upload systems, filing, service, and upload/download workflows.
 - Configure `email_monitor_profile`, `calendar_monitor_profile`, `docket_monitor_profile`, and `monitoring_report_policy` before enabling monitor routines.
-- Keep monitor routines paused until the board/operator approves the profile and schedule. Treat `setup-ready / paused` and `enabled / runnable` as separate states: setup can be done while monitoring is still off. Within an enabled approved profile, monitors may read full in-scope content needed for local reports, including Email bodies/threads/attachments, Calendar event details/attachments, and free public docket documents. Every monitor run writes a durable `monitor-report` issue document. Actionable findings are deduped and routed to Legal Ops triage; monitors do not open substantive legal work directly.
+- Keep monitor routines paused until the board/operator approves the profile and schedule. Within an enabled profile, monitors may read full in-scope content needed for review. No-change and duplicate-only runs end with a one-line routine result and create no lawyer-visible report, comment, triage issue, or Dashboard update. Material findings are deduplicated into one matter-level `monitor-report` and routed to Legal Ops.
 - Use `references/matter-planning-playbook.md` when a new event arrives. Legal Ops should match or create the matter parent, classify all plausible workstreams, create child issues for safe work now, and record strategy/source/approval blockers in one batched plan.
 - Use `agents/legal-ops-supervisor/references/workflow-efficiency-budget.md` to keep matter work compact: default to 3-5 active lanes, batch monitor candidates, and avoid child issues for coordination-only work.
 - Use `references/matter-context-artifacts.md` to create or maintain matter context. Agents should check the matter context index plus role-relevant artifacts, not the entire context folder by default.
-- Use `references/lawyer-facing-output-standard.md` so reports start with plain-English summaries and place technical scope details in an `Audit Details` footer.
+- Use `agents/legal-ops-supervisor/references/lawyer-facing-output-standard.md`: substantive analysis lives once in the controlling artifact, while technical scope and process details remain in the internal audit record unless they affect reliability or the lawyer's next action.
 - Keep the completed Firm Operations Guide private to the deployment.
 - Start live work only from a parent issue assigned to Legal Ops Supervisor.
 - Keep the parent issue's Matter Dashboard current whenever child issues are created, blockers change, or the lawyer asks for status. Before a parent matter becomes `done`, `in_review`, or `blocked`, Legal Ops should clear stale blockers, list open decisions, and confirm no child issue is orphaned.
-- Let Legal Ops translate lawyer-facing intake answers into the Matter Safety Contract. A live issue should still carry `{matter_root}` or an approved source set, `{output_root}` when configured, Firm Operations Guide reference, read-only source roots, forbidden roots, allowed outputs, autonomy level, learning mode, approval profile, and hard gates, but lawyers should be asked for these in plain language.
+- Let Legal Ops translate lawyer-facing intake answers into the parent Matter Authorization Package. Child issues contain only the objective, relevant sources, output, and exceptions from parent authority.
+
+Lawyer-facing communication follows `agents/legal-ops-supervisor/references/lawyer-facing-output-standard.md`: substantive analysis appears once in a controlling artifact, comments stay near 120 words, run results stay within two lines, and the Matter Dashboard changes only when posture, risk, deadline, decision, or deliverable status materially changes.
 
 ## Confidentiality And Portability
 

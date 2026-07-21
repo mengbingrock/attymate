@@ -1,16 +1,16 @@
-# Autonomous MTC QA Checklist
+# Motion QA Checklist
 
-Before presenting an MTC package as ready for review, confirm:
+Before presenting a motion package for review, confirm:
 
-- Parent issue, child issues, and run state agree on matter/output scope.
-- No cross-matter sources were inspected.
-- Every artifact was created under the approved output root or separately approved path.
-- Source files were not renamed, overwritten, deleted, split, merged, or reordered.
-- OCR sidecars are traceable to original PDFs.
-- Original request and objection text is preserved where separate-statement rules require it.
-- Factual assertions cite approved sources.
-- Legal propositions cite supplied or approved authorities.
-- No memory-derived authorities appear.
-- External research, uploads, downloads, auth, paid retrieval, calendar writes, email, filing, service, signing, finalization, and active Word writes were not performed without approval.
-- Stale shell terms, placeholders, numbering errors, and TOC/TOA inconsistencies are flagged.
-- Privacy, protective-order, sanctions, and relief choices match approved strategy or are listed as unresolved.
+- Matter, objective, motion profile, source/output scope, and requested relief are consistent.
+- No cross-matter source was inspected or reused.
+- Source files and protected/final/user-edited materials remain unchanged.
+- OCR-derived text is traceable to the original page and result-affecting extraction gaps are disclosed.
+- Each material fact has a source cite; each legal proposition has a verified authority and accurate treatment.
+- The motion, supporting evidence, declarations, exhibits/RJN, proposed order, and any separate statement are internally consistent.
+- Routine research, permitted downloads, configured tools, and working-copy edits stayed within parent authorization.
+- No external upload/share, payment outside budget, calendar write, sending, filing, service, signature, protected-file mutation, scope expansion, or material strategy adoption occurred without the required Attorney Decision.
+- Stale shell terms, placeholders, numbering errors, and TOC/TOA inconsistencies are resolved or identified as material issues.
+- Privacy, protective-order, sanctions, waiver, settlement, and relief positions match a recorded decision or remain expressly unresolved.
+
+Return `Ready`, `Ready with revisions`, or `Not ready`. Put only material issues in the primary report; keep the full checklist in the internal audit record.

@@ -1,15 +1,16 @@
-# MTC Intermediary Work Product
+# Motion Intermediary Work Product
 
-Recommended artifacts:
+Create only artifacts needed for the selected motion:
 
-- Source index: source, type, date, page count, extraction status, and relevance.
-- Subpoena table: subpoena date, issuing party, recipient, categories, compliance date, responses, objections, and production status.
-- Objection table: request/category, objection text, responding party position, meet-and-confer facts, and draft response.
-- Exhibit list: exhibit number, source, description, purpose, declarant, and citation target.
-- Factual narrative: supported chronology and money, records, conduct, or issue-tracing theory.
-- Authority table: proposition, authority, pinpoint, source, treatment status, and approval status.
+- Source index: source, type, date, page count, usability, and relevance.
+- Issue/fact table: element or issue, supporting fact, source cite, counterpoint, and gap.
+- Authority table: proposition, authority, pinpoint, source, and treatment.
+- Exhibit or RJN list: number, source, description, purpose, sponsor, and citation target.
+- Procedural chronology: event, reliable source, date, and significance.
 - Replacement table: shell term, replacement, source support, and unresolved risk.
-- Needed-input list: question, gate, recommendation, risk, and affected draft section.
-- Live outline: motion sections, separate-statement items, declarations, RJN, proposed order, TOC, and TOA.
+- Decision list: material legal choice, recommendation, alternatives, effect, and deadline.
+- Live outline: required motion sections and supporting documents for the selected profile.
 
-Use numbered artifact names when sequence matters. Keep assumptions and internal notes out of final court-facing drafts.
+For a subpoena MTC, add subpoena-category and objection/response tables from `subpoena-mtc-checklists.md`. Do not create them for unrelated motions.
+
+Use numbered artifact names when sequence matters. Keep assumptions, process logs, and internal notes out of the review draft.

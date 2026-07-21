@@ -2,7 +2,7 @@
 
 Use this reference when the drafting issue depends on PDFs, scans, exhibits, pleadings, correspondence, orders, transcripts, or prior drafts.
 
-- Confirm the Matter Safety Contract before opening source materials.
+- Confirm the Matter Authorization Package before opening source materials.
 - Inspect only approved read-only source roots.
 - Preserve source files exactly as received; do not split, merge, rename, reorder, or overwrite PDFs.
 - Decide whether OCR is needed before relying on scanned or image-heavy PDFs.

@@ -1,6 +1,6 @@
-# MTC Workspace Setup
+# Motion Workspace Setup
 
-Use runtime paths from the Matter Safety Contract.
+Use runtime paths from the Matter Authorization Package.
 
 Recommended folders:
 

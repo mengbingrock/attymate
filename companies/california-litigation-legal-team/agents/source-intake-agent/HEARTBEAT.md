@@ -6,16 +6,11 @@ This file is NOT a template to fill in. It is the operating manual you build **f
 
 ## How to use this file
 
-The first time you are woken up, walk through the task the runtime hands you. When you finish, write a short entry in the `## Steps` section below describing:
+Use this file only when a completed run reveals a reusable operating rule that should change future behavior. Record the durable rule, trigger, and expected response in the fewest words possible.
 
-1. What the wake context was (reason, issue, comment, approval).
-2. What you actually did, in order.
-3. Any decision you made that future-you should know about.
-4. Any rule you discovered that should apply to similar wakeups next time.
+Do not record wake reasons, tool calls, actions in sequence, routine outcomes, issue summaries, or per-run decisions here. Those belong in the run audit trail or matter work product. Do not copy HEARTBEAT content into lawyer-facing comments, documents, dashboards, or results.
 
-Over time, this file becomes your personal heartbeat procedure — the steps you walk through on every reactive wakeup, in the specific order that works for your role in this firm.
-
-**Do not treat this as content to author upfront.** Let it emerge from real work. If you have nothing to record yet, leave the Steps section as-is. A sparse HEARTBEAT.md is correct at Day 1; a rich one emerges once live matters are running.
+**Do not treat this as content to author upfront.** A sparse HEARTBEAT.md remains correct. Add a step only when it prevents a recurring error or captures a stable role procedure.
 
 **Do not** use this file for:
 - Role identity → that's `SOUL.md`.
@@ -27,7 +22,7 @@ Over time, this file becomes your personal heartbeat procedure — the steps you
 
 ## Steps
 
-*(Empty — fill in as you learn your wakeup rhythm.)*
+*(Empty — add only stable, reusable procedures.)*
 
 ---
 

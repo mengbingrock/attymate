@@ -1,53 +1,33 @@
 # Monitoring Report Contract
 
-Use this contract for Email, Calendar, and Docket monitor routine outputs. A monitor report is a routed finding for Legal Ops Supervisor, not substantive legal work.
+Use this contract for Email, Calendar, and Docket monitoring. Monitor output is exception-based.
 
-Every monitor run must leave a durable issue document with key `monitor-report`. Do not rely on comments alone for the report. If the monitor finds actionable candidates, batch them in the report and create or update one non-substantive Legal Ops triage packet after dedupe. Monitor agents still do not create substantive legal-work child issues directly.
+## No-Change Runs
 
-## Required Fields
+When there is no new reportable finding or every candidate is already covered, finish with a one-line run/routine result. Do not create or update a `monitor-report`, comment, triage issue, or Matter Dashboard.
 
-Use this compact lawyer-first format:
+## Reportable Runs
+
+Create or update one `monitor-report` only when there is an actionable new finding or a setup/tool interruption that requires a named owner. Batch related findings and dedupe before routing.
 
 ```md
-# Monitor Report
+# Monitor Finding
 
-## Summary
+## Bottom Line
 
-**Result:** [No reportable findings / new finding / duplicate / blocked by setup.]
-**Bottom line:** [1-2 plain-English sentences.]
-**Recommended next action:** [Dismiss, update matter, create/update Legal Ops triage, ask one approval/source question.]
+**Finding:** [One or two sentences stating the legally relevant change.]
+**Practical effect:** [Deadline, posture, source need, or no immediate effect.]
+**Recommended action:** [One owner and next step.]
 
-## Findings
+## Material Findings
 
-| Finding | Source | Suggested Legal Ops action |
+| Finding | Reliable source | Consequence / next action |
 | --- | --- | --- |
-| [Finding or no findings] | [Safe source reference] | [Action] |
+| [Only material items] | [Safe source reference] | [Action] |
 
-## Dedupe
+## Internal Audit Reference
 
-[New / already reported / possible duplicate, with linked issue if known.]
-
-## Audit Details
-
-- Monitor type: `email`, `calendar`, or `docket`.
-- Profile reference: Firm Operations Guide section or issue-document reference.
-- Routine reference: routine name or ID, run time, and assigned monitor agent.
-- Checked scope and time window.
-- Evidence reviewed: concise list of message/thread/conversation/attachment types, calendar event/detail/attachment types, or docket entry/public-document types reviewed. Do not paste raw private content.
-- Deadline cues are proposed only, with source reference and uncertainty noted.
-- Hard gates requested, if any: auth, external download, paid retrieval, mailbox write, calendar write, filing, service, signing, email, or other approval.
-- Actions not taken: only list hard-gate actions that might be expected for this monitor.
+[Link to checked scope, time window, dedupe record, access limits, and actions not taken. Do not replay those details here.]
 ```
 
-Keep the summary and findings short. Move technical scope, preconditions, and hard-gate confirmations to `Audit Details`.
-
-## Handoff Rule
-
-All monitor findings go to Legal Ops Supervisor.
-
-- No reportable findings: write `monitor-report`, mark the monitor issue done, and do not create a triage issue.
-- Duplicate findings: write `monitor-report`, link the prior issue or matter, and avoid creating a duplicate unless Legal Ops needs a dedupe audit issue.
-- Actionable findings: write `monitor-report`, dedupe against open/recent matter parents and monitor candidates, then create or update one batched Legal Ops triage issue with the report linked. Do not open one triage issue per minor cue unless each cue maps to a different matter or a distinct substantive workstream.
-- Setup/profile blockers: write `monitor-report`, ask for one setup decision, and set the monitor issue to `blocked` only if no pending interaction or Legal Ops triage path exists.
-
-Monitor agents do not create substantive matter child issues, calendar entries, docket purchases, email replies, filing/service actions, or legal drafts unless Legal Ops creates a scoped issue and the required approval profile and gate approvals are visible.
+Actionable findings create or update one batched Legal Ops triage item. Monitor agents do not open substantive legal-work children or take external actions. Operational interruptions route to Legal Ops/tool owner and reach the lawyer only when they change timing, reliability, or the lawyer's next action.

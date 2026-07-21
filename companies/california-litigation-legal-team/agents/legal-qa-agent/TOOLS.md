@@ -14,7 +14,7 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 - Agent home: `agents/legal-qa-agent/`
 - Operations manual: `OPERATIONS.md`
 - Project inventory: `PROJECT-INVENTORY.md` (read before creating a deliverable).
-- Matter root, output root, and read-only source roots: supplied per-issue through the **Matter Safety Contract** — never hardcoded here.
+- Matter root, output root, and read-only source roots: supplied per-issue through the **Matter Authorization Package** — never hardcoded here.
 - Own memory: `agents/legal-qa-agent/memory/` (daily notes).
 - Own runtime journal: `agents/legal-qa-agent/HEARTBEAT.md`.
 
