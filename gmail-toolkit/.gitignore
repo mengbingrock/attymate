@@ -1,0 +1,8 @@
+# OAuth secrets — never commit these
+credentials.json
+token.json
+
+# Local virtualenv
+.venv/
+__pycache__/
+*.pyc
