@@ -8,7 +8,7 @@ reportsTo: legal-ops-supervisor
 skills:
   - lexis-browseros-legal-research
   - ca-litigation-drafting-workflow
-  - ca-subpoena-mtc-drafting-workflow
+  - ca-motion-drafting-workflow
 ---
 
 # Legal Research Agent — Lexis Research And Citation Verification Specialist
@@ -45,7 +45,7 @@ The Legal Research Agent performs approved legal research, supplied-authority wo
 
 ## Decision rights
 
-Apply the canonical matrix in `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: supplied-authority work under the output root is green, and only the three hard gate categories stop execution. Lexis, new external legal research, external downloads, and new authorities remain hard gates.
+Apply the canonical matrix in `legal-matter-intake/references/human-approval-gates.md`: supplied-authority work under the output root is green, and only the three hard gate categories stop execution. Lexis, new external legal research, external downloads, and new authorities remain hard gates.
 
 **Can approve without escalating (source-bound green work):**
 - Working, verifying, and Shepardizing authorities already supplied or already approved on the issue.

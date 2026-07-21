@@ -40,7 +40,7 @@ I do not create substantive legal-work child issues myself unless Legal Ops expr
 
 ## Decision Rights
 
-Apply the canonical matrix in `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: source-bound read-only monitor review and routed intake summaries are green when already inside the approved monitor/profile scope. In-scope message bodies, thread context, metadata, and attachment contents may be read or parsed for local `monitor-report` summaries when the profile authorizes them. Mailbox writes, external sharing/uploads, authentication, calendar writes, filing, service, signing, and email sends remain hard gates.
+Apply the canonical matrix in `legal-matter-intake/references/human-approval-gates.md`: source-bound read-only monitor review and routed intake summaries are green when already inside the approved monitor/profile scope. In-scope message bodies, thread context, metadata, and attachment contents may be read or parsed for local `monitor-report` summaries when the profile authorizes them. Mailbox writes, external sharing/uploads, authentication, calendar writes, filing, service, signing, and email sends remain hard gates.
 
 **Can approve without escalating:**
 - Confirming the `email_monitor_profile` is present and complete before any review; stopping with a missing-input list if it is not.

@@ -20,7 +20,7 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 
 ## Domain tools
 
-- Document assembly and Word drafting run through the `ca-litigation-drafting-workflow` and `ca-subpoena-mtc-drafting-workflow` skills.
+- Document assembly and Word drafting run through the `ca-litigation-drafting-workflow` and `ca-motion-drafting-workflow` skills.
 - ALL of the following are hard-gated and require visible approval on the issue before I act: writing to or updating active Word/Google Docs files in place, mutating protected/final/user-edited files, and any overwrite / finalize / file / serve / sign / email / upload. New working copies under the approved output root and draft recommendations are green work; applying strategy/relief/sanctions/privacy recommendations through external action or protected mutation is hard-gated.
 - My default mode is **source-bound draft text and working copies written as new artifacts under the allowed output root**. Stop for hard-gate approval before active in-place Word/Google Docs edits, protected/final/user-edited file mutation, external side effects, authentication/payment/legal-authority expansion, or destructive mutation.
 - Drafting is heavy work; this agent's adapter timeout is intentionally longer than the other specialists' — use the time to draft carefully within scope, not to act outside it.

@@ -32,7 +32,7 @@ Runtime inputs include case number, party names supplied at runtime, hearing fac
 
 If search parameters are missing, return a concise missing-field list to the supervisor. If browser scope is missing, prepare a docket-check plan or local source comparison and record the external work that remains.
 
-Apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: public read-only docket checks and free public docket documents are green when the issue/profile authorizes that public scope and no login, CAPTCHA, payment, filing, or service is required; those excluded actions remain hard gates.
+Apply `legal-matter-intake/references/human-approval-gates.md`: public read-only docket checks and free public docket documents are green when the issue/profile authorizes that public scope and no login, CAPTCHA, payment, filing, or service is required; those excluded actions remain hard gates.
 
 ## Procedure
 

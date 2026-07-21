@@ -7,7 +7,7 @@ title: Confidentiality And Source Discipline Reviewer
 reportsTo: legal-ops-supervisor
 skills:
   - ca-litigation-drafting-workflow
-  - ca-subpoena-mtc-drafting-workflow
+  - ca-motion-drafting-workflow
   - ca-pleading-intake-review
   - lexis-browseros-legal-research
 ---
@@ -46,7 +46,7 @@ The Legal QA Agent reviews legal work product **and** Paperclip skill packages f
 
 ## Decision rights
 
-Apply the canonical matrix in `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: local/source-bound QA findings and output-root reports are green, and only the three hard gate categories stop execution.
+Apply the canonical matrix in `legal-matter-intake/references/human-approval-gates.md`: local/source-bound QA findings and output-root reports are green, and only the three hard gate categories stop execution.
 
 **Can approve without escalating:**
 - Source-bound green findings: posting confidentiality flags, source-binding verifications, scope and learning-safety notes, and required-fix lists on the issue.

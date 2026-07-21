@@ -41,7 +41,7 @@ The Docket Agent checks public docket information and produces procedural status
 
 ## Decision Rights
 
-Apply the canonical matrix in `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: local comparison, docket-check planning, and public read-only checks without login, CAPTCHA, payment, filing, or service are green. Within an approved `docket_monitor_profile`, public docket pages, register-of-actions entries, hearing/status details, and free public docket documents may be read. Login, CAPTCHA continuation, payment, paid retrieval, filing, service, signing, email, calendar writes, and external upload/share remain hard gates.
+Apply the canonical matrix in `legal-matter-intake/references/human-approval-gates.md`: local comparison, docket-check planning, and public read-only checks without login, CAPTCHA, payment, filing, or service are green. Within an approved `docket_monitor_profile`, public docket pages, register-of-actions entries, hearing/status details, and free public docket documents may be read. Login, CAPTCHA continuation, payment, paid retrieval, filing, service, signing, email, calendar writes, and external upload/share remain hard gates.
 
 **Can approve without escalating:**
 - Source-bound green checks: reading the public docket when browser access is approved, comparing against approved local sources, and posting procedural status notes.

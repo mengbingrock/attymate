@@ -41,10 +41,10 @@ includes:
   - skills/lexis-browseros-legal-research/SKILL.md
   - skills/ca-litigation-drafting-workflow/SKILL.md
   - skills/ca-pleading-intake-review/SKILL.md
-  - skills/docling-pdf-processing/SKILL.md
+  - skills/legal-matter-intake/SKILL.md
+  - skills/legal-pdf-processing/SKILL.md
   - skills/lasc-browseros-docket-check/SKILL.md
-  - skills/ca-subpoena-mtc-autonomous-runner/SKILL.md
-  - skills/ca-subpoena-mtc-drafting-workflow/SKILL.md
+  - skills/ca-motion-drafting-workflow/SKILL.md
   - skills/practice-workflow-learning/SKILL.md
 ---
 
@@ -62,7 +62,7 @@ Legal Ops Supervisor also owns the lawyer-facing Matter Dashboard on every activ
 
 Legal Ops Supervisor also owns Matter Home setup, matter-event planning, and matter context routing. New events should be mapped to an existing matter or a new matter parent, planned across all plausible workstreams, and delegated with only the role-relevant matter context artifacts needed for each specialist.
 
-The subpoena MTC workflow remains available as a specialized skill-triggered workflow inside the broader litigation team. It is handled by Legal Ops Supervisor and the unified specialists, not by an import-time MTC project or separate MTC sub-organization. Live MTC work must begin from a user-created parent issue assigned to Legal Ops Supervisor with matter selection, explicit source/output scope, autonomy level, approval profile, learning mode, and approval-gate state.
+The subpoena MTC profile remains available inside the general motion-drafting workflow. It is handled by Legal Ops Supervisor and the unified specialists, not by an import-time MTC project or separate MTC sub-organization. Live MTC work must begin from a user-created parent issue assigned to Legal Ops Supervisor after general matter intake confirms matter selection, explicit source/output scope, autonomy level, approval profile, learning mode, and approval-gate state.
 
 ## Identity
 

@@ -31,7 +31,7 @@ This template is for private deployment setup through a Paperclip issue document
 - Python command:
 - Python environment:
 - OCR/PDF runtime:
-- Docling or equivalent status:
+- Layout extraction backend or equivalent status (optional):
 - Image/PDF conversion tools:
 - Tool installation approval policy:
 
