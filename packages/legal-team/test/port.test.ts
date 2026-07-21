@@ -24,7 +24,7 @@ const EXPECTED_SKILLS = [
 	"ca-subpoena-mtc-drafting-workflow",
 	"docling-pdf-processing",
 	"legal-calendaring-workflow",
-	"lexis-browseros-legal-research",
+	"supplied-authority-legal-research",
 ];
 
 function* markdownFiles(dir: string): Generator<string> {

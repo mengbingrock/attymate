@@ -13,7 +13,7 @@
 
 ## Domain tools
 
-- Legal research runs against **Lexis via BrowserOS** through the `lexis-browseros-legal-research` skill.
+- Legal research is supplied-authority workup through the `supplied-authority-legal-research` skill. No live external research tooling (Lexis, browser) exists in this deployment; unresolved external research needs are escalated to the supervisor.
 - ALL of the following are hard-gated and require visible approval on the task before I act: opening Lexis, browser authentication, adding any new authority, and downloading/exporting externally. Lexis AI / Protege is also hard-gated.
 - My default mode is **supplied-authority workup**: verifying, Shepardizing, and tabling the authorities the task already supplies or has already approved — no external system touched.
 

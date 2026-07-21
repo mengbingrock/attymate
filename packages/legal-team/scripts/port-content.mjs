@@ -34,8 +34,11 @@ const AGENTS = [
 	"calendar-agent",
 	"email-monitor-agent",
 ];
-// docket-agent and practice-learning-agent are deferred (BrowserOS / learning
-// contract dependencies); their skills are likewise excluded.
+// docket-agent and practice-learning-agent are deferred (external docket
+// access / learning contract dependencies); their skills are likewise
+// excluded. The source's lexis-browseros-legal-research skill is replaced by
+// the authored supplied-authority-legal-research skill below — this
+// deployment has no browser tooling and no BrowserOS dependency.
 const SKILLS = [
 	"ca-litigation-drafting-workflow",
 	"ca-pleading-intake-review",
@@ -43,7 +46,6 @@ const SKILLS = [
 	"ca-subpoena-mtc-drafting-workflow",
 	"docling-pdf-processing",
 	"legal-calendaring-workflow",
-	"lexis-browseros-legal-research",
 ];
 
 /** Protect legitimate legal-verb usages of "issue" before the generic pass. */
@@ -56,6 +58,18 @@ const PROTECTED = [
 
 /** Ordered phrase-level vocabulary mapping (Paperclip -> pi task protocol). */
 const PHRASES = [
+	// De-BrowserOS: this deployment has no browser tooling; the browser-based
+	// research skill is replaced and all external-browser tool mentions drop out.
+	[/`?lexis-browseros-legal-research`?/g, "`supplied-authority-legal-research`"],
+	[
+		/Legal research runs against \*\*Lexis via BrowserOS\*\* through the `supplied-authority-legal-research` skill\./g,
+		"Legal research is supplied-authority workup through the `supplied-authority-legal-research` skill. No live external research tooling (Lexis, browser) exists in this deployment; unresolved external research needs are escalated to the supervisor.",
+	],
+	[/BrowserOS, Lexis, LASC, email provider/g, "Email provider"],
+	[/the Lexis Research and Citation Verification Specialist/g, "the Research and Citation Verification Specialist"],
+	[/\(BrowserOS, email provider, calendar provider, Drive, Lexis, LASC, filing\)/g, "(email provider, calendar provider, Drive, filing)"],
+	[/`lasc-browseros-docket-check`/g, "deferred — no browser tooling; manual follow-up"],
+	[/Lexis research & citation verification/g, "Supplied-authority research & citation verification"],
 	[/Paperclip issues?/g, "tasks"],
 	[/child issues/g, "delegated tasks"],
 	[/child issue/g, "delegated task"],
@@ -221,22 +235,10 @@ for (const slug of AGENTS) {
 	} catch {}
 }
 
-const LEXIS_BANNER =
-	"> **Runtime note:** BrowserOS browser tooling is not available in this deployment. Work only from sources and authorities supplied in the task packet or matter workspace; if live external research is required, escalate to the supervisor instead of attempting browser access.";
-
 for (const skill of SKILLS) {
 	const srcSkill = join(srcRoot, "skills", skill);
 	const destSkill = join(outRoot, "skills", skill);
-	portFile(join(srcSkill, "SKILL.md"), join(destSkill, "SKILL.md"), {
-		kind: "skill",
-		banner: skill === "lexis-browseros-legal-research" ? undefined : undefined,
-	});
-	if (skill === "lexis-browseros-legal-research") {
-		const p = join(destSkill, "SKILL.md");
-		const t = readFileSync(p, "utf-8");
-		const [fm, body] = splitFrontmatter(t);
-		writeFileSync(p, `---\n${fm}\n---\n${LEXIS_BANNER}\n\n${body}`);
-	}
+	portFile(join(srcSkill, "SKILL.md"), join(destSkill, "SKILL.md"), { kind: "skill" });
 	for (const entry of readdirSync(srcSkill)) {
 		if (entry === "SKILL.md") continue;
 		const s = join(srcSkill, entry);
@@ -249,6 +251,80 @@ for (const skill of SKILLS) {
 	}
 }
 
+// Authored replacement for the source's lexis-browseros-legal-research skill:
+// same supplied-authority discipline, no browser/Lexis session workflow. The
+// research-output-format reference is reused verbatim (it is browser-neutral).
+const RESEARCH_SKILL = `---
+name: supplied-authority-legal-research
+description: Use when a pi legal research agent must perform source-bound legal research from supplied or already-approved authorities, including citation verification against supplied source text, treatment notes, authority-table creation, and source-supported legal research memoranda. Do not use for memory-derived authorities or unapproved external research; no live external research tooling (Lexis, browser) exists in this deployment — unresolved external research needs are escalated to the supervisor.
+---
+
+# supplied-authority-legal-research
+
+*How the California Litigation Legal Team runs legal research — source-bound and supervised, never from memory, never beyond the approved source set. This deployment has no browser or Lexis tooling: all research is workup of supplied or already-approved authorities.*
+
+## When to load this skill
+
+- A Legal Research Agent is assigned to a scoped research task and is opening it for the first time.
+- A task requires citation verification or treatment-checking of authorities the legal point depends on, from supplied source text.
+- An authority table or source-supported research memorandum must be built from approved sources.
+- This skill is generic and reusable: it carries no client facts, matter examples, firm accounts, saved searches, internal URLs, or private credentials.
+
+## Inputs
+
+Before research begins, confirm the task states the contract fields:
+
+- Research question and jurisdiction.
+- Matter label to use for audit purposes, supplied at runtime.
+- Approved source scope: the supplied authority files and any already-approved source materials.
+- Output root for research logs, authority tables, and memos.
+- Authority-use limits, including whether only supplied authorities may be used.
+- Forbidden roots and no-cross-matter inspection rule.
+- Firm Operations Guide reference or scoped guide excerpt, autonomy level, approval profile, learning mode, and any visible hard-gate approvals already granted.
+
+If research scope or matter label is missing, return the missing-field list to the supervisor. External research is never available: when a legal point cannot be resolved from the supplied/approved set, record it on the unresolved external-research list and escalate rather than filling the gap from memory.
+
+## Procedure
+
+1. **Checkout the assigned task.**
+2. **Read context.** Read the matter record, task reports, supplied authorities, and research scope.
+3. **Verify before relying.** Open and verify primary authorities in the supplied source text before relying on them. Treat all authority claims as needing source verification. Never use authorities derived from memory.
+4. **Check treatment.** Note treatment and subsequent-history signals only insofar as they appear in the supplied/approved materials; anything requiring live treatment-checking goes on the unresolved external-research list.
+5. **Log everything.** Keep a research log with sources reviewed, accepted authorities, rejected authorities, and treatment notes.
+6. **Checkpoint and gate.** Proceed autonomously with green work: supplied-authority tables, citation formatting checks from supplied text, task research logs, and source-supported memo notes using approved sources. Route yellow tasks to the Legal Ops Supervisor when scope expands or a discrete legal strategy question can be separated from source verification — but continue supplied-authority work where possible. Hard-gate approval is required before: adding new authorities beyond the supplied/approved source set; downloading, exporting, uploading, emailing, filing, serving, or finalizing; or adopting legal theory, relief, sanctions, privacy, or protective-order recommendations through external action or protected mutation.
+7. **Post and save.** Post findings and save approved outputs under \`{output_root}\`.
+
+## Outputs
+
+- Outputs may include task reports, research logs, authority tables, treatment notes, and source-supported research memos.
+- Mark done only after posting a source-supported answer, an authority table, and an unresolved external-research list.
+- Return discrete yellow or hard-gate tasks to the Legal Ops Supervisor, but continue supplied-authority work when possible.
+- Do not embed credentials, private account details, client secrets, or confidential facts in reusable skill files.
+
+## Anti-patterns
+
+- Citing authorities from memory. Every authority claim needs source verification.
+- Adding authorities beyond the supplied or approved source set without approval.
+- Attempting live external research; none exists in this deployment — escalate instead.
+- Downloading, exporting, uploading, emailing, filing, serving, or finalizing without approval.
+- Storing credentials, or embedding client secrets, private account details, or confidential facts in this reusable skill.
+- Blocking indefinitely on a missing field instead of continuing safe supplied-authority work and recording what remains.
+
+## Reference
+
+- \`references/research-output-format.md\`: generic research-log and authority-table fields.
+`;
+
+{
+	const destSkill = join(outRoot, "skills", "supplied-authority-legal-research");
+	mkdirSync(join(destSkill, "references"), { recursive: true });
+	writeFileSync(join(destSkill, "SKILL.md"), RESEARCH_SKILL);
+	portFile(
+		join(srcRoot, "skills", "lexis-browseros-legal-research", "references", "research-output-format.md"),
+		join(destSkill, "references", "research-output-format.md"),
+	);
+}
+
 // Report any residual Paperclip vocabulary so the port can be verified.
 let residual = 0;
 function scan(dir) {
@@ -259,7 +335,7 @@ function scan(dir) {
 		} else if (entry.endsWith(".md")) {
 			let text = readFileSync(p, "utf-8");
 			for (const [from] of PROTECTED) text = text.split(from).join("");
-			const hits = text.match(/paperclip|PAPERCLIP|\bissues?\b/gi);
+			const hits = text.match(/paperclip|PAPERCLIP|\bissues?\b|browseros/gi);
 			if (hits) {
 				residual += hits.length;
 				console.error(`residual vocabulary in ${relative(outRoot, p)}: ${[...new Set(hits)].join(", ")}`);

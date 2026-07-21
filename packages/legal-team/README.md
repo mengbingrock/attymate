@@ -15,7 +15,7 @@ The California Litigation Legal Team, rebuilt natively on the [pi coding agent](
 | calendar-agent | deadline calcs + proposals; event writes hard-gated; monitor sweeps | gpt-5.5 (medium); sweeps on gpt-5.4-mini |
 | email-monitor-agent | read-only mailbox monitor | gpt-5.4-mini (low) |
 
-Deferred from the source company: docket-agent (needs BrowserOS/LASC access) and practice-learning-agent (needs an explicit learning contract).
+Deferred from the source company: docket-agent (needs external docket access) and practice-learning-agent (needs an explicit learning contract). The deployment has no browser tooling and no BrowserOS dependency; the source browser-based research skill is replaced by `supplied-authority-legal-research`.
 
 The agent definitions live in `company/` — a mechanical port of `companies/california-litigation-legal-team` from the attymate master branch onto pi vocabulary (`scripts/port-content.mjs` reproduces it). SOUL/AGENTS/TOOLS are appended to pi's own system prompt; COMPANY/OPERATIONS/PROJECT-INVENTORY ride along as context files; skills load through pi's native skill mechanism, filtered per agent.
 

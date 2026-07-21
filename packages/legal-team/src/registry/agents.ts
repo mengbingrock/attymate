@@ -18,7 +18,7 @@ const GPT_MONITOR = { provider: "openai-codex", model: "gpt-5.4-mini" };
 
 /**
  * The phase-1 team: 8 of the source company's 10 agents. docket-agent and
- * practice-learning-agent are deferred (BrowserOS docket access and the
+ * practice-learning-agent are deferred (external docket access and the
  * opt-in learning contract are not available in this deployment).
  */
 export const AGENT_REGISTRY: Record<string, AgentSpec> = {
@@ -34,7 +34,7 @@ export const AGENT_REGISTRY: Record<string, AgentSpec> = {
 			"ca-litigation-drafting-workflow",
 			"ca-pleading-intake-review",
 			"docling-pdf-processing",
-			"lexis-browseros-legal-research",
+			"supplied-authority-legal-research",
 		],
 		allowBash: false,
 		timeoutSec: 1200,
@@ -63,7 +63,7 @@ export const AGENT_REGISTRY: Record<string, AgentSpec> = {
 		...GPT_MAIN,
 		thinkingLevel: "medium",
 		skills: [
-			"lexis-browseros-legal-research",
+			"supplied-authority-legal-research",
 			"ca-litigation-drafting-workflow",
 			"ca-subpoena-mtc-drafting-workflow",
 		],
@@ -88,7 +88,7 @@ export const AGENT_REGISTRY: Record<string, AgentSpec> = {
 			"ca-litigation-drafting-workflow",
 			"ca-subpoena-mtc-drafting-workflow",
 			"ca-pleading-intake-review",
-			"lexis-browseros-legal-research",
+			"supplied-authority-legal-research",
 		],
 		allowBash: false,
 		timeoutSec: 1200,

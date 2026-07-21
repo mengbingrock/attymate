@@ -25,7 +25,7 @@ Update this file after every completed deliverable. Keeping the inventory curren
 - Configure workspace structure — `legal-ops-supervisor`
 - Configure agent runtime (pi/the pi orchestrator) — `legal-ops-supervisor`
 - Configure local tools (Python, OCR/PDF, Docling) — `legal-ops-supervisor`
-- Connect external tools (BrowserOS, email provider, calendar provider, Drive, Lexis, LASC, filing) — `legal-ops-supervisor`
+- Connect external tools (email provider, calendar provider, Drive, filing) — `legal-ops-supervisor`
 - Configure Email monitoring profile and verify paused routine — `legal-ops-supervisor`
 - Configure Calendar monitoring profile and verify paused routine — `legal-ops-supervisor`
 - Configure Docket monitoring profile and verify paused routine — `legal-ops-supervisor`
@@ -50,8 +50,8 @@ These are reusable workflows owned by Legal Ops Supervisor and the unified speci
 | Pleading intake & review | `ca-pleading-intake-review` | source-intake-agent | Source-bound, read-only intake. |
 | California litigation drafting | `ca-litigation-drafting-workflow` | drafting-assembly-agent | Source-bound drafts under output root. |
 | Legal calendaring | `legal-calendaring-workflow` | calendar-agent | Proposals first; writes are hard-gated. |
-| Public docket check | `lasc-browseros-docket-check` | docket-agent | Public records only; paid/login/CAPTCHA gates not crossed. |
-| Lexis research & citation verification | `lexis-browseros-legal-research` | legal-research-agent | External research hard-gated. |
+| Public docket check | deferred — no browser tooling; manual follow-up | docket-agent | Public records only; paid/login/CAPTCHA gates not crossed. |
+| Supplied-authority research & citation verification | `supplied-authority-legal-research` | legal-research-agent | External research hard-gated. |
 | Opt-in workflow learning | `practice-workflow-learning` | practice-learning-agent | Off by default; explicit learning contract required. |
 
 ## In-flight deliverables

@@ -21,7 +21,7 @@ Use `references/workflow-efficiency-budget.md` before creating delegated tasks o
 
 ## External Tools
 
-BrowserOS, Lexis, LASC, email provider, calendar provider, Google Drive, Word/live-draft writes, filing, service, and signing are delegated to the relevant specialist under an approved Matter Safety Contract. This agent grants or withholds hard gates and routes hard-gate requests to the supervising attorney (human operator); it does not operate external/protected tools directly. Routine local/source-bound work, output-root artifacts, working-copy drafts, QA, task updates, and internal routing proceed without extra approval when scope is clear.
+Email provider, calendar provider, Google Drive, Word/live-draft writes, filing, service, and signing are delegated to the relevant specialist under an approved Matter Safety Contract. This agent grants or withholds hard gates and routes hard-gate requests to the supervising attorney (human operator); it does not operate external/protected tools directly. Routine local/source-bound work, output-root artifacts, working-copy drafts, QA, task updates, and internal routing proceed without extra approval when scope is clear.
 
 ## Conventions
 

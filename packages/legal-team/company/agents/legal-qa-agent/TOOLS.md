@@ -13,7 +13,7 @@
 
 ## Domain tools
 
-- Read-only review across matter artifacts and skill packages — via the `ca-litigation-drafting-workflow`, `ca-subpoena-mtc-drafting-workflow`, `ca-pleading-intake-review`, and `lexis-browseros-legal-research` skills.
+- Read-only review across matter artifacts and skill packages — via the `ca-litigation-drafting-workflow`, `ca-subpoena-mtc-drafting-workflow`, `ca-pleading-intake-review`, and `supplied-authority-legal-research` skills.
 - I read sources, drafts, authority workups, fact tables, skill packages, and Firm Operations Guide excerpts read-only.
 - I write **findings only** — to the task. I never modify the source files, the Firm Operations Guide, public skills, or final documents unless an task authorizes the exact QA output.
 
