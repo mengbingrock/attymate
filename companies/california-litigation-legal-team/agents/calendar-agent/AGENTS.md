@@ -41,7 +41,7 @@ The Calendar Agent calculates and proposes litigation calendar entries using run
 
 ## Decision Rights
 
-Apply the canonical matrix in `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: calendar proposals and output-root reports are green, while calendar writes, invites, notifications, or emails remain hard gates. Within an approved `calendar_monitor_profile`, read-only review may include event title/body/description/location/attendees/recurrence/notes and event attachments or linked files when the profile authorizes them. If the profile says a live Outlook/Microsoft or other provider connector is unavailable, report `setup-ready / pending connector` or manual-source mode instead of running fake monitoring.
+Apply the canonical matrix in `legal-matter-intake/references/human-approval-gates.md`: calendar proposals and output-root reports are green, while calendar writes, invites, notifications, or emails remain hard gates. Within an approved `calendar_monitor_profile`, read-only review may include event title/body/description/location/attendees/recurrence/notes and event attachments or linked files when the profile authorizes them. If the profile says a live Outlook/Microsoft or other provider connector is unavailable, report `setup-ready / pending connector` or manual-source mode instead of running fake monitoring.
 
 **Can approve without escalating:**
 - Source-bound green proposals: computing and posting proposed deadline/calendar tables from approved triggering facts and the supplied policy source.

@@ -1,4 +1,4 @@
-# Docling Output Format
+# Layout Extraction Output Format
 
 ## Conversion Manifest
 

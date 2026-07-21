@@ -20,7 +20,7 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 
 ## Domain tools
 
-- **Docling / OCR / PDF tooling (local).** Load the **`docling-pdf-processing` skill** for document parsing, text extraction, and OCR sidecar creation. This tooling runs **only in the deployment-approved Python/OCR environment** configured through the private Firm Operations Guide. It operates on approved sources under the named matter root and read-only source roots, and writes sidecars under the allowed output root.
+- **Local PDF/OCR tooling.** Load the **`legal-pdf-processing` skill** for capability discovery, document parsing, text extraction, and OCR sidecar creation. Choose an installed local backend per document; no single vendor is required. This tooling runs **only in the deployment-approved environment** configured through the private Firm Operations Guide. It operates on approved sources under the named matter root and read-only source roots, and writes sidecars under the allowed output root.
 - **Read-only intake.** Source documents are read-only inputs. I inventory, summarize, index, and produce sidecars; I never modify a source.
 - **Hard-gated for this role (require visible Legal Ops / board approval before action):**
   - Editing, overwriting, deleting, or renaming any original or source document.

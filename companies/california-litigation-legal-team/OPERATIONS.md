@@ -53,7 +53,7 @@ Use `references/lawyer-facing-output-standard.md` for comments, reports, and han
 
 - **Green (autonomous, logged):** source-bound intake, fact/evidence tables, supplied-authority workup, draft text under the output root, calendar *proposals*, public docket *checks*, QA findings, sanitized learning proposals. Proceed and log.
 - **Yellow (Legal Ops may cure):** routing/scope ambiguities the parent issue already authorizes the scope for. Legal Ops cures or returns the issue; specialists do not self-expand scope.
-- **Red (board/user approval required before action):** follow `skills/ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`. Agents proceed on local/source-bound work, output-root artifacts, new output-root working copies, draft recommendations, QA, issue updates, and internal routing. Stop only for external side effects; authentication, payment, or legal-authority expansion; and destructive or protected mutation. Use `approval_profile: sandbox_autopilot` to label local non-client-facing test work.
+- **Red (board/user approval required before action):** follow `skills/legal-matter-intake/references/human-approval-gates.md`. Agents proceed on local/source-bound work, output-root artifacts, new output-root working copies, draft recommendations, QA, issue updates, and internal routing. Stop only for external side effects; authentication, payment, or legal-authority expansion; and destructive or protected mutation. Use `approval_profile: sandbox_autopilot` to label local non-client-facing test work.
 - **Never autonomous:** changing the company identity, the hard constraints, the matter scope, or the confidentiality rules.
 
 ## Delegation quality checklist

@@ -24,7 +24,7 @@ Update this file after every completed deliverable. Keeping the inventory curren
 **Expected deliverables (onboarding tasks):**
 - Configure workspace structure — `legal-ops-supervisor`
 - Configure agent runtime (Codex/Paperclip) — `legal-ops-supervisor`
-- Configure local tools (Python, OCR/PDF, Docling) — `legal-ops-supervisor`
+- Configure local tools (Python, local OCR/PDF, optional layout backends) — `legal-ops-supervisor`
 - Connect external tools (BrowserOS, email provider, calendar provider, Drive, Lexis, LASC, filing) — `legal-ops-supervisor`
 - Configure Email monitoring profile and verify paused routine — `legal-ops-supervisor`
 - Configure Calendar monitoring profile and verify paused routine — `legal-ops-supervisor`
@@ -46,7 +46,8 @@ These are reusable workflows owned by Legal Ops Supervisor and the unified speci
 
 | Workflow | Entry skill | Owner | Notes |
 |---|---|---|---|
-| Subpoena motion-to-compel run | `ca-subpoena-mtc-autonomous-runner` | legal-ops-supervisor | MTC Launch Intake → delegate to specialists. See `references/workflow-issue-templates.md`. |
+| Matter launch intake | `legal-matter-intake` | legal-ops-supervisor | General scope, source, output, routing, and approval handoff. |
+| Litigation motion drafting | `ca-motion-drafting-workflow` | legal-ops-supervisor | Motion Launch Packet → delegate to specialists; MTC is one supported motion profile. |
 | Pleading intake & review | `ca-pleading-intake-review` | source-intake-agent | Source-bound, read-only intake. |
 | California litigation drafting | `ca-litigation-drafting-workflow` | drafting-assembly-agent | Source-bound drafts under output root. |
 | Legal calendaring | `legal-calendaring-workflow` | calendar-agent | Proposals first; writes are hard-gated. |

@@ -33,7 +33,7 @@ If research scope or matter label is missing, return the missing-field list to t
 
 Inputs may include issue research questions, supplied authority files, public law, user-approved search terms, and approved Lexis results.
 
-Apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: supplied-authority work is green, but Lexis, new external legal research, external downloads, and new authorities remain hard gates.
+Apply `legal-matter-intake/references/human-approval-gates.md`: supplied-authority work is green, but Lexis, new external legal research, external downloads, and new authorities remain hard gates.
 
 ## Procedure
 

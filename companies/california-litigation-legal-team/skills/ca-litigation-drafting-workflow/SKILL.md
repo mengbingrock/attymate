@@ -32,7 +32,7 @@ If scope, source, or output boundaries are missing, return the missing-field lis
 
 Inputs may also include source pleadings, exhibits, declarations, discovery, authority tables, public law, approved examples, and drafting profiles.
 
-Apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md`: local/source-bound draft artifacts and new output-root working copies are green, and only the three hard gate categories stop execution.
+Apply `legal-matter-intake/references/human-approval-gates.md`: local/source-bound draft artifacts and new output-root working copies are green, and only the three hard gate categories stop execution.
 
 ## Procedure
 

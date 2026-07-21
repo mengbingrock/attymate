@@ -12,7 +12,7 @@ Proceed without asking for:
 
 - Reading approved local or test source roots.
 - Creating new artifacts under `{output_root}`.
-- Local OCR, Docling, extraction, and sidecar generation from approved local sources.
+- Local OCR, layout extraction, and sidecar generation from approved local sources.
 - Source, exhibit, objection, replacement, chronology, authority, QA, benchmark, and demo tables.
 - Draft text, memos, proposed orders, declarations, and working-copy drafts created as new artifacts under `{output_root}`.
 - Research logs and citation workups from supplied authorities.

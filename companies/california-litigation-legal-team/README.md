@@ -57,10 +57,10 @@ Each agent is defined by four files: `AGENTS.md` (role, triggers, handoffs, deli
 | Agent | Title | Reports to | Key skills |
 | --- | --- | --- | --- |
 | [Legal Ops Supervisor](agents/legal-ops-supervisor/AGENTS.md) | Reusable Litigation Workflow Supervisor | — | all workflows (front door) |
-| [Source Intake Agent](agents/source-intake-agent/AGENTS.md) | Source Intake, Pleading Review, and OCR Specialist | legal-ops-supervisor | ca-pleading-intake-review, docling-pdf-processing |
+| [Source Intake Agent](agents/source-intake-agent/AGENTS.md) | Source Intake, Pleading Review, and OCR Specialist | legal-ops-supervisor | ca-pleading-intake-review, legal-pdf-processing |
 | [Facts & Evidence Agent](agents/facts-evidence-agent/AGENTS.md) | Facts, Evidence, Exhibits, and Citation Table Specialist | legal-ops-supervisor | ca-litigation-drafting-workflow |
 | [Legal Research Agent](agents/legal-research-agent/AGENTS.md) | Lexis Research and Citation Verification Specialist | legal-ops-supervisor | lexis-browseros-legal-research |
-| [Drafting & Assembly Agent](agents/drafting-assembly-agent/AGENTS.md) | California Litigation Drafting and Working-Copy Assembly Specialist | legal-ops-supervisor | ca-litigation-drafting-workflow, ca-subpoena-mtc-drafting-workflow |
+| [Drafting & Assembly Agent](agents/drafting-assembly-agent/AGENTS.md) | California Litigation Drafting and Working-Copy Assembly Specialist | legal-ops-supervisor | ca-litigation-drafting-workflow, ca-motion-drafting-workflow |
 | [Legal QA Agent](agents/legal-qa-agent/AGENTS.md) | Confidentiality and Source Discipline Reviewer | legal-ops-supervisor | ca-litigation-drafting-workflow, lexis-browseros-legal-research |
 | [Calendar Agent](agents/calendar-agent/AGENTS.md) | Litigation Calendar Proposal Specialist | legal-ops-supervisor | legal-calendaring-workflow |
 | [Docket Agent](agents/docket-agent/AGENTS.md) | Public Docket Check Specialist | legal-ops-supervisor | lasc-browseros-docket-check |
@@ -78,11 +78,11 @@ Each agent is defined by four files: `AGENTS.md` (role, triggers, handoffs, deli
 
 - [Firm Onboarding](projects/firm-onboarding/PROJECT.md) — import-time onboarding to configure workspace, runtime, local tools, connectors, Email/Calendar/Docket monitor profiles, SOPs, matter mapping, and policy before any live matter work. Twelve setup tasks are owned by the Legal Ops Supervisor, and three paused recurring monitor tasks are imported for Email, Calendar, and Docket monitoring.
 
-The subpoena motion-to-compel workflow is a skill-triggered workflow owned by Legal Ops and the unified specialists — not an import-time project or a separate sub-organization. Live work begins only from a user-created parent issue with a complete Matter Safety Contract.
+Matter launch intake is a standalone skill-triggered front door owned by Legal Ops. Motion drafting is a separate downstream workflow, and subpoena MTC is one motion profile rather than a separate intake system or sub-organization. Live work begins only from a user-created parent issue with a complete Matter Safety Contract.
 
 ## Skills
 
-`legal-calendaring-workflow` · `lexis-browseros-legal-research` · `ca-litigation-drafting-workflow` · `ca-pleading-intake-review` · `docling-pdf-processing` · `lasc-browseros-docket-check` · `ca-subpoena-mtc-autonomous-runner` · `ca-subpoena-mtc-drafting-workflow` · `practice-workflow-learning`
+`legal-calendaring-workflow` · `lexis-browseros-legal-research` · `ca-litigation-drafting-workflow` · `ca-pleading-intake-review` · `legal-matter-intake` · `legal-pdf-processing` · `lasc-browseros-docket-check` · `ca-motion-drafting-workflow` · `practice-workflow-learning`
 
 ## Import
 
@@ -111,8 +111,8 @@ If an onboarding task is substantively complete but the issue cannot be marked d
 - Complete the imported Firm Onboarding issues before live matter work.
 - Configure each `codex_local` agent with the deployment's absolute `cwd` / workspace root.
 - Configure authenticated Codex CLI access or an approved deployment-specific API-key auth mechanism.
-- Configure Python, OCR/PDF tooling, Docling or equivalent local processing, and approved output roots.
-- Review executable-script trust before using repo helper scripts. The MTC drafting skill references an optional local OCR helper at `skills/ca-subpoena-mtc-drafting-workflow/scripts/ocr_pdf_intake.ps1`; it requires explicit `{matter_root}` / `{output_root}` scope, writes only under the approved output root, and must be run only in a deployment-approved Python/OCR environment. Paperclip company import stores the markdown skill/reference files; deployments that want the helper should review and copy or run it from the repository source after approval.
+- Configure a local PDF/OCR toolchain appropriate to the deployment, and approved output roots. Use `skills/legal-pdf-processing/scripts/pdf_runtime_probe.sh` to discover capabilities; no single PDF vendor is required.
+- Review executable-script trust before using repo helper scripts. The PDF skill includes an optional local OCR helper at `skills/legal-pdf-processing/scripts/ocr_pdf_intake.ps1`; it requires explicit `{matter_root}` / `{output_root}` scope, writes only under the approved output root, and must be run only in a deployment-approved Python/OCR environment. Paperclip company import stores the markdown skill/reference files; deployments that want the helper should review or run it from the repository source after approval.
 - Set budgets, model choices, and approval policies appropriate for the deployment.
 - Use the relaxed default approval matrix for testing and product iteration: proceed on local/source-bound output-root work and stop only for external side effects, authentication/payment/legal-authority expansion, or destructive/protected mutation. Use `approval_profile: sandbox_autopilot` to label local non-client-facing test matters.
 - Configure external-tool access before use: BrowserOS or equivalent browser tooling, email provider, calendar provider, Google Drive, Lexis, LASC, external knowledge-base/upload systems, filing, service, and upload/download workflows.

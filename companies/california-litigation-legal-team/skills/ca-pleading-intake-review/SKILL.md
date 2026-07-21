@@ -32,7 +32,7 @@ Runtime inputs may include pleadings, proofs of service, docket facts, email att
 
 If the contract is missing, return a concise missing-field list to the supervisor. If approved source files and output root are clear, continue safe intake work and log unresolved gaps.
 
-Apply `ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md` in both standard and `sandbox_autopilot` modes: local source intake, local OCR sidecars, and output-root summaries are green, and only the three hard gate categories stop execution.
+Apply `legal-matter-intake/references/human-approval-gates.md` in both standard and `sandbox_autopilot` modes: local source intake, local OCR sidecars, and output-root summaries are green, and only the three hard gate categories stop execution.
 
 ## Procedure
 

@@ -55,4 +55,4 @@ Also update the parent Matter Dashboard so the lawyer can see whether the next s
 
 ## Red Gates
 
-Use `skills/ca-subpoena-mtc-autonomous-runner/references/human-approval-gates.md` as the canonical approval matrix. Proceed on local/source-bound work, output-root artifacts, new output-root working copies, draft recommendations, QA, issue updates, and internal routing. Stop only for external side effects; authentication, payment, or legal-authority expansion; and destructive or protected mutation.
+Use `skills/legal-matter-intake/references/human-approval-gates.md` as the canonical approval matrix. Proceed on local/source-bound work, output-root artifacts, new output-root working copies, draft recommendations, QA, issue updates, and internal routing. Stop only for external side effects; authentication, payment, or legal-authority expansion; and destructive or protected mutation.
