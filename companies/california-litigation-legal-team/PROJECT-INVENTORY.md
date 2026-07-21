@@ -19,7 +19,7 @@ Update this file after every completed deliverable. Keeping the inventory curren
 **Owner:** `legal-ops-supervisor`
 **Goal:** `complete-firm-onboarding-and-runtime-readiness`
 **Description:** Import-time onboarding to configure a reusable litigation AI firm — workspace, runtime, tools, connectors, monitor profiles, imported monitor routines, SOPs, matter mapping, matter context conventions, and policy — before any live matter work. The durable output is the private Firm Operations Guide (`firm-operations-guide`).
-**Success condition:** All one-time setup tasks closed; Email/Calendar/Docket monitor routines imported and left paused until enabled; Firm Operations Guide complete and current; readiness smoke test posted green; learning mode set to `off` with an explicit opt-in path documented.
+**Success condition:** All one-time setup tasks closed; Email/Calendar/Docket monitor routines imported and left paused until enabled; Firm Operations Guide complete and current; readiness smoke test posted ready; learning mode set to `off` with an explicit opt-in path documented.
 
 **Expected deliverables (onboarding tasks):**
 - Configure workspace structure — `legal-ops-supervisor`
@@ -35,14 +35,14 @@ Update this file after every completed deliverable. Keeping the inventory curren
 - Maintain Firm Operations Guide (`firm-operations-guide` issue document) — `legal-ops-supervisor`
 - Onboard firm SOPs & templates — `legal-ops-supervisor`
 - Onboard existing matters (high-level mapping, no client facts in package) — `legal-ops-supervisor`
-- Run environment readiness smoke (green/yellow/red table) — `legal-ops-supervisor`
+- Run environment readiness smoke (ready/limited/not ready) — `legal-ops-supervisor`
 - Configure learning/feedback policy (default `off`) — `legal-ops-supervisor`
 
 **Status:** `in_progress`
 
 ## Matter workflows (skill-triggered, not import-time projects)
 
-These are reusable workflows owned by Legal Ops Supervisor and the unified specialists. They are **not** import-time starter projects and do **not** create a separate sub-organization. Live work begins only from a user-created parent issue with a complete Matter Safety Contract and a lawyer-facing Matter Dashboard. For each new event, use `references/matter-planning-playbook.md` to map the matter, confirm the Matter Home or issue-document fallback, and classify all plausible workstreams before delegating individual child issues.
+These are reusable workflows owned by Legal Ops Supervisor and the unified specialists. They are **not** import-time starter projects and do **not** create a separate sub-organization. Live work begins from a user-created parent issue with a Matter Authorization Package and a lawyer-facing Matter Dashboard. Descendants inherit that authorization through focused work orders. For each new event, use `references/matter-planning-playbook.md` to map the matter, confirm the Matter Home or issue-document fallback, and classify the relevant workstreams before delegation.
 
 | Workflow | Entry skill | Owner | Notes |
 |---|---|---|---|
@@ -50,9 +50,9 @@ These are reusable workflows owned by Legal Ops Supervisor and the unified speci
 | Litigation motion drafting | `ca-motion-drafting-workflow` | legal-ops-supervisor | Motion Launch Packet → delegate to specialists; MTC is one supported motion profile. |
 | Pleading intake & review | `ca-pleading-intake-review` | source-intake-agent | Source-bound, read-only intake. |
 | California litigation drafting | `ca-litigation-drafting-workflow` | drafting-assembly-agent | Source-bound drafts under output root. |
-| Legal calendaring | `legal-calendaring-workflow` | calendar-agent | Proposals first; writes are hard-gated. |
-| Public docket check | `lasc-browseros-docket-check` | docket-agent | Public records only; paid/login/CAPTCHA gates not crossed. |
-| Lexis research & citation verification | `lexis-browseros-legal-research` | legal-research-agent | External research hard-gated. |
+| Legal calendaring | `legal-calendaring-workflow` | calendar-agent | Proposals proceed; calendar writes require an Attorney Decision. |
+| Public docket check | `lasc-browseros-docket-check` | docket-agent | Authorized public records proceed; payment needs a decision and login/CAPTCHA failures go to the tool owner. |
+| Lexis research & citation verification | `lexis-browseros-legal-research` | legal-research-agent | Routine research and verified authorities proceed within matter scope and budget. |
 | Opt-in workflow learning | `practice-workflow-learning` | practice-learning-agent | Off by default; explicit learning contract required. |
 
 ## In-flight deliverables

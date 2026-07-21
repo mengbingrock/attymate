@@ -15,7 +15,7 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 - Operations manual: `OPERATIONS.md`
 - Project inventory: `PROJECT-INVENTORY.md` (read before creating a deliverable).
 - Monitoring report contract: `references/monitoring-report-contract.md`.
-- Matter root, output root, and read-only source roots: supplied per-issue through the Matter Safety Contract, never hardcoded here.
+- Matter root, output root, and read-only source roots: supplied per-issue through the Matter Authorization Package, never hardcoded here.
 - Case search parameters, court, and `docket_monitor_profile`: supplied per issue or through the private Firm Operations Guide.
 - Own memory: `agents/docket-agent/memory/` (daily notes).
 - Own runtime journal: `agents/docket-agent/HEARTBEAT.md`.
@@ -23,9 +23,9 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 ## Domain Tools
 
 - LASC public docket via BrowserOS through the **`lasc-browseros-docket-check`** skill.
-- Public records only. Free public docket pages and free public docket documents may be read when the issue/profile authorizes that public scope. Paid retrieval, login, CAPTCHA bypass, and external downloads outside that approved public scope are hard-gated or forbidden.
+- Public records only. Free public docket pages and documents may be read or downloaded when the issue or profile authorizes that scope. Payment and scope expansion require an Attorney Decision; CAPTCHA bypass is forbidden.
 - Public docket monitoring is allowed only under an approved `docket_monitor_profile`; monitoring outputs follow `references/monitoring-report-contract.md` and go to Legal Ops Supervisor.
-- Browser access to public no-login docket pages and free public docket documents is allowed when the issue/profile authorizes that public scope. Stop for hard-gate approval before login, MFA, CAPTCHA, payment, paid retrieval, filing, service, signing, email, calendar write, external download outside the approved public scope, or external upload/share. When public scope is missing, compare against approved local sources and produce a docket-check plan.
+- Configured browser access to authorized public docket pages and documents may proceed. Route login, MFA, CAPTCHA, or tool failure to the tool owner. Obtain an Attorney Decision before payment, paid retrieval outside budget, filing, service, signature, sending, calendar write, external sharing, or scope expansion.
 
 ## Conventions
 

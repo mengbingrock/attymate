@@ -1,17 +1,19 @@
-# Calendar Output Format
+# Calendar Review Format
 
-Use this format for issue comments or new artifacts under `{output_root}`.
+```md
+## Proposed Deadlines Or Events
 
-## Proposed Entries
+| Deadline / event | Date and time | Trigger and authority | Recommended action |
+| --- | --- | --- | --- |
+| [Material item] | [Time zone included] | [Reliable source/rule] | [Owner + next step] |
 
-| Entry | Trigger | Date/Time | Rule Or Source | Calendar | Reminder | Confidence | Approval Needed |
-| --- | --- | --- | --- | --- | --- | --- | --- |
+## Material Qualification
 
-## Verification Notes
+- [Uncertain trigger, disputed service date, policy limitation, or decision that affects the date. Omit otherwise.]
 
-- Approved by:
-- Write action performed:
-- Calendar entry read back:
-- Entry title:
-- Date/time/time zone:
-- Remaining uncertainties:
+## Next
+
+[No calendar write needed / decision interaction link / approved write completed and verified.]
+```
+
+Keep calculation worksheets, connector details, entry IDs, and read-back logs in the internal calendar record.

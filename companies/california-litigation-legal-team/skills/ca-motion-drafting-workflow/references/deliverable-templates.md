@@ -1,6 +1,6 @@
 # Deliverable Templates
 
-Use these generic formats for MTC work product. Adapt headings to the issue's approved style profile.
+Use only the formats needed for the selected motion profile. Adapt headings to the authorized style source.
 
 ## Replacement Table
 
@@ -8,9 +8,9 @@ Use these generic formats for MTC work product. Adapt headings to the issue's ap
 | --- | --- | --- | --- |
 | `{old_term}` | `{new_term}` | `{source citation}` | Confirmed / unresolved |
 
-## Objection Table
+## Issue / Response Table
 
-| Request/category | Original request text | Original objection text | Source cite | Draft response | Gap |
+| Issue/request | Controlling text or fact | Position/response | Source cite | Draft treatment | Material gap |
 | --- | --- | --- | --- | --- | --- |
 
 ## Exhibit List
@@ -20,14 +20,13 @@ Use these generic formats for MTC work product. Adapt headings to the issue's ap
 
 ## Needed-Input List
 
-| Question | Gate | Recommended default | Risk | Affected artifact |
+| Question | Recommended path | Alternatives | Legal effect/deadline | Affected artifact |
 | --- | --- | --- | --- | --- |
 
-## QA Note
+## QA Disposition
 
+- Status: Ready | Ready with revisions | Not ready
 - Artifact reviewed:
-- Sources checked:
-- Authorities checked:
-- Placeholders:
-- Red gates:
-- Recommendation:
+- Material issues only:
+- Recommended action:
+- Review link:

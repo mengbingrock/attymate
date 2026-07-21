@@ -5,7 +5,7 @@ After implementation is authorized, maintain durable state in Paperclip and, whe
 Recommended fields:
 
 - Parent issue and child issue IDs.
-- Matter Safety Contract summary.
+- Parent Matter Authorization Package reference and child exceptions, if any.
 - Firm Operations Guide reference.
 - Current phase.
 - Approved source roots.

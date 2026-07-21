@@ -1,20 +1,22 @@
-# Drafting Output Format
+# Drafting Review Format
 
-## Draft Artifact Header
+```md
+## Ready For Review
 
-- Issue:
-- Matter root:
-- Output root:
-- Approved sources used:
-- Approved authorities used:
-- Drafting profile:
-- Approval needed before Word update:
+**Work product:** [Draft type and direct link.]
+**Bottom line:** [What the draft accomplishes and its present readiness.]
 
-## QA Footer
+## Material Revisions
 
-- Placeholders:
-- Unresolved citations:
-- Source facts needing verification:
-- Strategy decisions needed:
-- Files modified:
-- Files intentionally not modified:
+- [Substantive change and why it matters.]
+
+## Attorney Decisions
+
+- [Only a material strategy, relief, waiver, settlement, sanctions, privacy, or filing choice. Omit when none.]
+
+## Remaining Work
+
+[Next owner/action, including source or QA work that remains.]
+```
+
+Keep file paths, tooling, change logs, placeholders, citation mechanics, and finalization controls in the internal drafting/QA record unless they affect readiness.

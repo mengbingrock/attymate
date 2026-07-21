@@ -1,6 +1,6 @@
 # Workspace Setup
 
-Use runtime paths from the Matter Safety Contract and Firm Operations Guide. Do not hardcode local paths in reusable skills.
+Use runtime paths from the Matter Authorization Package and Firm Operations Guide. Do not hardcode local paths in reusable skills.
 
 Recommended portable folders:
 
@@ -17,4 +17,4 @@ Rules:
 - Keep new artifacts under `{output_root}` unless the issue expressly approves another location.
 - Use numbered artifact names for intermediary work when sequence matters.
 - Do not inspect other matters or deployment-private folders outside the approved source roots.
-- Do not overwrite user-edited, signed, filed, served, final, or gold-standard documents without hard-gate approval.
+- Do not overwrite user-edited, signed, filed, served, final, or gold-standard documents without an Attorney Decision.

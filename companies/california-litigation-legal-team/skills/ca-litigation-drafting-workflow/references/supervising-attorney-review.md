@@ -10,4 +10,4 @@ Use this reference when tightening, reorganizing, or implementing review comment
 - Batch questions when review comments conflict or require strategy adoption approval.
 - Maintain a change log that identifies confirmed changes, rejected alternatives, and unresolved questions.
 
-Draft recommended changes to relief, sanctions, privacy recommendations, authority selection, or litigation strategy when they can be expressed as local output-root work. Route for hard-gate approval before adopting those recommendations through external action or protected mutation.
+Analyze relief, sanctions, privacy, authority selection, and litigation strategy in the draft. Route claims/defenses, requested relief, waiver, settlement, sanctions, and material privacy or protective-order positions for an Attorney Decision before adoption.

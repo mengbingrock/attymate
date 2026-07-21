@@ -22,7 +22,7 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 Required references for matter work:
 
 - `light-intake-guide.md`
-- `matter-safety-contract.md`
+- `matter-authorization-package.md`
 - `matter-status-digest.md`
 - `matter-context-artifacts.md`
 - `matter-planning-playbook.md`
@@ -46,17 +46,17 @@ Use `references/workflow-efficiency-budget.md` before creating child issues or r
 
 ## External Tools
 
-BrowserOS, Lexis, LASC, email provider, calendar provider, Google Drive, Word/live-draft writes, filing, service, and signing are delegated to the relevant specialist under an approved Matter Safety Contract. This agent grants or withholds hard gates and routes hard-gate requests to the board; it does not operate external/protected tools directly. Routine local/source-bound work, output-root artifacts, working-copy drafts, QA, issue updates, and internal routing proceed without extra approval when scope is clear.
+BrowserOS, Lexis, LASC, email, calendar, Drive, and document tools are delegated to the relevant specialist under the parent Matter Authorization Package. Configured read-only tools and routine research proceed within scope and budget. Filing, service, signature, sending, calendar writes, external sharing, payment, protected-file mutation, scope expansion, and material legal strategy are routed as Attorney Decisions. Login, MFA, CAPTCHA, and tool failures go to the tool owner as Operational Interruptions.
 
 ## Conventions
 
-- Every child issue carries a focused Matter Safety Contract and sets `parentId` to the Legal Ops parent issue.
+- Every child issue carries a focused Matter Authorization Package and sets `parentId` to the Legal Ops parent issue.
 - Every active parent matter issue carries a lawyer-facing Matter Dashboard with a Coverage table.
 - Legal Ops owns Matter Home creation or confirmation when a matter/output root is approved. Use `{workspace}/Matters/{matter-short-name}/` with issue audit output under `_paperclip_issues/{issue-identifier}/`.
-- The lawyer does not fill out the Matter Safety Contract. Use `light-intake-guide.md` to ask plain-language questions, then translate the answer internally.
+- The lawyer does not fill out the Matter Authorization Package. Use `light-intake-guide.md` to ask plain-language questions, then translate the answer internally.
 - Never store client data, case numbers, party names, credentials, internal URLs, or local paths in package files. Those live in the private Firm Operations Guide and scoped issue documents only.
 - Check `PROJECT-INVENTORY.md` before creating or delegating a deliverable so work is not duplicated.
-- Check `workflow-efficiency-budget.md` before creating child issues. A child must have a specialist-owned durable deliverable, long-running work, parallel work, a true blocker, or a hard-gate path. Otherwise, update the parent dashboard/plan.
+- Check `workflow-efficiency-budget.md` before creating child issues. A child must have a specialist-owned durable deliverable, long-running work, parallel work, a material blocker, or review work. Otherwise, update the parent Dashboard or plan.
 - Dedupe monitor findings and child issues before creating new work. Actionable monitor findings require a durable `monitor-report` document and Legal Ops triage handoff, not comment-only routing.
 - Before a parent matter becomes `done`, `in_review`, or `blocked`, update the dashboard, clear stale blockers, list open decisions, and confirm no child issue is orphaned.
 - If a matter or output scope is unclear and no safe work remains, ask for one batched answer with 2-3 practical choices. Use `in_review` when a real interaction is pending; use `blocked` only for a true blocker.

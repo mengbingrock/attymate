@@ -2,63 +2,28 @@
 schema: agentcompanies/v1
 slug: lasc-browseros-docket-check
 name: lasc-browseros-docket-check
-description: Use when a Paperclip docket agent must check Los Angeles Superior Court public civil docket information, summarize register-of-actions entries, identify hearings, compare docket facts to supplied source material, or prepare a procedural status note through BrowserOS. Do not use to file, serve, buy paid documents, send email, calendar deadlines, or bypass CAPTCHA/login/payment gates.
+description: Check authorized Los Angeles Superior Court public docket information, summarize material register events, and identify procedural or deadline consequences without crossing scope, payment, or access controls.
 ---
 
 # lasc-browseros-docket-check
 
-*How the California Litigation Legal Team checks the LASC public civil docket through BrowserOS — confirmed facts kept apart from inference, source-bound and supervised.*
-
-## When to load this skill
-
-- The Docket Agent is assigned a public docket-check issue for a Los Angeles Superior Court matter.
-- Register-of-actions entries, hearings, or procedural status need to be summarized from the public docket.
-- Docket facts need to be compared against supplied source material.
-- A procedural status note is required before deadline or calendar work is delegated elsewhere.
-- This skill contains no case numbers, party names, account details, payment instructions, or firm-specific procedures.
-
-## Inputs
-
-Before docket work begins, confirm the issue states:
-
-- Case number or exact public docket search parameters.
-- Jurisdiction/court and scope of review.
-- Output root for notes or status artifacts.
-- Whether browser access is approved.
-- Forbidden actions, including filing, service, paid retrieval, email, and calendaring unless separately approved.
-- Firm Operations Guide reference or scoped guide excerpt, autonomy level, approval profile, learning mode, and hard gates already approved.
-
-Runtime inputs include case number, party names supplied at runtime, hearing facts, and source materials to compare.
-
-If search parameters are missing, return a concise missing-field list to the supervisor. If browser scope is missing, prepare a docket-check plan or local source comparison and record the external work that remains.
-
-Apply `legal-matter-intake/references/human-approval-gates.md`: public read-only docket checks and free public docket documents are green when the issue/profile authorizes that public scope and no login, CAPTCHA, payment, filing, or service is required; those excluded actions remain hard gates.
-
 ## Procedure
 
-1. Checkout the assigned issue.
-2. Confirm case number/search scope and whether public read-only browser access is within the approved profile.
-3. Use BrowserOS (or another approved browser tool) with snapshot-before-action discipline only when browser access is within scope. Do not store credentials. Do not bypass access restrictions.
-4. Search the public docket using the supplied parameters.
-5. Record confirmed docket facts separately from inference and unresolved access limits.
-6. Post a status summary or save a new artifact under `{output_root}`. For deadline calculations, hand off to the Calendar Agent rather than embedding calendaring policy here.
-7. **Apply the checkpoint policy.** Green work proceeds autonomously and is logged: local source comparison, docket-check planning, public docket summaries when browser access is in scope, and status notes under `{output_root}`. Yellow routes to the Legal Ops Supervisor when docket data conflicts with source documents or deadline/calendar work should be delegated. Hard gates require visible approval before the actions listed under Anti-patterns. Return discrete yellow or hard-gate issues to the supervisor but continue safe local comparison or public docket summary work when possible.
+1. Confirm court/case parameters, authorized public scope, relevant time window, and output target.
+2. Use configured read-only access and permitted free public documents within the parent/profile scope.
+3. Separate confirmed docket facts, analysis/inference, and any access limitation that affects reliability.
+4. Route potential deadline consequences to Calendar with the reliable trigger source.
+5. Produce one procedural status artifact using `references/docket-output-format.md`.
+6. No-change monitor runs end silently; actionable changes follow `agents/docket-agent/references/monitoring-report-contract.md`.
 
-## Outputs
+## Decisions And Interruptions
 
-- Docket-status comments, register-of-actions summaries, hearing lists, conflict notes, and access-limit notes.
-- Discrete yellow or hard-gate issues returned to the Legal Ops Supervisor.
-- A handoff to the Calendar Agent for any deadline calculations.
+Payment, paid retrieval, expanded case/court scope, filing, service, sends, calendar writes, and external sharing require the appropriate attorney decision. Login/MFA/CAPTCHA or connector failure is an operational interruption; never bypass it.
 
-## Anti-patterns
+## Communication
 
-Never do any of the following without visible hard-gate approval:
+State the material docket event, reliable source, practical consequence, and recommended action. Keep search parameters, timestamps, portal process, and dedupe detail internal.
 
-- Login, MFA, CAPTCHA continuation, payment, or paid document retrieval.
-- Reading or saving docket documents outside the authorized free public scope.
-- Filing, serving, signing, emailing, or calendar writing.
-- Treating docket facts as certified records.
+## Limits
 
-## Reference
-
-- `references/docket-output-format.md`: generic docket-status output format.
+Do not inspect another matter/case outside scope, pay for records without a decision, bypass access controls, or take filing/service/calendar/send actions.

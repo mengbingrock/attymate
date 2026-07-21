@@ -30,7 +30,7 @@ Use this structure as the default for solo/small-firm deployments:
 - Paperclip audit outputs may live under `_paperclip_issues/{issue-identifier}/`.
 - Issue folders such as `{issue-identifier}/` are acceptable temporary execution folders, but Legal Ops should link or move lawyer-facing outputs into the Matter Home once a matter/output root is approved.
 - If no Matter Home is approved yet, use parent issue documents and mark the Matter Dashboard as `not yet filed into Matter Home`.
-- Never create, move, overwrite, or rename live matter folders unless the issue approves the matter/output root and the action is local/source-bound. Protected/final/source-file mutation remains a hard gate.
+- Never create, move, overwrite, or rename live matter folders unless the parent authorizes the matter/output root and the action affects only designated working material. Protected/final/source-file mutation requires an Attorney Decision.
 
 ## Artifact Set
 
@@ -53,7 +53,7 @@ When the matter is still issue-document-only, use the same artifact names as doc
 
 Agents should not read every context artifact on every issue. Use this relevance model:
 
-- **Tier 0: routing check.** For an existing matter, check `00_Matter_Context_Index.md` when it is available. If it is missing, proceed from the issue's Matter Safety Contract and note that the index should be created or updated.
+- **Tier 0: routing check.** For an existing matter, check `00_Matter_Context_Index.md` when it is available. If it is missing, proceed from the issue's Matter Authorization Package and note that the index should be created or updated.
 - **Tier 1: role-critical check.** Read the artifacts that are directly relevant to the assigned role and requested deliverable.
 - **Tier 2: triggered optional check.** Read optional artifacts only when the issue facts, missing context, cited sources, or likely deadlines make them relevant.
 - **Tier 3: skip.** Skip irrelevant artifacts. Do not add boilerplate about every skipped artifact; mention a skipped artifact only when audit clarity matters.
@@ -78,6 +78,6 @@ Agents should not read every context artifact on every issue. Use this relevance
 - Legal Ops creates or confirms the Matter Home, context folder, issue-output subfolder, and context index when opening a matter parent issue whenever a matter/output root is approved.
 - Specialists may update matter context artifacts within their lane when the issue allows output-root artifacts and the update is source-bound.
 - Every substantive update should include a source note, author/agent, date, and unresolved assumptions.
-- Do not overwrite, rename, delete, or mutate original sources, final/signed/filed/served documents, user-edited files, or protected drafts without visible hard-gate approval.
+- Do not overwrite, rename, delete, or mutate original sources, final/signed/filed/served documents, user-edited files, or protected drafts without an Attorney Decision.
 - If an artifact is stale or conflicts with a source, preserve both facts, flag the conflict, and route the issue to Legal Ops rather than silently replacing history.
 - Keep issue-audit detail under `_paperclip_issues/`; keep lawyer-facing summaries in the matter folders.

@@ -19,10 +19,11 @@ For each matter event, create or update a concise Matter Plan on the parent issu
 - `create now` - safe, source-bound work can begin with the current scope.
 - `schedule/monitor` - timing should be tracked through a proposed deadline table, issue monitor, or routine where supported.
 - `conditional on lawyer strategy` - prepare the question or recommendation, but do not draft or launch the strategy-dependent work until confirmed.
-- `blocked on source/approval` - name the missing source, profile, or hard-gate approval.
+- `decision needed` - name the material legal or external choice, recommendation, effect, and deadline.
+- `operational interruption` - name the unavailable login, connector, or tool and its owner.
 - `no action with reason` - explain why the workstream is not needed.
 
-Use the active Matter Safety Contract, not hidden memory, as the source of authority for child issues. Each child issue should include the relevant matter context artifact paths from `references/matter-context-artifacts.md`, not the full folder by default.
+Use the active Matter Authorization Package, not hidden memory, as the source of authority for child issues. Each child issue should include the relevant matter context artifact paths from `references/matter-context-artifacts.md`, not the full folder by default.
 
 ## Work Packet Before Child Issues
 
@@ -41,31 +42,26 @@ Use the no-child rule from `references/workflow-efficiency-budget.md`: dashboard
 
 ## Matter Dashboard Coverage
 
-Every planning pass must update the parent Matter Dashboard from `references/matter-status-digest.md`. The dashboard is the lawyer-facing source of truth and must include a Coverage table with these rows:
+Update the parent Matter Dashboard from `references/matter-status-digest.md` only when the event materially changes posture, risk, deadline, workstream status, a decision, or a deliverable. Coverage shows no more than five active or currently relevant workstreams. Omit irrelevant and unchanged `not started` or `not needed` rows.
 
 | Workstream | Default treatment |
 | --- | --- |
-| Intake / matter mapping | Identify existing matter or temporary parent. |
-| Source review | Create only if a safe source set exists or a source approval is needed. |
-| Calendar / deadlines | Propose dates and reminders; calendar writes stay gated. |
-| Docket / procedural history | Use public/read-only or approved docket facts; route deadlines to Calendar. |
-| Discovery | Track source-bound discovery issues; strategy-dependent motions stay conditional. |
-| Drafting | Draft local recommendations or rough artifacts only when source scope supports them. |
-| Research / authorities | Use supplied authorities by default; external/new authorities stay gated. |
-| QA / review | Create when a draft or source-bound artifact needs review. |
-| External actions | Record only approved hard gates; never imply external action is authorized. |
-| Blocked decisions | Batch the smallest useful lawyer/board decision. |
+| Source / facts | State the material review scope, current coverage, and result-affecting gap. |
+| Research | State the question, short answer, controlling authority, and adverse consideration. |
+| Drafting | Link the review copy and identify any unresolved material legal issue. |
+| QA / deadline / docket | State readiness or the procedural change and practical effect. |
+| Decision | Show at most one batched Attorney Decision. |
 
 Do not make the lawyer inspect child issue chains to know whether a workstream is covered. Link the latest artifact in the dashboard and keep detailed audit notes in child issues.
 
 ## Question Batching
 
-Ask at most one pending decision per matter planning cycle. Batch related choices into one plain-English prompt when a lawyer decision is required. Prefer choices like:
+Keep at most one pending decision per matter. Batch all currently ripe choices into one plain-English card when a lawyer decision is required. Prefer paths like:
 
 - close / no action;
 - proceed with safe local work;
 - provide a source package or Matter Home path;
-- approve one named hard-gate action.
+- choose one material legal or external action.
 
 If safe local/source-bound work can continue, create or update the relevant child issue and continue without asking. If no safe work remains, ask the batched decision and set the parent to `in_review`, not `blocked`, when a real interaction is pending.
 
@@ -84,22 +80,22 @@ If safe local/source-bound work can continue, create or update the relevant chil
 
 - Set `parentId` to the matter parent issue.
 - Assign the correct specialist agent.
-- Include the focused Matter Safety Contract fields needed for the child.
+- Reference the parent Matter Authorization Package and include only the objective, relevant sources, output, and exceptions.
 - Include a small relevant artifact set, based on the tiered context rules.
 - Place or link lawyer-facing outputs in the Matter Home when approved; keep issue audit output under `_paperclip_issues/{issue-identifier}` when filesystem output is used.
-- Create children only for specialist-owned durable deliverables, longer specialist/tool runs, parallel lanes, true blockers, hard-gate approval paths, or review of an existing draft/artifact.
+- Create children only for specialist-owned durable deliverables, longer specialist/tool runs, parallel lanes, material blockers, or review of an existing draft/artifact.
 - Do not create child issues for coordination-only work, dashboard edits, dedupe notes, minor monitor cues, or another plan with no deliverable.
 - Do not create every possible downstream drafting issue as active work when it depends on lawyer strategy. Create a strategy-confirmation question or a blocked/conditional planning item instead.
-- Use Calendar Agent for proposed deadlines and pre-deadline reminders. Calendar writes, invites, notifications, and emails remain hard gates.
+- Use Calendar Agent for proposed deadlines and pre-deadline reminders. Calendar writes, invitations, notifications, and emails require an Attorney Decision.
 
 ## Parent Cleanup Rule
 
 Before a parent matter is set to `done`, `in_review`, or `blocked`, Legal Ops must:
 
-- update the Matter Dashboard and Coverage table;
+- update the Matter Dashboard only if there is a material change;
 - clear stale `blockedByIssueIds` that have resolved;
 - list exactly what remains open and who owns it;
-- verify that every child issue is done, not needed, linked in Coverage, or blocked by a named pending decision;
+- verify that every child issue is done, not needed, linked from the controlling artifact, or blocked by a named pending decision;
 - avoid `blocked` when the real state is an answered/ pending interaction or an active agent dependency.
 
 A parent matter must not remain blocked without either a first-class blocker or a pending user/board interaction.
@@ -110,7 +106,7 @@ A matter planning pass is complete when the parent issue shows:
 
 - existing matter match or new matter creation decision;
 - the event being planned;
-- all plausible workstreams classified;
+- all currently relevant workstreams classified;
 - child issues created for safe work now;
 - scheduled/monitor items recorded where supported;
 - strategy, source, or approval blockers batched into the smallest useful lawyer question;

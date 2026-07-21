@@ -1,14 +1,20 @@
-# Layout Extraction Output Format
+# PDF Review Handoff Format
 
-## Conversion Manifest
+```md
+## PDF Coverage
 
-| Source PDF | Output Markdown | Output JSON | Pages | Text Quality | Warnings |
-| --- | --- | --- | --- | --- | --- |
+**Reviewed:** [Document set and page count.]
+**Usable coverage:** [Complete / partial, with the legally meaningful exception.]
 
-## QA Notes
+## Exceptions Affecting Review
 
-- Runtime/config used:
-- Files created:
-- Source files not modified:
-- Pages needing visual verification:
-- Downstream handoff:
+| Document/pages | Issue | Effect on legal review | Next action |
+| --- | --- | --- | --- |
+| [Only material exceptions] | [Unreadable/missing/handwriting/etc.] | [What cannot yet be relied on] | [Action] |
+
+## Handoff
+
+[Controlling source index/text artifact and next owner.]
+```
+
+Keep backend selection, runtime configuration, per-page status, retry counts, manifests, and logs in the internal PDF work product.

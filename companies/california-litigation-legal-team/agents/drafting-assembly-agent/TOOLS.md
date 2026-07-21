@@ -14,15 +14,15 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 - Agent home: `agents/drafting-assembly-agent/`
 - Operations manual: `OPERATIONS.md` — read for firm rules and approval policy.
 - Project inventory: `PROJECT-INVENTORY.md` — read before creating any deliverable, to avoid duplicates.
-- Matter root, output root, read-only source roots, and forbidden roots are supplied per-issue through the **Matter Safety Contract** (`references/matter-safety-contract.md`). They are never hardcoded here.
+- Matter root, output root, read-only source roots, and forbidden roots are supplied per-issue through the **Matter Authorization Package** (`references/matter-authorization-package.md`). They are never hardcoded here.
 - Own memory: `agents/drafting-assembly-agent/memory/` (daily notes).
 - Own runtime journal: `agents/drafting-assembly-agent/HEARTBEAT.md`.
 
 ## Domain tools
 
 - Document assembly and Word drafting run through the `ca-litigation-drafting-workflow` and `ca-motion-drafting-workflow` skills.
-- ALL of the following are hard-gated and require visible approval on the issue before I act: writing to or updating active Word/Google Docs files in place, mutating protected/final/user-edited files, and any overwrite / finalize / file / serve / sign / email / upload. New working copies under the approved output root and draft recommendations are green work; applying strategy/relief/sanctions/privacy recommendations through external action or protected mutation is hard-gated.
-- My default mode is **source-bound draft text and working copies written as new artifacts under the allowed output root**. Stop for hard-gate approval before active in-place Word/Google Docs edits, protected/final/user-edited file mutation, external side effects, authentication/payment/legal-authority expansion, or destructive mutation.
+- Source-bound working copies may be created and revised under the authorized output root, including configured document-tool use.
+- Protected source/final/user-edited file mutation, finalization, filing, service, signature, sending, external sharing, payment, scope expansion, and material strategy require an Attorney Decision. Authentication or tool failure is an Operational Interruption.
 - Drafting is heavy work; this agent's adapter timeout is intentionally longer than the other specialists' — use the time to draft carefully within scope, not to act outside it.
 
 ## Conventions

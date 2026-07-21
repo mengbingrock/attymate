@@ -1,18 +1,18 @@
-# MTC Word Editing Protocol
+# Motion Word Editing Protocol
 
-Word work is a red-gate activity unless the issue expressly authorizes a new working copy.
+Designated working-copy creation and revision proceed under the parent Matter Authorization Package.
 
 Before editing:
 
-- Confirm the exact source draft, output path, and whether the action is a new working copy or approved active-draft update.
-- Confirm section text has been reviewed or the issue authorizes direct assembly.
-- Confirm captions, exhibit numbers, separate-statement numbering, TOC/TOA status, and placeholders.
-- Make or use a new working copy; do not overwrite originals.
+- Confirm the source draft, designated working copy, output path, and motion profile.
+- Confirm the controlling issue/fact/authority tables and any recorded Attorney Decision.
+- Confirm captions, exhibit numbering, required supporting papers, TOC/TOA status, and placeholders.
+- Create or use a working copy; never overwrite an original, final, filed, signed, served, or user-edited file.
 
 After editing:
 
-- Preserve captions, styles, numbering, indentation, table layout, line spacing, headers, footers, fields, and tracked changes unless approved.
-- Update the live change log.
-- Report unresolved placeholders and formatting risks.
+- Preserve required captions, styles, numbering, indentation, tables, line spacing, headers, footers, fields, and tracked changes.
+- Record detailed changes in the internal audit trail.
+- In the lawyer-facing handoff, identify only material revisions, unresolved legal issues, and the review link.
 
-Never sign, file, serve, email, or mark a document final without separate approval.
+Finalization, signature, filing, service, sending, and external sharing require the appropriate Attorney Decision and authorized actor.

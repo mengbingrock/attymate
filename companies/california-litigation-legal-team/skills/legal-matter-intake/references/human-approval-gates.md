@@ -1,64 +1,46 @@
-# Human Approval Gates
+# Matter Authorization And Attorney Decisions
 
-Use this checkpoint matrix to reduce unnecessary blocks while preserving external-action, legal-authority, and file-safety controls.
+Use this as the single authorization matrix for the company. Agent coordination is not approval. Once Legal Ops records a Matter Authorization Package on the parent issue, its authority flows to descendants until the lawyer revokes it, the matter or source scope changes, or the approved budget is exhausted.
 
-## Approval Profiles
+## Matter Authorization
 
-Unless a parent issue states otherwise, use the relaxed default matrix below.
+The following work proceeds without another approval when it stays within the parent package:
 
-Use `approval_profile: sandbox_autopilot` for local sandbox, demo, benchmark, and early product-testing matters so reports clearly label the work as non-client-facing test output. This profile uses the same hard gates as the relaxed default matrix, but it also reminds agents that outputs are not attorney-final, client-facing, filed, served, signed, uploaded, or shared.
+- Read and analyze approved matter sources and matter-context artifacts.
+- Create and revise derived work product and working copies under the approved output root.
+- Run local PDF extraction, OCR, layout recovery, indexing, fact work, drafting, research, and QA.
+- Use configured and authenticated connectors for approved read-only access.
+- Conduct routine external legal research within the approved questions, jurisdiction, source classes, and budget; add verified authorities found during that research.
+- Download permitted material from an approved source into the approved output root when no payment or new source scope is involved.
+- Prepare calendar proposals, docket summaries, litigation analyses, and recommendations.
+- Delegate between agents, repair child scope, create internal issues, update status, and maintain internal audit records.
 
-Proceed without asking for:
+Do not ask Legal Ops or the lawyer to reapprove these actions. A child issue inherits the parent package by reference and states only its objective, relevant sources/context, output, and exceptions.
 
-- Reading approved local or test source roots.
-- Creating new artifacts under `{output_root}`.
-- Local OCR, layout extraction, and sidecar generation from approved local sources.
-- Source, exhibit, objection, replacement, chronology, authority, QA, benchmark, and demo tables.
-- Draft text, memos, proposed orders, declarations, and working-copy drafts created as new artifacts under `{output_root}`.
-- Research logs and citation workups from supplied authorities.
-- Proposed calendar and deadline tables that do not write to a real calendar.
-- Read-only review inside an approved monitor profile, including in-scope email message bodies, thread/conversation context, metadata, authorized attachment contents, calendar event details and event attachments/links, public docket entries, and free public docket documents.
-- Public read-only browser checks and free public docket documents inside the approved public scope, when they do not require login, CAPTCHA, payment, upload, sharing, filing, or service.
-- Parent-linked child issue creation, issue comments, status updates, review packets, and run-state updates.
-- Strategy, relief, risk, sanctions, privacy, or protective-order analysis as draft recommendations only.
+## Attorney Decision
 
-Stop only for these hard gate categories:
+Obtain an explicit lawyer decision before:
 
-1. External side effects and system writes: email send/reply/forward, mailbox mutation, calendar writes/invites/notifications, filing, service, signing, external upload, external sharing, or public posting.
-2. Irreversible or source-mutating actions: delete, overwrite, rename, mutate original sources, mutate final/signed/filed/served/user-edited documents, or edit active Word/Google Docs in place unless the issue explicitly names that document as the target.
-3. Authentication, payment, or legal-authority expansion: login, MFA, CAPTCHA, paid retrieval, Lexis, new external legal research, external downloads outside the approved public/read-only scope, or adding new legal authorities not supplied in the test package.
+- Filing, service, signature, email send/reply/forward, calendar write/invite/notification, public posting, or external upload/share.
+- Payment, paid retrieval, or work that would exceed the approved research or tool budget.
+- Deleting or changing original evidence, filed/signed/final materials, or user-edited/protected documents. Routine edits to a designated working copy under the output root remain authorized.
+- Expanding the matter or source boundary, inspecting another matter, or reusing matter-confidential material elsewhere.
+- Adopting a material litigation position involving claims or defenses, requested relief, waiver, settlement, sanctions, or a significant privacy/protective-order position. Agents may research, analyze, and recommend these issues before the decision.
 
-## Green Actions
+Keep at most one pending first-class decision interaction per matter. Batch all currently ripe choices into one card, put the recommended path first, offer two or three practical paths, and state the legal consequence and deadline when one exists. Do not duplicate the request in a separate approval, comment, and document.
 
-Proceed and log:
+Lawyer-facing text uses `Decision needed`, not internal terms such as `hard gate`, `yellow escalation`, or contract-field names.
 
-- Reading approved source roots.
-- Creating new artifacts under `{output_root}`.
-- OCR sidecars from approved local sources.
-- Source, exhibit, objection, replacement, chronology, authority, and QA tables.
-- Draft text from approved sources and authorities.
-- New working-copy drafts created under `{output_root}`.
-- Research logs from supplied authorities.
-- Strategy, relief, sanctions, privacy, or protective-order analysis as draft recommendations.
-- Read-only monitor reports from approved email, calendar, or docket profiles.
-- Proposed child issue descriptions and status summaries.
+## Operational Interruption
 
-## Yellow Escalations
+Expired login sessions, MFA, unavailable connectors, missing tools, runner failures, and configuration defects are operational interruptions. Route them to Legal Ops or the deployment/tool owner; they are not lawyer approvals unless the lawyer is the only person who can supply the required access or choice.
 
-Route to Legal Ops Supervisor, but continue safe work where possible:
+Continue authorized work that does not depend on the interruption. Surface the interruption on the Matter Dashboard only when it changes delivery timing, reliability, or the lawyer's next action.
 
-- Child issue missing a curable scope detail.
-- Source ambiguity that does not require new external access.
-- Conflicting examples or prior drafts.
-- Internal routing, budget, or sequencing issues.
-- Questions that can be batched into the next review packet.
+## Decision Hygiene
 
-## Hard Gates
-
-Request board/user approval before action:
-
-- External side effects and system writes: email send/reply/forward, mailbox mutation, calendar writes/invites/notifications, filing, service, signing, external upload, external sharing, or public posting.
-- Authentication, payment, or legal-authority expansion: login, MFA, CAPTCHA, paid retrieval, Lexis, new external legal research, external downloads outside the approved public/read-only scope, or adding new legal authorities not supplied or already approved.
-- Destructive or protected mutation: delete, overwrite, rename, mutate original sources, mutate final/signed/filed/served/user-edited documents, or edit active Word/Google Docs in place unless the issue explicitly names that document as the target.
-
-Approval requests should state the hard gate, recommended action, options, risk, affected artifacts, and safe work that can continue. Draft recommendations are allowed; adopting them through an external action or protected mutation is gated.
+- Check the parent package and existing pending interactions before asking again.
+- Do not stop the whole matter when another authorized workstream can continue.
+- Use `in_review` only when a real lawyer/reviewer interaction is pending.
+- Use `blocked` only when no authorized work remains and a named dependency or owner must act.
+- Approval of one external act does not silently approve a different external act or a material strategy decision.
