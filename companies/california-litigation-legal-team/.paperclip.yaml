@@ -1,0 +1,336 @@
+schema: paperclip/v1
+sidebar:
+  agents: [legal-ops-supervisor, source-intake-agent, facts-evidence-agent, legal-research-agent, drafting-assembly-agent, legal-qa-agent, calendar-agent, docket-agent, practice-learning-agent, email-monitor-agent]
+  projects: [firm-onboarding]
+agents:
+  legal-ops-supervisor:
+    permissions:
+      canCreateAgents: true
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+  source-intake-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+  facts-evidence-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+  legal-research-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+  drafting-assembly-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1800
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+  legal-qa-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+  calendar-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+  docket-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+  practice-learning-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+  email-monitor-agent:
+    adapter:
+      type: codex_local
+      config:
+        model: "gpt-5.5"
+        timeoutSec: 1200
+        graceSec: 20
+        extraArgs:
+          - "--skip-git-repo-check"
+    inputs:
+      env:
+        AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:
+          kind: plain
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence endpoint URL used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+        AZURE_DOCUMENT_INTELLIGENCE_KEY:
+          kind: secret
+          requirement: optional
+          portability: system_dependent
+          description: Azure Document Intelligence API key used by the docling three-stage PDF pipeline (run-azure stage). Provided by the server deployment environment; no per-agent action needed.
+inputs:
+  deployment:
+    workspace_root:
+      kind: path
+      requirement: required
+      description: Absolute workspace root to configure as each codex_local agent cwd after import. Use the active AttyMate WORKSPACE selection as the source of truth and revalidate it before runner jobs.
+    codex_auth:
+      kind: text
+      requirement: optional
+      default: "Use the current authenticated Codex session; no extra auth setup is required for sandbox_autopilot local testing."
+      description: Configure authenticated Codex CLI access or an approved API-key based auth mechanism in the target deployment.
+    python_command:
+      kind: text
+      requirement: optional
+      default: "python3"
+      description: Python command or environment launcher agents may use for local scripts and PDF/OCR tooling.
+    pdf_ocr_runtime:
+      kind: text
+      requirement: optional
+      default: "Optional local OCR/PDF tooling; disabled for sandbox runs unless already available in the workspace."
+      description: Deployment-approved OCR/PDF runtime, such as Docling or another local processing tool, configured outside the public package.
+    firm_operations_guide:
+      kind: text
+      requirement: optional
+      default: "Use the imported onboarding guide or issue-scoped instructions until a private Firm Operations Guide is configured."
+      description: Private Paperclip issue-document reference for the deployment's durable Firm Operations Guide.
+    browser_tooling:
+      kind: text
+      requirement: optional
+      default: "Disabled for authenticated or side-effectful browser actions; public read-only browsing may be issue-scoped."
+      description: Browser automation tool status and approval policy for BrowserOS or an equivalent deployment-approved browser.
+    email_connector:
+      kind: text
+      requirement: optional
+      description: Provider-neutral email connector status for gmail, outlook, or other/manual-source deployments. Sensitive values must use Paperclip secret references, not inline package data. Live Outlook/Microsoft monitoring requires a deployment-provided connector; otherwise record pending connector or manual-source mode.
+    email_monitor_profile:
+      kind: text
+      requirement: optional
+      description: Read-only email monitoring profile including provider, connector_status, authorized account/mailbox scope, Gmail labels/query or Outlook folders/categories/search terms or manual-export source, authorized body/thread/attachment access, dedupe policy, routing criteria, redaction policy, cadence, routine status, and hard gates. Required before enabling Email Monitor Agent routines.
+    gmail_connector:
+      kind: text
+      requirement: optional
+      description: Deprecated compatibility alias for email_connector when the provider is Gmail. New imports should use email_connector.
+    gmail_monitor_profile:
+      kind: text
+      requirement: optional
+      description: Deprecated compatibility alias for email_monitor_profile when the provider is Gmail. New imports should use email_monitor_profile.
+    calendar_connector:
+      kind: text
+      requirement: optional
+      description: Provider-neutral calendar connector status for google_calendar, outlook_calendar, or other/manual-source deployments. Calendar writes require issue-level approval. Live Outlook Calendar monitoring requires a deployment-provided connector; otherwise record pending connector or manual-source mode.
+    calendar_monitor_profile:
+      kind: text
+      requirement: optional
+      description: Read-only calendar monitoring profile including provider, connector_status, authorized calendars/shared calendars/groups, authorized event-detail and attachment/link access, exclusions, lookback/lookahead windows, deadline/event categories, dedupe policy, redaction policy, routing criteria, cadence, routine status, and hard gates. Required before enabling Calendar Agent monitor routines.
+    google_calendar_connector:
+      kind: text
+      requirement: optional
+      description: Deprecated compatibility alias for calendar_connector when the provider is Google Calendar. New imports should use calendar_connector.
+    google_drive_connector:
+      kind: text
+      requirement: optional
+      description: Google Drive connector status. Downloads, uploads, and sharing require issue-level approval.
+    lexis_access:
+      kind: text
+      requirement: optional
+      description: Lexis or legal research access status. External research and new authorities require issue-level approval.
+    lasc_access:
+      kind: text
+      requirement: optional
+      description: LASC docket access status. Authentication, paid retrieval, downloads, filing, and service require approval.
+    docket_monitor_profile:
+      kind: text
+      requirement: optional
+      description: Read-only public docket monitoring scope, authorized courts or portals, free public-document access, case-list source, check cadence, change-detection rule, report cadence, and red gates. Required before enabling Docket Agent monitor routines.
+    monitoring_report_policy:
+      kind: text
+      requirement: optional
+      description: Deployment policy for monitor reports to Legal Ops Supervisor, including redaction, dedupe, evidence-reviewed notes, candidate issue creation, setup-ready versus enabled routine status, and review cadence.
+    matter_status_style:
+      kind: text
+      requirement: optional
+      description: Deployment preference for lawyer-facing Matter Status Digest tone, detail level, and preferred next-action phrasing.
+    matter_root:
+      kind: path
+      requirement: runtime
+      description: Supplied per issue through the Matter Safety Contract, not stored in the reusable package.
+    output_root:
+      kind: path
+      requirement: runtime
+      description: Supplied per issue through the Matter Safety Contract, not stored in the reusable package.
+routines:
+  run-email-monitor:
+    status: "paused"
+    priority: "medium"
+    concurrencyPolicy: "coalesce_if_active"
+    catchUpPolicy: "skip_missed"
+    triggers:
+      - kind: schedule
+        cronExpression: "0 8-18 * * 1-5"
+        timezone: "America/Los_Angeles"
+  run-calendar-monitor:
+    status: "paused"
+    priority: "medium"
+    concurrencyPolicy: "coalesce_if_active"
+    catchUpPolicy: "skip_missed"
+    triggers:
+      - kind: schedule
+        cronExpression: "0 8 * * 1-5"
+        timezone: "America/Los_Angeles"
+  run-docket-monitor:
+    status: "paused"
+    priority: "medium"
+    concurrencyPolicy: "coalesce_if_active"
+    catchUpPolicy: "skip_missed"
+    triggers:
+      - kind: schedule
+        cronExpression: "0 9 * * 1"
+        timezone: "America/Los_Angeles"
