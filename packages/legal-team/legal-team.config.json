@@ -1,0 +1,11 @@
+{
+	"workspaceRoot": "~/attymate-workspace",
+	"timezone": "America/Los_Angeles",
+	"approvalMode": "interactive",
+	"taskTimeoutSec": 1200,
+	"agents": {},
+	"monitors": {
+		"gmail": { "enabled": false, "cron": "0 8-18 * * 1-5", "maxResults": 25 },
+		"calendar": { "enabled": false, "cron": "0 8 * * 1-5", "lookaheadDays": 30 }
+	}
+}
