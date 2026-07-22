@@ -22,6 +22,7 @@ import {
   Plus,
   ShieldCheck,
   Trash2,
+  Waypoints,
 } from 'lucide-react';
 
 import { KanbanColumn } from './KanbanColumn';
@@ -33,6 +34,7 @@ import {
 } from './KanbanGridLayout';
 import { KanbanSortPopover } from './KanbanSortPopover';
 import { KanbanTaskCard } from './KanbanTaskCard';
+import { KanbanWorkflowView } from './KanbanWorkflowView';
 
 import type { KanbanFilterState } from './KanbanFilterPopover';
 import type { KanbanSortField, KanbanSortState } from './KanbanSortPopover';
@@ -102,7 +104,7 @@ interface KanbanBoardProps {
   onOpenTrash?: () => void;
 }
 
-type KanbanViewMode = 'grid' | 'columns';
+type KanbanViewMode = 'grid' | 'columns' | 'workflow';
 
 const SCROLLABLE_OVERFLOW_VALUES = new Set(['auto', 'scroll', 'overlay']);
 const INITIAL_VISIBLE_TASKS_PER_COLUMN = 20;
@@ -833,7 +835,7 @@ export const KanbanBoard = memo(function KanbanBoard({
                   variant="ghost"
                   size="sm"
                   className={cn(
-                    'h-7 rounded-l-none border-l border-[var(--color-border)] px-2',
+                    'h-7 rounded-none border-l border-[var(--color-border)] px-2',
                     viewMode === 'columns'
                       ? 'bg-[var(--color-surface-raised)] text-[var(--color-text)]'
                       : 'text-[var(--color-text-muted)]'
@@ -846,11 +848,37 @@ export const KanbanBoard = memo(function KanbanBoard({
               </TooltipTrigger>
               <TooltipContent side="bottom">{t('kanban.board.columnsView')}</TooltipContent>
             </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    'h-7 rounded-l-none border-l border-[var(--color-border)] px-2',
+                    viewMode === 'workflow'
+                      ? 'bg-[var(--color-surface-raised)] text-[var(--color-text)]'
+                      : 'text-[var(--color-text-muted)]'
+                  )}
+                  onClick={() => switchViewMode('workflow')}
+                  aria-label="Workflow view"
+                >
+                  <Waypoints size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Workflow view</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </div>
 
-      {viewMode === 'grid' ? (
+      {viewMode === 'workflow' ? (
+        <KanbanWorkflowView
+          tasksByColumn={groupedOrdered}
+          members={members}
+          memberColorMap={memberColorMap}
+          onTaskClick={onTaskClick}
+        />
+      ) : viewMode === 'grid' ? (
         <KanbanGridLayout
           allColumnIds={COLUMNS.map((column) => column.id)}
           primaryColumnId={primaryVisibleColumnId}
