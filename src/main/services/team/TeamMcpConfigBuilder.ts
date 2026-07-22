@@ -462,6 +462,31 @@ async function probeShellNodeRuntimePath(
  * Uses the user's shell/enriched PATH so packaged GUI launches do not depend
  * on the minimal Finder/Dock PATH.
  */
+async function resolveNodeLaunchSpecWithElectronFallback(
+  args: string[],
+  options?: McpLaunchSpecResolveOptions
+): Promise<McpLaunchSpec> {
+  try {
+    return { command: await resolveNodePath(options), args };
+  } catch (error) {
+    // No compatible system Node.js — Electron itself embeds a Node 24 runtime
+    // usable via ELECTRON_RUN_AS_NODE, in dev as well as packaged builds.
+    if (typeof process.execPath !== 'string' || process.execPath.trim().length === 0) {
+      throw error;
+    }
+    const electronProbe = await probePackagedElectronNodeRuntime(options);
+    if (!electronProbe.ok) {
+      throw error;
+    }
+    emitProgress(options, 'electron-node-runtime-found', 'Using bundled Electron Node runtime...');
+    return {
+      command: process.execPath.trim(),
+      args,
+      env: getPackagedElectronNodeEnv(),
+    };
+  }
+}
+
 async function resolveNodePath(options?: McpLaunchSpecResolveOptions): Promise<string> {
   if (_resolvedNodePath) return _resolvedNodePath;
 
@@ -620,10 +645,7 @@ export async function resolveAgentTeamsMcpLaunchSpec(
           'Bundled Electron Node runtime unavailable, resolving Node.js fallback...'
         );
       }
-      return {
-        command: await resolveNodePath(options),
-        args: [packagedEntry],
-      };
+      return resolveNodeLaunchSpecWithElectronFallback([packagedEntry], options);
     }
     logger.warn(`Packaged MCP entry not found at ${packagedEntry}, falling back to workspace`);
   }
@@ -636,10 +658,7 @@ export async function resolveAgentTeamsMcpLaunchSpec(
     emitProgress(options, 'tsx-runner', 'Resolving MCP TypeScript runner...');
     const tsxCli = await resolveWorkspaceTsxCli(checked);
     if (tsxCli) {
-      return {
-        command: await resolveNodePath(options),
-        args: [tsxCli, sourceEntry],
-      };
+      return resolveNodeLaunchSpecWithElectronFallback([tsxCli, sourceEntry], options);
     }
   }
 
@@ -648,10 +667,7 @@ export async function resolveAgentTeamsMcpLaunchSpec(
   emitProgress(options, 'built-entry', 'Checking built MCP server entry...');
   checked.push(builtEntry);
   if (await pathExists(builtEntry)) {
-    return {
-      command: await resolveNodePath(options),
-      args: [builtEntry],
-    };
+    return resolveNodeLaunchSpecWithElectronFallback([builtEntry], options);
   }
 
   throw new Error(

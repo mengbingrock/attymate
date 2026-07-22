@@ -117,7 +117,7 @@ import {
 import { mergeJsonSettingsArgs } from '../runtime/cliSettingsArgs';
 import { buildProviderControlPlaneCliCommandArgs } from '../runtime/providerCliCommandArgs';
 import { ProviderConnectionService } from '../runtime/ProviderConnectionService';
-import { resolveTeamProviderId } from '../runtime/providerRuntimeEnv';
+import { resolveTeamProviderId, stripMultimodelRoutingEnv } from '../runtime/providerRuntimeEnv';
 import { type TeamRuntimeSettingsJson } from '../runtime/teamRuntimeSettingsBundle';
 
 import { openCodeRuntimeApprovalProvider } from './approvals/OpenCodeRuntimeApprovalProvider';
@@ -203,10 +203,12 @@ import {
   type RuntimeEvidenceKind,
   RuntimeStaleEvidenceError,
 } from './opencode/store/RuntimeRunTombstoneStore';
+import { synthesizeStockClaudeTeamRuntimeState } from './provisioning/StockClaudeTeamStateSynthesizer';
 import { getSystemLocale } from './provisioning/TeamProvisioningAgentLanguage';
 import {
   buildDeterministicCreateBootstrapSpec,
   buildDeterministicLaunchBootstrapSpec,
+  buildStockClaudeBootstrapPrompt,
   getProvisioningRunTimeoutMs,
   removeDeterministicBootstrapSpecFile,
   removeDeterministicBootstrapUserPromptFile,
@@ -843,6 +845,10 @@ const {
 } = agentTeamsControllerModule;
 const VERIFY_TIMEOUT_MS = 15_000;
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function asRuntimeRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('OpenCode runtime payload must be an object');
@@ -1019,6 +1025,7 @@ function pushUniqueSupportDiagnostics(
 
 const STALL_CHECK_INTERVAL_MS = 10_000;
 const STALL_WARNING_THRESHOLD_MS = 20_000;
+const STOCK_INBOX_RELAY_POLL_MS = 4_000;
 const APP_TEAM_RUNTIME_DISALLOWED_TOOLS =
   'TeamDelete,TodoWrite,TaskCreate,TaskUpdate,mcp__agent-teams__team_launch,mcp__agent-teams__team_stop';
 const CLAUDE_TEAM_RUNTIME_SETTINGS_PATH_ENV = 'CLAUDE_TEAM_RUNTIME_SETTINGS_PATH';
@@ -1183,6 +1190,14 @@ interface ProvisioningRun {
   lastStdoutReceivedAt: number;
   /** Stall watchdog interval handle. Cleared in cleanupRun(). */
   stallCheckHandle: NodeJS.Timeout | null;
+  /**
+   * Stock-runtime only: periodic poll that relays teammate inbox messages to
+   * the lead (which forwards to the in-process subagent). In-process stock
+   * teammates cannot self-consume their inboxes, so without this, inbox-
+   * delivered signals (work-sync nudges, teammate-to-teammate, cross-team)
+   * would sit unread forever.
+   */
+  stockInboxRelayHandle: NodeJS.Timeout | null;
   /** Index of the current stall warning in provisioningOutputParts.
    *  Used to replace in-place instead of pushing duplicates. */
   stallWarningIndex: number | null;
@@ -1214,6 +1229,12 @@ interface ProvisioningRun {
   isLaunch: boolean;
   launchStateClearedForRun: boolean;
   deterministicBootstrap: boolean;
+  /**
+   * Stock Claude Code runtime (flavor 'claude'): teammates are spawned as
+   * ephemeral Agent subagents without the fork's team_name binding, so member
+   * spawn tracking matches on member name alone.
+   */
+  stockClaudeRuntime: boolean;
   launchCleanupStateFinalized?: boolean;
   workspaceTrustPlan?: WorkspaceTrustFullPlanResult | null;
   workspaceTrustExecution?: WorkspaceTrustExecutionResult | null;
@@ -11033,6 +11054,51 @@ export class TeamProvisioningService {
   }
 
   /**
+   * Stock-runtime only: periodically forward each teammate's unread inbox
+   * messages to the lead so it can hand them to the corresponding in-process
+   * subagent. relayMemberInboxMessages marks relayed messages read and de-dupes
+   * by id, so repeated polls are idempotent and cannot loop.
+   */
+  private startStockTeammateInboxRelayPoll(run: ProvisioningRun): void {
+    if (!run.stockClaudeRuntime || run.stockInboxRelayHandle) return;
+
+    const poll = (): void => {
+      if (run.processKilled || run.cancelRequested || !run.provisioningComplete) return;
+      const leadName = this.getRunLeadName(run);
+      const teammates = (run.expectedMembers ?? []).filter((name) => name && name !== leadName);
+      for (const memberName of teammates) {
+        void this.relayMemberInboxMessages(run.teamName, memberName).catch((error: unknown) => {
+          logger.debug(
+            `[${run.teamName}] stock inbox relay poll failed for "${memberName}": ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        });
+      }
+    };
+
+    run.stockInboxRelayHandle = setInterval(() => {
+      try {
+        poll();
+      } catch (error) {
+        logger.debug(
+          `[${run.teamName}] stock inbox relay poll error: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    }, STOCK_INBOX_RELAY_POLL_MS);
+    run.stockInboxRelayHandle.unref?.();
+  }
+
+  private stopStockTeammateInboxRelayPoll(run: ProvisioningRun): void {
+    if (run.stockInboxRelayHandle) {
+      clearInterval(run.stockInboxRelayHandle);
+      run.stockInboxRelayHandle = null;
+    }
+  }
+
+  /**
    * Detects auth failure keywords in stderr/stdout during provisioning.
    * On first detection: kills process, waits, and respawns automatically.
    * On second detection (after retry): fails fast with a clear error.
@@ -11091,6 +11157,7 @@ export class TeamProvisioningService {
     }
     this.stopFilesystemMonitor(run);
     this.stopStallWatchdog(run);
+    this.stopStockTeammateInboxRelayPoll(run);
     if (run.child) {
       run.child.stdout?.removeAllListeners('data');
       run.child.stderr?.removeAllListeners('data');
@@ -11291,6 +11358,7 @@ export class TeamProvisioningService {
     run.lastDataReceivedAt = Date.now();
     run.lastStdoutReceivedAt = Date.now();
     this.startStallWatchdog(run);
+    this.startStockTeammateInboxRelayPoll(run);
 
     // Restart filesystem monitor for createTeam (launch skips it)
     if (!run.isLaunch) {
@@ -11780,6 +11848,7 @@ export class TeamProvisioningService {
         lastDataReceivedAt: 0, // intentionally 0 — real reset happens after spawn (see startStallWatchdog call sites)
         lastStdoutReceivedAt: 0,
         stallCheckHandle: null,
+        stockInboxRelayHandle: null,
         stallWarningIndex: null,
         preStallMessage: null,
         lastRetryAt: 0,
@@ -11797,6 +11866,7 @@ export class TeamProvisioningService {
         isLaunch: false,
         launchStateClearedForRun: false,
         deterministicBootstrap: true,
+        stockClaudeRuntime: getConfiguredCliFlavor() === 'claude',
         workspaceTrustPlan: workspaceTrustFullPlan,
         workspaceTrustExecution: null,
         workspaceTrustDiagnostics: null,
@@ -11877,7 +11947,19 @@ export class TeamProvisioningService {
       const initialUserPrompt = request.prompt?.trim() ?? '';
       const promptSize = getPromptSizeSummary(initialUserPrompt);
       let child: ReturnType<typeof spawn>;
-      shellEnv.CLAUDE_ENABLE_DETERMINISTIC_TEAM_BOOTSTRAP = '1';
+      const useStockClaudeBootstrap = getConfiguredCliFlavor() === 'claude';
+      let stockBootstrapPrompt: string | null = null;
+      if (useStockClaudeBootstrap) {
+        // Stock Claude Code has no --team-bootstrap-spec contract: teams are
+        // experimental (env-gated) and bootstrapped by prompting the lead over
+        // stdin. Readiness then relies on the filesystem monitor, not
+        // team_bootstrap stream events.
+        run.deterministicBootstrap = false;
+        shellEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1';
+        stripMultimodelRoutingEnv(shellEnv);
+      } else {
+        shellEnv.CLAUDE_ENABLE_DETERMINISTIC_TEAM_BOOTSTRAP = '1';
+      }
       const teammateModeDecision = await resolveDesktopTeammateModeDecision(request.extraCliArgs);
       applyDesktopTeammateModeDecisionToEnv(shellEnv, teammateModeDecision);
       let mcpConfigPath: string;
@@ -11954,7 +12036,9 @@ export class TeamProvisioningService {
         emitProvisioningCheckpoint(run, 'Writing deterministic bootstrap spec file');
         bootstrapSpecPath = await writeDeterministicBootstrapSpecFile(bootstrapSpec);
         run.bootstrapSpecPath = bootstrapSpecPath;
-        if (initialUserPrompt) {
+        if (useStockClaudeBootstrap) {
+          stockBootstrapPrompt = buildStockClaudeBootstrapPrompt(bootstrapSpec, initialUserPrompt);
+        } else if (initialUserPrompt) {
           emitProvisioningCheckpoint(
             run,
             'Writing deferred user prompt file',
@@ -12016,7 +12100,9 @@ export class TeamProvisioningService {
         envResolution: { ...provisioningEnv, providerArgs: providerArgsForLaunch },
         extraArgs: extraCliArgs,
         inheritedProviderArgs: crossProviderMemberArgsForLaunch.args,
-        includeAnthropicHelper: resolvedProviderId === 'anthropic',
+        // Stock Claude Code authenticates via its own keychain login; the fork's
+        // apiKeyHelper settings would override that and yield "Not logged in".
+        includeAnthropicHelper: !useStockClaudeBootstrap && resolvedProviderId === 'anthropic',
         contextLabel: 'Team create launch',
       });
       const spawnArgs = mergeJsonSettingsArgs([
@@ -12030,8 +12116,7 @@ export class TeamProvisioningService {
         'user,project,local',
         '--mcp-config',
         mcpConfigPath,
-        '--team-bootstrap-spec',
-        bootstrapSpecPath,
+        ...(useStockClaudeBootstrap ? [] : ['--team-bootstrap-spec', bootstrapSpecPath]),
         ...(bootstrapUserPromptPath
           ? ['--team-bootstrap-user-prompt-file', bootstrapUserPromptPath]
           : []),
@@ -12128,17 +12213,49 @@ export class TeamProvisioningService {
         args: spawnArgs,
         cwd: request.cwd,
         env: { ...shellEnv },
-        prompt: initialUserPrompt,
+        prompt: stockBootstrapPrompt ?? initialUserPrompt,
       };
 
       this.attachStdoutHandler(run);
       this.attachStderrHandler(run);
+
+      if (stockBootstrapPrompt && child.stdin?.writable) {
+        emitProvisioningCheckpoint(run, 'Sending stock bootstrap prompt over stdin');
+        const message = JSON.stringify({
+          type: 'user',
+          message: { role: 'user', content: [{ type: 'text', text: stockBootstrapPrompt }] },
+        });
+        child.stdin.write(message + '\n');
+      }
 
       // Reset AFTER spawn — not at run init — because async operations (buildProvisioningEnv,
       // writeConfigFile) between init and spawn can take seconds, causing false stall warnings.
       run.lastDataReceivedAt = Date.now();
       run.lastStdoutReceivedAt = Date.now();
       this.startStallWatchdog(run);
+      this.startStockTeammateInboxRelayPoll(run);
+
+      if (useStockClaudeBootstrap) {
+        // Stock Claude Code never writes the fork's team runtime files, so the
+        // app materializes config.json + inbox stubs itself; the filesystem
+        // monitor below then observes them and completes provisioning.
+        emitProvisioningCheckpoint(run, 'Synthesizing stock-runtime team state');
+        try {
+          await synthesizeStockClaudeTeamRuntimeState({
+            teamName: request.teamName,
+            cwd: request.cwd,
+            description: request.description,
+            members: effectiveMemberSpecs,
+            providerId: resolvedProviderId,
+          });
+        } catch (error) {
+          logger.warn(
+            `[${request.teamName}] Failed to synthesize stock-runtime team state: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
+      }
 
       // Filesystem-based progress monitor: actively polls team files instead
       // of relying on stdout (which only arrives at the end in text mode).
@@ -12413,6 +12530,7 @@ export class TeamProvisioningService {
       lastDataReceivedAt: 0,
       lastStdoutReceivedAt: 0,
       stallCheckHandle: null,
+      stockInboxRelayHandle: null,
       stallWarningIndex: null,
       preStallMessage: null,
       lastRetryAt: 0,
@@ -12431,6 +12549,7 @@ export class TeamProvisioningService {
       isLaunch: true,
       launchStateClearedForRun: false,
       deterministicBootstrap: false,
+      stockClaudeRuntime: getConfiguredCliFlavor() === 'claude',
       workspaceTrustPlan: null,
       workspaceTrustExecution: null,
       workspaceTrustDiagnostics: null,
@@ -13858,6 +13977,7 @@ export class TeamProvisioningService {
         lastDataReceivedAt: 0, // intentionally 0 — real reset happens after spawn (see startStallWatchdog call sites)
         lastStdoutReceivedAt: 0,
         stallCheckHandle: null,
+        stockInboxRelayHandle: null,
         stallWarningIndex: null,
         preStallMessage: null,
         lastRetryAt: 0,
@@ -13875,6 +13995,7 @@ export class TeamProvisioningService {
         isLaunch: true,
         launchStateClearedForRun: false,
         deterministicBootstrap: true,
+        stockClaudeRuntime: getConfiguredCliFlavor() === 'claude',
         workspaceTrustPlan: workspaceTrustFullPlan,
         workspaceTrustExecution: null,
         workspaceTrustDiagnostics: null,
@@ -13981,7 +14102,17 @@ export class TeamProvisioningService {
       );
       const promptSize = getPromptSizeSummary(prompt);
       let child: ReturnType<typeof spawn>;
-      shellEnv.CLAUDE_ENABLE_DETERMINISTIC_TEAM_BOOTSTRAP = '1';
+      const useStockClaudeBootstrap = getConfiguredCliFlavor() === 'claude';
+      let stockBootstrapPrompt: string | null = null;
+      if (useStockClaudeBootstrap) {
+        // Stock Claude Code: no deterministic bootstrap contract; the lead is
+        // re-hydrated via a stdin prompt and readiness comes from team files.
+        run.deterministicBootstrap = false;
+        shellEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1';
+        stripMultimodelRoutingEnv(shellEnv);
+      } else {
+        shellEnv.CLAUDE_ENABLE_DETERMINISTIC_TEAM_BOOTSTRAP = '1';
+      }
       const teammateModeDecision = await resolveDesktopTeammateModeDecision(request.extraCliArgs);
       applyDesktopTeammateModeDecisionToEnv(shellEnv, teammateModeDecision);
       let mcpConfigPath: string;
@@ -14028,14 +14159,18 @@ export class TeamProvisioningService {
         emitProvisioningCheckpoint(run, 'Writing deterministic bootstrap spec file');
         bootstrapSpecPath = await writeDeterministicBootstrapSpecFile(bootstrapSpec);
         run.bootstrapSpecPath = bootstrapSpecPath;
-        emitProvisioningCheckpoint(
-          run,
-          'Writing launch hydration prompt file',
-          `chars=${promptSize.chars} lines=${promptSize.lines}`
-        );
-        bootstrapUserPromptPath = await writeDeterministicBootstrapUserPromptFile(prompt);
-        run.bootstrapUserPromptPath = bootstrapUserPromptPath;
-        run.requiresFirstRealTurnSuccess = true;
+        if (useStockClaudeBootstrap) {
+          stockBootstrapPrompt = buildStockClaudeBootstrapPrompt(bootstrapSpec, prompt);
+        } else {
+          emitProvisioningCheckpoint(
+            run,
+            'Writing launch hydration prompt file',
+            `chars=${promptSize.chars} lines=${promptSize.lines}`
+          );
+          bootstrapUserPromptPath = await writeDeterministicBootstrapUserPromptFile(prompt);
+          run.bootstrapUserPromptPath = bootstrapUserPromptPath;
+          run.requiresFirstRealTurnSuccess = true;
+        }
         emitProvisioningCheckpoint(run, 'Writing MCP config file');
         mcpConfigPath = await this.mcpConfigBuilder.writeConfigFile(request.cwd, {
           controlApiBaseUrl: provisioningEnv.env.CLAUDE_TEAM_CONTROL_URL,
@@ -14081,8 +14216,7 @@ export class TeamProvisioningService {
         'user,project,local',
         '--mcp-config',
         mcpConfigPath,
-        '--team-bootstrap-spec',
-        bootstrapSpecPath,
+        ...(useStockClaudeBootstrap ? [] : ['--team-bootstrap-spec', bootstrapSpecPath]),
         ...(bootstrapUserPromptPath
           ? ['--team-bootstrap-user-prompt-file', bootstrapUserPromptPath]
           : []),
@@ -14107,7 +14241,9 @@ export class TeamProvisioningService {
         envResolution: { ...provisioningEnv, providerArgs: providerArgsForLaunch },
         extraArgs: extraCliArgs,
         inheritedProviderArgs: crossProviderMemberArgsForLaunch.args,
-        includeAnthropicHelper: resolvedProviderId === 'anthropic',
+        // Stock Claude Code authenticates via its own keychain login; the fork's
+        // apiKeyHelper settings would override that and yield "Not logged in".
+        includeAnthropicHelper: !useStockClaudeBootstrap && resolvedProviderId === 'anthropic',
         contextLabel: 'Team launch',
       });
       if (launchModelArg) {
@@ -14241,22 +14377,57 @@ export class TeamProvisioningService {
         args: finalLaunchArgs,
         cwd: request.cwd,
         env: { ...shellEnv },
-        prompt,
+        prompt: stockBootstrapPrompt ?? prompt,
       };
 
       this.attachStdoutHandler(run);
       this.attachStderrHandler(run);
+
+      if (stockBootstrapPrompt && child.stdin?.writable) {
+        emitProvisioningCheckpoint(run, 'Sending stock bootstrap prompt over stdin');
+        const message = JSON.stringify({
+          type: 'user',
+          message: { role: 'user', content: [{ type: 'text', text: stockBootstrapPrompt }] },
+        });
+        child.stdin.write(message + '\n');
+      }
+
+      if (useStockClaudeBootstrap) {
+        // Repair missing stock-runtime team files (config.json, inbox stubs)
+        // for relaunches; existing files are never overwritten.
+        try {
+          await synthesizeStockClaudeTeamRuntimeState({
+            teamName: request.teamName,
+            cwd: request.cwd,
+            members: effectiveMemberSpecs,
+            providerId: resolvedProviderId,
+          });
+        } catch (error) {
+          logger.warn(
+            `[${request.teamName}] Failed to synthesize stock-runtime team state: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
+      }
 
       // Reset AFTER spawn — not at run init — because async operations between init
       // and spawn can take seconds, causing false stall warnings.
       run.lastDataReceivedAt = Date.now();
       run.lastStdoutReceivedAt = Date.now();
       this.startStallWatchdog(run);
+      this.startStockTeammateInboxRelayPoll(run);
 
       // For launch, skip the filesystem monitor — files (config, inboxes, tasks)
       // already exist from the previous run and would trigger immediate false
       // completion on the first poll. Rely on stream-json result.success instead.
-      updateProgress(run, 'configuring', 'CLI running - deterministic launch in progress');
+      updateProgress(
+        run,
+        'configuring',
+        run.deterministicBootstrap
+          ? 'CLI running - deterministic launch in progress'
+          : 'CLI running - reconnecting with teammates'
+      );
       run.onProgress(run.progress);
 
       run.timeoutHandle = setTimeout(() => {
@@ -16195,6 +16366,21 @@ export class TeamProvisioningService {
   }
 
   /**
+   * True when the team's live run uses the stock Claude Code runtime, where
+   * teammates are in-process subagents of the lead and cannot self-consume
+   * their inbox files. Falls back to the configured flavor when no run is
+   * tracked yet (e.g. delivery evaluated just before the run map is populated).
+   */
+  isStockClaudeRuntimeTeam(teamName: string): boolean {
+    const runId = this.getAliveRunId(teamName);
+    const run = runId ? this.runs.get(runId) : null;
+    if (run) {
+      return run.stockClaudeRuntime === true;
+    }
+    return getConfiguredCliFlavor() === 'claude';
+  }
+
+  /**
    * Get list of teams with active processes.
    */
   getAliveTeams(): string[] {
@@ -16337,6 +16523,23 @@ export class TeamProvisioningService {
    * Messages stays accurate even if Claude's own routing is flaky.
    */
   /**
+   * Stock Claude Code Agent spawns carry no member name; recover it by matching
+   * an expected member name mentioned in the Agent call's description (the stock
+   * bootstrap prompt instructs the lead to name teammates exactly). Word-boundary
+   * matched to avoid partial hits; returns '' when zero or multiple members match.
+   */
+  private matchExpectedMemberByAgentDescription(run: ProvisioningRun, description: string): string {
+    const expected = run.expectedMembers ?? [];
+    const haystack = description.toLowerCase();
+    const matches = expected.filter((name) => {
+      const needle = name.trim().toLowerCase();
+      if (!needle) return false;
+      return new RegExp(`(^|[^a-z0-9])${escapeRegExp(needle)}([^a-z0-9]|$)`).test(haystack);
+    });
+    return matches.length === 1 ? matches[0] : '';
+  }
+
+  /**
    * Intercept Task tool_use blocks that spawn team members.
    * Sets member spawn status to 'spawning' when the lead issues a Task call with team_name + name.
    */
@@ -16355,23 +16558,40 @@ export class TeamProvisioningService {
         );
         continue;
       }
-      if (!memberName) continue;
-      if (!teamName) {
-        logger.warn(
-          `[captureTeamSpawnEvents] Agent call for "${memberName}" is missing team_name - ` +
-            `teammate will be an ephemeral subagent, not a persistent member of "${run.teamName}"`
-        );
-        this.setMemberSpawnStatus(
-          run,
-          memberName,
-          'error',
-          `Agent spawn for "${memberName}" is missing team_name - spawned as ephemeral subagent instead of persistent teammate`
-        );
-        continue;
+      // Stock Claude Code (flavor 'claude') has no team_name binding on the
+      // Agent tool: it spawns teammates as ephemeral subagents identified by
+      // name only. The app owns team membership via the synthesized config, so
+      // match a stock spawn to its expected member by name and treat it as a
+      // real teammate spawn instead of an error.
+      const stockAgentName =
+        run.stockClaudeRuntime && !teamName && !memberName && typeof inp.description === 'string'
+          ? this.matchExpectedMemberByAgentDescription(run, inp.description)
+          : '';
+      const effectiveMemberName = memberName || stockAgentName;
+      if (!effectiveMemberName) continue;
+      if (run.stockClaudeRuntime) {
+        if (!run.expectedMembers?.includes(effectiveMemberName)) {
+          continue;
+        }
+      } else {
+        if (!teamName) {
+          logger.warn(
+            `[captureTeamSpawnEvents] Agent call for "${effectiveMemberName}" is missing team_name - ` +
+              `teammate will be an ephemeral subagent, not a persistent member of "${run.teamName}"`
+          );
+          this.setMemberSpawnStatus(
+            run,
+            effectiveMemberName,
+            'error',
+            `Agent spawn for "${effectiveMemberName}" is missing team_name - spawned as ephemeral subagent instead of persistent teammate`
+          );
+          continue;
+        }
+        // Only track spawns for this team
+        if (teamName !== run.teamName) continue;
       }
-      // Only track spawns for this team
-      if (teamName !== run.teamName) continue;
-      const existing = run.memberSpawnStatuses.get(memberName);
+      const memberNameForTracking = effectiveMemberName;
+      const existing = run.memberSpawnStatuses.get(memberNameForTracking);
       if (
         existing &&
         !existing.hardFailure &&
@@ -16379,15 +16599,15 @@ export class TeamProvisioningService {
       ) {
         this.appendMemberBootstrapDiagnostic(
           run,
-          memberName,
+          memberNameForTracking,
           'respawn blocked as duplicate - teammate already online'
         );
         continue;
       }
-      this.setMemberSpawnStatus(run, memberName, 'spawning');
+      this.setMemberSpawnStatus(run, memberNameForTracking, 'spawning');
       const toolUseId = typeof part.id === 'string' ? part.id.trim() : '';
       if (toolUseId) {
-        run.memberSpawnToolUseIds.set(toolUseId, memberName);
+        run.memberSpawnToolUseIds.set(toolUseId, memberNameForTracking);
       }
 
       // Advance stepper to "Members joining" when first member spawn is detected
@@ -16395,7 +16615,11 @@ export class TeamProvisioningService {
         !run.provisioningComplete &&
         (run.progress.state === 'configuring' || run.progress.state === 'spawning')
       ) {
-        const progress = updateProgress(run, 'assembling', `Spawning member ${memberName}...`);
+        const progress = updateProgress(
+          run,
+          'assembling',
+          `Spawning member ${memberNameForTracking}...`
+        );
         run.onProgress(progress);
       }
     }
@@ -22678,6 +22902,7 @@ export class TeamProvisioningService {
    * Remove a run from tracking maps.
    */
   private cleanupRun(run: ProvisioningRun): void {
+    this.stopStockTeammateInboxRelayPoll(run);
     cleanupProvisioningRun(run, {
       getTrackedRunId: (teamName) => this.getTrackedRunId(teamName),
       isRunIdTracked: (runId) =>

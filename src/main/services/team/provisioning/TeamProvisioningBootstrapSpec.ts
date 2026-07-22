@@ -226,6 +226,86 @@ export function buildDeterministicLaunchBootstrapSpec(
   };
 }
 
+function describeStockBootstrapMember(member: RuntimeBootstrapMemberSpec): string {
+  const details: string[] = [];
+  if (member.model) details.push(`model: ${member.model}`);
+  if (member.effort) details.push(`effort: ${member.effort}`);
+  if (member.isolation === 'worktree') details.push('work in an isolated git worktree');
+  const header =
+    details.length > 0 ? `- ${member.name} (${details.join(', ')})` : `- ${member.name}`;
+  const brief = member.description?.trim() || member.prompt?.trim();
+  return brief ? `${header}: ${brief}` : header;
+}
+
+/**
+ * Stock Claude Code has no --team-bootstrap-spec flag; the same roster is
+ * delivered as the first stdin user turn so the lead assembles the team itself.
+ */
+export function buildStockClaudeBootstrapPrompt(
+  spec: RuntimeBootstrapSpec,
+  initialUserPrompt: string
+): string {
+  const teamLabel = spec.team.displayName?.trim() || spec.team.name;
+  const lines: string[] = [];
+  if (spec.mode === 'create') {
+    lines.push(
+      `You are the lead of a new agent team. Create the team named exactly "${spec.team.name}"` +
+        (teamLabel !== spec.team.name ? ` (display name: "${teamLabel}")` : '') +
+        '.'
+    );
+    if (spec.team.description?.trim()) {
+      lines.push(`Team purpose: ${spec.team.description.trim()}`);
+    }
+  } else {
+    lines.push(
+      `You are the lead of the existing agent team "${spec.team.name}". Its state is persisted on disk; bring the team back up.`
+    );
+  }
+  if (spec.members.length > 0) {
+    lines.push(
+      '',
+      'Spawn one teammate per roster entry below. Use the exact teammate names as given:'
+    );
+    for (const member of spec.members) {
+      lines.push(describeStockBootstrapMember(member));
+    }
+  }
+  lines.push(
+    '',
+    'IMPORTANT: The desktop app has pre-registered this roster for tracking only. The',
+    'teammates are NOT running yet — team_get / team_list may list them, but that is just',
+    'the registered roster, not live agents. You MUST spawn every teammate yourself now by',
+    'calling the Agent tool once per roster entry (run them in the background). Do not skip',
+    'spawning or assume they are already provisioned; if you do not spawn them, the launch',
+    "fails. In each Agent call, begin the description field with the teammate's exact name",
+    'from the roster (e.g. description: "<name>: ...") so the app can track the spawn. Spawn',
+    'all teammates before starting any other work, and keep them running so they can pick up',
+    'tasks.'
+  );
+  lines.push(
+    '',
+    'You are running inside a desktop app that tracks this team on a kanban board through your',
+    '"agent-teams-mcp" MCP tools. Follow this protocol:',
+    `- Record every distinct work item with the task_create tool (teamName: "${spec.team.name}") before working on it.`,
+    '- Keep task status current with task_start, task_set_status, task_set_owner, and task_complete.',
+    '- Report progress and results to the human user with the message_send tool (to: "user", from: "team-lead").',
+    '- Check lead_briefing periodically for the operational queue and newly assigned work.',
+    '- Do not stop your session while teammates are still working; wait for them and keep coordinating.',
+    '',
+    'CRITICAL — teammates do NOT auto-pick-up work. Your teammates are in-process agents that',
+    'you spawned; they do not poll the task board or their inbox on their own. Assigning a task',
+    '(task_create/task_set_owner with a teammate owner) does NOT start it. To make a teammate',
+    'do work you MUST call the SendMessage tool (to: "<teammate>") with the task id and what to',
+    'do, then wait for their reply. After they report back, update the task status yourself.'
+  );
+  if (initialUserPrompt.trim()) {
+    lines.push('', 'Once the team is assembled, start on this task:', '', initialUserPrompt.trim());
+  } else {
+    lines.push('', 'Once the team is assembled, wait for further instructions from the user.');
+  }
+  return lines.join('\n');
+}
+
 export async function writeDeterministicBootstrapSpecFile(
   spec: RuntimeBootstrapSpec
 ): Promise<string> {

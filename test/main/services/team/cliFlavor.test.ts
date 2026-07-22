@@ -8,20 +8,22 @@ describe('cliFlavor', () => {
     vi.clearAllMocks();
   });
 
-  it('uses multimodel runtime by default', async () => {
+  it('uses the genuine Claude CLI by default', async () => {
+    const { getConfiguredCliFlavor } = await import('@main/services/team/cliFlavor');
+
+    expect(getConfiguredCliFlavor()).toBe('claude');
+  });
+
+  it('lets env override the default runtime to the multimodel orchestrator', async () => {
+    process.env.CLAUDE_TEAM_CLI_FLAVOR = 'agent_teams_orchestrator';
+
     const { getConfiguredCliFlavor } = await import('@main/services/team/cliFlavor');
 
     expect(getConfiguredCliFlavor()).toBe('agent_teams_orchestrator');
   });
 
-  it('ignores the legacy persisted multimodel flag', async () => {
-    const { getConfiguredCliFlavor } = await import('@main/services/team/cliFlavor');
-
-    expect(getConfiguredCliFlavor()).toBe('agent_teams_orchestrator');
-  });
-
-  it('lets env override the default runtime', async () => {
-    process.env.CLAUDE_TEAM_CLI_FLAVOR = 'claude';
+  it('falls back to the default when the env override is invalid', async () => {
+    process.env.CLAUDE_TEAM_CLI_FLAVOR = 'not-a-real-flavor';
 
     const { getConfiguredCliFlavor } = await import('@main/services/team/cliFlavor');
 

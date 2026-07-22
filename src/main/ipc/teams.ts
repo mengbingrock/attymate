@@ -3343,24 +3343,30 @@ async function handleSendMessage(
       ? await teamDataService.sendRuntimeRecipientMessage(tn, messageRequest)
       : await teamDataService.sendMessage(tn, messageRequest);
 
-    // Teammate inbox relay DISABLED (2026-03-23).
-    // Codex/Claude teammates read their own inbox files directly via fs.watch.
-    // Relaying through the lead (relayMemberInboxMessages) caused multiple bugs:
+    // Teammate inbox relay is DISABLED for native fork teammates (2026-03-23).
+    // Codex/Claude fork teammates are separate processes that read their own
+    // inbox files directly via fs.watch, so relaying through the lead caused:
     //   1. Lead responded to user instead of forwarding to the teammate
     //   2. Duplicate messages (relay loop: markInboxMessagesRead → FileWatcher → relay again)
     //   3. Fragile LLM-dependent prompt chain for routing
-    // The message is already persisted in inboxes/{member}.json above.
-    // Teammate responses go to inboxes/user.json and are read by TeamInboxReader.
-    // Lead relay (relayLeadInboxMessages) is still needed because lead reads stdin only, not inbox.
-    // OpenCode secondary lanes do not watch these inbox files, so they need runtime bridge delivery.
     //
-    // if (!isLeadRecipient && isAlive) {
-    //   try {
-    //     await provisioning.relayMemberInboxMessages(tn, memberName);
-    //   } catch (e: unknown) {
-    //     logger.warn(`Relay after sendMessage failed for teammate "${memberName}": ${String(e)}`);
-    //   }
-    // }
+    // Stock Claude Code (flavor 'claude') is the exception: its teammates are
+    // IN-PROCESS subagents of the lead with no separate process to consume
+    // inboxes/{member}.json, so the DM would otherwise sit unread forever
+    // (UI stuck on "delivering"). For stock teammates the lead IS the only
+    // delivery channel, and there is no independent teammate process to loop
+    // with — so relay through the lead and let markInboxMessagesRead confirm.
+    if (!isLeadRecipient && !isOpenCodeRecipient && isAlive) {
+      if (provisioning.isStockClaudeRuntimeTeam(tn)) {
+        try {
+          await provisioning.relayMemberInboxMessages(tn, memberName);
+        } catch (e: unknown) {
+          logger.warn(
+            `Stock teammate relay after sendMessage failed for "${memberName}": ${String(e)}`
+          );
+        }
+      }
+    }
     if (isOpenCodeRecipient) {
       try {
         const relay = await waitForOpenCodeRuntimeRelayForUi({

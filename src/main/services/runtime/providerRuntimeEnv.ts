@@ -157,6 +157,22 @@ export function applyProviderRuntimeEnv(
   return env;
 }
 
+/**
+ * Remove the multimodel fork's provider-routing/backend env vars. Stock Claude
+ * Code treats CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST=1 as "the host injects
+ * credentials" and then refuses its own keychain/OAuth login ("Not logged in"),
+ * so these host-routing pins must be stripped before launching the stock CLI.
+ */
+export function stripMultimodelRoutingEnv(env: NodeJS.ProcessEnv): void {
+  for (const key of PROVIDER_ROUTING_ENV_KEYS) {
+    delete env[key];
+  }
+  for (const key of BACKEND_SELECTION_ENV_KEYS) {
+    delete env[key];
+  }
+  delete env[AGENT_TEAMS_ANTHROPIC_CONNECTION_MODE_ENV];
+}
+
 export function resolveRuntimeProviderId(
   providerId: RuntimeEnvProviderId | undefined
 ): CliProviderId {

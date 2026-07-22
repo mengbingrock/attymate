@@ -1,6 +1,6 @@
 import type { CliFlavor, CliFlavorUiOptions } from '@shared/types';
 
-export const DEFAULT_CLI_FLAVOR: CliFlavor = 'agent_teams_orchestrator';
+export const DEFAULT_CLI_FLAVOR: CliFlavor = 'claude';
 
 function parseFlavorOverride(raw: string | undefined): CliFlavor | null {
   const trimmed = raw?.trim();
