@@ -6,9 +6,9 @@ name: Practice Learning Agent
 title: Private Workflow Learning Specialist
 reportsTo: legal-ops-supervisor
 skills:
-  - practice-workflow-learning
-  - ca-litigation-drafting-workflow
-  - ca-motion-drafting-workflow
+  - legal-practice-improvement
+  - california-litigation-drafting
+  - california-motion-practice
 ---
 
 # Practice Learning Agent

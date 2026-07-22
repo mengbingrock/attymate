@@ -183,6 +183,19 @@ function readSkillKey(frontmatter: Record<string, unknown>) {
   );
 }
 
+function readSkillAliases(frontmatter: Record<string, unknown>) {
+  const metadata = isPlainRecord(frontmatter.metadata) ? frontmatter.metadata : null;
+  const rawAliases = Array.isArray(frontmatter.aliases)
+    ? frontmatter.aliases
+    : Array.isArray(metadata?.aliases)
+      ? metadata.aliases
+      : [];
+  return Array.from(new Set(rawAliases.flatMap((value) => {
+    const alias = normalizeSkillSlug(asString(value));
+    return alias ? [alias] : [];
+  })));
+}
+
 function deriveManifestSkillKey(
   frontmatter: Record<string, unknown>,
   fallbackSlug: string,
@@ -2122,11 +2135,19 @@ function shouldReferenceSkillOnExport(skill: CompanySkill, expandReferencedSkill
 
 async function buildReferencedSkillMarkdown(skill: CompanySkill) {
   const sourceEntry = await buildSkillSourceEntry(skill);
+  const metadata = isPlainRecord(skill.metadata) ? skill.metadata : null;
+  const aliases = Array.isArray(metadata?.aliases)
+    ? metadata.aliases.flatMap((value) => {
+      const alias = normalizeSkillSlug(asString(value));
+      return alias ? [alias] : [];
+    })
+    : [];
   const frontmatter: Record<string, unknown> = {
     key: skill.key,
     slug: skill.slug,
     name: skill.name,
     description: skill.description ?? null,
+    aliases: aliases.length > 0 ? Array.from(new Set(aliases)) : null,
   };
   if (sourceEntry) {
     frontmatter.metadata = {
@@ -2746,6 +2767,13 @@ function buildManifestFromPackageFiles(
     } else if (metadata) {
       normalizedMetadata = {
         sourceKind: "catalog",
+      };
+    }
+    const aliases = readSkillAliases(frontmatter);
+    if (aliases.length > 0) {
+      normalizedMetadata = {
+        ...(normalizedMetadata ?? {}),
+        aliases,
       };
     }
     const key = deriveManifestSkillKey(frontmatter, slug, normalizedMetadata, sourceType, sourceLocator);
@@ -3377,6 +3405,13 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       skillByReference.set(skill.key, skill);
       skillByReference.set(skill.slug, skill);
       skillByReference.set(skill.name, skill);
+      const aliases = isPlainRecord(skill.metadata) && Array.isArray(skill.metadata.aliases)
+        ? skill.metadata.aliases
+        : [];
+      for (const alias of aliases) {
+        const normalizedAlias = normalizeSkillSlug(asString(alias));
+        if (normalizedAlias) skillByReference.set(normalizedAlias, skill);
+      }
     }
     const selectedSkills = new Map<string, typeof companySkillRows[number]>();
     for (const selector of input.skills ?? []) {
@@ -3866,6 +3901,16 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       const existing = availableSkillSlugs.get(skill.slug) ?? [];
       existing.push(skill);
       availableSkillSlugs.set(skill.slug, existing);
+      const aliases = isPlainRecord(skill.metadata) && Array.isArray(skill.metadata.aliases)
+        ? skill.metadata.aliases
+        : [];
+      for (const alias of aliases) {
+        const normalizedAlias = normalizeSkillSlug(asString(alias));
+        if (!normalizedAlias) continue;
+        const aliasMatches = availableSkillSlugs.get(normalizedAlias) ?? [];
+        aliasMatches.push(skill);
+        availableSkillSlugs.set(normalizedAlias, aliasMatches);
+      }
     }
 
     for (const agent of selectedAgents) {

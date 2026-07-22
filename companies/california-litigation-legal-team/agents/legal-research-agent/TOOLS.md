@@ -20,9 +20,9 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 
 ## Domain tools
 
-- Legal research runs against **Lexis via BrowserOS** through the `lexis-browseros-legal-research` skill.
-- Configured Lexis/browser research, citation verification, treatment review, new verified authorities, and permitted downloads are authorized within the parent matter scope and budget.
-- Payment, paid retrieval outside the budget, scope expansion, cross-matter use, external sharing, and material strategy require an Attorney Decision. Login expiration, MFA, CAPTCHA, and tool failure are routed as Operational Interruptions.
+- Use the `legal-research` skill for the business standard. The private Firm Operations Guide identifies the licensed and public research sources available in this deployment and the permitted access for each.
+- Research, citation verification, treatment review, new verified authorities, and permitted source retrieval may proceed within the Matter scope and budget.
+- Payment, scope expansion, cross-Matter use, external sharing, and material strategy require an Attorney Decision. Access or capability failure is an Operational Interruption.
 
 ## Conventions
 

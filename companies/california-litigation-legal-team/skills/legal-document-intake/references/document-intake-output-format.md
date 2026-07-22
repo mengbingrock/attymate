@@ -1,7 +1,7 @@
-# PDF Review Handoff Format
+# Legal Document Intake Output Format
 
 ```md
-## PDF Coverage
+## Document Coverage
 
 **Reviewed:** [Document set and page count.]
 **Usable coverage:** [Complete / partial, with the legally meaningful exception.]
@@ -17,4 +17,4 @@
 [Controlling source index/text artifact and next owner.]
 ```
 
-Keep backend selection, runtime configuration, per-page status, retry counts, manifests, and logs in the internal PDF work product.
+Keep operational diagnostics and processing records outside the attorney-facing handoff unless they change reliability or the recommended next action.

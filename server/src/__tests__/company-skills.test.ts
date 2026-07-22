@@ -185,6 +185,116 @@ describe("project workspace skill discovery", () => {
       ],
     });
   });
+
+  it("normalizes top-level skill aliases into import metadata", async () => {
+    const workspace = await makeTempDir("paperclip-aliased-skill-");
+    await fs.writeFile(
+      path.join(workspace, "SKILL.md"),
+      [
+        "---",
+        "slug: legal-research",
+        "name: Legal Research",
+        "aliases:",
+        "  - lexis-browseros-legal-research",
+        "---",
+        "",
+        "# Legal Research",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const imported = await readLocalSkillImportFromDirectory(
+      "33333333-3333-4333-8333-333333333333",
+      workspace,
+      { inventoryMode: "full" },
+    );
+
+    expect(imported.slug).toBe("legal-research");
+    expect(imported.metadata).toMatchObject({
+      aliases: ["lexis-browseros-legal-research"],
+      sourceKind: "local_path",
+    });
+  });
+
+  it("rejects aliases that repeat the canonical skill slug", async () => {
+    const workspace = await makeTempDir("paperclip-invalid-alias-");
+    await fs.writeFile(
+      path.join(workspace, "SKILL.md"),
+      [
+        "---",
+        "slug: legal-research",
+        "name: Legal Research",
+        "aliases:",
+        "  - legal-research",
+        "---",
+        "",
+        "# Legal Research",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    await expect(readLocalSkillImportFromDirectory(
+      "33333333-3333-4333-8333-333333333333",
+      workspace,
+      { inventoryMode: "full" },
+    )).rejects.toMatchObject({
+      status: 422,
+      message: "Skill legal-research cannot use its canonical slug as an alias.",
+    });
+  });
+});
+
+describe("California litigation business skills", () => {
+  const skillRoot = path.join(
+    process.cwd(),
+    "companies/california-litigation-legal-team/skills",
+  );
+  const expectedAliases: Record<string, string[]> = {
+    "california-litigation-drafting": ["ca-litigation-drafting-workflow"],
+    "california-motion-practice": ["ca-motion-drafting-workflow"],
+    "california-pleading-review": ["ca-pleading-intake-review"],
+    "court-docket-review": ["lasc-browseros-docket-check"],
+    "legal-document-intake": ["legal-pdf-processing"],
+    "legal-matter-intake": [],
+    "legal-practice-improvement": ["practice-workflow-learning"],
+    "legal-research": ["lexis-browseros-legal-research"],
+    "litigation-deadline-management": ["legal-calendaring-workflow"],
+  };
+
+  it("publishes exactly nine canonical, uniquely aliased business skills", async () => {
+    const directories = (await fs.readdir(skillRoot, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+
+    expect(directories).toEqual(Object.keys(expectedAliases).sort());
+
+    const seenReferences = new Set<string>();
+    for (const slug of directories) {
+      const imported = await readLocalSkillImportFromDirectory(
+        "33333333-3333-4333-8333-333333333333",
+        path.join(skillRoot, slug),
+      );
+      const aliases = (imported.metadata?.aliases as string[] | undefined) ?? [];
+      expect(imported.slug).toBe(slug);
+      expect(aliases).toEqual(expectedAliases[slug]);
+      for (const reference of [slug, ...aliases]) {
+        expect(seenReferences.has(reference)).toBe(false);
+        seenReferences.add(reference);
+      }
+    }
+  });
+
+  it("keeps implementation-specific terms out of business skill bodies", async () => {
+    const forbidden = /\b(?:BrowserOS|OCRmyPDF|Tesseract|Azure|Python|runtime|connector|pipeline|cwd)\b|output root|local path|workspace setup|run state/i;
+    for (const slug of Object.keys(expectedAliases)) {
+      const markdown = await fs.readFile(path.join(skillRoot, slug, "SKILL.md"), "utf8");
+      const body = markdown.replace(/^---[\s\S]*?---\s*/, "");
+      expect(body, `${slug} contains implementation-specific language`).not.toMatch(forbidden);
+    }
+  });
 });
 
 describe("missing local skill reconciliation", () => {

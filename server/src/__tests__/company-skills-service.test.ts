@@ -96,4 +96,178 @@ describeEmbeddedPostgres("companySkillService.list", () => {
       message: "Company not found",
     });
   });
+
+  it("resolves canonical slugs and deprecated aliases to the same skill key", async () => {
+    const companyId = randomUUID();
+    const skillKey = `company/${companyId}/legacy-legal-research`;
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Legal Team",
+      issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      requireBoardApprovalForNewAgents: false,
+    });
+    await db.insert(companySkills).values({
+      companyId,
+      key: skillKey,
+      slug: "legal-research",
+      name: "Legal Research",
+      markdown: "# Legal Research\n",
+      sourceType: "catalog",
+      trustLevel: "markdown_only",
+      compatibility: "compatible",
+      fileInventory: [{ path: "SKILL.md", kind: "skill" }],
+      metadata: {
+        sourceKind: "catalog",
+        aliases: ["lexis-browseros-legal-research"],
+      },
+    });
+
+    await expect(svc.resolveRequestedSkillKeys(companyId, ["legal-research"]))
+      .resolves.toEqual([skillKey]);
+    await expect(svc.resolveRequestedSkillKeys(companyId, ["lexis-browseros-legal-research"]))
+      .resolves.toEqual([skillKey]);
+  });
+
+  it("upgrades an aliased skill in place during package import", async () => {
+    const companyId = randomUUID();
+    const skillId = randomUUID();
+    const legacyKey = `company/${companyId}/lexis-browseros-legal-research`;
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Legal Team",
+      issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      requireBoardApprovalForNewAgents: false,
+    });
+    await db.insert(companySkills).values({
+      id: skillId,
+      companyId,
+      key: legacyKey,
+      slug: "lexis-browseros-legal-research",
+      name: "Legacy Research",
+      markdown: "# Legacy Research\n",
+      sourceType: "catalog",
+      trustLevel: "markdown_only",
+      compatibility: "compatible",
+      fileInventory: [{ path: "SKILL.md", kind: "skill" }],
+      metadata: { sourceKind: "catalog", skillKey: legacyKey },
+    });
+
+    const result = await svc.importPackageFiles(companyId, {
+      "skills/legal-research/SKILL.md": [
+        "---",
+        "slug: legal-research",
+        "name: Legal Research",
+        "description: Source-backed legal research and authority analysis.",
+        "aliases:",
+        "  - lexis-browseros-legal-research",
+        "---",
+        "",
+        "# Legal Research",
+        "",
+      ].join("\n"),
+    }, { onConflict: "replace" });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      action: "updated",
+      originalSlug: "legal-research",
+      requestedRefs: expect.arrayContaining([
+        "legal-research",
+        "lexis-browseros-legal-research",
+      ]),
+      skill: {
+        id: skillId,
+        key: legacyKey,
+        slug: "legal-research",
+        name: "Legal Research",
+      },
+    });
+    expect(result[0]?.skill.metadata).toMatchObject({
+      aliases: ["lexis-browseros-legal-research"],
+      skillKey: legacyKey,
+    });
+    await expect(svc.resolveRequestedSkillKeys(companyId, ["lexis-browseros-legal-research"]))
+      .resolves.toEqual([legacyKey]);
+  });
+
+  it("rejects an alias that resolves to multiple installed skills", async () => {
+    const companyId = randomUUID();
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Legal Team",
+      issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      requireBoardApprovalForNewAgents: false,
+    });
+    await db.insert(companySkills).values([
+      {
+        companyId,
+        key: `company/${companyId}/research-one`,
+        slug: "research-one",
+        name: "Research One",
+        markdown: "# Research One\n",
+        sourceType: "catalog",
+        metadata: { sourceKind: "catalog", aliases: ["legacy-research"] },
+      },
+      {
+        companyId,
+        key: `company/${companyId}/research-two`,
+        slug: "research-two",
+        name: "Research Two",
+        markdown: "# Research Two\n",
+        sourceType: "catalog",
+        metadata: { sourceKind: "catalog", aliases: ["legacy-research"] },
+      },
+    ]);
+
+    await expect(svc.resolveRequestedSkillKeys(companyId, ["legacy-research"]))
+      .rejects.toMatchObject({
+        status: 422,
+        message: "Invalid company skill selection (ambiguous references: legacy-research).",
+      });
+  });
+
+  it("rejects an in-place upgrade when canonical and alias references match different skills", async () => {
+    const companyId = randomUUID();
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Legal Team",
+      issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      requireBoardApprovalForNewAgents: false,
+    });
+    await db.insert(companySkills).values([
+      {
+        companyId,
+        key: `company/${companyId}/legal-research`,
+        slug: "legal-research",
+        name: "Canonical Research",
+        markdown: "# Canonical Research\n",
+        sourceType: "catalog",
+      },
+      {
+        companyId,
+        key: `company/${companyId}/legacy-research`,
+        slug: "lexis-browseros-legal-research",
+        name: "Legacy Research",
+        markdown: "# Legacy Research\n",
+        sourceType: "catalog",
+      },
+    ]);
+
+    await expect(svc.importPackageFiles(companyId, {
+      "skills/legal-research/SKILL.md": [
+        "---",
+        "slug: legal-research",
+        "name: Legal Research",
+        "aliases:",
+        "  - lexis-browseros-legal-research",
+        "---",
+        "",
+        "# Legal Research",
+        "",
+      ].join("\n"),
+    }, { onConflict: "replace" })).rejects.toMatchObject({
+      status: 422,
+      message: "Skill legal-research references match different installed skills.",
+    });
+  });
 });

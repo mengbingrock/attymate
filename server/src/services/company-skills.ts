@@ -75,8 +75,9 @@ type CompanySkillReferenceRow = Pick<
   | "id"
   | "key"
   | "slug"
+  | "metadata"
 >;
-type SkillReferenceTarget = Pick<CompanySkill, "id" | "key" | "slug">;
+type SkillReferenceTarget = Pick<CompanySkill, "id" | "key" | "slug" | "metadata">;
 type SkillSourceInfoTarget = Pick<
   CompanySkill,
   | "companyId"
@@ -121,6 +122,7 @@ type ParsedSkillImportSource = {
 
 type SkillSourceMeta = {
   skillKey?: string;
+  aliases?: string[];
   sourceKind?: string;
   hostname?: string;
   owner?: string;
@@ -730,13 +732,54 @@ function deriveImportedSkillSlug(frontmatter: Record<string, unknown>, fallback:
     ?? "skill";
 }
 
+function readSkillAliases(frontmatter: Record<string, unknown>, slug: string) {
+  if (frontmatter.aliases === undefined || frontmatter.aliases === null) return [];
+  if (!Array.isArray(frontmatter.aliases)) {
+    throw unprocessable(`Skill ${slug} aliases must be an array of slugs.`);
+  }
+
+  const aliases: string[] = [];
+  const seen = new Set<string>();
+  for (const rawAlias of frontmatter.aliases) {
+    const alias = normalizeSkillSlug(asString(rawAlias));
+    if (!alias) {
+      throw unprocessable(`Skill ${slug} contains an invalid alias.`);
+    }
+    if (alias === slug) {
+      throw unprocessable(`Skill ${slug} cannot use its canonical slug as an alias.`);
+    }
+    if (seen.has(alias)) {
+      throw unprocessable(`Skill ${slug} contains duplicate alias ${alias}.`);
+    }
+    seen.add(alias);
+    aliases.push(alias);
+  }
+  return aliases;
+}
+
+function withSkillAliases(
+  metadata: Record<string, unknown> | null,
+  frontmatter: Record<string, unknown>,
+  slug: string,
+): Record<string, unknown> {
+  const aliases = readSkillAliases(frontmatter, slug);
+  return {
+    ...(metadata ?? {}),
+    ...(aliases.length > 0 ? { aliases } : {}),
+  };
+}
+
 function deriveImportedSkillSource(
   frontmatter: Record<string, unknown>,
   fallbackSlug: string,
 ): Pick<ImportedSkill, "sourceType" | "sourceLocator" | "sourceRef" | "metadata"> {
-  const metadata = isPlainRecord(frontmatter.metadata) ? frontmatter.metadata : null;
+  const metadata = withSkillAliases(
+    isPlainRecord(frontmatter.metadata) ? frontmatter.metadata : null,
+    frontmatter,
+    fallbackSlug,
+  );
   const canonicalKey = readCanonicalSkillKey(frontmatter, metadata);
-  const rawSources = metadata && Array.isArray(metadata.sources) ? metadata.sources : [];
+  const rawSources = Array.isArray(metadata.sources) ? metadata.sources : [];
   const sourceEntry = rawSources.find((entry) => isPlainRecord(entry)) as Record<string, unknown> | undefined;
   const kind = asString(sourceEntry?.kind);
 
@@ -757,6 +800,7 @@ function deriveImportedSkillSource(
         sourceLocator: url,
         sourceRef: commit,
         metadata: {
+          ...metadata,
           ...(canonicalKey ? { skillKey: canonicalKey } : {}),
           sourceKind: "github",
           ...(sourceHostname !== "github.com" ? { hostname: sourceHostname } : {}),
@@ -778,6 +822,7 @@ function deriveImportedSkillSource(
         sourceLocator: url,
         sourceRef: null,
         metadata: {
+          ...metadata,
           ...(canonicalKey ? { skillKey: canonicalKey } : {}),
           sourceKind: "url",
         },
@@ -790,6 +835,7 @@ function deriveImportedSkillSource(
     sourceLocator: null,
     sourceRef: null,
     metadata: {
+      ...metadata,
       ...(canonicalKey ? { skillKey: canonicalKey } : {}),
       sourceKind: "catalog",
     },
@@ -915,8 +961,8 @@ export async function readLocalSkillImportFromDirectory(
   const parsedMetadata = isPlainRecord(parsed.frontmatter.metadata) ? parsed.frontmatter.metadata : null;
   const skillKey = readCanonicalSkillKey(parsed.frontmatter, parsedMetadata);
   const metadata = {
+    ...withSkillAliases(parsedMetadata, parsed.frontmatter, slug),
     ...(skillKey ? { skillKey } : {}),
-    ...(parsedMetadata ?? {}),
     sourceKind: "local_path",
     ...(options?.metadata ?? {}),
   };
@@ -987,8 +1033,8 @@ async function readLocalSkillImports(companyId: string, sourcePath: string): Pro
     const parsedMetadata = isPlainRecord(parsed.frontmatter.metadata) ? parsed.frontmatter.metadata : null;
     const skillKey = readCanonicalSkillKey(parsed.frontmatter, parsedMetadata);
     const metadata = {
+      ...withSkillAliases(parsedMetadata, parsed.frontmatter, slug),
       ...(skillKey ? { skillKey } : {}),
-      ...(parsedMetadata ?? {}),
       sourceKind: "local_path",
     };
     const inventory: CompanySkillFileInventoryEntry[] = [
@@ -1106,6 +1152,11 @@ async function readUrlSkillImports(
         continue;
       }
       const metadata = {
+        ...withSkillAliases(
+          isPlainRecord(parsedMarkdown.frontmatter.metadata) ? parsedMarkdown.frontmatter.metadata : null,
+          parsedMarkdown.frontmatter,
+          slug,
+        ),
         ...(skillKey ? { skillKey } : {}),
         sourceKind: "github",
         ...(parsed.hostname !== "github.com" ? { hostname: parsed.hostname } : {}),
@@ -1166,6 +1217,11 @@ async function readUrlSkillImports(
       isPlainRecord(parsedMarkdown.frontmatter.metadata) ? parsedMarkdown.frontmatter.metadata : null,
     );
     const metadata = {
+      ...withSkillAliases(
+        isPlainRecord(parsedMarkdown.frontmatter.metadata) ? parsedMarkdown.frontmatter.metadata : null,
+        parsedMarkdown.frontmatter,
+        slug,
+      ),
       ...(skillKey ? { skillKey } : {}),
       sourceKind: "url",
     };
@@ -1254,10 +1310,42 @@ function getSkillMeta(skill: Pick<CompanySkill, "metadata">): SkillSourceMeta {
   return isPlainRecord(skill.metadata) ? skill.metadata as SkillSourceMeta : {};
 }
 
-function resolveSkillReference(
-  skills: SkillReferenceTarget[],
+function getSkillAliases(skill: Pick<CompanySkill, "metadata">) {
+  const aliases = getSkillMeta(skill).aliases;
+  if (!Array.isArray(aliases)) return [];
+  return aliases.flatMap((value) => {
+    const alias = normalizeSkillSlug(value);
+    return alias ? [alias] : [];
+  });
+}
+
+function validateImportedSkillReferences(skills: ImportedSkill[]) {
+  const referenceOwners = new Map<string, string>();
+  for (const skill of skills) {
+    for (const reference of [skill.slug, ...getSkillAliases(skill)]) {
+      const existingOwner = referenceOwners.get(reference);
+      if (existingOwner && existingOwner !== skill.slug) {
+        throw unprocessable(
+          `Skill reference ${reference} is ambiguous between ${existingOwner} and ${skill.slug}.`,
+        );
+      }
+      referenceOwners.set(reference, skill.slug);
+    }
+  }
+}
+
+function importedSkillMatchesReference(skill: ImportedSkill, reference: string) {
+  const normalized = normalizeSkillSlug(reference);
+  return Boolean(
+    normalized
+    && (skill.slug === normalized || getSkillAliases(skill).includes(normalized)),
+  );
+}
+
+function resolveSkillReference<T extends SkillReferenceTarget>(
+  skills: T[],
   reference: string,
-): { skill: SkillReferenceTarget | null; ambiguous: boolean } {
+): { skill: T | null; ambiguous: boolean } {
   const trimmed = reference.trim();
   if (!trimmed) {
     return { skill: null, ambiguous: false };
@@ -1286,6 +1374,14 @@ function resolveSkillReference(
     return { skill: bySlug[0] ?? null, ambiguous: false };
   }
   if (bySlug.length > 1) {
+    return { skill: null, ambiguous: true };
+  }
+
+  const byAlias = skills.filter((skill) => getSkillAliases(skill).includes(normalizedSlug));
+  if (byAlias.length === 1) {
+    return { skill: byAlias[0] ?? null, ambiguous: false };
+  }
+  if (byAlias.length > 1) {
     return { skill: null, ambiguous: true };
   }
 
@@ -1682,6 +1778,7 @@ export function companySkillService(db: Db) {
         id: companySkills.id,
         key: companySkills.key,
         slug: companySkills.slug,
+        metadata: companySkills.metadata,
       })
       .from(companySkills)
       .where(eq(companySkills.companyId, companyId));
@@ -2207,6 +2304,7 @@ export function companySkillService(db: Db) {
     const normalizedFiles = normalizePackageFileMap(files);
     const importedSkills = readInlineSkillImports(companyId, normalizedFiles);
     if (importedSkills.length === 0) return [];
+    validateImportedSkillReferences(importedSkills);
 
     for (const skill of importedSkills) {
       if (skill.sourceType !== "catalog") continue;
@@ -2241,18 +2339,49 @@ export function companySkillService(db: Db) {
       const originalSlug = importedSkill.slug;
       const normalizedSlug = normalizeSkillSlug(importedSkill.slug) ?? importedSkill.slug;
       const existingByIncomingKey = existingByKey.get(importedSkill.key) ?? null;
-      const existingByIncomingSlug = existingBySlug.get(normalizedSlug) ?? null;
-      const conflict = existingByIncomingKey ?? existingByIncomingSlug;
+      const existingByIncomingReference = resolveSkillReference(existingSkills, normalizedSlug);
+      if (existingByIncomingReference.ambiguous) {
+        throw unprocessable(`Skill ${importedSkill.slug} matches multiple installed skills.`);
+      }
+      const existingByIncomingSlug = existingBySlug.get(normalizedSlug)
+        ?? existingByIncomingReference.skill
+        ?? null;
+      const existingAliasMatches = getSkillAliases(importedSkill)
+        .map((alias) => resolveSkillReference(existingSkills, alias));
+      if (existingAliasMatches.some((match) => match.ambiguous)) {
+        throw unprocessable(`Skill ${importedSkill.slug} has an alias that matches multiple installed skills.`);
+      }
+      const matchingAliasSkills = Array.from(new Map(
+        existingAliasMatches.flatMap((match) => match.skill ? [[match.skill.id, match.skill] as const] : []),
+      ).values());
+      const matchingInstalledSkills = Array.from(new Map(
+        [existingByIncomingKey, existingByIncomingSlug, ...matchingAliasSkills]
+          .flatMap((skill) => skill ? [[skill.id, skill] as const] : []),
+      ).values());
+      if (matchingInstalledSkills.length > 1) {
+        throw unprocessable(`Skill ${importedSkill.slug} references match different installed skills.`);
+      }
+      const conflict = matchingInstalledSkills[0] ?? null;
 
       if (!conflict || conflictStrategy === "replace") {
-        toPersist.push(importedSkill);
+        const skillToPersist = conflict
+          ? {
+            ...importedSkill,
+            key: conflict.key,
+            metadata: {
+              ...(importedSkill.metadata ?? {}),
+              skillKey: conflict.key,
+            },
+          }
+          : importedSkill;
+        toPersist.push(skillToPersist);
         prepared.push({
-          skill: importedSkill,
+          skill: skillToPersist,
           originalKey,
           originalSlug,
-          existingBefore: existingByIncomingKey,
-          actionHint: existingByIncomingKey ? "updated" : "created",
-          reason: existingByIncomingKey ? "Existing skill key matched; replace strategy." : null,
+          existingBefore: conflict,
+          actionHint: conflict ? "updated" : "created",
+          reason: conflict ? "Existing skill key, slug, or alias matched; replace strategy." : null,
         });
         usedSlugs.add(normalizedSlug);
         usedKeys.add(importedSkill.key);
@@ -2265,7 +2394,11 @@ export function companySkillService(db: Db) {
           action: "skipped",
           originalKey,
           originalSlug,
-          requestedRefs: Array.from(new Set([originalKey, originalSlug])),
+          requestedRefs: Array.from(new Set([
+            originalKey,
+            originalSlug,
+            ...getSkillAliases(importedSkill),
+          ])),
           reason: "Existing skill matched; skip strategy.",
         });
         continue;
@@ -2309,7 +2442,11 @@ export function companySkillService(db: Db) {
         action: preparedSkill.actionHint,
         originalKey: preparedSkill.originalKey,
         originalSlug: preparedSkill.originalSlug,
-        requestedRefs: Array.from(new Set([preparedSkill.originalKey, preparedSkill.originalSlug])),
+        requestedRefs: Array.from(new Set([
+          preparedSkill.originalKey,
+          preparedSkill.originalSlug,
+          ...getSkillAliases(preparedSkill.skill),
+        ])),
         reason: preparedSkill.reason,
       });
     }
@@ -2378,25 +2515,26 @@ export function companySkillService(db: Db) {
   async function importFromSource(companyId: string, source: string): Promise<CompanySkillImportResult> {
     await ensureSkillInventoryCurrent(companyId);
     const parsed = parseSkillImportSourceInput(source);
+    const requestedSkillSlug = parsed.requestedSkillSlug;
     const local = !/^https?:\/\//i.test(parsed.resolvedSource);
     const { skills, warnings } = local
       ? {
         skills: (await readLocalSkillImports(companyId, parsed.resolvedSource))
-          .filter((skill) => !parsed.requestedSkillSlug || skill.slug === parsed.requestedSkillSlug),
+          .filter((skill) => !requestedSkillSlug || importedSkillMatchesReference(skill, requestedSkillSlug)),
         warnings: parsed.warnings,
       }
-      : await readUrlSkillImports(companyId, parsed.resolvedSource, parsed.requestedSkillSlug)
+      : await readUrlSkillImports(companyId, parsed.resolvedSource, requestedSkillSlug)
         .then((result) => ({
           skills: result.skills,
           warnings: [...parsed.warnings, ...result.warnings],
         }));
-    const filteredSkills = parsed.requestedSkillSlug
-      ? skills.filter((skill) => skill.slug === parsed.requestedSkillSlug)
+    const filteredSkills = requestedSkillSlug
+      ? skills.filter((skill) => importedSkillMatchesReference(skill, requestedSkillSlug))
       : skills;
     if (filteredSkills.length === 0) {
       throw unprocessable(
-        parsed.requestedSkillSlug
-          ? `Skill ${parsed.requestedSkillSlug} was not found in the provided source.`
+        requestedSkillSlug
+          ? `Skill ${requestedSkillSlug} was not found in the provided source.`
           : "No skills were found in the provided source.",
       );
     }

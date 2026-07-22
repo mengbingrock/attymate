@@ -7,11 +7,11 @@ Use this as the single authorization matrix for the company. Agent coordination 
 The following work proceeds without another approval when it stays within the parent package:
 
 - Read and analyze approved matter sources and matter-context artifacts.
-- Create and revise derived work product and working copies under the approved output root.
+- Create and revise derived work product and designated working copies.
 - Run local PDF extraction, OCR, layout recovery, indexing, fact work, drafting, research, and QA.
-- Use configured and authenticated connectors for approved read-only access.
+- Use approved read-only sources through the access available to the firm.
 - Conduct routine external legal research within the approved questions, jurisdiction, source classes, and budget; add verified authorities found during that research.
-- Download permitted material from an approved source into the approved output root when no payment or new source scope is involved.
+- Obtain permitted material from an approved source when no payment or new source scope is involved.
 - Prepare calendar proposals, docket summaries, litigation analyses, and recommendations.
 - Delegate between agents, repair child scope, create internal issues, update status, and maintain internal audit records.
 
@@ -23,7 +23,7 @@ Obtain an explicit lawyer decision before:
 
 - Filing, service, signature, email send/reply/forward, calendar write/invite/notification, public posting, or external upload/share.
 - Payment, paid retrieval, or work that would exceed the approved research or tool budget.
-- Deleting or changing original evidence, filed/signed/final materials, or user-edited/protected documents. Routine edits to a designated working copy under the output root remain authorized.
+- Deleting or changing original evidence, filed/signed/final materials, or user-edited/protected documents. Routine edits to a designated working copy remain authorized.
 - Expanding the matter or source boundary, inspecting another matter, or reusing matter-confidential material elsewhere.
 - Adopting a material litigation position involving claims or defenses, requested relief, waiver, settlement, sanctions, or a significant privacy/protective-order position. Agents may research, analyze, and recommend these issues before the decision.
 
@@ -33,7 +33,7 @@ Lawyer-facing text uses `Decision needed`, not internal terms such as `hard gate
 
 ## Operational Interruption
 
-Expired login sessions, MFA, unavailable connectors, missing tools, runner failures, and configuration defects are operational interruptions. Route them to Legal Ops or the deployment/tool owner; they are not lawyer approvals unless the lawyer is the only person who can supply the required access or choice.
+Unavailable access, identity verification, missing capabilities, execution failures, and configuration defects are operational interruptions. Route them to Legal Ops or the responsible owner; they are not lawyer approvals unless the lawyer is the only person who can supply the required access or choice.
 
 Continue authorized work that does not depend on the interruption. Surface the interruption on the Matter Dashboard only when it changes delivery timing, reliability, or the lawyer's next action.
 

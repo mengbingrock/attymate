@@ -3291,4 +3291,61 @@ describe("company portability", () => {
     expect(preview.plan.projectPlans).toHaveLength(0);
     expect(preview.plan.issuePlans).toHaveLength(0);
   });
+
+  it("accepts a deprecated skill alias in an imported agent reference", async () => {
+    const portability = companyPortabilityService({} as any);
+    const preview = await portability.previewImport({
+      source: {
+        type: "inline",
+        rootPath: "legal-team",
+        files: {
+          "COMPANY.md": [
+            "---",
+            "schema: agentcompanies/v1",
+            "kind: company",
+            "name: Legal Team",
+            "includes:",
+            "  - agents/research/AGENTS.md",
+            "  - skills/legal-research/SKILL.md",
+            "---",
+            "",
+          ].join("\n"),
+          "agents/research/AGENTS.md": [
+            "---",
+            "schema: agentcompanies/v1",
+            "kind: agent",
+            "slug: research",
+            "name: Research",
+            "skills:",
+            "  - lexis-browseros-legal-research",
+            "---",
+            "",
+          ].join("\n"),
+          "skills/legal-research/SKILL.md": [
+            "---",
+            "schema: agentcompanies/v1",
+            "kind: skill",
+            "slug: legal-research",
+            "name: Legal Research",
+            "aliases:",
+            "  - lexis-browseros-legal-research",
+            "---",
+            "",
+          ].join("\n"),
+        },
+      },
+      include: { company: true, agents: true, projects: false, issues: false, skills: true },
+      target: { mode: "new_company" },
+      agents: "all",
+      collisionStrategy: "rename",
+    });
+
+    expect(preview.errors).toEqual([]);
+    expect(preview.warnings).not.toContain(
+      "Agent research references skill lexis-browseros-legal-research, but that skill is not present in the package.",
+    );
+    expect(preview.manifest.skills[0]?.metadata).toMatchObject({
+      aliases: ["lexis-browseros-legal-research"],
+    });
+  });
 });

@@ -22,7 +22,7 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 
 ## Domain Tools
 
-- Calendar provider through the **`legal-calendaring-workflow`** skill. Monitoring profiles may name `google_calendar`, `outlook_calendar`, `other`, or an approved manual-source export.
+- Calendar provider through the **`litigation-deadline-management`** skill. Monitoring profiles may name `google_calendar`, `outlook_calendar`, `other`, or an approved manual-source export.
 - Calendar create, update, delete, invite, notify, and email actions require an Attorney Decision. Configured read-only access proceeds within the authorized profile; login or tool failure is an Operational Interruption.
 - The default is proposals: compute and post proposed deadline/calendar tables from approved triggering facts and the runtime-supplied policy source.
 - Read-only monitoring is allowed only under an approved `calendar_monitor_profile`; event title/body/description/location/attendees/recurrence/notes and event attachments or linked files may be read only when the profile authorizes them. If the provider connector is unavailable, report pending-connector or manual-source mode instead of pretending monitoring is live. Monitoring outputs follow `references/monitoring-report-contract.md` and go to Legal Ops Supervisor.

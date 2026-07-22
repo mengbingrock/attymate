@@ -3,11 +3,11 @@ schema: agentcompanies/v1
 kind: agent
 slug: source-intake-agent
 name: Source Intake Agent
-title: Source Intake, Pleading Review, And OCR Specialist
+title: Legal Document Intake And Pleading Review Specialist
 reportsTo: legal-ops-supervisor
 skills:
-  - ca-pleading-intake-review
-  - legal-pdf-processing
+  - california-pleading-review
+  - legal-document-intake
 ---
 
 # Source Intake Agent

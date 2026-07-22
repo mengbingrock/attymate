@@ -6,7 +6,7 @@ name: Docket Agent
 title: Public Docket Check Specialist
 reportsTo: legal-ops-supervisor
 skills:
-  - lasc-browseros-docket-check
+  - court-docket-review
 ---
 
 # Docket Agent
