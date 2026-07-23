@@ -8686,6 +8686,12 @@ export class TeamProvisioningService {
         )
           ? incomingHeartbeatAt
           : prev.lastHeartbeatAt;
+      } else if (run.interactiveRuntime && livenessSource === 'process') {
+        // Interactive stock teams: the runtime registers a member in its
+        // session config only after the teammate's pane booted and checked in,
+        // so registration IS the bootstrap confirmation. There is no separate
+        // heartbeat protocol in this mode.
+        next.bootstrapConfirmed = true;
       }
       next.hardFailure = false;
       next.bootstrapStalled = undefined;
