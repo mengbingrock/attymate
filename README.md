@@ -212,6 +212,8 @@ An orchestration layer for AI agent teams across Claude Code, Codex, OpenCode, C
 - **Flexible autonomy** — let agents run fully autonomous, or review and approve supported tool actions one by one (you'll get a notification) — configure the level of control that fits your security needs
 - **Task-specific logs and messages** — clearly see agent/runtime logs (tools), actions and messages in isolation for each individual task, making it easy to trace what happened for any assignment
 - **Integrated terminal workspace** — run commands in a visual PTY, switch between the team runtime and local shell, and use persistent history, autocomplete, and terminal settings without leaving the app
+- **Interactive agent consoles (tmux)** — Claude Code teams run the lead as a real interactive session inside an app-managed tmux session, with every teammate in its own pane. Click "Open console" on a member card to watch an agent live and type to it directly — or attach from any terminal with `tmux`. Headless mode remains the automatic fallback when tmux isn't available
+- **Workflow view on the kanban** — a third board view that renders tasks as complete workflows on a vertical timeline: stage rail, each task's full journey (created → status moves → review → approved) built from its history, and board insights (completed, in review, average cycle time)
 - **Solo mode** — one-member team: a single agent that creates its own tasks and shows live progress. Saves tokens; can expand to a full team anytime
 - **Multi-provider orchestration** — start with a free model with no auth, auto-detect available Claude Code, Codex, and OpenCode runtimes, or connect Cursor, SuperGrok, GitHub Copilot, Z.AI, MiniMax, and Kiro using the subscriptions or API keys you already have
 
@@ -247,6 +249,8 @@ An orchestration layer for AI agent teams across Claude Code, Codex, OpenCode, C
 - **Attach code context** — reference files or snippets in messages, like in Cursor. You can also mention tasks using `#task-id`, or refer to another team with `@team-name` in your messages.
 
 - **Notification system** — configurable alerts when tasks complete, agents need your response, new comments arrive, or errors occur
+
+- **Genuine Claude Code runtime by default** — Claude teams run on your installed `claude` CLI with the login and subscription you already have. The bundled multimodel orchestrator remains available per session via `CLAUDE_TEAM_CLI_FLAVOR=agent_teams_orchestrator`, and the interactive tmux mode can be disabled with `AGENT_TEAMS_DISABLE_INTERACTIVE_RUNTIME=1` (Windows and tmux-less systems fall back to headless automatically)
 
 - **MCP integration** — supports the built-in `mcp-server` (see [mcp-server folder](./mcp-server)) for integrating external tools and extensible agent plugins out of the box
 
@@ -399,6 +403,11 @@ pnpm dev
 ```
 
 `pnpm dev` starts the desktop Electron app. Do not start a browser/web dev server for normal development; that path is limited and is not the supported way to run agent teams locally.
+
+By default, Claude teams launch on the genuine Claude Code CLI found on your PATH (interactive
+tmux mode when tmux is available, headless otherwise). Set `CLAUDE_TEAM_CLI_FLAVOR=agent_teams_orchestrator`
+to use the bundled multimodel runtime instead, or `AGENT_TEAMS_DISABLE_INTERACTIVE_RUNTIME=1` to
+force headless stock launches.
 
 To run the desktop app against a local orchestrator checkout during development, point it at the
 source launcher:
