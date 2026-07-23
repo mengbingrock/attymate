@@ -441,9 +441,29 @@ export class TmuxPlatformCommandExecutor {
     }
   }
 
-  /** Break a pane into its own named window (pane id remains stable). */
-  async breakPaneToWindow(paneId: string, windowName: string): Promise<void> {
-    const result = await this.execTmux(['break-pane', '-d', '-s', paneId, '-n', windowName], 5_000);
+  /**
+   * Break a pane into its own named window (pane id remains stable). The
+   * target session MUST be pinned when multiple sessions exist on the server —
+   * without -t, tmux picks the current session and the window can land in an
+   * unrelated team's session.
+   */
+  async breakPaneToWindow(
+    paneId: string,
+    windowName: string,
+    targetSessionName?: string
+  ): Promise<void> {
+    const result = await this.execTmux(
+      [
+        'break-pane',
+        '-d',
+        '-s',
+        paneId,
+        ...(targetSessionName ? ['-t', `=${targetSessionName}:`] : []),
+        '-n',
+        windowName,
+      ],
+      5_000
+    );
     if (result.exitCode !== 0) {
       throw new Error(result.stderr || `Failed to break tmux pane ${paneId} into a window`);
     }

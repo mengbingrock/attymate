@@ -331,7 +331,7 @@ export class InteractiveTeamRuntimeService {
                 if (!paneId?.startsWith('%')) continue;
                 seenMembers.add(name);
                 await tmux
-                  .breakPaneToWindow(paneId, name)
+                  .breakPaneToWindow(paneId, name, binding.tmuxSessionName)
                   .catch((error: unknown) =>
                     logger.warn(
                       `[${input.teamName}] break-pane for "${name}" failed: ${String(error)}`
