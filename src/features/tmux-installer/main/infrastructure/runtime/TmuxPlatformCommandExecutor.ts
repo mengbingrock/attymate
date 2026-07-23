@@ -292,6 +292,187 @@ export class TmuxPlatformCommandExecutor {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Session verbs for the interactive team runtime (default tmux socket).
+  // ---------------------------------------------------------------------------
+
+  /** Resolve the tmux binary path for external spawns (e.g. PTY `tmux attach`). */
+  async resolveTmuxBinaryPath(): Promise<string> {
+    if (process.platform === 'win32') {
+      throw new Error('tmux binary resolution is not supported on Windows');
+    }
+    return this.#resolveNativeTmuxExecutable(buildEnrichedEnv());
+  }
+
+  async newDetachedSession(input: {
+    sessionName: string;
+    cwd: string;
+    command: string;
+    cols?: number;
+    rows?: number;
+  }): Promise<void> {
+    const result = await this.execTmux(
+      [
+        'new-session',
+        '-d',
+        '-s',
+        input.sessionName,
+        '-c',
+        input.cwd,
+        '-x',
+        String(input.cols ?? 220),
+        '-y',
+        String(input.rows ?? 50),
+        input.command,
+      ],
+      10_000
+    );
+    if (result.exitCode !== 0) {
+      throw new Error(result.stderr || `Failed to create tmux session ${input.sessionName}`);
+    }
+    await this.execTmux(['set-option', '-t', input.sessionName, 'aggressive-resize', 'on'], 3_000);
+  }
+
+  async hasSession(sessionName: string): Promise<boolean> {
+    const result = await this.execTmux(['has-session', '-t', `=${sessionName}`], 3_000);
+    return result.exitCode === 0;
+  }
+
+  async killSession(sessionName: string): Promise<void> {
+    await this.execTmux(['kill-session', '-t', `=${sessionName}`], 5_000);
+  }
+
+  async listSessions(): Promise<string[]> {
+    const result = await this.execTmux(['list-sessions', '-F', '#{session_name}'], 3_000);
+    if (result.exitCode !== 0) return [];
+    return result.stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+
+  async listSessionPanes(sessionName: string): Promise<
+    {
+      paneId: string;
+      windowIndex: number;
+      windowName: string;
+      currentCommand: string;
+      panePid: number;
+    }[]
+  > {
+    const result = await this.execTmux(
+      [
+        'list-panes',
+        '-s',
+        '-t',
+        `=${sessionName}`,
+        '-F',
+        '#{pane_id}\t#{window_index}\t#{window_name}\t#{pane_current_command}\t#{pane_pid}',
+      ],
+      3_000
+    );
+    if (result.exitCode !== 0) {
+      return [];
+    }
+    const panes: {
+      paneId: string;
+      windowIndex: number;
+      windowName: string;
+      currentCommand: string;
+      panePid: number;
+    }[] = [];
+    for (const line of result.stdout.split('\n')) {
+      const [paneId, windowIndex, windowName, currentCommand, panePid] = line.split('\t');
+      if (!paneId?.trim()) continue;
+      panes.push({
+        paneId: paneId.trim(),
+        windowIndex: Number.parseInt(windowIndex ?? '0', 10) || 0,
+        windowName: windowName?.trim() ?? '',
+        currentCommand: currentCommand?.trim() ?? '',
+        panePid: Number.parseInt(panePid ?? '0', 10) || 0,
+      });
+    }
+    return panes;
+  }
+
+  async capturePaneTail(paneId: string, lines = 30): Promise<string> {
+    const result = await this.execTmux(
+      ['capture-pane', '-p', '-t', paneId, '-S', `-${lines}`],
+      3_000
+    );
+    return result.exitCode === 0 ? result.stdout : '';
+  }
+
+  /**
+   * Deliver arbitrary multi-line text into a pane via tmux buffers with
+   * bracketed paste (the Claude TUI treats it as one input), then submit with
+   * Enter. Avoids send-keys argv limits and shell escaping entirely.
+   */
+  async pasteTextIntoPane(
+    paneId: string,
+    text: string,
+    options?: { submit?: boolean }
+  ): Promise<void> {
+    const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'agteams-paste-'));
+    const tempFile = path.join(tempDir, 'buffer.txt');
+    const bufferName = `agteams-${Date.now().toString(36)}`;
+    try {
+      await fs.promises.writeFile(tempFile, text, { mode: 0o600 });
+      const load = await this.execTmux(['load-buffer', '-b', bufferName, tempFile], 5_000);
+      if (load.exitCode !== 0) {
+        throw new Error(load.stderr || 'Failed to load tmux paste buffer');
+      }
+      const paste = await this.execTmux(
+        ['paste-buffer', '-p', '-d', '-b', bufferName, '-t', paneId],
+        5_000
+      );
+      if (paste.exitCode !== 0) {
+        throw new Error(paste.stderr || `Failed to paste into tmux pane ${paneId}`);
+      }
+      if (options?.submit !== false) {
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        const submit = await this.execTmux(['send-keys', '-t', paneId, 'Enter'], 3_000);
+        if (submit.exitCode !== 0) {
+          throw new Error(submit.stderr || `Failed to submit input in tmux pane ${paneId}`);
+        }
+      }
+    } finally {
+      await fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
+  /** Break a pane into its own named window (pane id remains stable). */
+  async breakPaneToWindow(paneId: string, windowName: string): Promise<void> {
+    const result = await this.execTmux(['break-pane', '-d', '-s', paneId, '-n', windowName], 5_000);
+    if (result.exitCode !== 0) {
+      throw new Error(result.stderr || `Failed to break tmux pane ${paneId} into a window`);
+    }
+  }
+
+  /**
+   * Create a detached grouped viewer session pointed at a specific window, so
+   * each attached console has an independent current-window selection.
+   */
+  async newViewerSession(input: {
+    groupSessionName: string;
+    viewerSessionName: string;
+    windowTarget: string | number;
+  }): Promise<void> {
+    const create = await this.execTmux(
+      ['new-session', '-d', '-t', `=${input.groupSessionName}`, '-s', input.viewerSessionName],
+      5_000
+    );
+    if (create.exitCode !== 0) {
+      throw new Error(
+        create.stderr || `Failed to create tmux viewer session ${input.viewerSessionName}`
+      );
+    }
+    await this.execTmux(
+      ['select-window', '-t', `${input.viewerSessionName}:${input.windowTarget}`],
+      3_000
+    );
+  }
+
   killPaneSync(paneId: string): void {
     if (process.platform === 'win32') {
       const preferredDistro = this.#wslService.getPersistedPreferredDistroSync();

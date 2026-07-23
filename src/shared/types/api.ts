@@ -124,6 +124,7 @@ import type {
 } from '@features/change-review-history/contracts';
 import type { CodexAccountElectronApi } from '@features/codex-account/contracts';
 import type { CodexRuntimeAPI } from '@features/codex-runtime-installer/contracts';
+import type { InteractiveTeamRuntimeElectronApi } from '@features/interactive-team-runtime/contracts';
 import type { MemberLogStreamApi } from '@features/member-log-stream/contracts';
 import type {
   MemberWorkSyncMetricsRequest,
@@ -1118,6 +1119,9 @@ export interface ElectronAPI
 
   // Team-scoped Terminal Platform workspace API
   terminalWorkspace: TerminalWorkspaceElectronApi;
+
+  // Interactive tmux team runtime (stock Claude leads with attachable consoles)
+  interactiveTeamRuntime: InteractiveTeamRuntimeElectronApi;
 
   // Embedded Terminal API (xterm.js + node-pty)
   terminal: TerminalAPI;

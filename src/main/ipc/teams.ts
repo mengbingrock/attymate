@@ -3220,9 +3220,25 @@ async function handleSendMessage(
             formatAttachmentDeliveryFailure(stdinError, provisioning.isTeamAlive(tn))
           );
         }
-        const errMsg = stdinError instanceof Error ? stdinError.message : 'unknown error';
-        logger.warn(`stdin fallback for ${tn}: ${errMsg}`);
-        // Fallback to inbox path below
+        // Interactive stock leads own no app-writable stdin; deliver through the
+        // runtime's own session mailbox instead (the lead consumes it natively).
+        try {
+          const deliveredViaMailbox = await provisioning.deliverStockTeammateDm(
+            tn,
+            resolvedLeadName,
+            { text: stdinTextForLead, summary: payload.summary }
+          );
+          if (deliveredViaMailbox) {
+            stdinSent = true;
+          }
+        } catch (mailboxError: unknown) {
+          logger.warn(`lead mailbox delivery failed for ${tn}: ${String(mailboxError)}`);
+        }
+        if (!stdinSent) {
+          const errMsg = stdinError instanceof Error ? stdinError.message : 'unknown error';
+          logger.warn(`stdin fallback for ${tn}: ${errMsg}`);
+          // Fallback to inbox path below
+        }
       }
 
       if (stdinSent) {
@@ -3351,18 +3367,31 @@ async function handleSendMessage(
     //   3. Fragile LLM-dependent prompt chain for routing
     //
     // Stock Claude Code (flavor 'claude') is the exception: its teammates are
-    // IN-PROCESS subagents of the lead with no separate process to consume
+    // in-process agents of the lead that do not consume the app's
     // inboxes/{member}.json, so the DM would otherwise sit unread forever
-    // (UI stuck on "delivering"). For stock teammates the lead IS the only
-    // delivery channel, and there is no independent teammate process to loop
-    // with — so relay through the lead and let markInboxMessagesRead confirm.
+    // (UI stuck on "delivering"). Delivery order for stock teammates:
+    //   1. Direct write into the stock runtime's own session-derived team
+    //      mailbox (~/.claude/teams/session-XXXXXXXX/inboxes/) — the runtime
+    //      delivers it to the teammate itself, no lead involvement. Only
+    //      available when the runtime materialized its team on disk
+    //      (interactive-lead sessions; headless --print leads currently
+    //      don't).
+    //   2. Fallback: relay through the lead over stdin, which forwards via
+    //      SendMessage and marks the inbox copy read.
     if (!isLeadRecipient && !isOpenCodeRecipient && isAlive) {
       if (provisioning.isStockClaudeRuntimeTeam(tn)) {
         try {
-          await provisioning.relayMemberInboxMessages(tn, memberName);
+          const deliveredDirect = await provisioning.deliverStockTeammateDm(tn, memberName, {
+            text: inboxText,
+            summary: payload.summary,
+            messageId: result.messageId,
+          });
+          if (!deliveredDirect) {
+            await provisioning.relayMemberInboxMessages(tn, memberName);
+          }
         } catch (e: unknown) {
           logger.warn(
-            `Stock teammate relay after sendMessage failed for "${memberName}": ${String(e)}`
+            `Stock teammate delivery after sendMessage failed for "${memberName}": ${String(e)}`
           );
         }
       }

@@ -80,6 +80,10 @@ import {
   RUNTIME_PROVIDER_MANAGEMENT_OAUTH_PROGRESS,
 } from '@features/runtime-provider-management/contracts';
 import {
+  interactiveTeamRuntimeService,
+  registerInteractiveTeamRuntimeIpc,
+} from '@features/interactive-team-runtime/main';
+import {
   createTerminalWorkspaceFeature,
   registerTerminalWorkspaceIpc,
   removeTerminalWorkspaceIpc,
@@ -350,11 +354,7 @@ const relayDiagnosticsLogDedup = new Map<string, { message: string; loggedAt: nu
 
 function shouldLogRelayDiagnostics(dedupKey: string, message: string, nowMs: number): boolean {
   const previous = relayDiagnosticsLogDedup.get(dedupKey);
-  if (
-    previous &&
-    previous.message === message &&
-    nowMs - previous.loggedAt < RELAY_DIAGNOSTICS_LOG_DEDUP_MS
-  ) {
+  if (previous?.message === message && nowMs - previous.loggedAt < RELAY_DIAGNOSTICS_LOG_DEDUP_MS) {
     return false;
   }
   if (!previous && relayDiagnosticsLogDedup.size >= RELAY_DIAGNOSTICS_LOG_DEDUP_MAX_ENTRIES) {
@@ -2871,6 +2871,7 @@ async function initializeServices(): Promise<void> {
   registerOrganizationsIpc(ipcMain, organizationsFeature);
   registerRuntimeProviderManagementIpc(ipcMain, runtimeProviderManagementFeature);
   registerTerminalWorkspaceIpc(ipcMain, terminalWorkspaceFeature);
+  registerInteractiveTeamRuntimeIpc(ipcMain, interactiveTeamRuntimeService);
   if (tokenUsageFeature) {
     registerTokenUsageIpc(ipcMain, tokenUsageFeature);
   }

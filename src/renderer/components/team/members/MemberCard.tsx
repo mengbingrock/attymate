@@ -44,6 +44,7 @@ import {
   Plus,
   RotateCcw,
   Server,
+  SquareTerminal,
   Undo2,
 } from 'lucide-react';
 
@@ -106,6 +107,8 @@ interface MemberCardProps {
   onOpenReviewTask?: () => void;
   onClick?: () => void;
   onSendMessage?: () => void;
+  /** Opens an interactive console attached to this member's tmux pane. */
+  onOpenConsole?: () => void;
   onAssignTask?: () => void;
   onRestartMember?: (memberName: string) => Promise<void> | void;
   onSkipMemberForLaunch?: (memberName: string) => Promise<void> | void;
@@ -606,11 +609,13 @@ const MemberActionButton = memo(function MemberActionButton({
 interface MemberQuickActionsProps {
   onSendMessage?: () => void;
   onAssignTask?: () => void;
+  onOpenConsole?: () => void;
 }
 
 const MemberQuickActions = memo(function MemberQuickActions({
   onSendMessage,
   onAssignTask,
+  onOpenConsole,
 }: MemberQuickActionsProps): React.JSX.Element {
   const { t } = useAppTranslation('team');
 
@@ -622,6 +627,11 @@ const MemberQuickActions = memo(function MemberQuickActions({
       <MemberActionButton label={t('members.actions.assignTask')} onClick={onAssignTask}>
         <Plus size={13} />
       </MemberActionButton>
+      {onOpenConsole ? (
+        <MemberActionButton label="Open console" onClick={onOpenConsole}>
+          <SquareTerminal size={13} />
+        </MemberActionButton>
+      ) : null}
     </div>
   );
 });
@@ -718,6 +728,7 @@ export const MemberCard = memo(function MemberCard({
   onOpenReviewTask,
   onClick,
   onSendMessage,
+  onOpenConsole,
   onAssignTask,
   onRestartMember,
   onSkipMemberForLaunch,
@@ -1564,7 +1575,11 @@ export const MemberCard = memo(function MemberCard({
               progressPercent={progressPercent}
             />
             {!isRemoved && (
-              <MemberQuickActions onSendMessage={onSendMessage} onAssignTask={onAssignTask} />
+              <MemberQuickActions
+                onSendMessage={onSendMessage}
+                onAssignTask={onAssignTask}
+                onOpenConsole={onOpenConsole}
+              />
             )}
             {canRestoreMember ? (
               <Tooltip>

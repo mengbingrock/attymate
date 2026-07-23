@@ -48,6 +48,7 @@ import type {
   CodexStartChatgptLoginOptions,
 } from '@features/codex-account/contracts';
 import type { CodexRuntimeAPI } from '@features/codex-runtime-installer/contracts';
+import type { InteractiveTeamRuntimeElectronApi } from '@features/interactive-team-runtime/contracts';
 import type { MemberLogStreamApi } from '@features/member-log-stream/contracts';
 import type { DashboardRecentProjectsPayload } from '@features/recent-projects/contracts';
 import type {
@@ -1773,6 +1774,15 @@ export class HttpAPIClient implements ElectronAPI {
       throw new Error('Terminal workspace is not available in browser mode');
     },
     stopTeamRuntime: async (): Promise<void> => {},
+  };
+
+  interactiveTeamRuntime: InteractiveTeamRuntimeElectronApi = {
+    getStatus: async () => ({ active: false }),
+    listConsoleTargets: async () => [],
+    openConsole: async () => {
+      throw new Error('Interactive console is not available in browser mode');
+    },
+    closeConsole: async (): Promise<void> => {},
   };
 
   terminal: TerminalAPI = {

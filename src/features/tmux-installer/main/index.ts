@@ -5,6 +5,7 @@ export {
 export type { TmuxInstallerFeatureFacade } from './composition/createTmuxInstallerFeature';
 export { createTmuxInstallerFeature } from './composition/createTmuxInstallerFeature';
 export {
+  getTmuxSessionCommandExecutor,
   invalidateTmuxRuntimeStatusCache,
   isTmuxRuntimeReadyForCurrentPlatform,
   killTmuxPaneForCurrentPlatform,

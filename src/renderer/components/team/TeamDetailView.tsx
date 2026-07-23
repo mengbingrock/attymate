@@ -13,6 +13,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 
+import { MemberConsoleSheet } from '@features/interactive-team-runtime/renderer';
 import { useAppTranslation } from '@features/localization/renderer';
 import { TerminalWorkspaceFloatingLauncher } from '@features/terminal-workspace/renderer';
 import { classifyAnalyticsError, recordTeamStop } from '@renderer/analytics/productAnalytics';
@@ -232,8 +233,7 @@ const TaskDetailDialogHost = memo(
     const selectedTaskSnapshot =
       selectedTaskId !== null ? (taskMap.get(selectedTaskId) ?? selectedTask) : null;
     const selectedTaskUpdatedAt = selectedTaskSnapshot?.updatedAt ?? null;
-    const currentTask =
-      loadedTask && loadedTask.id === selectedTaskId ? loadedTask : selectedTaskSnapshot;
+    const currentTask = loadedTask?.id === selectedTaskId ? loadedTask : selectedTaskSnapshot;
     const dialogTaskMap = useMemo(() => {
       if (!currentTask) {
         return taskMap;
@@ -2327,6 +2327,31 @@ export const TeamDetailView = memo(function TeamDetailView({
     setSendDialogOpen(true);
   }, []);
 
+  const [consoleMemberName, setConsoleMemberName] = useState<string | null>(null);
+  const [interactiveRuntimeActive, setInteractiveRuntimeActive] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    if (!data?.isAlive) {
+      setInteractiveRuntimeActive(false);
+      return;
+    }
+    void window.electronAPI.interactiveTeamRuntime
+      .getStatus(teamName)
+      .then((status) => {
+        if (!cancelled) setInteractiveRuntimeActive(status.active);
+      })
+      .catch(() => {
+        if (!cancelled) setInteractiveRuntimeActive(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [teamName, data?.isAlive]);
+
+  const handleOpenMemberConsole = useCallback((member: ResolvedTeamMember) => {
+    setConsoleMemberName(member.name);
+  }, []);
+
   const handleAssignTaskToMember = useCallback(
     (member: ResolvedTeamMember) => {
       openCreateTaskDialog('', '', member.name);
@@ -2450,12 +2475,7 @@ export const TeamDetailView = memo(function TeamDetailView({
       initialFilePath: request.filePath,
       taskChangeRequestOptions: request.requestOptions,
     });
-  }, [
-    isThisTabActive,
-    pendingReviewRequest,
-    requestOpenChangeReview,
-    setPendingReviewRequest,
-  ]);
+  }, [isThisTabActive, pendingReviewRequest, requestOpenChangeReview, setPendingReviewRequest]);
 
   const pendingTeamSectionFocus = useStore((s) => s.pendingTeamSectionFocus);
   const clearTeamSectionFocus = useStore((s) => s.clearTeamSectionFocus);
@@ -3304,6 +3324,7 @@ export const TeamDetailView = memo(function TeamDetailView({
                       launchParams={launchParams}
                       onMemberClick={handleSelectMember}
                       onSendMessage={handleSendMessageToMember}
+                      onOpenConsole={interactiveRuntimeActive ? handleOpenMemberConsole : undefined}
                       onAssignTask={handleAssignTaskToMember}
                       onOpenTask={handleOpenTaskById}
                       onRestartMember={handleRestartMember}
@@ -3811,6 +3832,13 @@ export const TeamDetailView = memo(function TeamDetailView({
               buttonTestId="open-terminal-floating-button"
               enabled={isThisTabActive && !graphOpen}
             />
+            {consoleMemberName ? (
+              <MemberConsoleSheet
+                teamName={teamName}
+                memberName={consoleMemberName}
+                onClose={() => setConsoleMemberName(null)}
+              />
+            ) : null}
           </div>
         </div>
 

@@ -52,3 +52,11 @@ export function killTmuxPaneForCurrentPlatformSync(paneId: string): void {
   runtimeCommandExecutor.killPaneSync(paneId);
   invalidateTmuxRuntimeStatusCache();
 }
+
+/**
+ * Session-level tmux verbs for the interactive team runtime. Exposed as the
+ * shared executor instance so socket resolution and enriched env are reused.
+ */
+export function getTmuxSessionCommandExecutor(): TmuxPlatformCommandExecutor {
+  return runtimeCommandExecutor;
+}

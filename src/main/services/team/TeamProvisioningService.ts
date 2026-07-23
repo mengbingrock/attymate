@@ -2,6 +2,10 @@ import {
   buildClaudeAttachmentDeliveryParts,
   buildCodexNativeAttachmentDeliveryParts,
 } from '@features/agent-attachments/main';
+import {
+  buildInteractiveCliArgs,
+  interactiveTeamRuntimeService,
+} from '@features/interactive-team-runtime/main';
 import { type RuntimeTurnSettledProvider } from '@features/member-work-sync/main';
 import { inspectOpenCodeLocalModelRuntimeReadiness } from '@features/runtime-provider-management/main';
 import {
@@ -204,6 +208,7 @@ import {
   RuntimeStaleEvidenceError,
 } from './opencode/store/RuntimeRunTombstoneStore';
 import { synthesizeStockClaudeTeamRuntimeState } from './provisioning/StockClaudeTeamStateSynthesizer';
+import { deliverStockSessionTeamDm } from './provisioning/StockSessionTeamBridge';
 import { getSystemLocale } from './provisioning/TeamProvisioningAgentLanguage';
 import {
   buildDeterministicCreateBootstrapSpec,
@@ -1235,6 +1240,11 @@ interface ProvisioningRun {
    * spawn tracking matches on member name alone.
    */
   stockClaudeRuntime: boolean;
+  /**
+   * Interactive tmux lead (stock flavor): no owned child process; the lead
+   * lives in an app-created tmux session and observation is file-based.
+   */
+  interactiveRuntime?: boolean;
   launchCleanupStateFinalized?: boolean;
   workspaceTrustPlan?: WorkspaceTrustFullPlanResult | null;
   workspaceTrustExecution?: WorkspaceTrustExecutionResult | null;
@@ -5394,10 +5404,7 @@ export class TeamProvisioningService {
     if (!restart) {
       return null;
     }
-    if (
-      currentMemberName &&
-      restart.memberName.trim().toLowerCase() === currentMemberName.trim().toLowerCase()
-    ) {
+    if (restart.memberName.trim().toLowerCase() === currentMemberName?.trim().toLowerCase()) {
       return restart.runId;
     }
     await restart.completion;
@@ -11946,7 +11953,7 @@ export class TeamProvisioningService {
 
       const initialUserPrompt = request.prompt?.trim() ?? '';
       const promptSize = getPromptSizeSummary(initialUserPrompt);
-      let child: ReturnType<typeof spawn>;
+      let child: ReturnType<typeof spawn> | undefined;
       const useStockClaudeBootstrap = getConfiguredCliFlavor() === 'claude';
       let stockBootstrapPrompt: string | null = null;
       if (useStockClaudeBootstrap) {
@@ -12150,6 +12157,8 @@ export class TeamProvisioningService {
         expectedMembersCount: effectiveMemberSpecs.length,
         launchIdentity,
       });
+      const useInteractiveRuntime =
+        useStockClaudeBootstrap && (await interactiveTeamRuntimeService.isEligible());
       try {
         if (
           run.cancelRequested ||
@@ -12163,16 +12172,61 @@ export class TeamProvisioningService {
           await this.seedLeadBootstrapPermissionRules(request.teamName, request.cwd);
         }
 
-        emitProvisioningCheckpoint(
-          run,
-          'Spawning agent runtime process',
-          `args=${spawnArgs.length} cwd=${request.cwd}`
-        );
-        child = spawnCli(claudePath, spawnArgs, {
-          cwd: request.cwd,
-          env: { ...shellEnv },
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
+        if (useInteractiveRuntime) {
+          run.interactiveRuntime = true;
+          const interactiveArgs = buildInteractiveCliArgs(spawnArgs);
+          emitProvisioningCheckpoint(
+            run,
+            'Launching interactive tmux lead',
+            `args=${interactiveArgs.length} cwd=${request.cwd}`
+          );
+          await interactiveTeamRuntimeService.launchInteractiveLead({
+            teamName: request.teamName,
+            runId,
+            cwd: request.cwd,
+            claudePath,
+            args: interactiveArgs,
+            env: { ...shellEnv },
+            bootstrapPrompt: stockBootstrapPrompt ?? initialUserPrompt,
+            rosterMemberNames: effectiveMemberSpecs.map((member) => member.name),
+            callbacks: {
+              checkpoint: (label, detail) => emitProvisioningCheckpoint(run, label, detail),
+              onLeadSessionDetected: (leadSessionId) => {
+                run.detectedSessionId = leadSessionId;
+              },
+              onMemberRegistered: (memberName) => {
+                this.setMemberSpawnStatus(run, memberName, 'online', undefined, 'process');
+              },
+              onFailed: (reason) => {
+                if (run.provisioningComplete) {
+                  logger.warn(`[${request.teamName}] interactive runtime ended: ${reason}`);
+                  this.runtimeAdapterRunByTeam.delete(request.teamName);
+                  this.deleteAliveRunId(request.teamName);
+                  return;
+                }
+                const progress = updateProgress(run, 'failed', reason, { error: reason });
+                run.onProgress(progress);
+                this.cleanupRun(run);
+              },
+            },
+          });
+          this.runtimeAdapterRunByTeam.set(request.teamName, {
+            runId,
+            providerId: resolvedProviderId,
+            cwd: request.cwd,
+          });
+        } else {
+          emitProvisioningCheckpoint(
+            run,
+            'Spawning agent runtime process',
+            `args=${spawnArgs.length} cwd=${request.cwd}`
+          );
+          child = spawnCli(claudePath, spawnArgs, {
+            cwd: request.cwd,
+            env: { ...shellEnv },
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+        }
       } catch (error) {
         // Clean up pre-saved meta files if spawn failed (instant failure, not transient)
         await this.teamMetaStore.deleteMeta(request.teamName).catch(() => {});
@@ -12201,38 +12255,57 @@ export class TeamProvisioningService {
         throw error;
       }
 
-      updateProgress(run, 'spawning', 'Starting agent runtime process', {
-        pid: child.pid ?? undefined,
-        warnings: mergeProvisioningWarnings(run.progress.warnings, runtimeWarning),
-      });
-      run.onProgress(run.progress);
-      run.child = child;
-      run.processClosed = false;
-      run.spawnContext = {
-        claudePath,
-        args: spawnArgs,
-        cwd: request.cwd,
-        env: { ...shellEnv },
-        prompt: stockBootstrapPrompt ?? initialUserPrompt,
-      };
-
-      this.attachStdoutHandler(run);
-      this.attachStderrHandler(run);
-
-      if (stockBootstrapPrompt && child.stdin?.writable) {
-        emitProvisioningCheckpoint(run, 'Sending stock bootstrap prompt over stdin');
-        const message = JSON.stringify({
-          type: 'user',
-          message: { role: 'user', content: [{ type: 'text', text: stockBootstrapPrompt }] },
+      if (useInteractiveRuntime) {
+        updateProgress(run, 'spawning', 'Interactive tmux lead starting', {
+          warnings: mergeProvisioningWarnings(run.progress.warnings, runtimeWarning),
         });
-        child.stdin.write(message + '\n');
+        run.onProgress(run.progress);
+        run.processClosed = false;
+        run.spawnContext = {
+          claudePath,
+          args: buildInteractiveCliArgs(spawnArgs),
+          cwd: request.cwd,
+          env: { ...shellEnv },
+          prompt: stockBootstrapPrompt ?? initialUserPrompt,
+        };
+      } else {
+        updateProgress(run, 'spawning', 'Starting agent runtime process', {
+          pid: child!.pid ?? undefined,
+          warnings: mergeProvisioningWarnings(run.progress.warnings, runtimeWarning),
+        });
+        run.onProgress(run.progress);
+        run.child = child!;
+        run.processClosed = false;
+        run.spawnContext = {
+          claudePath,
+          args: spawnArgs,
+          cwd: request.cwd,
+          env: { ...shellEnv },
+          prompt: stockBootstrapPrompt ?? initialUserPrompt,
+        };
+
+        this.attachStdoutHandler(run);
+        this.attachStderrHandler(run);
+
+        if (stockBootstrapPrompt && child!.stdin?.writable) {
+          emitProvisioningCheckpoint(run, 'Sending stock bootstrap prompt over stdin');
+          const message = JSON.stringify({
+            type: 'user',
+            message: { role: 'user', content: [{ type: 'text', text: stockBootstrapPrompt }] },
+          });
+          child!.stdin.write(message + '\n');
+        }
       }
 
       // Reset AFTER spawn — not at run init — because async operations (buildProvisioningEnv,
       // writeConfigFile) between init and spawn can take seconds, causing false stall warnings.
       run.lastDataReceivedAt = Date.now();
       run.lastStdoutReceivedAt = Date.now();
-      this.startStallWatchdog(run);
+      if (!useInteractiveRuntime) {
+        // Interactive leads produce no stdout for the app; the stall watchdog
+        // would only emit false silence warnings.
+        this.startStallWatchdog(run);
+      }
       this.startStockTeammateInboxRelayPoll(run);
 
       if (useStockClaudeBootstrap) {
@@ -12287,7 +12360,7 @@ export class TeamProvisioningService {
         }
       }, getProvisioningRunTimeoutMs(run));
 
-      child.once('error', (error) => {
+      child?.once('error', (error) => {
         const progress = updateProgress(run, 'failed', 'Failed to start agent runtime', {
           error: error.message,
           cliLogsTail: extractCliLogsFromRun(run),
@@ -12296,7 +12369,7 @@ export class TeamProvisioningService {
         this.cleanupRun(run);
       });
 
-      child.once('close', (code) => {
+      child?.once('close', (code) => {
         void this.handleProcessExit(run, code);
       });
 
@@ -14101,7 +14174,7 @@ export class TeamProvisioningService {
         false
       );
       const promptSize = getPromptSizeSummary(prompt);
-      let child: ReturnType<typeof spawn>;
+      let child: ReturnType<typeof spawn> | undefined;
       const useStockClaudeBootstrap = getConfiguredCliFlavor() === 'claude';
       let stockBootstrapPrompt: string | null = null;
       if (useStockClaudeBootstrap) {
@@ -14113,6 +14186,8 @@ export class TeamProvisioningService {
       } else {
         shellEnv.CLAUDE_ENABLE_DETERMINISTIC_TEAM_BOOTSTRAP = '1';
       }
+      const useInteractiveRuntime =
+        useStockClaudeBootstrap && (await interactiveTeamRuntimeService.isEligible());
       const teammateModeDecision = await resolveDesktopTeammateModeDecision(request.extraCliArgs);
       applyDesktopTeammateModeDecisionToEnv(shellEnv, teammateModeDecision);
       let mcpConfigPath: string;
@@ -14160,7 +14235,12 @@ export class TeamProvisioningService {
         bootstrapSpecPath = await writeDeterministicBootstrapSpecFile(bootstrapSpec);
         run.bootstrapSpecPath = bootstrapSpecPath;
         if (useStockClaudeBootstrap) {
-          stockBootstrapPrompt = buildStockClaudeBootstrapPrompt(bootstrapSpec, prompt);
+          // Interactive relaunches must not carry the refresh-only hydration
+          // instruction — the lead has to actually re-spawn teammates first.
+          stockBootstrapPrompt = buildStockClaudeBootstrapPrompt(
+            bootstrapSpec,
+            useInteractiveRuntime ? '' : prompt
+          );
         } else {
           emitProvisioningCheckpoint(
             run,
@@ -14320,6 +14400,7 @@ export class TeamProvisioningService {
         { providerBackendId: request.providerBackendId }
       );
 
+      const interactiveRegisteredMembers = new Set<string>();
       try {
         if (
           run.cancelRequested ||
@@ -14332,16 +14413,74 @@ export class TeamProvisioningService {
           emitProvisioningCheckpoint(run, 'Seeding lead bootstrap permission rules');
           await this.seedLeadBootstrapPermissionRules(request.teamName, request.cwd);
         }
-        emitProvisioningCheckpoint(
-          run,
-          'Spawning agent runtime process for team launch',
-          `args=${finalLaunchArgs.length} cwd=${request.cwd}`
-        );
-        child = spawnCli(claudePath, finalLaunchArgs, {
-          cwd: request.cwd,
-          env: { ...shellEnv },
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
+        if (useInteractiveRuntime) {
+          run.interactiveRuntime = true;
+          const interactiveArgs = buildInteractiveCliArgs(finalLaunchArgs);
+          emitProvisioningCheckpoint(
+            run,
+            'Launching interactive tmux lead',
+            `args=${interactiveArgs.length} cwd=${request.cwd}`
+          );
+          await interactiveTeamRuntimeService.launchInteractiveLead({
+            teamName: request.teamName,
+            runId,
+            cwd: request.cwd,
+            claudePath,
+            args: interactiveArgs,
+            env: { ...shellEnv },
+            bootstrapPrompt: stockBootstrapPrompt ?? prompt,
+            rosterMemberNames: effectiveMemberSpecs.map((member) => member.name),
+            callbacks: {
+              checkpoint: (label, detail) => emitProvisioningCheckpoint(run, label, detail),
+              onLeadSessionDetected: (leadSessionId) => {
+                run.detectedSessionId = leadSessionId;
+              },
+              onMemberRegistered: (memberName) => {
+                this.setMemberSpawnStatus(run, memberName, 'online', undefined, 'process');
+                // Launch path has no filesystem monitor or stream events;
+                // complete provisioning once the full roster is registered.
+                interactiveRegisteredMembers.add(memberName);
+                if (
+                  interactiveRegisteredMembers.size >= effectiveMemberSpecs.length &&
+                  !run.provisioningComplete
+                ) {
+                  void this.handleProvisioningTurnComplete(run).catch((error: unknown) =>
+                    logger.warn(
+                      `[${request.teamName}] interactive launch completion failed: ${String(error)}`
+                    )
+                  );
+                }
+              },
+              onFailed: (reason) => {
+                if (run.provisioningComplete) {
+                  logger.warn(`[${request.teamName}] interactive runtime ended: ${reason}`);
+                  this.runtimeAdapterRunByTeam.delete(request.teamName);
+                  this.deleteAliveRunId(request.teamName);
+                  return;
+                }
+                const progress = updateProgress(run, 'failed', reason, { error: reason });
+                run.onProgress(progress);
+                this.cleanupRun(run);
+              },
+            },
+          });
+          this.runtimeAdapterRunByTeam.set(request.teamName, {
+            runId,
+            providerId: resolvedProviderId,
+            cwd: request.cwd,
+          });
+        } else {
+          emitProvisioningCheckpoint(
+            run,
+            'Spawning agent runtime process for team launch',
+            `args=${finalLaunchArgs.length} cwd=${request.cwd}`
+          );
+          child = spawnCli(claudePath, finalLaunchArgs, {
+            cwd: request.cwd,
+            env: { ...shellEnv },
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+        }
       } catch (error) {
         if (run.mcpConfigPath) {
           await this.mcpConfigBuilder.removeConfigFile(run.mcpConfigPath).catch(() => {});
@@ -14365,31 +14504,46 @@ export class TeamProvisioningService {
         throw error;
       }
 
-      updateProgress(run, 'spawning', 'Starting agent runtime process for team launch', {
-        pid: child.pid ?? undefined,
-        warnings: mergeProvisioningWarnings(run.progress.warnings, runtimeWarning),
-      });
-      run.onProgress(run.progress);
-      run.child = child;
-      run.processClosed = false;
-      run.spawnContext = {
-        claudePath,
-        args: finalLaunchArgs,
-        cwd: request.cwd,
-        env: { ...shellEnv },
-        prompt: stockBootstrapPrompt ?? prompt,
-      };
-
-      this.attachStdoutHandler(run);
-      this.attachStderrHandler(run);
-
-      if (stockBootstrapPrompt && child.stdin?.writable) {
-        emitProvisioningCheckpoint(run, 'Sending stock bootstrap prompt over stdin');
-        const message = JSON.stringify({
-          type: 'user',
-          message: { role: 'user', content: [{ type: 'text', text: stockBootstrapPrompt }] },
+      if (useInteractiveRuntime) {
+        updateProgress(run, 'spawning', 'Interactive tmux lead starting', {
+          warnings: mergeProvisioningWarnings(run.progress.warnings, runtimeWarning),
         });
-        child.stdin.write(message + '\n');
+        run.onProgress(run.progress);
+        run.processClosed = false;
+        run.spawnContext = {
+          claudePath,
+          args: buildInteractiveCliArgs(finalLaunchArgs),
+          cwd: request.cwd,
+          env: { ...shellEnv },
+          prompt: stockBootstrapPrompt ?? prompt,
+        };
+      } else {
+        updateProgress(run, 'spawning', 'Starting agent runtime process for team launch', {
+          pid: child!.pid ?? undefined,
+          warnings: mergeProvisioningWarnings(run.progress.warnings, runtimeWarning),
+        });
+        run.onProgress(run.progress);
+        run.child = child!;
+        run.processClosed = false;
+        run.spawnContext = {
+          claudePath,
+          args: finalLaunchArgs,
+          cwd: request.cwd,
+          env: { ...shellEnv },
+          prompt: stockBootstrapPrompt ?? prompt,
+        };
+
+        this.attachStdoutHandler(run);
+        this.attachStderrHandler(run);
+
+        if (stockBootstrapPrompt && child!.stdin?.writable) {
+          emitProvisioningCheckpoint(run, 'Sending stock bootstrap prompt over stdin');
+          const message = JSON.stringify({
+            type: 'user',
+            message: { role: 'user', content: [{ type: 'text', text: stockBootstrapPrompt }] },
+          });
+          child!.stdin.write(message + '\n');
+        }
       }
 
       if (useStockClaudeBootstrap) {
@@ -14415,7 +14569,9 @@ export class TeamProvisioningService {
       // and spawn can take seconds, causing false stall warnings.
       run.lastDataReceivedAt = Date.now();
       run.lastStdoutReceivedAt = Date.now();
-      this.startStallWatchdog(run);
+      if (!useInteractiveRuntime) {
+        this.startStallWatchdog(run);
+      }
       this.startStockTeammateInboxRelayPoll(run);
 
       // For launch, skip the filesystem monitor — files (config, inboxes, tasks)
@@ -14456,7 +14612,7 @@ export class TeamProvisioningService {
         }
       }, getProvisioningRunTimeoutMs(run));
 
-      child.once('error', (error) => {
+      child?.once('error', (error) => {
         const progress = updateProgress(run, 'failed', 'Failed to start agent runtime (launch)', {
           error: error.message,
           cliLogsTail: extractCliLogsFromRun(run),
@@ -14465,7 +14621,7 @@ export class TeamProvisioningService {
         this.cleanupRun(run);
       });
 
-      child.once('close', (code) => {
+      child?.once('close', (code) => {
         void this.handleProcessExit(run, code);
       });
 
@@ -16381,6 +16537,53 @@ export class TeamProvisioningService {
   }
 
   /**
+   * Direct DM to a stock teammate via the runtime's own session-derived team
+   * mailbox (no lead relay). Opportunistic: only works when the stock runtime
+   * materialized its team on disk (interactive-lead sessions do; headless
+   * --print leads currently do not). On success the app-side inbox copy is
+   * marked read so the UI shows delivered. Returns false when unavailable —
+   * caller should fall back to the lead relay.
+   */
+  async deliverStockTeammateDm(
+    teamName: string,
+    memberName: string,
+    input: { text: string; summary?: string; messageId?: string }
+  ): Promise<boolean> {
+    const runId = this.getAliveRunId(teamName);
+    const run = runId ? this.runs.get(runId) : null;
+    if (run && !run.stockClaudeRuntime) {
+      return false;
+    }
+    let leadSessionId = run?.detectedSessionId?.trim() || null;
+    if (!leadSessionId) {
+      // Interactive/adopted runtimes persist the binding on disk.
+      const binding = await interactiveTeamRuntimeService.readBinding(teamName);
+      leadSessionId = binding?.leadSessionId ?? null;
+    }
+    if (!leadSessionId) {
+      return false;
+    }
+    const delivered = await deliverStockSessionTeamDm(leadSessionId, {
+      memberName,
+      text: input.text,
+      ...(input.summary ? { summary: input.summary } : {}),
+    }).catch((error: unknown) => {
+      logger.warn(
+        `[${teamName}] stock session-team DM to "${memberName}" failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return false;
+    });
+    if (delivered && input.messageId) {
+      await this.markInboxMessagesRead(teamName, memberName, [
+        { messageId: input.messageId },
+      ]).catch(() => {});
+    }
+    return delivered;
+  }
+
+  /**
    * Get list of teams with active processes.
    */
   getAliveTeams(): string[] {
@@ -17860,6 +18063,11 @@ export class TeamProvisioningService {
       isTerminalFailureProvisioningState(run.progress.state)
     ) {
       return false;
+    }
+    if (run.interactiveRuntime) {
+      // Interactive tmux runs own no child process; liveness is the tmux
+      // session, which the interactive runtime service tracks separately.
+      return true;
     }
     if (!run.child || run.child.killed) return false;
     const stdin = run.child.stdin as
@@ -20538,6 +20746,12 @@ export class TeamProvisioningService {
    * Always uses SIGKILL via killTeamProcess() to prevent CLI cleanup.
    */
   async stopTeam(teamName: string): Promise<void> {
+    // Interactive tmux runtime: gracefully exit the lead (which cleans up the
+    // session-derived team dir) and tear down the tmux session + viewers
+    // before the standard stop flow reconciles run records.
+    await interactiveTeamRuntimeService.stopInteractiveTeam(teamName).catch((error: unknown) => {
+      logger.warn(`[${teamName}] interactive runtime stop failed: ${String(error)}`);
+    });
     const teamKey = teamName.trim().toLowerCase();
     const aggregateRestart = this.openCodeAggregatePrimaryRestartByTeam.get(teamKey);
     if (aggregateRestart) {
@@ -20965,8 +21179,7 @@ export class TeamProvisioningService {
 
     const cached = this.persistedTeamConfigCache.get(teamName);
     if (
-      cached &&
-      cached.path === configPath &&
+      cached?.path === configPath &&
       cached.size === stat.size &&
       cached.mtimeMs === stat.mtimeMs &&
       cached.ctimeMs === stat.ctimeMs

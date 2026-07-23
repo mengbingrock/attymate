@@ -61,6 +61,7 @@ interface MemberListProps {
   launchParams?: TeamLaunchParams;
   onMemberClick?: (member: ResolvedTeamMember) => void;
   onSendMessage?: (member: ResolvedTeamMember) => void;
+  onOpenConsole?: (member: ResolvedTeamMember) => void;
   onAssignTask?: (member: ResolvedTeamMember) => void;
   onOpenTask?: (taskId: string) => void;
   onRestartMember?: (memberName: string) => Promise<void> | void;
@@ -420,8 +421,7 @@ function buildCachedMemberRuntimeEntries(
     const signature = buildMemberRuntimeCardSignature(entry);
     const cached = cache.get(memberName);
     if (
-      !cached ||
-      cached.signature !== signature ||
+      cached?.signature !== signature ||
       nowMs - cached.cachedAt >= MEMBER_CARD_RUNTIME_TELEMETRY_CACHE_MS
     ) {
       cache.set(memberName, { signature, cachedAt: nowMs, entry });
@@ -588,6 +588,7 @@ function areMemberListPropsEqual(
     prev.leadActivity === next.leadActivity &&
     prev.onMemberClick === next.onMemberClick &&
     prev.onSendMessage === next.onSendMessage &&
+    prev.onOpenConsole === next.onOpenConsole &&
     prev.onAssignTask === next.onAssignTask &&
     prev.onOpenTask === next.onOpenTask &&
     prev.onRestartMember === next.onRestartMember &&
@@ -634,6 +635,7 @@ interface MemberCardRowProps {
   onOpenTask?: (taskId: string) => void;
   onMemberClick?: (member: ResolvedTeamMember) => void;
   onSendMessage?: (member: ResolvedTeamMember) => void;
+  onOpenConsole?: (member: ResolvedTeamMember) => void;
   onAssignTask?: (member: ResolvedTeamMember) => void;
   onRestartMember?: (memberName: string) => Promise<void> | void;
   onSkipMemberForLaunch?: (memberName: string) => Promise<void> | void;
@@ -673,6 +675,7 @@ const MemberCardRow = memo(function MemberCardRow({
   onOpenTask,
   onMemberClick,
   onSendMessage,
+  onOpenConsole,
   onAssignTask,
   onRestartMember,
   onSkipMemberForLaunch,
@@ -691,6 +694,10 @@ const MemberCardRow = memo(function MemberCardRow({
 
   const handleClick = useCallback(() => onMemberClick?.(member), [onMemberClick, member]);
   const handleSendMessage = useCallback(() => onSendMessage?.(member), [onSendMessage, member]);
+  const handleOpenConsole = useCallback(
+    () => (onOpenConsole ? onOpenConsole(member) : undefined),
+    [onOpenConsole, member]
+  );
   const handleAssignTask = useCallback(() => onAssignTask?.(member), [onAssignTask, member]);
 
   return (
@@ -728,6 +735,7 @@ const MemberCardRow = memo(function MemberCardRow({
       onOpenReviewTask={reviewTask ? handleOpenReviewTask : undefined}
       onClick={handleClick}
       onSendMessage={handleSendMessage}
+      onOpenConsole={onOpenConsole ? handleOpenConsole : undefined}
       onAssignTask={handleAssignTask}
       onRestartMember={onRestartMember}
       onSkipMemberForLaunch={onSkipMemberForLaunch}
@@ -849,6 +857,7 @@ export const MemberList = memo(function MemberList({
   launchParams,
   onMemberClick,
   onSendMessage,
+  onOpenConsole,
   onAssignTask,
   onOpenTask,
   onRestartMember,
@@ -1257,6 +1266,7 @@ export const MemberList = memo(function MemberList({
               onOpenTask={onOpenTask}
               onMemberClick={onMemberClick}
               onSendMessage={onSendMessage}
+              onOpenConsole={onOpenConsole}
               onAssignTask={onAssignTask}
               onRestartMember={onRestartMember}
               onSkipMemberForLaunch={onSkipMemberForLaunch}
@@ -1306,6 +1316,7 @@ export const MemberList = memo(function MemberList({
                 onOpenTask={onOpenTask}
                 onMemberClick={onMemberClick}
                 onSendMessage={onSendMessage}
+                onOpenConsole={onOpenConsole}
                 onAssignTask={onAssignTask}
                 onRestartMember={undefined}
                 onSkipMemberForLaunch={undefined}

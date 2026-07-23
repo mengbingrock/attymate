@@ -274,13 +274,13 @@ export function buildStockClaudeBootstrapPrompt(
     '',
     'IMPORTANT: The desktop app has pre-registered this roster for tracking only. The',
     'teammates are NOT running yet — team_get / team_list may list them, but that is just',
-    'the registered roster, not live agents. You MUST spawn every teammate yourself now by',
-    'calling the Agent tool once per roster entry (run them in the background). Do not skip',
-    'spawning or assume they are already provisioned; if you do not spawn them, the launch',
-    "fails. In each Agent call, begin the description field with the teammate's exact name",
-    'from the roster (e.g. description: "<name>: ...") so the app can track the spawn. Spawn',
-    'all teammates before starting any other work, and keep them running so they can pick up',
-    'tasks.'
+    'the registered roster, not live agents. You MUST spawn every roster entry yourself now,',
+    'as an agent-team TEAMMATE: a named, persistent agent you can message by name with',
+    'SendMessage — not a one-shot subagent that just returns a result. Do not skip spawning',
+    'or assume they are already provisioned; if you do not spawn them, the launch fails.',
+    'In each spawn, use the exact roster name and begin the description field with that name',
+    '(e.g. description: "<name>: ...") so the app can track the spawn. Spawn all teammates',
+    'before starting any other work, and keep them running so they can pick up tasks.'
   );
   lines.push(
     '',
