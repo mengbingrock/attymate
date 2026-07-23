@@ -216,13 +216,15 @@ export class InteractiveTeamRuntimeService {
    */
   async #discoverSessionTeamByScan(
     cwd: string,
-    launchedAtMs: number
+    launchedAtMs: number,
+    excludedSessionTeams?: ReadonlySet<string>
   ): Promise<{ sessionTeamName: string; leadSessionId: string | null } | null> {
     try {
       const teamsBase = getTeamsBasePath();
       const entries = await fs.promises.readdir(teamsBase);
       for (const entry of entries) {
         if (!entry.startsWith('session-')) continue;
+        if (excludedSessionTeams?.has(entry)) continue;
         const configPath = path.join(teamsBase, entry, 'config.json');
         try {
           const stat = await fs.promises.stat(configPath);
@@ -298,6 +300,7 @@ export class InteractiveTeamRuntimeService {
     void (async () => {
       const tmux = getTmuxSessionCommandExecutor();
       const seenMembers = new Set<string>();
+      const rejectedSessionTeams = new Set<string>();
       const deadline = Date.now() + SESSION_TEAM_WATCH_TIMEOUT_MS;
       const launchedAtMs = Date.parse(binding.launchedAt) || Date.now();
       while (!abort.signal.aborted && Date.now() < deadline) {
@@ -306,7 +309,11 @@ export class InteractiveTeamRuntimeService {
             binding.sessionTeamName ??
             (binding.leadSessionId ? getSessionTeamName(binding.leadSessionId) : null);
           if (!sessionTeamName) {
-            const discovered = await this.#discoverSessionTeamByScan(input.cwd, launchedAtMs);
+            const discovered = await this.#discoverSessionTeamByScan(
+              input.cwd,
+              launchedAtMs,
+              rejectedSessionTeams
+            );
             if (discovered) {
               sessionTeamName = discovered.sessionTeamName;
               binding.sessionTeamName = discovered.sessionTeamName;
@@ -324,11 +331,38 @@ export class InteractiveTeamRuntimeService {
               const config = JSON.parse(raw) as {
                 members?: { name?: string; tmuxPaneId?: string; agentType?: string }[];
               };
+              // Ground truth: stock spawns teammate panes inside OUR tmux
+              // session. A candidate whose pane ids don't exist there is a
+              // stale session-team dir from a previous (hard-killed) run —
+              // hard-kills skip Claude's cleanup and the backup service can
+              // refresh the dir's mtime, defeating freshness checks.
+              const ourPaneIds = new Set(
+                (await tmux.listSessionPanes(binding.tmuxSessionName)).map((pane) => pane.paneId)
+              );
+              const teammateEntries = (config.members ?? []).filter(
+                (member) =>
+                  member.agentType !== 'team-lead' && member.tmuxPaneId?.trim().startsWith('%')
+              );
+              const staleCandidate =
+                teammateEntries.length > 0 &&
+                teammateEntries.every((member) => !ourPaneIds.has(member.tmuxPaneId!.trim()));
+              if (staleCandidate) {
+                logger.warn(
+                  `[${input.teamName}] ignoring stale session team "${sessionTeamName}" (panes not in ${binding.tmuxSessionName})`
+                );
+                rejectedSessionTeams.add(sessionTeamName);
+                binding.sessionTeamName = null;
+                binding.leadSessionId = null;
+                await this.#writeBinding(binding);
+                await sleep(SESSION_TEAM_WATCH_POLL_MS);
+                continue;
+              }
               for (const member of config.members ?? []) {
                 const name = member.name?.trim();
                 const paneId = member.tmuxPaneId?.trim();
                 if (!name || seenMembers.has(name) || member.agentType === 'team-lead') continue;
                 if (!paneId?.startsWith('%')) continue;
+                if (!ourPaneIds.has(paneId)) continue;
                 seenMembers.add(name);
                 await tmux
                   .breakPaneToWindow(paneId, name, binding.tmuxSessionName)
