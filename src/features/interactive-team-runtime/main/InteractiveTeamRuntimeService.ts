@@ -337,7 +337,7 @@ export class InteractiveTeamRuntimeService {
                       `[${input.teamName}] break-pane for "${name}" failed: ${String(error)}`
                     )
                   );
-                await this.#mirrorMemberIntoAppConfig(input.teamName, name, paneId);
+                await this.#mirrorMemberIntoAppConfig(input.teamName, name, paneId, input.cwd);
                 input.callbacks.onMemberRegistered(name, paneId);
               }
               if (
@@ -363,7 +363,8 @@ export class InteractiveTeamRuntimeService {
   async #mirrorMemberIntoAppConfig(
     teamName: string,
     memberName: string,
-    paneId: string
+    paneId: string,
+    cwd: string
   ): Promise<void> {
     const configPath = path.join(getTeamsBasePath(), teamName, 'config.json');
     try {
@@ -372,18 +373,32 @@ export class InteractiveTeamRuntimeService {
         members?: Record<string, unknown>[];
       };
       if (!Array.isArray(config.members)) return;
-      let changed = false;
+      let matched = false;
       for (const member of config.members) {
         if ((member.name as string | undefined)?.trim() === memberName) {
           member.tmuxPaneId = paneId;
           member.backendType = 'tmux';
           member.isActive = true;
-          changed = true;
+          matched = true;
         }
       }
-      if (changed) {
-        await atomicWriteAsync(configPath, JSON.stringify(config, null, 2));
+      if (!matched) {
+        // Launch flows can reset config members to the lead only; the audit
+        // treats absence as "never registered", so append the entry.
+        config.members.push({
+          agentId: `${memberName}@${teamName}`,
+          name: memberName,
+          joinedAt: Date.now(),
+          cwd,
+          subscriptions: [],
+          provider: 'anthropic',
+          providerId: 'anthropic',
+          tmuxPaneId: paneId,
+          backendType: 'tmux',
+          isActive: true,
+        });
       }
+      await atomicWriteAsync(configPath, JSON.stringify(config, null, 2));
     } catch (error) {
       logger.debug(`[${teamName}] app-config mirror failed for "${memberName}": ${String(error)}`);
     }
