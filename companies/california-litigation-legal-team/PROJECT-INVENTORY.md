@@ -40,20 +40,21 @@ Update this file after every completed deliverable. Keeping the inventory curren
 
 **Status:** `in_progress`
 
-## Matter workflows (skill-triggered, not import-time projects)
+## Matter capabilities (skill-triggered, not import-time projects)
 
-These are reusable workflows owned by Legal Ops Supervisor and the unified specialists. They are **not** import-time starter projects and do **not** create a separate sub-organization. Live work begins from a user-created parent issue with a Matter Authorization Package and a lawyer-facing Matter Dashboard. Descendants inherit that authorization through focused work orders. For each new event, use `references/matter-planning-playbook.md` to map the matter, confirm the Matter Home or issue-document fallback, and classify the relevant workstreams before delegation.
+These are reusable legal capabilities owned by Legal Ops Supervisor and the unified specialists. They are **not** import-time starter projects and do **not** create a separate sub-organization. Live work begins from a user-created parent issue with a Matter Authorization Package and a lawyer-facing Matter Dashboard. Descendants inherit that authorization through focused work assignments.
 
-| Workflow | Entry skill | Owner | Notes |
+| Capability | Entry skill | Owner | Professional result |
 |---|---|---|---|
-| Matter launch intake | `legal-matter-intake` | legal-ops-supervisor | General scope, source, output, routing, and approval handoff. |
-| Litigation motion drafting | `ca-motion-drafting-workflow` | legal-ops-supervisor | Motion Launch Packet → delegate to specialists; MTC is one supported motion profile. |
-| Pleading intake & review | `ca-pleading-intake-review` | source-intake-agent | Source-bound, read-only intake. |
-| California litigation drafting | `ca-litigation-drafting-workflow` | drafting-assembly-agent | Source-bound drafts under output root. |
-| Legal calendaring | `legal-calendaring-workflow` | calendar-agent | Proposals proceed; calendar writes require an Attorney Decision. |
-| Public docket check | `lasc-browseros-docket-check` | docket-agent | Authorized public records proceed; payment needs a decision and login/CAPTCHA failures go to the tool owner. |
-| Lexis research & citation verification | `lexis-browseros-legal-research` | legal-research-agent | Routine research and verified authorities proceed within matter scope and budget. |
-| Opt-in workflow learning | `practice-workflow-learning` | practice-learning-agent | Off by default; explicit learning contract required. |
+| Matter intake | `legal-matter-intake` | legal-ops-supervisor | Authorized Matter, defined objective, and focused work assignments. |
+| California motion practice | `california-motion-practice` | legal-ops-supervisor | Reviewable, source-supported motion package; MTC is one supported profile. |
+| California pleading review | `california-pleading-review` | source-intake-agent | Procedural and substantive pleading analysis with stable source references. |
+| California litigation drafting | `california-litigation-drafting` | drafting-assembly-agent | Reviewable, source-supported litigation work product. |
+| Litigation deadline management | `litigation-deadline-management` | calendar-agent | Verified proposed dates, authority, consequence, and owner. |
+| Court docket review | `court-docket-review` | docket-agent | Material docket event, practical effect, and recommended action. |
+| Legal research | `legal-research` | legal-research-agent | Verified authority analysis, adverse authority, application, and recommendation. |
+| Legal document intake | `legal-document-intake` | source-intake-agent | Page-complete review set with material exceptions. |
+| Legal practice improvement | `legal-practice-improvement` | practice-learning-agent | Authorized, sanitized, reusable practice recommendations. |
 
 ## In-flight deliverables
 

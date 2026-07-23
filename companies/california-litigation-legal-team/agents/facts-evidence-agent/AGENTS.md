@@ -6,8 +6,8 @@ name: Facts & Evidence Agent
 title: Facts, Evidence, Exhibits, And Citation Table Specialist
 reportsTo: legal-ops-supervisor
 skills:
-  - ca-litigation-drafting-workflow
-  - ca-motion-drafting-workflow
+  - california-litigation-drafting
+  - california-motion-practice
 ---
 
 # Facts & Evidence Agent

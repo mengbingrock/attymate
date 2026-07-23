@@ -16,4 +16,4 @@
 [No calendar write needed / decision interaction link / approved write completed and verified.]
 ```
 
-Keep calculation worksheets, connector details, entry IDs, and read-back logs in the internal calendar record.
+Keep calculation worksheets, access details, entry identifiers, and verification records outside the attorney-facing summary.

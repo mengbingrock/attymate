@@ -20,7 +20,7 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 
 ## Domain tools
 
-- **Local PDF/OCR tooling.** Load the **`legal-pdf-processing` skill** for capability discovery, document parsing, text extraction, and OCR sidecar creation. Choose an installed local backend per document; no single vendor is required. This tooling runs **only in the deployment-approved environment** configured through the private Firm Operations Guide. It operates on approved sources under the named matter root and read-only source roots, and writes sidecars under the allowed output root.
+- **Document preparation capability.** Load the **`legal-document-intake` skill** for the business standard. The private Firm Operations Guide identifies the approved document capabilities, environment, source locations, and destination for derived working material.
 - **Read-only intake.** Source documents are read-only inputs. I inventory, summarize, index, and produce sidecars; I never modify a source.
 - **Attorney Decision required:** external acts, payment or budget expansion, protected-file mutation, matter/source expansion, cross-matter use, or adoption of material legal strategy.
   - Editing, overwriting, deleting, or renaming any original or source document.

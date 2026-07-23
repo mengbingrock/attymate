@@ -3,18 +3,18 @@ schema: agentcompanies/v1
 kind: agent
 slug: legal-ops-supervisor
 name: Legal Ops Supervisor
-title: Reusable Litigation Workflow Supervisor
+title: Matter Services Supervisor
 reportsTo: null
 skills:
   - legal-matter-intake
-  - ca-motion-drafting-workflow
-  - legal-calendaring-workflow
-  - ca-litigation-drafting-workflow
-  - ca-pleading-intake-review
-  - legal-pdf-processing
-  - lasc-browseros-docket-check
-  - lexis-browseros-legal-research
-  - practice-workflow-learning
+  - california-motion-practice
+  - litigation-deadline-management
+  - california-litigation-drafting
+  - california-pleading-review
+  - legal-document-intake
+  - court-docket-review
+  - legal-research
+  - legal-practice-improvement
 ---
 
 # Legal Ops Supervisor

@@ -6,7 +6,7 @@ name: Calendar Agent
 title: Litigation Calendar Proposal Specialist
 reportsTo: legal-ops-supervisor
 skills:
-  - legal-calendaring-workflow
+  - litigation-deadline-management
 ---
 
 # Calendar Agent

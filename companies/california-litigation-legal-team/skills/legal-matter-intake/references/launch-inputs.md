@@ -1,16 +1,15 @@
-# Launch Intake Inputs
+# Matter Intake Inputs
 
-Legal Ops Supervisor completes this read-only launch intake before implementation child issues are created.
+Collect or determine only the business information needed to open or update the Matter:
 
-Collect or discover within approved scope:
+- Matter identity and the no-cross-Matter boundary.
+- Requested legal outcome, deliverable, urgency, and known deadlines.
+- Procedural posture and legally significant facts supplied by the lawyer or approved sources.
+- Sources the team may use and sources it must not inspect.
+- Existing pleadings, evidence, correspondence, docket material, authorities, templates, and prior approved work product relevant to the request.
+- Authorized research scope and budget.
+- Material legal positions already decided or reserved to the lawyer.
+- External actions, payments, protected changes, or source expansions already authorized.
+- Learning authority and exclusions, when practice improvement is requested.
 
-- User-selected matter and no-cross-matter boundary.
-- Workflow type, requested deliverable, autonomy level, approval profile, learning mode, and do-not-learn list.
-- Matter root, output root, read-only source roots, forbidden roots, and allowed outputs.
-- Matter facts, procedural posture, deadlines, and decision points supplied in approved sources.
-- Source categories: pleadings, exhibits, declarations, discovery, correspondence, docket material, example shells, authority tables, and prior approved work product.
-- Research scope, source restrictions, permitted research systems, and budget.
-- Tool readiness: Codex cwd, Python/OCR runtime, document tooling, browser tooling, connectors, and Firm Operations Guide reference.
-- Existing Attorney Decisions, material strategy questions, and known Operational Interruptions.
-
-If any required startup input is missing, batch the question with a recommended default and explain what safe work can continue.
+Implementation readiness belongs to Legal Ops. Ask the lawyer only when a missing answer changes the Matter, legal objective, source boundary, budget, material strategy, or external action.

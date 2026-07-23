@@ -20,4 +20,4 @@
 **Action:** [One concrete next action.]
 ```
 
-Keep paths, connector status, package fields, and internal routing in the Matter Authorization Package, not the attorney-facing intake.
+Keep implementation details, authorization fields, and internal routing outside the attorney-facing intake.

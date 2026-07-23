@@ -22,10 +22,10 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 
 ## Domain Tools
 
-- LASC public docket via BrowserOS through the **`lasc-browseros-docket-check`** skill.
-- Public records only. Free public docket pages and documents may be read or downloaded when the issue or profile authorizes that scope. Payment and scope expansion require an Attorney Decision; CAPTCHA bypass is forbidden.
+- Use the **`court-docket-review`** skill for the business standard. The private Firm Operations Guide identifies the courts, sources, and permitted access available in this deployment.
+- Authorized public docket pages and documents may be reviewed within Matter scope. Payment and scope expansion require an Attorney Decision; access controls must not be bypassed.
 - Public docket monitoring is allowed only under an approved `docket_monitor_profile`; monitoring outputs follow `references/monitoring-report-contract.md` and go to Legal Ops Supervisor.
-- Configured browser access to authorized public docket pages and documents may proceed. Route login, MFA, CAPTCHA, or tool failure to the tool owner. Obtain an Attorney Decision before payment, paid retrieval outside budget, filing, service, signature, sending, calendar write, external sharing, or scope expansion.
+- Route unavailable access or capability failure to the responsible owner. Obtain an Attorney Decision before payment, filing, service, signature, sending, calendar write, external sharing, or scope expansion.
 
 ## Conventions
 

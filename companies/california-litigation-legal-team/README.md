@@ -1,8 +1,8 @@
 # California Litigation Legal Team
 
-> Reusable Paperclip `agentcompanies/v1` package for California litigation workflows with supervised issue scope, approvals, and specialist agents — source-bound, matter-scoped, and confidentiality-first.
+> Reusable Paperclip `agentcompanies/v1` package for California litigation services with supervised Matter scope, attorney decisions, and specialist agents — source-bound, matter-scoped, and confidentiality-first.
 
-It packages one board-facing Legal Ops Supervisor, reusable specialist agents, a read-only Email Monitor Agent, one opt-in Practice Learning Agent, onboarding tasks, and reusable legal skills for intake, OCR, research, drafting, docket checks, calendaring, QA, workflow learning, and subpoena motion-to-compel work. Paperclip owns coordination (issues, assignment, heartbeats, approvals, audit trail); the legal skills own domain workflow discipline.
+It packages one board-facing Legal Ops Supervisor, reusable specialist agents, a read-only Email Monitor Agent, one opt-in Practice Learning Agent, onboarding tasks, and reusable legal skills for Matter intake, document readiness, research, drafting, docket review, deadline management, QA, practice improvement, and subpoena motion-to-compel work. Paperclip owns coordination and audit; the legal skills define professional work and deliverables.
 
 ## Overview
 
@@ -54,15 +54,15 @@ Each agent is defined by four files: `AGENTS.md` (role, triggers, handoffs, deli
 
 | Agent | Title | Reports to | Key skills |
 | --- | --- | --- | --- |
-| [Legal Ops Supervisor](agents/legal-ops-supervisor/AGENTS.md) | Reusable Litigation Workflow Supervisor | — | all workflows (front door) |
-| [Source Intake Agent](agents/source-intake-agent/AGENTS.md) | Source Intake, Pleading Review, and OCR Specialist | legal-ops-supervisor | ca-pleading-intake-review, legal-pdf-processing |
-| [Facts & Evidence Agent](agents/facts-evidence-agent/AGENTS.md) | Facts, Evidence, Exhibits, and Citation Table Specialist | legal-ops-supervisor | ca-litigation-drafting-workflow |
-| [Legal Research Agent](agents/legal-research-agent/AGENTS.md) | Lexis Research and Citation Verification Specialist | legal-ops-supervisor | lexis-browseros-legal-research |
-| [Drafting & Assembly Agent](agents/drafting-assembly-agent/AGENTS.md) | California Litigation Drafting and Working-Copy Assembly Specialist | legal-ops-supervisor | ca-litigation-drafting-workflow, ca-motion-drafting-workflow |
-| [Legal QA Agent](agents/legal-qa-agent/AGENTS.md) | Confidentiality and Source Discipline Reviewer | legal-ops-supervisor | ca-litigation-drafting-workflow, lexis-browseros-legal-research |
-| [Calendar Agent](agents/calendar-agent/AGENTS.md) | Litigation Calendar Proposal Specialist | legal-ops-supervisor | legal-calendaring-workflow |
-| [Docket Agent](agents/docket-agent/AGENTS.md) | Public Docket Check Specialist | legal-ops-supervisor | lasc-browseros-docket-check |
-| [Practice Learning Agent](agents/practice-learning-agent/AGENTS.md) | Private Workflow Learning Specialist | legal-ops-supervisor | practice-workflow-learning |
+| [Legal Ops Supervisor](agents/legal-ops-supervisor/AGENTS.md) | Matter Services Supervisor | — | all Matter services (front door) |
+| [Source Intake Agent](agents/source-intake-agent/AGENTS.md) | Legal Document Intake and Pleading Review Specialist | legal-ops-supervisor | california-pleading-review, legal-document-intake |
+| [Facts & Evidence Agent](agents/facts-evidence-agent/AGENTS.md) | Facts, Evidence, Exhibits, and Citation Table Specialist | legal-ops-supervisor | california-litigation-drafting |
+| [Legal Research Agent](agents/legal-research-agent/AGENTS.md) | Legal Research and Authority Analysis Specialist | legal-ops-supervisor | legal-research |
+| [Drafting & Assembly Agent](agents/drafting-assembly-agent/AGENTS.md) | California Litigation Drafting and Working-Copy Assembly Specialist | legal-ops-supervisor | california-litigation-drafting, california-motion-practice |
+| [Legal QA Agent](agents/legal-qa-agent/AGENTS.md) | Confidentiality and Source Discipline Reviewer | legal-ops-supervisor | california-litigation-drafting, legal-research |
+| [Calendar Agent](agents/calendar-agent/AGENTS.md) | Litigation Calendar Proposal Specialist | legal-ops-supervisor | litigation-deadline-management |
+| [Docket Agent](agents/docket-agent/AGENTS.md) | Court Docket Review Specialist | legal-ops-supervisor | court-docket-review |
+| [Practice Learning Agent](agents/practice-learning-agent/AGENTS.md) | Legal Practice Improvement Specialist | legal-ops-supervisor | legal-practice-improvement |
 | [Email Monitor Agent](agents/email-monitor-agent/AGENTS.md) | Read-Only Legal Intake Monitor | legal-ops-supervisor | — (read-only routing) |
 
 ## Goals
@@ -76,11 +76,11 @@ Each agent is defined by four files: `AGENTS.md` (role, triggers, handoffs, deli
 
 - [Firm Onboarding](projects/firm-onboarding/PROJECT.md) — import-time onboarding to configure workspace, runtime, local tools, connectors, Email/Calendar/Docket monitor profiles, SOPs, matter mapping, and policy before any live matter work. Twelve setup tasks are owned by the Legal Ops Supervisor, and three paused recurring monitor tasks are imported for Email, Calendar, and Docket monitoring.
 
-Matter launch intake is a standalone skill-triggered front door owned by Legal Ops. Motion drafting is a separate downstream workflow, and subpoena MTC is one motion profile rather than a separate intake system or sub-organization. Live work begins from a user-created parent issue with a Matter Authorization Package; child issues reference it rather than copying it.
+Matter intake is the front door owned by Legal Ops. California Motion Practice is a separate downstream capability, and subpoena MTC is one motion profile rather than a separate intake system or sub-organization. Live work begins from a user-created parent issue with a Matter Authorization Package; child issues reference it rather than copying it.
 
 ## Skills
 
-`legal-calendaring-workflow` · `lexis-browseros-legal-research` · `ca-litigation-drafting-workflow` · `ca-pleading-intake-review` · `legal-matter-intake` · `legal-pdf-processing` · `lasc-browseros-docket-check` · `ca-motion-drafting-workflow` · `practice-workflow-learning`
+`litigation-deadline-management` · `legal-research` · `california-litigation-drafting` · `california-pleading-review` · `legal-matter-intake` · `legal-document-intake` · `court-docket-review` · `california-motion-practice` · `legal-practice-improvement`
 
 ## Import
 
@@ -109,11 +109,11 @@ If an onboarding task is substantively complete but the issue cannot be marked d
 - Complete the imported Firm Onboarding issues before live matter work.
 - Configure each `codex_local` agent with the deployment's absolute `cwd` / workspace root.
 - Configure authenticated Codex CLI access or an approved deployment-specific API-key auth mechanism.
-- Configure a local PDF/OCR toolchain appropriate to the deployment, and approved output roots. Use `skills/legal-pdf-processing/scripts/pdf_runtime_probe.sh` to discover capabilities; no single PDF vendor is required.
-- Review executable-script trust before using repo helper scripts. The PDF skill includes an optional local OCR helper at `skills/legal-pdf-processing/scripts/ocr_pdf_intake.ps1`; it requires explicit `{matter_root}` / `{output_root}` scope, writes only under the approved output root, and must be run only in a deployment-approved Python/OCR environment. Paperclip company import stores the markdown skill/reference files; deployments that want the helper should review or run it from the repository source after approval.
+- Configure document preparation capabilities appropriate to the deployment and record them in the private Firm Operations Guide. The business skill does not require a particular provider.
+- Optional operator helpers live under `tooling/pdf/`, outside the imported skill. Review their trust and deployment-specific boundaries before use; they are examples, not required business steps.
 - Set budgets, model choices, and approval policies appropriate for the deployment.
 - Use the canonical authorization matrix in `skills/legal-matter-intake/references/human-approval-gates.md`. Routine research, permitted downloads, configured read-only connectors, working-copy edits, QA, and internal coordination proceed within the parent authorization.
-- Configure external-tool access before use: BrowserOS or equivalent browser tooling, email provider, calendar provider, Google Drive, Lexis, LASC, external knowledge-base/upload systems, filing, service, and upload/download workflows.
+- Configure approved research, court, email, calendar, document, storage, filing, service, and sharing capabilities before use. Provider choices belong in the private Firm Operations Guide, not the business skills.
 - Configure `email_monitor_profile`, `calendar_monitor_profile`, `docket_monitor_profile`, and `monitoring_report_policy` before enabling monitor routines.
 - Keep monitor routines paused until the board/operator approves the profile and schedule. Within an enabled profile, monitors may read full in-scope content needed for review. No-change and duplicate-only runs end with a one-line routine result and create no lawyer-visible report, comment, triage issue, or Dashboard update. Material findings are deduplicated into one matter-level `monitor-report` and routed to Legal Ops.
 - Use `references/matter-planning-playbook.md` when a new event arrives. Legal Ops should match or create the matter parent, classify all plausible workstreams, create child issues for safe work now, and record strategy/source/approval blockers in one batched plan.

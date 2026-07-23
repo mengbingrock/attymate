@@ -1,64 +1,62 @@
 ---
 schema: agentcompanies/v1
 slug: legal-matter-intake
-name: legal-matter-intake
-description: Turn a lawyer's matter request and approved source description into a concise Launch Intake Packet and inherited Matter Authorization Package for the next legal workflow.
+name: Legal Matter Intake
+description: Open or update a legal matter, define the authorized scope, identify the requested outcome, and direct the work to the appropriate legal capabilities.
 ---
 
-# legal-matter-intake
+# Legal Matter Intake
 
-*The general front door for matter selection, standing authority, source boundaries, and workflow routing.*
+## Business Purpose
 
-## When to load this skill
+Turn a lawyer's request into an authorized Matter, a clear legal objective, and focused work assignments without requiring the lawyer to design the internal process.
 
-- A lawyer describes a new matter, document set, deadline, or legal work request.
-- Legal Ops needs to create or confirm a parent matter before specialist work begins.
-- A workflow needs matter scope, standing research/tool authority, output boundaries, or a material strategy decision.
+## Use When
 
-This skill does not draft legal arguments or perform specialist work. It creates one parent authorization package that downstream work inherits.
+- A new Matter, document set, deadline, or legal request arrives.
+- New information may belong to an existing Matter.
+- Existing authority, source boundaries, budget, or legal objectives may need to change.
 
-## Inputs
+## Required Inputs
 
-Collect or discover within approved scope:
+- Matter identity or enough information to determine whether an existing Matter applies.
+- The lawyer's objective, requested deliverable, urgency, and known deadlines.
+- The sources the team may use and any sources it must not inspect.
+- Any existing legal positions, budget limits, or external actions already authorized.
 
-- Selected matter and no-cross-matter boundary.
-- Plain-language objective, urgency, requested deliverable, and known deadlines.
-- Approved source set, protected/forbidden sources, output root, and designated working copies.
-- Routine research questions, jurisdiction, source classes, configured tools/connectors, and budget ceiling.
-- Material legal positions already decided or reserved to the lawyer.
-- External actions, payments, protected mutations, or scope expansions already authorized, if any.
-- Firm Operations Guide reference and learning policy.
+Ask only for missing information that changes the Matter, the legal objective, permitted sources, material strategy, budget, or an external act.
 
-Use safe defaults for internal implementation details. Ask the lawyer only when the missing answer changes the legal objective, matter/source boundary, material strategy, budget, or external action.
+## Professional Work
 
-## Procedure
+1. Determine whether the request belongs to an existing Matter or requires a new one.
+2. State the legal objective, requested outcome, known deadlines, and material source gaps in plain language.
+3. Record one Matter Authorization Package that applies to the Matter's authorized workstreams.
+4. Identify the legal capabilities needed, such as document intake, pleading review, factual analysis, research, drafting, docket review, deadline management, or QA.
+5. Create only the work assignments needed to produce durable legal work or resolve a real dependency.
+6. Consolidate any material legal choices into one decision request with a recommendation and consequences.
 
-1. **Checkout or create the parent matter.** Read current comments, linked documents, and existing matter context without replaying unrelated history.
-2. **Plan read-only.** Confirm matter identity, objective, source boundary, output boundary, standing tool/research authority, and reserved lawyer decisions.
-3. **Produce a concise Launch Intake Packet** using `references/intake-output-format.md`. State the objective, what can proceed now, any material source gap, and the next owner.
-4. **Create or confirm the Matter Authorization Package** using `agents/legal-ops-supervisor/references/matter-authorization-package.md`.
-5. **Route to the narrowest next skill.** A PDF does not imply a motion; a motion does not imply OCR.
-6. **Create only needed child work orders.** Each child references the parent package and includes only objective, relevant sources/context, output, completion standard, and exceptions.
-7. **Ask one decision only when required.** Use `references/human-approval-gates.md`; consolidate related material strategy or external-action choices into one first-class interaction.
-8. **Keep the lawyer-facing surface concise.** Update the Matter Dashboard only for a material posture, deliverable, risk, deadline, or decision change.
+## Attorney Deliverable
 
-## Outputs
+Provide one concise intake record stating:
 
-- Concise Launch Intake Packet.
-- Parent Matter Authorization Package.
-- Workflow routing and focused child work orders.
-- At most one batched lawyer decision when required.
+- What the Matter and immediate objective are.
+- What the team can do now.
+- What material information is missing or unreliable.
+- Whether the lawyer must decide anything now.
+- What work product or action comes next and who owns it.
 
-## Anti-patterns
+Use `references/intake-output-format.md` for presentation and `references/human-approval-gates.md` for decision boundaries.
 
-- Copying the full parent authorization package into every child.
-- Treating agent delegation, configured read-only tools, routine research, or working-copy edits as new approvals.
-- Asking the lawyer for internal paths, profiles, gate names, or contract fields.
-- Starting work outside the matter/source boundary or crossing an attorney-decision category without a decision.
-- Creating comments or documents that merely narrate intake process.
+## Completion Standard
 
-## Reference
+Intake is complete when the Matter is identified, authority and source boundaries are recorded, the next legal work is assigned, and the lawyer can understand the next step without reading internal coordination.
 
-- `references/launch-inputs.md`: discovery order and package inputs.
-- `references/intake-output-format.md`: concise attorney-facing intake format.
-- `references/human-approval-gates.md`: canonical authorization, attorney-decision, and operational-interruption matrix.
+## Material Decisions
+
+Obtain an attorney decision for material legal strategy, expanded Matter/source scope, payment or budget expansion, protected-file changes, or external acts such as filing, service, signature, sending, calendar writing, or sharing outside the approved environment.
+
+Access failures and unavailable capabilities are operational interruptions for Legal Ops unless only the lawyer can resolve them or they materially change the legal result.
+
+## Handoff
+
+Send each specialist only the Matter context, sources, requested work product, completion standard, and exceptions relevant to that assignment. Do not copy the full authorization package or narrate internal routing to the lawyer.

@@ -3,12 +3,12 @@ schema: agentcompanies/v1
 kind: agent
 slug: legal-research-agent
 name: Legal Research Agent
-title: Lexis Research And Citation Verification Specialist
+title: Legal Research And Authority Analysis Specialist
 reportsTo: legal-ops-supervisor
 skills:
-  - lexis-browseros-legal-research
-  - ca-litigation-drafting-workflow
-  - ca-motion-drafting-workflow
+  - legal-research
+  - california-litigation-drafting
+  - california-motion-practice
 ---
 
 # Legal Research Agent

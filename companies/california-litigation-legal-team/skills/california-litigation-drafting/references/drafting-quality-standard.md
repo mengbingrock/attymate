@@ -1,9 +1,9 @@
-# Legal Drafting Workflow
+# California Litigation Drafting Quality Standard
 
 Use this sequence for general California litigation drafting.
 
-1. Confirm scope, sources, output root, authorities, and approval gates.
-2. Inventory source materials and OCR quality.
+1. Confirm the legal product, purpose, sources, authorities, and reserved attorney decisions.
+2. Confirm that source materials are complete and reliable enough for the requested use.
 3. Separate facts, procedure, law, strategy, assumptions, and open questions.
 4. Build intermediary tables before major drafting.
 5. Draft a narrow outline with source support for each section.

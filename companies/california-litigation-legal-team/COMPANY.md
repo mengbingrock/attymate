@@ -3,8 +3,8 @@ schema: agentcompanies/v1
 kind: company
 slug: california-litigation-legal-team
 name: California Litigation Legal Team
-description: Paperclip company for reusable California litigation workflows with supervised issue scope, approvals, and specialist agents.
-version: 0.6.0
+description: Paperclip company for source-supported California litigation services with supervised Matter scope, attorney decisions, and specialist agents.
+version: 0.7.0
 license: MIT
 tags: []
 metadata:
@@ -12,7 +12,7 @@ metadata:
     tone: green
     mono: N
 goals:
-  - Coordinate reusable California litigation workflows through Paperclip issues, approvals, budgets, and Codex local agents.
+  - Coordinate reusable California litigation services through Paperclip Matters, work assignments, attorney decisions, and specialist agents.
   - Complete deployment onboarding before live matter work so local tools, workspace structure, external connectors, and approval policy are explicit.
 requirements:
   runtime:
@@ -37,20 +37,20 @@ includes:
   - agents/practice-learning-agent/AGENTS.md
   - agents/email-monitor-agent/AGENTS.md
   - projects/firm-onboarding/PROJECT.md
-  - skills/legal-calendaring-workflow/SKILL.md
-  - skills/lexis-browseros-legal-research/SKILL.md
-  - skills/ca-litigation-drafting-workflow/SKILL.md
-  - skills/ca-pleading-intake-review/SKILL.md
+  - skills/litigation-deadline-management/SKILL.md
+  - skills/legal-research/SKILL.md
+  - skills/california-litigation-drafting/SKILL.md
+  - skills/california-pleading-review/SKILL.md
   - skills/legal-matter-intake/SKILL.md
-  - skills/legal-pdf-processing/SKILL.md
-  - skills/lasc-browseros-docket-check/SKILL.md
-  - skills/ca-motion-drafting-workflow/SKILL.md
-  - skills/practice-workflow-learning/SKILL.md
+  - skills/legal-document-intake/SKILL.md
+  - skills/court-docket-review/SKILL.md
+  - skills/california-motion-practice/SKILL.md
+  - skills/legal-practice-improvement/SKILL.md
 ---
 
 # California Litigation Legal Team
 
-This Paperclip company packages reusable California litigation workflows into a legal-team org chart. Paperclip owns coordination: onboarding issues, live matter issues, child issues, agent assignment, heartbeats, approvals, and audit trail. The legal skills own domain workflow discipline.
+This Paperclip company packages reusable California litigation capabilities into a legal-team org chart. Paperclip owns coordination, assignments, attorney decisions, and the audit trail. The legal skills define professional purpose, work product, quality, and legal boundaries.
 
 Productized skills in this package must not include client confidentiality, firm-specific procedures, private URLs, credentials, account details, or hardcoded local paths. Deployment-specific behavior belongs in runtime issue contracts, deployment profiles, or local adapter configuration.
 
@@ -62,7 +62,7 @@ Legal Ops Supervisor also owns the lawyer-facing Matter Dashboard on every activ
 
 Legal Ops Supervisor also owns Matter Home setup, matter-event planning, and matter context routing. New events should be mapped to an existing matter or a new matter parent, planned across all plausible workstreams, and delegated with only the role-relevant matter context artifacts needed for each specialist.
 
-The subpoena MTC profile remains available inside the general motion-drafting workflow. It is handled by Legal Ops Supervisor and the unified specialists, not by an import-time MTC project or separate MTC sub-organization. Live MTC work begins from a user-created parent issue assigned to Legal Ops Supervisor after general matter intake establishes the Matter Authorization Package.
+The subpoena MTC profile remains available inside California Motion Practice. It is handled by Legal Ops Supervisor and the unified specialists, not by an import-time MTC project or separate MTC sub-organization. Live MTC work begins from a user-created parent issue assigned to Legal Ops Supervisor after general matter intake establishes the Matter Authorization Package.
 
 ## Identity
 
