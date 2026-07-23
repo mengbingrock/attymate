@@ -111,6 +111,13 @@ Keep orphaned Task calls (no matching subagent) for visibility.
 Agent Teams is this app's orchestration layer across Claude, Codex, and OpenCode runtimes.
 For Claude runtime behavior, also track Anthropic's upstream agent-team docs: https://code.claude.com/docs/en/agent-teams
 
+#### Claude Runtime Flavors
+- **Default flavor is `claude` (stock Claude Code CLI)** — `DEFAULT_CLI_FLAVOR` in `src/main/services/team/cliFlavor.ts`. The bundled multimodel fork (`claude-multimodel`) is opt-in via `CLAUDE_TEAM_CLI_FLAVOR=agent_teams_orchestrator` and still required for Codex/Gemini/OpenCode providers.
+- **Stock teams launch INTERACTIVE in tmux by default** (`src/features/interactive-team-runtime/`): the lead is a real interactive Claude session in an app-created tmux session (`agteams-<team>-<run8>`), teammates get their own panes broken out into named windows, and member consoles attach via PTY + `tmux attach`. Headless `--print` is the automatic fallback (no tmux, win32, or `AGENT_TEAMS_DISABLE_INTERACTIVE_RUNTIME=1`).
+- Stock launches strip the fork's routing env (`stripMultimodelRoutingEnv` — `CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST=1` makes stock refuse its keychain login), set `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`, skip the fork-only `--team-bootstrap-spec` flags, and deliver the roster as a bootstrap prompt (stdin for headless, tmux paste-buffer for interactive).
+- Interactive runs have **no child process**: aliveness comes from `runtimeAdapterRunByTeam`, readiness from watching the stock session-derived team dir (`~/.claude/teams/session-<lead8>/`), and member bootstrap confirmation from runtime registration. Known limitation: app quit stops interactive teams (restart adoption not yet built).
+- The stock runtime writes its own team state under a SESSION-DERIVED name (`session-` + first 8 chars of lead session id), separate from the app team dir. `StockSessionTeamBridge` (`src/main/services/team/provisioning/`) maps between them and delivers DMs directly into stock mailbox files.
+
 #### Debugging Team Launches And Teammates
 - Use [`docs/team-management/debugging-agent-teams.md`](docs/team-management/debugging-agent-teams.md) when a team launch hangs, a teammate remains `registered`, OpenCode shows `bootstrap unconfirmed`, messages are missing, or Task Log Stream looks wrong.
 - Always correlate UI diagnostics with persisted files under `~/.claude/teams/<teamName>/`, live process state, and runtime-specific evidence before changing code.
@@ -118,13 +125,14 @@ For Claude runtime behavior, also track Anthropic's upstream agent-team docs: ht
 - Do not treat `member_briefing` as runtime evidence. OpenCode deliverability requires lane-scoped committed runtime evidence such as `opencode-sessions.json` plus its manifest entry.
 
 #### Message Delivery Architecture
-- **Lead** reads ONLY stdin (stream-json). Messages to lead must go through `relayLeadInboxMessages()` which converts inbox entries to stdin.
-- **Native teammates** are independent CLI/process teammates. Claude/Codex-style teammates read their own inbox files between turns; no relay through the lead is needed.
+- **Fork lead (headless)** reads ONLY stdin (stream-json). Messages to lead go through `relayLeadInboxMessages()` which converts inbox entries to stdin. **Stock interactive leads have no app-owned stdin** — lead DMs deliver via the stock session mailbox (`deliverStockTeammateDm` with the lead name); the stdin path remains for headless.
+- **Fork native teammates** are independent CLI/process teammates that read their own inbox files between turns; no relay through the lead is needed.
+- **Stock teammates**: interactive-mode teammates consume the stock session mailbox (`session-<lead8>/inboxes/<member>.json`) — the app writes DMs there directly via `StockSessionTeamBridge`. Headless stock teammates are in-process subagents that read NO inbox files; DMs relay through the lead via `relayMemberInboxMessages` (re-enabled for stock headless only) plus a periodic relay poll.
 - **OpenCode secondary lanes** do not watch teammate inbox files. User DMs are persisted to `inboxes/{member}.json`, then delivered through the OpenCode runtime bridge with explicit delivery proof.
-- **User → Teammate DM**: UI writes to `inboxes/{member}.json` with `from: "user"`. Native teammates read it directly; OpenCode teammates receive it through runtime delivery.
+- **User → Teammate DM**: UI writes to `inboxes/{member}.json` with `from: "user"`. Delivery then depends on the runtime (see above); on confirmed delivery the app-side copy is marked `read`, which drives the UI's delivering→delivered state.
 - **Teammate → User response**: Teammate writes to `inboxes/user.json` or uses the runtime-specific Agent Teams message tool that persists there. UI reads all inbox files including `user.json` via `TeamInboxReader`.
-- **`relayMemberInboxMessages` is legacy fallback code, not the normal teammate-DM path.** The UI caller in `src/main/ipc/teams.ts` is disabled because lead-mediated relay caused lead replies, duplicate messages, and relay loops.
-- **`relayLeadInboxMessages` is ACTIVE** - lead needs it because lead reads stdin, not inbox files.
+- **`relayMemberInboxMessages` is disabled for FORK teammates** (lead replies, duplicate messages, relay loops) but is the active fallback for stock headless teams where the lead is the only delivery channel.
+- **`relayLeadInboxMessages` is ACTIVE for headless leads** - they read stdin, not inbox files.
 - Messages in `user.json` may lack `messageId` - `TeamInboxReader` generates deterministic IDs via sha256(from+timestamp+text).
 - See `docs/team-management/research-messaging.md` for full architecture details.
 
