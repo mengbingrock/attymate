@@ -16,7 +16,9 @@ import { migrateProviderBackendId } from '@shared/utils/providerBackend';
 
 import { mergeJsonSettingsArgs } from '../runtime/cliSettingsArgs';
 import { buildProviderAwareCliEnv } from '../runtime/providerAwareCliEnv';
+import { stripMultimodelRoutingEnv } from '../runtime/providerRuntimeEnv';
 import { ClaudeBinaryResolver } from '../team/ClaudeBinaryResolver';
+import { getConfiguredCliFlavor } from '../team/cliFlavor';
 
 import type { ScheduleLaunchConfig, ScheduleRun } from '@shared/types';
 import type { ChildProcess } from 'child_process';
@@ -156,6 +158,13 @@ export class ScheduledTaskExecutor {
     const connectionIssue = connectionIssues[providerId];
     if (connectionIssue) {
       throw new Error(connectionIssue);
+    }
+
+    if (getConfiguredCliFlavor() === 'claude') {
+      // Stock Claude Code refuses its own keychain login when the multimodel
+      // fork's host-routing pins (CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST etc.)
+      // are present — scheduled runs would exit 1 with "Not logged in".
+      stripMultimodelRoutingEnv(env);
     }
 
     const args = this.buildArgs(request, providerArgs);
