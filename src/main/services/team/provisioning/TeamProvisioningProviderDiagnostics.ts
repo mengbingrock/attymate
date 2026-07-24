@@ -20,7 +20,7 @@ import {
 } from '../../runtime/providerModelProbe';
 import { resolveTeamProviderId } from '../../runtime/providerRuntimeEnv';
 import { atomicWriteAsync } from '../atomicWrite';
-import { getConfiguredCliCommandLabel } from '../cliFlavor';
+import { getConfiguredCliCommandLabel, getConfiguredCliFlavor } from '../cliFlavor';
 
 import { buildCombinedLogs } from './TeamProvisioningCliExitPresentation';
 import { boundProbeOutputBuffer } from './TeamProvisioningProgressBuffers';
@@ -228,6 +228,17 @@ export async function probeClaudeRuntime({
   }
 
   if (resolvedProviderId === 'anthropic' || resolvedProviderId === 'codex') {
+    if (resolvedProviderId === 'codex' && getConfiguredCliFlavor() !== 'agent_teams_orchestrator') {
+      // Stock flavor has no codex control plane in the claude binary
+      // (`runtime status` / `auth status` are fork subcommands); the
+      // codex-exec one-shot diagnostic performs the real readiness check.
+      ports.appendPreflightDebugLog('provider_runtime_control_plane_skipped', {
+        providerId: resolvedProviderId,
+        cwd,
+        reason: 'stock_flavor_codex',
+      });
+      return {};
+    }
     return await probeProviderRuntimeControlPlane({
       claudePath,
       cwd,
@@ -403,6 +414,7 @@ export async function runProviderOneShotDiagnostic({
   env,
   providerId = 'anthropic',
   providerArgs = [],
+  probeOverride,
   ports,
 }: {
   claudePath: string;
@@ -410,6 +422,11 @@ export async function runProviderOneShotDiagnostic({
   env: NodeJS.ProcessEnv;
   providerId?: TeamProviderId;
   providerArgs?: string[];
+  /**
+   * Run the ping against a different binary with pre-built args (stock codex
+   * probes use the codex CLI itself; the claude-style args do not apply).
+   */
+  probeOverride?: { binaryPath: string; args: string[] };
   ports: TeamProvisioningProviderDiagnosticsPorts;
 }): Promise<{ warning?: string }> {
   const cliCommandLabel = getConfiguredCliCommandLabel();
@@ -424,19 +441,23 @@ export async function runProviderOneShotDiagnostic({
     return {};
   }
 
-  const args = buildProviderCliCommandArgs(providerArgs, getPreflightPingArgs(providerId, ports));
+  const probeBinaryPath = probeOverride?.binaryPath ?? claudePath;
+  const args =
+    probeOverride?.args ??
+    buildProviderCliCommandArgs(providerArgs, getPreflightPingArgs(providerId, ports));
   const timeoutMs = getPreflightTimeoutMs(providerId);
   ports.appendPreflightDebugLog('provider_one_shot_diagnostic_start', {
     providerId: resolvedProviderId,
     cwd,
     timeoutMs,
+    binaryPath: probeBinaryPath,
     args,
   });
 
   for (let attempt = 1; attempt <= PREFLIGHT_AUTH_MAX_RETRIES; attempt++) {
     let pingProbe: SpawnProbeResult | null = null;
     try {
-      pingProbe = await ports.spawnProbe(claudePath, args, cwd, env, timeoutMs, {
+      pingProbe = await ports.spawnProbe(probeBinaryPath, args, cwd, env, timeoutMs, {
         resolveOnOutputMatch: ({ stdout, stderr }) => {
           const combined = `${stdout}\n${stderr}`.trim();
           return /\bPONG\b/i.test(combined);

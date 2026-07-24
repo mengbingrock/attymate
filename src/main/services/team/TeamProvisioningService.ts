@@ -125,6 +125,10 @@ import {
 import { mergeJsonSettingsArgs } from '../runtime/cliSettingsArgs';
 import { buildProviderControlPlaneCliCommandArgs } from '../runtime/providerCliCommandArgs';
 import { ProviderConnectionService } from '../runtime/ProviderConnectionService';
+import {
+  buildCodexExecModelProbeArgs,
+  getProviderPreflightModel,
+} from '../runtime/providerModelProbe';
 import { resolveTeamProviderId, stripMultimodelRoutingEnv } from '../runtime/providerRuntimeEnv';
 import { type TeamRuntimeSettingsJson } from '../runtime/teamRuntimeSettingsBundle';
 
@@ -23750,13 +23754,38 @@ export class TeamProvisioningService {
     providerId: TeamProviderId | undefined = 'anthropic',
     providerArgs: string[] = []
   ): Promise<{ warning?: string }> {
+    const ports = this.getProviderDiagnosticsPorts();
+    let probeOverride: { binaryPath: string; args: string[] } | undefined;
+    if (
+      resolveTeamProviderId(providerId) === 'codex' &&
+      getConfiguredCliFlavor() !== 'agent_teams_orchestrator'
+    ) {
+      // Stock flavor has no codex control plane in the claude binary; ping the
+      // codex CLI itself (fork-style --settings args do not apply to it).
+      const codexPath = await CodexBinaryResolver.resolve();
+      if (!codexPath) {
+        return {
+          warning:
+            'Codex CLI not found for the one-shot diagnostic. Install the Codex runtime from the provider settings, or put `codex` on PATH.',
+        };
+      }
+      probeOverride = {
+        binaryPath: codexPath,
+        args: buildCodexExecModelProbeArgs(
+          getProviderPreflightModel('codex', {
+            modelOverride: ports.getConfiguredCodexCustomProviderModel(),
+          })
+        ),
+      };
+    }
     return runProviderOneShotDiagnostic({
       claudePath,
       cwd,
       env,
       providerId,
       providerArgs,
-      ports: this.getProviderDiagnosticsPorts(),
+      ...(probeOverride ? { probeOverride } : {}),
+      ports,
     });
   }
 
