@@ -40,6 +40,7 @@ import { tmpdir } from 'os';
 import { join, posix as pathPosix, win32 as pathWin32 } from 'path';
 
 import { ClaudeMultimodelBridgeService } from '../runtime/ClaudeMultimodelBridgeService';
+import { providerConnectionService } from '../runtime/ProviderConnectionService';
 import {
   CliProviderModelAvailabilityService,
   type ProviderModelAvailabilityContext,
@@ -1314,6 +1315,12 @@ export class CliInstallerService {
       return;
     }
 
+    // Stock flavor: the claude binary has no multimodel control plane, but
+    // Codex teams run as stock codex lanes — surface a codex provider status
+    // (auth via codex-account, model catalog via the codex app-server) so the
+    // create/launch dialogs offer real Codex models instead of bare "Default".
+    void this.attachStockCodexProviderStatus(result, generation);
+
     const doCheck = async (): Promise<void> => {
       for (let authAttempt = 1; authAttempt <= AUTH_STATUS_MAX_RETRIES; authAttempt++) {
         diag.authAttempts = authAttempt;
@@ -1374,6 +1381,62 @@ export class CliInstallerService {
       }
       result.authStatusChecking = false;
       diag.authTimedOut = hitAuthTimeout;
+    }
+  }
+
+  /**
+   * Stock flavor only: build a codex provider status from flavor-independent
+   * sources (codex-account connection + codex app-server model catalog via
+   * providerConnectionService.enrichProviderStatus) and publish it into the
+   * status snapshot. The claude binary is never involved.
+   */
+  private async attachStockCodexProviderStatus(
+    result: CliInstallationStatus,
+    generation: number
+  ): Promise<void> {
+    try {
+      const base: CliProviderStatus = {
+        providerId: 'codex',
+        displayName: getProviderDisplayName('codex'),
+        supported: true,
+        authenticated: false,
+        authMethod: null,
+        verificationState: 'unknown',
+        modelVerificationState: 'idle',
+        statusMessage: 'Codex teams run as stock codex lanes',
+        models: [],
+        modelAvailability: [],
+        canLoginFromUi: true,
+        capabilities: {
+          teamLaunch: true,
+          oneShot: true,
+          extensions: createDefaultCliExtensionCapabilities(),
+        },
+        backend: {
+          kind: 'codex-native',
+          label: 'Codex native',
+          endpointLabel: null,
+          projectId: null,
+          authMethodDetail: null,
+        },
+      };
+      const enriched = await providerConnectionService.enrichProviderStatus(base);
+      if (generation !== this.statusGatherGeneration) {
+        return;
+      }
+      const authenticated =
+        enriched.connection?.codex?.launchAllowed === true ||
+        enriched.connection?.apiKeyConfigured === true;
+      result.providers = [
+        {
+          ...enriched,
+          authenticated,
+          verificationState: authenticated ? 'verified' : enriched.verificationState,
+        },
+      ];
+      this.publishStatusSnapshot(result);
+    } catch (error) {
+      logger.warn(`Stock codex provider status unavailable: ${getErrorMessage(error)}`);
     }
   }
 

@@ -377,10 +377,10 @@ export const LaunchTeamDialog = (props: LaunchTeamDialogProps): React.JSX.Elemen
         : cliStatus,
     [cliStatus, cliStatusLoading, multimodelEnabled]
   );
+  // Flavor-independent: the stock flavor also surfaces a codex provider entry.
   const codexAccount = useCodexAccountSnapshot({
     enabled:
       multimodelEnabled &&
-      loadingCliStatus?.flavor === 'agent_teams_orchestrator' &&
       Boolean(loadingCliStatus?.providers.some((provider) => provider.providerId === 'codex')),
   });
   const effectiveCliStatus = useMemo(

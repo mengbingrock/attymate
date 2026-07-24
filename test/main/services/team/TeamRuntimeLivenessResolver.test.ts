@@ -28,6 +28,43 @@ describe('resolveTeamMemberRuntimeLiveness', () => {
     expect(result.pid).toBe(100);
   });
 
+  it('treats a codex-lane pane running codex as live runtime evidence', () => {
+    const result = resolveTeamMemberRuntimeLiveness({
+      teamName: 'codex-crew',
+      memberName: 'scout',
+      agentId: 'scout@codex-crew',
+      backendType: 'tmux',
+      providerId: 'codex',
+      tmuxPaneId: '%7',
+      pane: { paneId: '%7', panePid: 512, currentCommand: 'codex' },
+      // Codex argv carries no --team-name/--agent-id identity markers.
+      processRows: [{ pid: 512, ppid: 1, command: 'codex -c mcp_servers.agent_teams.command=…' }],
+      processTableAvailable: true,
+      nowIso: NOW,
+    });
+
+    expect(result.alive).toBe(true);
+    expect(result.livenessKind).toBe('runtime_process');
+    expect(result.pidSource).toBe('tmux_pane');
+  });
+
+  it('keeps non-codex panes on identity-verified process matching', () => {
+    const result = resolveTeamMemberRuntimeLiveness({
+      teamName: 'demo',
+      memberName: 'bob',
+      agentId: 'agent-bob',
+      backendType: 'tmux',
+      providerId: 'anthropic',
+      tmuxPaneId: '%8',
+      pane: { paneId: '%8', panePid: 600, currentCommand: 'codex' },
+      processRows: [{ pid: 600, ppid: 1, command: 'codex' }],
+      processTableAvailable: true,
+      nowIso: NOW,
+    });
+
+    expect(result.alive).toBe(false);
+  });
+
   it('promotes a verified team and agent process to strong runtime evidence', () => {
     const result = resolveTeamMemberRuntimeLiveness({
       teamName: 'demo',

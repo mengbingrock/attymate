@@ -539,10 +539,11 @@ export const CreateTeamDialog = ({
         : cliStatus,
     [cliStatus, cliStatusLoading, multimodelEnabled]
   );
+  // The codex account snapshot is flavor-independent (app-server based); the
+  // stock flavor also surfaces a codex provider entry for codex lane teams.
   const codexAccount = useCodexAccountSnapshot({
     enabled:
       multimodelEnabled &&
-      loadingCliStatus?.flavor === 'agent_teams_orchestrator' &&
       Boolean(loadingCliStatus?.providers.some((provider) => provider.providerId === 'codex')),
   });
   const effectiveCliStatus = useMemo(

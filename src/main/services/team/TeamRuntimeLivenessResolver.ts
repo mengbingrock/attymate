@@ -241,6 +241,12 @@ function isOpenCodeRuntimeProcess(command: string | undefined): boolean {
   return (command ?? '').toLowerCase().includes('opencode');
 }
 
+/** tmux reports the foreground command basename (e.g. "codex", "codex-x86"). */
+function isCodexPaneCommand(command: string | undefined): boolean {
+  const normalized = (command ?? '').trim().toLowerCase();
+  return normalized === 'codex' || normalized.startsWith('codex-') || normalized === 'codex.exe';
+}
+
 function hasPersistedEvidence(input: ResolveTeamMemberRuntimeLivenessInput): boolean {
   return Boolean(
     input.agentId?.trim() ||
@@ -412,6 +418,23 @@ export function resolveTeamMemberRuntimeLiveness(
 
   const pane = input.pane;
   if (pane) {
+    // Codex lane panes run the stock codex TUI directly. Codex argv carries no
+    // --team-name/--agent-id identity markers, so descendant matching can never
+    // verify it — but the app created this exact pane for this member, so a
+    // live pane whose foreground command is codex IS the member's runtime.
+    if (input.providerId === 'codex' && isCodexPaneCommand(pane.currentCommand)) {
+      return result({
+        alive: true,
+        livenessKind: 'runtime_process',
+        pidSource: 'tmux_pane',
+        pid: pane.panePid,
+        panePid: pane.panePid,
+        paneCurrentCommand: pane.currentCommand,
+        runtimeSessionId,
+        runtimeDiagnostic: 'codex lane pane is running the codex runtime',
+        diagnostics: [...diagnostics, 'tmux pane foreground command is codex'],
+      });
+    }
     const descendants = collectDescendants(input.processRows, pane.panePid);
     const verifiedDescendant = findNewestVerifiedRuntimeProcess({
       rows: descendants,
