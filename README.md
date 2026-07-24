@@ -16,6 +16,44 @@
   <sub>Free desktop app for AI agent teams. Start with a free model with no auth - no signup, API key, or card - or connect Claude Code, Codex, OpenCode, Cursor, SuperGrok, GitHub Copilot, Z.AI, MiniMax, Kiro, and many more. For coding and broader project work.</sub>
 </p>
 
+## What's new in this fork
+
+This fork replaces the bundled multimodel runtime with the **genuine CLIs you already have installed** — teams run on stock Claude Code and stock OpenAI Codex, using your existing logins and subscriptions, with live consoles into every agent.
+
+### Stock OpenAI Codex teams (new)
+
+Pick the Codex provider and the team runs entirely on the **stock `codex` CLI** — no forked runtime involved:
+
+- **Every member is a real interactive Codex session** — the lead and each teammate run as their own `codex` TUI in a window of one app-managed tmux session ("codex lanes")
+- **The app is the team fabric** — lanes get the built-in agent-teams MCP tools via `-c` config overrides, so the kanban board, task tools, and messaging work exactly like Claude teams; inbound messages are pasted straight into the member's pane (Codex queues input even mid-turn)
+- **Open a console on any member** — watch an agent live and type to it directly, or attach from any terminal with `tmux`
+- **Real model picker and auth** — team dialogs list actual Codex models from the Codex app-server catalog and show your ChatGPT/API-key connection state
+- **Uses your Codex login** — ChatGPT account or API key from `~/.codex`, nothing extra to configure
+
+### Stock Claude Code teams, interactive by default
+
+- **Claude teams launch on your installed `claude` CLI** with the login and subscription you already have; the bundled multimodel orchestrator is opt-in via `CLAUDE_TEAM_CLI_FLAVOR=agent_teams_orchestrator`
+- **Interactive tmux runtime** — the lead is a real interactive Claude session, teammates get their own panes broken out into named windows, and member cards gain an "Open console" action (headless remains the automatic fallback without tmux)
+- **Direct teammate messaging** — DMs are delivered into the runtime's own session mailboxes instead of being relayed through the lead
+
+### Provider-aware runtime routing
+
+Each launch picks its runtime from the team's provider: Claude leads → stock Claude, Codex leads → stock Codex lanes, and the fork only on explicit opt-in — a Codex team can never silently run on the Anthropic binary.
+
+### Workflow view on the kanban
+
+A third board view renders tasks as complete workflows on a vertical timeline — stage rail, each task's full journey (created → status moves → review → approved) rebuilt from its history, plus board insights (completed, in review, average cycle time), ordered by creation time.
+
+### Reliability fixes along the way
+
+Concurrent tmux paste-buffer collisions, fork-only control-plane probes leaking into stock launches, codex members stuck as "stale runtime"/forever-joining after launch, scheduler runs failing on stock auth, stale session-team directories being re-adopted, and a `GET /api/teams/:teamName/agent-runtime` diagnostics endpoint for member liveness.
+
+> Known limitation: interactive tmux teams stop when the app quits (restart adoption is not built yet); relaunch the team from the team view after restarting the app.
+
+---
+
+The original README follows.
+
 <p align="center">
   <a href="docs/screenshots/overview.jpg">
     <img src="docs/screenshots/overview.jpg" alt="Agent Teams AI workspace overview" width="100%" />
@@ -176,6 +214,7 @@ No prerequisites - the app can detect installed Claude Code, Codex, and OpenCode
 
 ## Table of contents
 
+- [What's new in this fork](#whats-new-in-this-fork)
 - [Installation](#installation)
 - [Table of contents](#table-of-contents)
 - [What is this](#what-is-this)
