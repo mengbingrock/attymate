@@ -190,6 +190,47 @@ describe('member runtime presentation', () => {
     ).toBe(false);
   });
 
+  it('keeps a live tmux-backed codex lane member green on bootstrap-confirmed liveness', () => {
+    const presentation = buildMemberLaunchPresentation({
+      member: createMember({ providerBackendId: undefined }),
+      spawnLivenessSource: 'process',
+      runtimeAdvisory: undefined,
+      isTeamAlive: true,
+      isTeamProvisioning: false,
+      ...createConfirmedCodexSpawn(),
+      runtimeEntry: createLiveRuntime({
+        backendType: 'tmux',
+        livenessKind: 'confirmed_bootstrap',
+        pid: undefined,
+        rssBytes: undefined,
+      }),
+    });
+
+    expect(presentation.launchVisualState).not.toBe('stale_runtime');
+    expect(presentation.presenceLabel).not.toBe('stale runtime');
+  });
+
+  it('still marks a dead tmux-backed codex lane pane as stale', () => {
+    const presentation = buildMemberLaunchPresentation({
+      member: createMember({ providerBackendId: undefined }),
+      spawnLivenessSource: 'process',
+      runtimeAdvisory: undefined,
+      isTeamAlive: true,
+      isTeamProvisioning: false,
+      ...createConfirmedCodexSpawn(),
+      spawnRuntimeAlive: false,
+      runtimeEntry: createLiveRuntime({
+        backendType: 'tmux',
+        alive: false,
+        livenessKind: 'runtime_process_candidate',
+        pid: undefined,
+        rssBytes: undefined,
+      }),
+    });
+
+    expect(presentation.launchVisualState).toBe('stale_runtime');
+  });
+
   it('marks stale confirmed Codex native spawn state as non-green runtime status', () => {
     const presentation = buildMemberLaunchPresentation({
       member: createMember(),

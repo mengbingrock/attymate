@@ -702,6 +702,32 @@ export function registerTeamRoutes(app: FastifyInstance, services: HttpServices)
     }
   );
 
+  app.get<{ Params: { teamName: string } }>(
+    '/api/teams/:teamName/agent-runtime',
+    async (request, reply) => {
+      try {
+        const validatedTeamName = validateTeamName(request.params.teamName);
+        if (!validatedTeamName.valid) {
+          return reply.status(400).send({ error: validatedTeamName.error });
+        }
+        const provisioning = getTeamProvisioningService(services);
+        const [snapshot, spawnStatuses] = await Promise.all([
+          provisioning.getTeamAgentRuntimeSnapshot(validatedTeamName.value!),
+          provisioning.getMemberSpawnStatuses(validatedTeamName.value!),
+        ]);
+        return reply.send({ snapshot, spawnStatuses });
+      } catch (error) {
+        if (shouldLogError(error)) {
+          logger.error(
+            `Error in GET /api/teams/${request.params.teamName}/agent-runtime:`,
+            getErrorMessage(error)
+          );
+        }
+        return reply.status(getStatusCode(error)).send({ error: getErrorMessage(error) });
+      }
+    }
+  );
+
   app.get('/api/teams/runtime/alive', async (_request, reply) => {
     try {
       const teamProvisioningService = getTeamProvisioningService(services);

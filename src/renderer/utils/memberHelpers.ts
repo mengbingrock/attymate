@@ -1066,6 +1066,12 @@ function shouldTreatCodexNativeRuntimeAsOffline({
   if (!isCodexNativeProcessTeammate(member)) {
     return false;
   }
+  // Codex lane members run as app-created tmux panes, not codex-native child
+  // processes; their liveness is pane/bootstrap-based and alive:true is
+  // authoritative, so the process-evidence expectation below does not apply.
+  if (runtimeEntry?.backendType === 'tmux') {
+    return runtimeEntry.alive !== true;
+  }
   if (
     spawnLaunchState === 'starting' ||
     spawnLaunchState === 'runtime_pending_bootstrap' ||
