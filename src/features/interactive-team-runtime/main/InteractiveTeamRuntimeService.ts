@@ -15,11 +15,20 @@ import {
   isViewerSessionNameFor,
 } from '../core/domain/sessionNaming';
 
+import {
+  clearRuntimeBinding,
+  readRuntimeBinding,
+  writeRuntimeBinding,
+} from './runtimeBindingStore';
+
 import type {
   ConsoleTargetDto,
   InteractiveRuntimeStatusDto,
   OpenConsoleResultDto,
 } from '../contracts';
+import type { InteractiveRuntimeBinding } from '../core/domain/runtimeBinding';
+
+export type { InteractiveRuntimeBinding } from '../core/domain/runtimeBinding';
 
 const logger = createLogger('Service:InteractiveTeamRuntime');
 
@@ -30,17 +39,7 @@ const PROMPT_READY_POLL_MS = 1_500;
 const SESSION_TEAM_WATCH_POLL_MS = 2_000;
 const SESSION_TEAM_WATCH_TIMEOUT_MS = 10 * 60_000;
 const GRACEFUL_EXIT_WAIT_MS = 12_000;
-
-export interface InteractiveRuntimeBinding {
-  version: 1;
-  teamName: string;
-  runId: string;
-  tmuxSessionName: string;
-  leadSessionId: string | null;
-  sessionTeamName: string | null;
-  leadPaneId: string | null;
-  launchedAt: string;
-}
+const CODEX_LANE_EXIT_WAIT_MS = 5_000;
 
 export interface InteractiveLaunchInput {
   teamName: string;
@@ -59,10 +58,6 @@ export interface InteractiveLaunchInput {
     onMemberRegistered: (memberName: string, paneId: string) => void;
     onFailed: (reason: string) => void;
   };
-}
-
-function getBindingPath(teamName: string): string {
-  return path.join(getTeamsBasePath(), teamName, 'interactive-runtime.json');
 }
 
 function getSessionTeamName(leadSessionId: string): string {
@@ -101,23 +96,15 @@ export class InteractiveTeamRuntimeService {
   }
 
   async readBinding(teamName: string): Promise<InteractiveRuntimeBinding | null> {
-    try {
-      const raw = await fs.promises.readFile(getBindingPath(teamName), 'utf-8');
-      const parsed = JSON.parse(raw) as InteractiveRuntimeBinding;
-      return parsed?.version === 1 && parsed.tmuxSessionName ? parsed : null;
-    } catch {
-      return null;
-    }
+    return readRuntimeBinding(teamName);
   }
 
   async #writeBinding(binding: InteractiveRuntimeBinding): Promise<void> {
-    const bindingPath = getBindingPath(binding.teamName);
-    await fs.promises.mkdir(path.dirname(bindingPath), { recursive: true });
-    await atomicWriteAsync(bindingPath, JSON.stringify(binding, null, 2));
+    await writeRuntimeBinding(binding);
   }
 
   async clearBinding(teamName: string): Promise<void> {
-    await fs.promises.rm(getBindingPath(teamName), { force: true }).catch(() => {});
+    await clearRuntimeBinding(teamName);
   }
 
   /**
@@ -160,13 +147,15 @@ export class InteractiveTeamRuntimeService {
     }
 
     const binding: InteractiveRuntimeBinding = {
-      version: 1,
+      version: 2,
+      runtime: 'claude-interactive',
       teamName: input.teamName,
       runId: input.runId,
       tmuxSessionName,
       leadSessionId: null,
       sessionTeamName: null,
       leadPaneId: null,
+      lanes: [],
       launchedAt: new Date().toISOString(),
     };
     await this.#writeBinding(binding);
@@ -446,7 +435,18 @@ export class InteractiveTeamRuntimeService {
 
     const tmux = getTmuxSessionCommandExecutor();
     if (await tmux.hasSession(binding.tmuxSessionName)) {
-      if (binding.leadPaneId) {
+      if (binding.runtime === 'codex-lanes') {
+        // Graceful per-lane exit; codex quits on "/quit" + Enter.
+        for (const lane of binding.lanes) {
+          await tmux.sendKeysToPane(lane.paneId, '/quit').catch(() => {});
+          await sleep(400);
+          await tmux.execTmux(['send-keys', '-t', lane.paneId, 'Enter'], 3_000).catch(() => {});
+        }
+        const deadline = Date.now() + CODEX_LANE_EXIT_WAIT_MS;
+        while (Date.now() < deadline && (await tmux.hasSession(binding.tmuxSessionName))) {
+          await sleep(1_000);
+        }
+      } else if (binding.leadPaneId) {
         // Graceful: /exit, then Enter to confirm "Exit anyway" if teammates run.
         await tmux.sendKeysToPane(binding.leadPaneId, '/exit').catch(() => {});
         await sleep(1_500);
@@ -488,6 +488,18 @@ export class InteractiveTeamRuntimeService {
     const tmux = getTmuxSessionCommandExecutor();
     const panes = await tmux.listSessionPanes(binding.tmuxSessionName);
     if (panes.length === 0) return [];
+    if (binding.runtime === 'codex-lanes') {
+      const livePaneIds = new Set(panes.map((pane) => pane.paneId));
+      return binding.lanes
+        .filter((lane) => livePaneIds.has(lane.paneId))
+        .map((lane) => ({
+          memberName: lane.memberName,
+          isLead: lane.isLead,
+          paneId: lane.paneId,
+          windowIndex:
+            panes.find((pane) => pane.paneId === lane.paneId)?.windowIndex ?? lane.windowIndex,
+        }));
+    }
     const targets: ConsoleTargetDto[] = [];
     for (const pane of panes) {
       if (pane.paneId === binding.leadPaneId) {

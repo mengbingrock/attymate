@@ -3,8 +3,11 @@ import {
   buildCodexNativeAttachmentDeliveryParts,
 } from '@features/agent-attachments/main';
 import {
+  buildCodexLaneArgs,
   buildInteractiveCliArgs,
+  codexTeamLanesService,
   interactiveTeamRuntimeService,
+  type CodexLaneSpec,
 } from '@features/interactive-team-runtime/main';
 import { type RuntimeTurnSettledProvider } from '@features/member-work-sync/main';
 import { inspectOpenCodeLocalModelRuntimeReadiness } from '@features/runtime-provider-management/main';
@@ -35,6 +38,7 @@ import {
   type WorkspaceTrustProvider,
   type WorkspaceTrustWorkspace,
 } from '@features/workspace-trust/main';
+import { CodexBinaryResolver } from '@main/services/infrastructure/codexAppServer';
 import { ConfigManager } from '@main/services/infrastructure/ConfigManager';
 import { NotificationManager } from '@main/services/infrastructure/NotificationManager';
 import { notifyTeamWatchScopeChanged } from '@main/services/infrastructure/teamWatchScope';
@@ -207,6 +211,11 @@ import {
   type RuntimeEvidenceKind,
   RuntimeStaleEvidenceError,
 } from './opencode/store/RuntimeRunTombstoneStore';
+import {
+  buildCodexLeadBootstrapPrompt,
+  buildCodexTeammateBriefingPrompt,
+} from './provisioning/CodexLaneBootstrapPrompts';
+import { resolveTeamRuntimeMode } from './provisioning/resolveTeamRuntimeMode';
 import { synthesizeStockClaudeTeamRuntimeState } from './provisioning/StockClaudeTeamStateSynthesizer';
 import { deliverStockSessionTeamDm } from './provisioning/StockSessionTeamBridge';
 import { getSystemLocale } from './provisioning/TeamProvisioningAgentLanguage';
@@ -218,6 +227,7 @@ import {
   removeDeterministicBootstrapSpecFile,
   removeDeterministicBootstrapUserPromptFile,
   type RuntimeBootstrapMemberMcpLaunchConfig,
+  type RuntimeBootstrapSpec,
   writeDeterministicBootstrapSpecFile,
   writeDeterministicBootstrapUserPromptFile,
 } from './provisioning/TeamProvisioningBootstrapSpec';
@@ -692,7 +702,7 @@ import {
   snapshotToMemberSpawnStatuses,
 } from './TeamLaunchStateEvaluator';
 import { TeamLaunchStateStore } from './TeamLaunchStateStore';
-import { TeamMcpConfigBuilder } from './TeamMcpConfigBuilder';
+import { buildAgentTeamsMcpServerSpec, TeamMcpConfigBuilder } from './TeamMcpConfigBuilder';
 import { TeamMemberLogsFinder } from './TeamMemberLogsFinder';
 import { TeamMembersMetaStore } from './TeamMembersMetaStore';
 import { TeamMemberWorktreeManager } from './TeamMemberWorktreeManager';
@@ -1245,6 +1255,13 @@ interface ProvisioningRun {
    * lives in an app-created tmux session and observation is file-based.
    */
   interactiveRuntime?: boolean;
+  /**
+   * Stock OpenAI codex lanes: every member (lead included) is its own
+   * interactive codex TUI in a tmux window; the app is the team fabric and
+   * inbound messages are pasted into member panes.
+   */
+  codexLaneRuntime?: boolean;
+  codexLanePumpHandle?: NodeJS.Timeout | null;
   launchCleanupStateFinalized?: boolean;
   workspaceTrustPlan?: WorkspaceTrustFullPlanResult | null;
   workspaceTrustExecution?: WorkspaceTrustExecutionResult | null;
@@ -10588,6 +10605,13 @@ export class TeamProvisioningService {
         effectiveMembers.push(effectiveMember);
         continue;
       }
+      if (providerId === 'codex' && getConfiguredCliFlavor() !== 'agent_teams_orchestrator') {
+        // Stock codex lanes launch without -m and inherit the user's own codex
+        // default model; the fork's `model list` control-plane CLI does not
+        // exist on the stock runtime, so default-model resolution must not run.
+        effectiveMembers.push(effectiveMember);
+        continue;
+      }
 
       effectiveMembers.push({
         ...effectiveMember,
@@ -11112,6 +11136,205 @@ export class TeamProvisioningService {
   }
 
   /**
+   * Stock OpenAI codex lane runtime: launch every member (lead included) as
+   * its own interactive codex TUI window in one tmux session. The app is the
+   * team fabric — coordination runs through the agent-teams MCP tools each
+   * lane is configured with, and inbound messages are pasted into panes.
+   */
+  private async launchCodexLanesForRun(params: {
+    run: ProvisioningRun;
+    runId: string;
+    teamName: string;
+    cwd: string;
+    shellEnv: NodeJS.ProcessEnv;
+    controlApiBaseUrl?: string;
+    leadBootstrapPrompt: string;
+    effectiveMemberSpecs: { name: string; model?: string; effort?: string; role?: string }[];
+    resolvedProviderId: TeamProviderId;
+    leadModel: string | null;
+    leadEffort: string | null;
+    bypassSandbox: boolean;
+    onAllLanesReady?: () => void;
+  }): Promise<void> {
+    const { run, runId, teamName, cwd, shellEnv } = params;
+    if (!(await interactiveTeamRuntimeService.isEligible())) {
+      throw new Error(
+        'Codex teams run as interactive tmux lanes and require tmux (not supported on Windows). Install tmux and try again.'
+      );
+    }
+    const codexPath = await CodexBinaryResolver.resolve();
+    if (!codexPath) {
+      throw new Error(
+        'Codex CLI not found. Install the Codex runtime from the provider settings, or put `codex` on PATH.'
+      );
+    }
+
+    const mcpServer = await buildAgentTeamsMcpServerSpec(params.controlApiBaseUrl);
+    const leadName = this.getRunLeadName(run);
+    const leadLane: CodexLaneSpec = {
+      memberName: leadName,
+      isLead: true,
+      args: buildCodexLaneArgs({
+        mcpServer,
+        cwd,
+        model: params.leadModel ?? undefined,
+        reasoningEffort: params.leadEffort ?? undefined,
+        bypassSandbox: params.bypassSandbox,
+      }),
+      briefingPrompt: params.leadBootstrapPrompt,
+    };
+    const teammateLanes: CodexLaneSpec[] = params.effectiveMemberSpecs
+      .filter((member) => member.name !== leadName)
+      .map((member) => ({
+        memberName: member.name,
+        isLead: false,
+        args: buildCodexLaneArgs({
+          mcpServer,
+          cwd,
+          model: member.model?.trim() || params.leadModel || undefined,
+          reasoningEffort: member.effort ?? params.leadEffort ?? undefined,
+          bypassSandbox: params.bypassSandbox,
+        }),
+        briefingPrompt: buildCodexTeammateBriefingPrompt({
+          teamName,
+          memberName: member.name,
+          role: member.role,
+          leadName,
+        }),
+      }));
+    const lanes = [leadLane, ...teammateLanes];
+    const readyLanes = new Set<string>();
+    emitProvisioningCheckpoint(
+      run,
+      'Launching codex team lanes',
+      `lanes=${lanes.length} cwd=${cwd}`
+    );
+    await codexTeamLanesService.launchCodexLanes({
+      teamName,
+      runId,
+      cwd,
+      codexPath,
+      env: { ...shellEnv },
+      lanes,
+      callbacks: {
+        checkpoint: (label, detail) => emitProvisioningCheckpoint(run, label, detail),
+        onLaneReady: (memberName) => {
+          readyLanes.add(memberName);
+          if (memberName !== leadName) {
+            this.setMemberSpawnStatus(run, memberName, 'online', undefined, 'process');
+          }
+          if (readyLanes.size >= lanes.length) {
+            void codexTeamLanesService.syncAppConfigMembers(teamName, cwd).catch(() => {});
+            params.onAllLanesReady?.();
+          }
+        },
+        onFailed: (reason) => {
+          if (run.provisioningComplete) {
+            logger.warn(`[${teamName}] codex lane runtime ended: ${reason}`);
+            this.runtimeAdapterRunByTeam.delete(teamName);
+            this.deleteAliveRunId(teamName);
+            return;
+          }
+          const progress = updateProgress(run, 'failed', reason, { error: reason });
+          run.onProgress(progress);
+          this.cleanupRun(run);
+        },
+      },
+    });
+    this.runtimeAdapterRunByTeam.set(teamName, {
+      runId,
+      providerId: params.resolvedProviderId,
+      cwd,
+    });
+    run.processClosed = false;
+    run.spawnContext = {
+      claudePath: codexPath,
+      args: leadLane.args,
+      cwd,
+      env: { ...shellEnv },
+      prompt: leadLane.briefingPrompt,
+    };
+  }
+
+  /**
+   * Codex-lane runtime delivery pump: unread app-inbox messages are pasted
+   * into the recipient's codex pane (the TUI queues input even mid-turn) and
+   * marked read on success — the on-disk read flag is the dedupe.
+   */
+  private startCodexLaneMessagePump(run: ProvisioningRun): void {
+    if (!run.codexLaneRuntime || run.codexLanePumpHandle) return;
+
+    const poll = (): void => {
+      if (run.processKilled || run.cancelRequested || !run.provisioningComplete) return;
+      const leadName = this.getRunLeadName(run);
+      const memberNames = [
+        leadName,
+        ...(run.expectedMembers ?? []).filter((name) => name && name !== leadName),
+      ];
+      for (const memberName of memberNames) {
+        void this.pumpCodexLaneInboxMessages(run, memberName).catch((error: unknown) => {
+          logger.debug(
+            `[${run.teamName}] codex lane pump failed for "${memberName}": ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        });
+      }
+    };
+
+    run.codexLanePumpHandle = setInterval(() => {
+      try {
+        poll();
+      } catch (error) {
+        logger.debug(
+          `[${run.teamName}] codex lane pump error: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    }, STOCK_INBOX_RELAY_POLL_MS);
+    run.codexLanePumpHandle.unref?.();
+  }
+
+  private stopCodexLaneMessagePump(run: ProvisioningRun): void {
+    if (run.codexLanePumpHandle) {
+      clearInterval(run.codexLanePumpHandle);
+      run.codexLanePumpHandle = null;
+    }
+  }
+
+  private async pumpCodexLaneInboxMessages(
+    run: ProvisioningRun,
+    memberName: string
+  ): Promise<void> {
+    let messages: Awaited<ReturnType<TeamInboxReader['getMessagesFor']>> = [];
+    try {
+      messages = await this.inboxReader.getMessagesFor(run.teamName, memberName);
+    } catch {
+      return;
+    }
+    const unread = messages
+      .filter((message): message is InboxMessage & { messageId: string } => {
+        if (message.read) return false;
+        if (typeof message.text !== 'string' || message.text.trim().length === 0) return false;
+        if (!hasStableInboxMessageId(message)) return false;
+        return message.from !== memberName;
+      })
+      .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+    for (const message of unread) {
+      const summaryPart = message.summary?.trim() ? ` ${message.summary.trim()}` : '';
+      const formatted = `[Agent Teams message from ${message.from}]${summaryPart}\n${message.text}`;
+      const delivered = await codexTeamLanesService.pasteIntoLane(
+        run.teamName,
+        memberName,
+        formatted
+      );
+      if (!delivered) return; // lane busy/unavailable — retry on the next poll
+      await this.markInboxMessagesRead(run.teamName, memberName, [message]).catch(() => {});
+    }
+  }
+
+  /**
    * Detects auth failure keywords in stderr/stdout during provisioning.
    * On first detection: kills process, waits, and respawns automatically.
    * On second detection (after retry): fails fast with a clear error.
@@ -11171,6 +11394,7 @@ export class TeamProvisioningService {
     this.stopFilesystemMonitor(run);
     this.stopStallWatchdog(run);
     this.stopStockTeammateInboxRelayPoll(run);
+    this.stopCodexLaneMessagePump(run);
     if (run.child) {
       run.child.stdout?.removeAllListeners('data');
       run.child.stderr?.removeAllListeners('data');
@@ -11960,7 +12184,12 @@ export class TeamProvisioningService {
       const initialUserPrompt = request.prompt?.trim() ?? '';
       const promptSize = getPromptSizeSummary(initialUserPrompt);
       let child: ReturnType<typeof spawn> | undefined;
-      const useStockClaudeBootstrap = getConfiguredCliFlavor() === 'claude';
+      const runtimeMode = resolveTeamRuntimeMode({
+        cliFlavor: getConfiguredCliFlavor(),
+        leadProviderId: request.providerId,
+      });
+      const useStockClaudeBootstrap = runtimeMode === 'stock-claude';
+      const useCodexLaneRuntime = runtimeMode === 'stock-codex-lanes';
       let stockBootstrapPrompt: string | null = null;
       if (useStockClaudeBootstrap) {
         // Stock Claude Code has no --team-bootstrap-spec contract: teams are
@@ -11969,6 +12198,14 @@ export class TeamProvisioningService {
         // team_bootstrap stream events.
         run.deterministicBootstrap = false;
         shellEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1';
+        stripMultimodelRoutingEnv(shellEnv);
+      } else if (useCodexLaneRuntime) {
+        // Stock OpenAI codex lanes: the app orchestrates every member as its
+        // own codex TUI; no Claude teams env, no deterministic bootstrap.
+        run.deterministicBootstrap = false;
+        run.stockClaudeRuntime = false;
+        run.interactiveRuntime = true;
+        run.codexLaneRuntime = true;
         stripMultimodelRoutingEnv(shellEnv);
       } else {
         shellEnv.CLAUDE_ENABLE_DETERMINISTIC_TEAM_BOOTSTRAP = '1';
@@ -12051,6 +12288,8 @@ export class TeamProvisioningService {
         run.bootstrapSpecPath = bootstrapSpecPath;
         if (useStockClaudeBootstrap) {
           stockBootstrapPrompt = buildStockClaudeBootstrapPrompt(bootstrapSpec, initialUserPrompt);
+        } else if (useCodexLaneRuntime) {
+          stockBootstrapPrompt = buildCodexLeadBootstrapPrompt(bootstrapSpec, initialUserPrompt);
         } else if (initialUserPrompt) {
           emitProvisioningCheckpoint(
             run,
@@ -12067,13 +12306,23 @@ export class TeamProvisioningService {
           controlApiBaseUrl: provisioningEnv.env.CLAUDE_TEAM_CONTROL_URL,
         });
         run.mcpConfigPath = mcpConfigPath;
-        emitProvisioningCheckpoint(run, 'Validating agent-teams MCP runtime');
-        await this.validateAgentTeamsMcpRuntime(claudePath, request.cwd, shellEnv, mcpConfigPath, {
-          isCancelled: () =>
-            run.cancelRequested ||
-            run.processKilled ||
-            this.stopAllTeamsGeneration !== stopAllGenerationAtStart,
-        });
+        if (!useCodexLaneRuntime) {
+          // Codex lanes take MCP config as -c overrides and never run the
+          // claude binary, so the claude-based MCP validation does not apply.
+          emitProvisioningCheckpoint(run, 'Validating agent-teams MCP runtime');
+          await this.validateAgentTeamsMcpRuntime(
+            claudePath,
+            request.cwd,
+            shellEnv,
+            mcpConfigPath,
+            {
+              isCancelled: () =>
+                run.cancelRequested ||
+                run.processKilled ||
+                this.stopAllTeamsGeneration !== stopAllGenerationAtStart,
+            }
+          );
+        }
       } catch (error) {
         this.runs.delete(runId);
         this.provisioningRunByTeam.delete(request.teamName);
@@ -12178,7 +12427,22 @@ export class TeamProvisioningService {
           await this.seedLeadBootstrapPermissionRules(request.teamName, request.cwd);
         }
 
-        if (useInteractiveRuntime) {
+        if (useCodexLaneRuntime) {
+          await this.launchCodexLanesForRun({
+            run,
+            runId,
+            teamName: request.teamName,
+            cwd: request.cwd,
+            shellEnv,
+            controlApiBaseUrl: provisioningEnv.env.CLAUDE_TEAM_CONTROL_URL,
+            leadBootstrapPrompt: stockBootstrapPrompt ?? initialUserPrompt,
+            effectiveMemberSpecs,
+            resolvedProviderId,
+            leadModel: launchModelArg ?? null,
+            leadEffort: launchIdentity.resolvedEffort ?? null,
+            bypassSandbox: request.skipPermissions !== false,
+          });
+        } else if (useInteractiveRuntime) {
           run.interactiveRuntime = true;
           const interactiveArgs = buildInteractiveCliArgs(spawnArgs);
           emitProvisioningCheckpoint(
@@ -12261,7 +12525,12 @@ export class TeamProvisioningService {
         throw error;
       }
 
-      if (useInteractiveRuntime) {
+      if (useCodexLaneRuntime) {
+        updateProgress(run, 'spawning', 'Starting Codex team lanes', {
+          warnings: mergeProvisioningWarnings(run.progress.warnings, runtimeWarning),
+        });
+        run.onProgress(run.progress);
+      } else if (useInteractiveRuntime) {
         updateProgress(run, 'spawning', 'Interactive tmux lead starting', {
           warnings: mergeProvisioningWarnings(run.progress.warnings, runtimeWarning),
         });
@@ -12307,15 +12576,16 @@ export class TeamProvisioningService {
       // writeConfigFile) between init and spawn can take seconds, causing false stall warnings.
       run.lastDataReceivedAt = Date.now();
       run.lastStdoutReceivedAt = Date.now();
-      if (!useInteractiveRuntime) {
+      if (!useInteractiveRuntime && !useCodexLaneRuntime) {
         // Interactive leads produce no stdout for the app; the stall watchdog
         // would only emit false silence warnings.
         this.startStallWatchdog(run);
       }
       this.startStockTeammateInboxRelayPoll(run);
+      this.startCodexLaneMessagePump(run);
 
-      if (useStockClaudeBootstrap) {
-        // Stock Claude Code never writes the fork's team runtime files, so the
+      if (useStockClaudeBootstrap || useCodexLaneRuntime) {
+        // Stock runtimes never write the fork's team runtime files, so the
         // app materializes config.json + inbox stubs itself; the filesystem
         // monitor below then observes them and completes provisioning.
         emitProvisioningCheckpoint(run, 'Synthesizing stock-runtime team state');
@@ -14181,13 +14451,26 @@ export class TeamProvisioningService {
       );
       const promptSize = getPromptSizeSummary(prompt);
       let child: ReturnType<typeof spawn> | undefined;
-      const useStockClaudeBootstrap = getConfiguredCliFlavor() === 'claude';
+      const runtimeMode = resolveTeamRuntimeMode({
+        cliFlavor: getConfiguredCliFlavor(),
+        leadProviderId: request.providerId,
+      });
+      const useStockClaudeBootstrap = runtimeMode === 'stock-claude';
+      const useCodexLaneRuntime = runtimeMode === 'stock-codex-lanes';
       let stockBootstrapPrompt: string | null = null;
       if (useStockClaudeBootstrap) {
         // Stock Claude Code: no deterministic bootstrap contract; the lead is
         // re-hydrated via a stdin prompt and readiness comes from team files.
         run.deterministicBootstrap = false;
         shellEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1';
+        stripMultimodelRoutingEnv(shellEnv);
+      } else if (useCodexLaneRuntime) {
+        // Stock OpenAI codex lanes: the app orchestrates every member as its
+        // own codex TUI; no Claude teams env, no deterministic bootstrap.
+        run.deterministicBootstrap = false;
+        run.stockClaudeRuntime = false;
+        run.interactiveRuntime = true;
+        run.codexLaneRuntime = true;
         stripMultimodelRoutingEnv(shellEnv);
       } else {
         shellEnv.CLAUDE_ENABLE_DETERMINISTIC_TEAM_BOOTSTRAP = '1';
@@ -14247,6 +14530,10 @@ export class TeamProvisioningService {
             bootstrapSpec,
             useInteractiveRuntime ? '' : prompt
           );
+        } else if (useCodexLaneRuntime) {
+          // Lanes are relaunched by the app; the lead only resumes
+          // coordination and rediscovers tasks through the task tools.
+          stockBootstrapPrompt = buildCodexLeadBootstrapPrompt(bootstrapSpec, '');
         } else {
           emitProvisioningCheckpoint(
             run,
@@ -14262,13 +14549,23 @@ export class TeamProvisioningService {
           controlApiBaseUrl: provisioningEnv.env.CLAUDE_TEAM_CONTROL_URL,
         });
         run.mcpConfigPath = mcpConfigPath;
-        emitProvisioningCheckpoint(run, 'Validating agent-teams MCP runtime');
-        await this.validateAgentTeamsMcpRuntime(claudePath, request.cwd, shellEnv, mcpConfigPath, {
-          isCancelled: () =>
-            run.cancelRequested ||
-            run.processKilled ||
-            this.stopAllTeamsGeneration !== stopAllGenerationAtStart,
-        });
+        if (!useCodexLaneRuntime) {
+          // Codex lanes take MCP config as -c overrides and never run the
+          // claude binary, so the claude-based MCP validation does not apply.
+          emitProvisioningCheckpoint(run, 'Validating agent-teams MCP runtime');
+          await this.validateAgentTeamsMcpRuntime(
+            claudePath,
+            request.cwd,
+            shellEnv,
+            mcpConfigPath,
+            {
+              isCancelled: () =>
+                run.cancelRequested ||
+                run.processKilled ||
+                this.stopAllTeamsGeneration !== stopAllGenerationAtStart,
+            }
+          );
+        }
       } catch (error) {
         this.runs.delete(runId);
         this.provisioningRunByTeam.delete(request.teamName);
@@ -14419,7 +14716,33 @@ export class TeamProvisioningService {
           emitProvisioningCheckpoint(run, 'Seeding lead bootstrap permission rules');
           await this.seedLeadBootstrapPermissionRules(request.teamName, request.cwd);
         }
-        if (useInteractiveRuntime) {
+        if (useCodexLaneRuntime) {
+          await this.launchCodexLanesForRun({
+            run,
+            runId,
+            teamName: request.teamName,
+            cwd: request.cwd,
+            shellEnv,
+            controlApiBaseUrl: provisioningEnv.env.CLAUDE_TEAM_CONTROL_URL,
+            leadBootstrapPrompt: stockBootstrapPrompt ?? prompt,
+            effectiveMemberSpecs,
+            resolvedProviderId,
+            leadModel: launchModelArg ?? null,
+            leadEffort: launchIdentity.resolvedEffort ?? null,
+            bypassSandbox: request.skipPermissions !== false,
+            onAllLanesReady: () => {
+              // Launch path has no filesystem monitor or stream events;
+              // complete provisioning once every lane is briefed.
+              if (!run.provisioningComplete) {
+                void this.handleProvisioningTurnComplete(run).catch((error: unknown) =>
+                  logger.warn(
+                    `[${request.teamName}] codex lane launch completion failed: ${String(error)}`
+                  )
+                );
+              }
+            },
+          });
+        } else if (useInteractiveRuntime) {
           run.interactiveRuntime = true;
           const interactiveArgs = buildInteractiveCliArgs(finalLaunchArgs);
           emitProvisioningCheckpoint(
@@ -14510,7 +14833,12 @@ export class TeamProvisioningService {
         throw error;
       }
 
-      if (useInteractiveRuntime) {
+      if (useCodexLaneRuntime) {
+        updateProgress(run, 'spawning', 'Starting Codex team lanes', {
+          warnings: mergeProvisioningWarnings(run.progress.warnings, runtimeWarning),
+        });
+        run.onProgress(run.progress);
+      } else if (useInteractiveRuntime) {
         updateProgress(run, 'spawning', 'Interactive tmux lead starting', {
           warnings: mergeProvisioningWarnings(run.progress.warnings, runtimeWarning),
         });
@@ -14552,7 +14880,7 @@ export class TeamProvisioningService {
         }
       }
 
-      if (useStockClaudeBootstrap) {
+      if (useStockClaudeBootstrap || useCodexLaneRuntime) {
         // Repair missing stock-runtime team files (config.json, inbox stubs)
         // for relaunches; existing files are never overwritten.
         try {
@@ -14575,10 +14903,11 @@ export class TeamProvisioningService {
       // and spawn can take seconds, causing false stall warnings.
       run.lastDataReceivedAt = Date.now();
       run.lastStdoutReceivedAt = Date.now();
-      if (!useInteractiveRuntime) {
+      if (!useInteractiveRuntime && !useCodexLaneRuntime) {
         this.startStallWatchdog(run);
       }
       this.startStockTeammateInboxRelayPoll(run);
+      this.startCodexLaneMessagePump(run);
 
       // For launch, skip the filesystem monitor — files (config, inboxes, tasks)
       // already exist from the previous run and would trigger immediate false
@@ -16540,6 +16869,52 @@ export class TeamProvisioningService {
       return run.stockClaudeRuntime === true;
     }
     return getConfiguredCliFlavor() === 'claude';
+  }
+
+  /**
+   * True when the team's live run uses the stock codex lane runtime, where
+   * every member is its own codex TUI pane and messages are pasted in.
+   */
+  isCodexLaneRuntimeTeam(teamName: string): boolean {
+    const runId = this.getAliveRunId(teamName);
+    const run = runId ? this.runs.get(runId) : null;
+    return run?.codexLaneRuntime === true;
+  }
+
+  /**
+   * Direct DM into a codex lane: paste into the member's pane (codex queues
+   * input mid-turn). On success the app-side inbox copy is marked read so the
+   * UI shows delivered. Returns false when the team has no live codex lane —
+   * the lane message pump then retries from the persisted inbox.
+   */
+  async deliverCodexLaneDm(
+    teamName: string,
+    memberName: string,
+    input: { text: string; summary?: string; messageId?: string }
+  ): Promise<boolean> {
+    const runId = this.getAliveRunId(teamName);
+    const run = runId ? this.runs.get(runId) : null;
+    if (run && !run.codexLaneRuntime) {
+      return false;
+    }
+    const summaryPart = input.summary?.trim() ? ` ${input.summary.trim()}` : '';
+    const formatted = `[Agent Teams message from user]${summaryPart}\n${input.text}`;
+    const delivered = await codexTeamLanesService
+      .pasteIntoLane(teamName, memberName, formatted)
+      .catch((error: unknown) => {
+        logger.warn(
+          `[${teamName}] codex lane DM to "${memberName}" failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        return false;
+      });
+    if (delivered && input.messageId) {
+      await this.markInboxMessagesRead(teamName, memberName, [
+        { messageId: input.messageId },
+      ]).catch(() => {});
+    }
+    return delivered;
   }
 
   /**
@@ -23122,6 +23497,7 @@ export class TeamProvisioningService {
    */
   private cleanupRun(run: ProvisioningRun): void {
     this.stopStockTeammateInboxRelayPoll(run);
+    this.stopCodexLaneMessagePump(run);
     cleanupProvisioningRun(run, {
       getTrackedRunId: (teamName) => this.getTrackedRunId(teamName),
       isRunIdTracked: (runId) =>

@@ -3222,12 +3222,17 @@ async function handleSendMessage(
         }
         // Interactive stock leads own no app-writable stdin; deliver through the
         // runtime's own session mailbox instead (the lead consumes it natively).
+        // Codex lane leads have no mailbox either — paste into the lead pane.
         try {
-          const deliveredViaMailbox = await provisioning.deliverStockTeammateDm(
-            tn,
-            resolvedLeadName,
-            { text: stdinTextForLead, summary: payload.summary }
-          );
+          const deliveredViaMailbox = provisioning.isCodexLaneRuntimeTeam(tn)
+            ? await provisioning.deliverCodexLaneDm(tn, resolvedLeadName, {
+                text: stdinTextForLead,
+                summary: payload.summary,
+              })
+            : await provisioning.deliverStockTeammateDm(tn, resolvedLeadName, {
+                text: stdinTextForLead,
+                summary: payload.summary,
+              });
           if (deliveredViaMailbox) {
             stdinSent = true;
           }
@@ -3379,7 +3384,21 @@ async function handleSendMessage(
     //   2. Fallback: relay through the lead over stdin, which forwards via
     //      SendMessage and marks the inbox copy read.
     if (!isLeadRecipient && !isOpenCodeRecipient && isAlive) {
-      if (provisioning.isStockClaudeRuntimeTeam(tn)) {
+      if (provisioning.isCodexLaneRuntimeTeam(tn)) {
+        // Codex lanes: paste directly into the member's pane; on failure the
+        // message stays unread and the lane message pump retries it.
+        try {
+          await provisioning.deliverCodexLaneDm(tn, memberName, {
+            text: inboxText,
+            summary: payload.summary,
+            messageId: result.messageId,
+          });
+        } catch (e: unknown) {
+          logger.warn(
+            `Codex lane delivery after sendMessage failed for "${memberName}": ${String(e)}`
+          );
+        }
+      } else if (provisioning.isStockClaudeRuntimeTeam(tn)) {
         try {
           const deliveredDirect = await provisioning.deliverStockTeammateDm(tn, memberName, {
             text: inboxText,

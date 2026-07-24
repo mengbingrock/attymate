@@ -333,6 +333,39 @@ export class TmuxPlatformCommandExecutor {
     await this.execTmux(['set-option', '-t', input.sessionName, 'aggressive-resize', 'on'], 3_000);
   }
 
+  /**
+   * Create a detached named window inside an existing session running a
+   * command. The session target is pinned (exact-name `=` match) for the same
+   * reason as breakPaneToWindow: pane/window targets are server-global.
+   */
+  async newWindowInSession(input: {
+    sessionName: string;
+    windowName: string;
+    cwd: string;
+    command: string;
+  }): Promise<void> {
+    const result = await this.execTmux(
+      [
+        'new-window',
+        '-d',
+        '-t',
+        `=${input.sessionName}:`,
+        '-n',
+        input.windowName,
+        '-c',
+        input.cwd,
+        input.command,
+      ],
+      10_000
+    );
+    if (result.exitCode !== 0) {
+      throw new Error(
+        result.stderr ||
+          `Failed to create tmux window ${input.windowName} in session ${input.sessionName}`
+      );
+    }
+  }
+
   async hasSession(sessionName: string): Promise<boolean> {
     const result = await this.execTmux(['has-session', '-t', `=${sessionName}`], 3_000);
     return result.exitCode === 0;

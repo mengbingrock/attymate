@@ -675,6 +675,33 @@ export async function resolveAgentTeamsMcpLaunchSpec(
   );
 }
 
+/**
+ * Agent-teams MCP server spec for runtimes that take MCP config as CLI config
+ * overrides instead of a --mcp-config file (stock codex lanes). Same server,
+ * runtime, and env composition as writeConfigFile's generated entry.
+ */
+export async function buildAgentTeamsMcpServerSpec(
+  controlApiBaseUrl?: string
+): Promise<{ command: string; args: string[]; env: Record<string, string> }> {
+  const launchSpec = await resolveAgentTeamsMcpLaunchSpec();
+  const resolvedControlUrl =
+    controlApiBaseUrl?.trim() || process.env[MCP_CONTROL_URL_ENV]?.trim() || '';
+  const normalized = normalizeMcpServerNodeOptions({
+    command: launchSpec.command,
+    args: launchSpec.args,
+    env: {
+      ...launchSpec.env,
+      [MCP_CLAUDE_DIR_ENV]: getClaudeBasePath(),
+      ...(resolvedControlUrl ? { [MCP_CONTROL_URL_ENV]: resolvedControlUrl } : {}),
+    },
+  });
+  return {
+    command: normalized.command as string,
+    args: (normalized.args as string[]) ?? [],
+    env: (normalized.env as Record<string, string>) ?? {},
+  };
+}
+
 export class TeamMcpConfigBuilder {
   async writeConfigFile(projectPath?: string, options?: WriteMcpConfigOptions): Promise<string>;
   async writeConfigFile(projectPath?: string, mcpPolicy?: TeamMemberMcpPolicy): Promise<string>;

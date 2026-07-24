@@ -226,7 +226,7 @@ export function buildDeterministicLaunchBootstrapSpec(
   };
 }
 
-function describeStockBootstrapMember(member: RuntimeBootstrapMemberSpec): string {
+export function describeStockBootstrapMember(member: RuntimeBootstrapMemberSpec): string {
   const details: string[] = [];
   if (member.model) details.push(`model: ${member.model}`);
   if (member.effort) details.push(`effort: ${member.effort}`);
