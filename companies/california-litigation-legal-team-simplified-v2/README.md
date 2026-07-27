@@ -2,7 +2,7 @@
 
 > Reusable `agentcompanies/v1` package for California litigation workflows with supervised issue scope, approvals, and specialist agents — source-bound, matter-scoped, and confidentiality-first.
 
-It packages one board-facing Legal Ops Supervisor, reusable specialist agents, a read-only Email Monitor Agent, one opt-in Practice Learning Agent, onboarding tasks, and reusable legal skills for intake, OCR, research, drafting, docket checks, calendaring, QA, workflow learning, and subpoena motion-to-compel work. The control plane owns coordination (issues, assignment, heartbeats, approvals, audit trail); the legal skills own domain workflow discipline.
+It packages one board-facing Legal Ops Supervisor, reusable specialist agents, a read-only Email Monitor Agent, onboarding tasks, and reusable legal skills for intake, OCR, research, drafting, docket checks, calendaring, QA, and subpoena motion-to-compel work. The control plane owns coordination (issues, assignment, heartbeats, approvals, audit trail); the legal skills own domain workflow discipline.
 
 ## Overview
 
@@ -46,7 +46,6 @@ graph TD
   LOS --> QA[Legal QA Agent]
   LOS --> CAL[Calendar Agent]
   LOS --> DOC[Docket Agent]
-  LOS --> PLA[Practice Learning Agent]
   LOS --> GMA[Email Monitor Agent]
 ```
 
@@ -64,7 +63,6 @@ Each agent is defined by a single `AGENTS.md` (role, triggers, handoffs, deliver
 | [Legal QA Agent](agents/legal-qa-agent/AGENTS.md) | Confidentiality and Source Discipline Reviewer | legal-ops-supervisor | ca-litigation-drafting-workflow, lexis-legal-research |
 | [Calendar Agent](agents/calendar-agent/AGENTS.md) | Litigation Calendar Proposal Specialist | legal-ops-supervisor | legal-calendaring-workflow |
 | [Docket Agent](agents/docket-agent/AGENTS.md) | Public Docket Check Specialist | legal-ops-supervisor | lasc-docket-check |
-| [Practice Learning Agent](agents/practice-learning-agent/AGENTS.md) | Private Workflow Learning Specialist | legal-ops-supervisor | practice-workflow-learning |
 | [Email Monitor Agent](agents/email-monitor-agent/AGENTS.md) | Read-Only Legal Intake Monitor | legal-ops-supervisor | — (read-only routing) |
 
 ## Goals
@@ -72,7 +70,6 @@ Each agent is defined by a single `AGENTS.md` (role, triggers, handoffs, deliver
 - [Complete firm onboarding and runtime readiness](goals/complete-firm-onboarding-and-runtime-readiness/GOAL.md)
 - [Run matter-scoped litigation work safely](goals/run-matter-scoped-litigation-work-safely/GOAL.md)
 - [Produce source-bound litigation work product](goals/produce-source-bound-litigation-work-product/GOAL.md)
-- [Improve firm workflow through opt-in learning](goals/improve-firm-workflow-through-opt-in-learning/GOAL.md)
 
 ## Projects
 
@@ -82,7 +79,7 @@ The subpoena motion-to-compel workflow is a skill-triggered workflow owned by Le
 
 ## Skills
 
-`legal-calendaring-workflow` · `lexis-legal-research` · `ca-litigation-drafting-workflow` · `ca-pleading-intake-review` · `docling-pdf-processing` · `lasc-docket-check` · `ca-subpoena-mtc-autonomous-runner` · `ca-subpoena-mtc-drafting-workflow` · `practice-workflow-learning`
+`legal-calendaring-workflow` · `lexis-legal-research` · `ca-litigation-drafting-workflow` · `ca-pleading-intake-review` · `docling-pdf-processing` · `lasc-docket-check` · `ca-subpoena-mtc-autonomous-runner` · `ca-subpoena-mtc-drafting-workflow`
 
 ## Import
 
@@ -131,7 +128,7 @@ If an onboarding task is substantively complete but the issue cannot be marked d
 
 This package is intended for public reuse. Do not add client names, matter identifiers, case numbers, firm-specific procedures, private URLs, credentials, account IDs, knowledge-base IDs, calendar IDs, hardcoded local paths, or source matter files.
 
-Deployment-specific behavior belongs in issue contracts, the private Firm Operations Guide, local adapter configuration, or private firm policy documents supplied at runtime. MTC remains a workflow owned by Legal Ops and the unified specialists, not an import-time project or separate sub-organization. Email monitoring is optional and read-only until configured. Practice learning is opt-in and private by default.
+Deployment-specific behavior belongs in issue contracts, the private Firm Operations Guide, local adapter configuration, or private firm policy documents supplied at runtime. MTC remains a workflow owned by Legal Ops and the unified specialists, not an import-time project or separate sub-organization. Email monitoring is optional and read-only until configured.
 
 ## References
 
