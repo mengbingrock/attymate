@@ -82,6 +82,5 @@ Include:
 - Legal research/authority: assigned to Legal Research Agent. Supplied-authority workup, citation verification, Shepardizing, and approved Lexis research only when authorized.
 - Drafting and assembly: assigned to Drafting & Assembly Agent. Draft text, proposed orders, declarations, and new output-root working-copy assembly.
 - QA review: assigned to Legal QA Agent. Source discipline, authority discipline, placeholders, confidentiality, finalization boundaries.
-- Practice learning: assigned to Practice Learning Agent only when learning mode is enabled.
 
 Each child issue must include a focused Matter Safety Contract, the role-relevant matter context artifacts from `references/matter-context-artifacts.md`, and the lawyer-facing output standard from `references/lawyer-facing-output-standard.md`. Do not create these children during package import.

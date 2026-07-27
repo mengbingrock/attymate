@@ -10,4 +10,3 @@
 - Live matter execution begins only after firm onboarding records the private Firm Operations Guide and the `codex_local` adapter checks pass.
 - Every delegated child issue must be parent-linked to the Legal Ops parent issue and must include the required Matter Safety Contract fields.
 - Specialist agents should proceed with green safe work when scope is sufficient, route yellow issues back to Legal Ops Supervisor, and stop only at hard gates or true missing inputs.
-- Learning is off by default. Practice Learning Agent may observe only issues with explicit learning mode, allowed sources, and do-not-learn boundaries.
