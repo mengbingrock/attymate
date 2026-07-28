@@ -52,20 +52,18 @@ Apply this workflow when:
 
 Runtime inputs may include pleadings, proofs of service, docket facts, email attachments, and approved source folders.
 
-If the contract is missing, return a concise missing-field list to the supervisor. If approved source files and output root are clear, continue safe intake work and log unresolved gaps.
-
-Apply `gating/human-approval-gates.md`.
+Apply `gating/human-approval-gates.md` and `gating/source-intake-gates.md`, which state the missing-contract and safe-continuation rules.
 
 ### Procedure
 
 1. Checkout the assigned issue.
 2. Read issue scope, comments, parent context, and approved source roots.
-3. Inventory source pleadings and identify extraction/OCR needs. Use PDF/OCR tools when source text is unavailable or unreliable. Treat source PDFs as read-only. Use mailbox/drive connectors only when the deployment and issue authorize them.
+3. Inventory source pleadings and identify extraction/OCR needs. Use PDF/OCR tools when source text is unavailable or unreliable. Treat source PDFs as read-only.
 4. Create only approved sidecar artifacts under `{output_root}`.
 5. Summarize pleadings with source page, paragraph, exhibit, filing, or service references where available.
 6. Flag extraction gaps, visual-verification needs, missing proofs, caption inconsistencies, and unresolved party issues.
-7. Prepare an external-upload handoff manifest only if approved; do not upload.
-8. **Apply the checkpoint policy.** Green work proceeds autonomously and is logged: local source inventories, extraction/OCR need assessment, source manifests, intake summaries, and approved sidecar artifacts under `{output_root}`. Yellow routes to the Legal Ops Supervisor when filing/service facts conflict, source scope needs repair, or a drafting handoff needs clearer routing. Hard gates require visible approval before the actions listed under Anti-patterns. Return discrete yellow or hard-gate issues to the supervisor but continue safe intake when approved sources and output boundaries allow it.
+7. Prepare an external-upload handoff manifest as an artifact.
+8. **Apply the checkpoint policy** in `gating/source-intake-gates.md`. Return discrete yellow or hard-gate issues to the supervisor, but continue safe intake when approved sources and output boundaries allow it.
 
 ### Intake output format
 
@@ -86,17 +84,11 @@ Apply `gating/human-approval-gates.md`.
 
 ### Anti-patterns
 
-Never do any of the following without visible hard-gate approval:
-
-- Downloading from email/drive systems unless the issue authorizes it.
-- Uploading to any external system.
-- Emailing, filing, serving, signing, finalizing, or calendar writing.
-- Editing originals or user-edited documents.
-- Expanding into legal research or drafting beyond intake summaries.
+The hard gates for intake are listed once in `gating/source-intake-gates.md`.
 
 ## Decision rights
 
-Apply the canonical matrix in `gating/human-approval-gates.md`. See `gating/README.md` for the gating model.
+Apply the canonical matrix in `gating/human-approval-gates.md`, narrowed for this lane by `gating/source-intake-gates.md`. See `gating/README.md` for the gating model.
 
 
 

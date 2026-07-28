@@ -2,17 +2,21 @@
 schema: agentcompanies/v1
 kind: task
 slug: run-email-monitor
-name: Configure and run Email monitor
+name: Run Email monitor
 assignee: email-monitor-agent
 project: firm-onboarding
 priority: medium
 recurring: true
 ---
 
-Run read-only email monitoring under the approved `email_monitor_profile` in this routine's variables, and report candidate legal-work findings to Legal Ops Supervisor per `references/monitoring-report-contract.md`. Apply the gating criteria in `gating/email-monitoring-gates.md`.
+Run the approved read-only email monitoring profile and report candidate legal-work findings to Legal Ops Supervisor per `references/monitoring-report-contract.md`. Apply the gating criteria in `gating/email-monitoring-gates.md`.
 
-## Setup (first run, or whenever the profile is missing)
+Preconditions:
 
-A complete `email_monitor_profile` names: provider (`gmail`, `outlook`, or `other`), connector status, authorized account or mailbox scope, allowed folders/labels/categories/search terms or manual-source export, exclusions, lookback window, max messages per run, authorized content access, attachment policy, dedupe/redaction rules, candidate-routing criteria, and report cadence.
+- `email_monitor_profile` exists in the private Firm Operations Guide or the routine variables.
+- The profile names the provider (`gmail`, `outlook`, or `other`), connector status, authorized mailbox/account scope, folders/labels/categories/search terms or manual-source export, exclusions, lookback window, max messages per run, authorized content access, attachment policy, dedupe rule, redaction policy, and routing criteria.
+- The routine is enabled by the board/operator after onboarding confirms the profile is ready.
 
-Configure the profile with the operator before any mailbox polling, and define the lawyer-facing output shape (one-sentence summary, recommended next action, and the exact approval or source choice needed if more access is required). Store the result in this routine's variables. Then confirm the routine's schedule trigger uses `coalesce_if_active` and `skip_missed` and has a clear status; if paused, report that setup is complete but monitoring is not live and leave one next action. Do not report email monitoring as configured without a working schedule trigger. Monitoring goes live only after the board/operator enables the routine.
+If the profile is missing, disabled, too broad, or names a live provider connector that is unavailable, do not inspect email. Write a `monitor-report` issue document that names the missing setup field and asks Legal Ops for the one next configuration step. If an Outlook/Microsoft connector is unavailable, report `setup-ready / pending connector` or manual-source mode instead of running fake live monitoring.
+
+Work read-only within the approved profile; `gating/email-monitoring-gates.md` governs what is in scope and what is gated. Dedupe before creating anything. If there is no new reportable finding, finish silently with a one-line run/routine result. If there is an actionable candidate, create or update one batched `monitor-report` and one Legal Ops triage item. Do not create substantive legal-work child issues directly.

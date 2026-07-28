@@ -21,16 +21,16 @@ Default subfolders:
 05_Research/
 06_Drafts/
 07_Service_Filing/
-_issues/
+_paperclip_issues/
 ```
 
 Use this structure as the default for solo/small-firm deployments:
 
 - Human-facing matter work lives in the matter folders above.
-- Control-plane audit outputs may live under `_issues/{issue-identifier}/`.
+- Paperclip audit outputs may live under `_paperclip_issues/{issue-identifier}/`.
 - Issue folders such as `{issue-identifier}/` are acceptable temporary execution folders, but Legal Ops should link or move lawyer-facing outputs into the Matter Home once a matter/output root is approved.
 - If no Matter Home is approved yet, use parent issue documents and mark the Matter Dashboard as `not yet filed into Matter Home`.
-- Never create, move, overwrite, or rename live matter folders unless the issue approves the matter/output root and the action is local/source-bound. Protected/final/source-file mutation remains a hard gate.
+- Never create, move, overwrite, or rename live matter folders unless the parent authorizes the matter/output root and the action affects only designated working material. Protected, final, and source-file mutation is gated by `gating/human-approval-gates.md`.
 
 ## Artifact Set
 
@@ -77,6 +77,6 @@ Agents should not read every context artifact on every issue. Use this relevance
 - Legal Ops creates or confirms the Matter Home, context folder, issue-output subfolder, and context index when opening a matter parent issue whenever a matter/output root is approved.
 - Specialists may update matter context artifacts within their lane when the issue allows output-root artifacts and the update is source-bound.
 - Every substantive update should include a source note, author/agent, date, and unresolved assumptions.
-- Do not overwrite, rename, delete, or mutate original sources, final/signed/filed/served documents, user-edited files, or protected drafts without visible hard-gate approval.
+- Destructive and protected-file mutation is gated by `gating/human-approval-gates.md`; apply that matrix rather than a local copy of it.
 - If an artifact is stale or conflicts with a source, preserve both facts, flag the conflict, and route the issue to Legal Ops rather than silently replacing history.
-- Keep issue-audit detail under `_issues/`; keep lawyer-facing summaries in the matter folders.
+- Keep issue-audit detail under `_paperclip_issues/`; keep lawyer-facing summaries in the matter folders.

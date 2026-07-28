@@ -2,17 +2,21 @@
 schema: agentcompanies/v1
 kind: task
 slug: run-docket-monitor
-name: Configure and run Docket monitor
+name: Run Docket monitor
 assignee: docket-agent
 project: firm-onboarding
 priority: medium
 recurring: true
 ---
 
-Run public, read-only docket monitoring under the approved `docket_monitor_profile` in this routine's variables, and report candidate matter changes to Legal Ops Supervisor per `references/monitoring-report-contract.md`. Apply the gating criteria in `gating/docket-monitoring-gates.md`.
+Run the approved public docket monitoring profile and report candidate matter changes to Legal Ops Supervisor per `references/monitoring-report-contract.md`. Apply the gating criteria in `gating/docket-monitoring-gates.md`.
 
-## Setup (first run, or whenever the profile is missing)
+Preconditions:
 
-A complete `docket_monitor_profile` names: connector/browser status, authorized courts or portals, public-only rule, authorized public-document access, matter/case list source, case-identifier storage location, check cadence, lookback window, change-detection rule, redaction policy, routing criteria, and report cadence.
+- `docket_monitor_profile` exists in the private Firm Operations Guide or the routine variables.
+- The profile names the authorized courts or portals, public-only rule, authorized public-document access, matter/case list source, check cadence, lookback window, change-detection rule, redaction policy, and routing criteria.
+- The routine is enabled by the board/operator after onboarding confirms the profile is ready.
 
-Configure the profile with the operator before any portal check, and define the lawyer-facing output shape (one-sentence summary, recommended next action, and the exact approval or source choice needed if more access is required). Store the result in this routine's variables. Then confirm the routine's schedule trigger uses `coalesce_if_active` and `skip_missed` and is either `setup-ready / paused` or `enabled / runnable`; if paused, report that setup is complete but monitoring is not live and leave one next action (enable or keep paused). Do not report docket monitoring as configured without a working schedule trigger. Monitoring goes live only after the board/operator enables the routine.
+If the profile is missing, disabled, or too broad, do not browse outside the approved public scope. For a configuration interruption that needs owner action, create or update one batched `monitor-report` naming the owner and next configuration step. Route login, CAPTCHA, and tool failure as Operational Interruptions.
+
+Work public and read-only within the approved profile; `gating/docket-monitoring-gates.md` governs what is in scope and what is gated. Dedupe before creating anything. If there is no new reportable finding, finish silently with a one-line run/routine result. If there is an actionable candidate, create or update one batched `monitor-report` and one Legal Ops triage item. Do not create substantive legal-work child issues directly.
