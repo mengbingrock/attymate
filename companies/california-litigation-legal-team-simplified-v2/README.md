@@ -14,7 +14,7 @@ It packages one board-facing Legal Ops Supervisor, reusable specialist agents, a
 | Projects | 1 (Firm Onboarding) |
 | Tasks | 15 (onboarding and paused monitor routines) |
 | Goals | 4 |
-| Skills | 9 |
+| Skills | 8 |
 
 ## How the firm operates
 
@@ -56,7 +56,7 @@ Each agent is defined by a single `AGENTS.md` (role, triggers, handoffs, deliver
 | Agent | Title | Reports to | Key skills |
 | --- | --- | --- | --- |
 | [Legal Ops Supervisor](agents/legal-ops-supervisor/AGENTS.md) | Reusable Litigation Workflow Supervisor | — | all workflows (front door) |
-| [Source Intake Agent](agents/source-intake-agent/AGENTS.md) | Source Intake, Pleading Review, and OCR Specialist | legal-ops-supervisor | ca-pleading-intake-review, docling-pdf-processing |
+| [Source Intake Agent](agents/source-intake-agent/AGENTS.md) | Source Intake, Pleading Review, and OCR Specialist | legal-ops-supervisor | docling-pdf-processing |
 | [Facts & Evidence Agent](agents/facts-evidence-agent/AGENTS.md) | Facts, Evidence, Exhibits, and Citation Table Specialist | legal-ops-supervisor | ca-litigation-drafting-workflow |
 | [Legal Research Agent](agents/legal-research-agent/AGENTS.md) | Lexis Research and Citation Verification Specialist | legal-ops-supervisor | lexis-legal-research |
 | [Drafting & Assembly Agent](agents/drafting-assembly-agent/AGENTS.md) | California Litigation Drafting and Working-Copy Assembly Specialist | legal-ops-supervisor | ca-litigation-drafting-workflow, ca-subpoena-mtc-drafting-workflow |
@@ -79,7 +79,7 @@ The subpoena motion-to-compel workflow is a skill-triggered workflow owned by Le
 
 ## Skills
 
-`legal-calendaring-workflow` · `lexis-legal-research` · `ca-litigation-drafting-workflow` · `ca-pleading-intake-review` · `docling-pdf-processing` · `lasc-docket-check` · `ca-subpoena-mtc-autonomous-runner` · `ca-subpoena-mtc-drafting-workflow`
+`matter-workspace-setup` · `legal-calendaring-workflow` · `lexis-legal-research` · `ca-litigation-drafting-workflow` · `docling-pdf-processing` · `lasc-docket-check` · `ca-subpoena-mtc-autonomous-runner` · `ca-subpoena-mtc-drafting-workflow`
 
 ## Import
 
