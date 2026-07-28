@@ -1,4 +1,4 @@
-# Deliverable Templates
+# Motion Package Deliverable Templates
 
 Use only the formats needed for the selected motion profile. Adapt headings to the authorized style source.
 
@@ -17,11 +17,6 @@ Use only the formats needed for the selected motion profile. Adapt headings to t
 
 | Exhibit | Source file | Description | Purpose | Declarant/sponsor | Draft cite |
 | --- | --- | --- | --- | --- | --- |
-
-## Needed-Input List
-
-| Question | Recommended path | Alternatives | Legal effect/deadline | Affected artifact |
-| --- | --- | --- | --- | --- |
 
 ## QA Disposition
 

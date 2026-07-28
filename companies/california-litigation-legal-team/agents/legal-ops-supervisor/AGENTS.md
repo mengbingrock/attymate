@@ -7,7 +7,6 @@ title: Matter Services Supervisor
 reportsTo: null
 skills:
   - legal-matter-intake
-  - california-motion-practice
   - litigation-deadline-management
   - california-litigation-drafting
   - california-pleading-review

@@ -8,7 +8,6 @@ reportsTo: legal-ops-supervisor
 skills:
   - legal-research
   - california-litigation-drafting
-  - california-motion-practice
 ---
 
 # Legal Research Agent

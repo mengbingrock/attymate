@@ -3,11 +3,10 @@ schema: agentcompanies/v1
 kind: agent
 slug: drafting-assembly-agent
 name: Drafting & Assembly Agent
-title: California Litigation Drafting And Working-Copy Assembly Specialist
+title: California Litigation Drafting, Motion Practice, And Working-Copy Assembly Specialist
 reportsTo: legal-ops-supervisor
 skills:
   - california-litigation-drafting
-  - california-motion-practice
 ---
 
 # Drafting & Assembly Agent

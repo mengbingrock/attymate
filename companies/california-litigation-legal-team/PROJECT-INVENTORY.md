@@ -47,9 +47,8 @@ These are reusable legal capabilities owned by Legal Ops Supervisor and the unif
 | Capability | Entry skill | Owner | Professional result |
 |---|---|---|---|
 | Matter intake | `legal-matter-intake` | legal-ops-supervisor | Authorized Matter, defined objective, and focused work assignments. |
-| California motion practice | `california-motion-practice` | legal-ops-supervisor | Reviewable, source-supported motion package; MTC is one supported profile. |
 | California pleading review | `california-pleading-review` | source-intake-agent | Procedural and substantive pleading analysis with stable source references. |
-| California litigation drafting | `california-litigation-drafting` | drafting-assembly-agent | Reviewable, source-supported litigation work product. |
+| California litigation drafting & motion practice | `california-litigation-drafting` | drafting-assembly-agent | Reviewable, source-supported litigation work product and motion packages; MTC is one supported profile. |
 | Litigation deadline management | `litigation-deadline-management` | calendar-agent | Verified proposed dates, authority, consequence, and owner. |
 | Court docket review | `court-docket-review` | docket-agent | Material docket event, practical effect, and recommended action. |
 | Legal research | `legal-research` | legal-research-agent | Verified authority analysis, adverse authority, application, and recommendation. |

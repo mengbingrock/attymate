@@ -44,7 +44,6 @@ includes:
   - skills/legal-matter-intake/SKILL.md
   - skills/legal-document-intake/SKILL.md
   - skills/court-docket-review/SKILL.md
-  - skills/california-motion-practice/SKILL.md
   - skills/legal-practice-improvement/SKILL.md
 ---
 
@@ -62,7 +61,7 @@ Legal Ops Supervisor also owns the lawyer-facing Matter Dashboard on every activ
 
 Legal Ops Supervisor also owns Matter Home setup, matter-event planning, and matter context routing. New events should be mapped to an existing matter or a new matter parent, planned across all plausible workstreams, and delegated with only the role-relevant matter context artifacts needed for each specialist.
 
-The subpoena MTC profile remains available inside California Motion Practice. It is handled by Legal Ops Supervisor and the unified specialists, not by an import-time MTC project or separate MTC sub-organization. Live MTC work begins from a user-created parent issue assigned to Legal Ops Supervisor after general matter intake establishes the Matter Authorization Package.
+The subpoena MTC profile remains available inside California Litigation Drafting & Motion Practice. It is handled by Legal Ops Supervisor and the unified specialists, not by an import-time MTC project or separate MTC sub-organization. Live MTC work begins from a user-created parent issue assigned to Legal Ops Supervisor after general matter intake establishes the Matter Authorization Package.
 
 ## Identity
 

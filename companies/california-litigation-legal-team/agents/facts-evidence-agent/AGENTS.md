@@ -7,7 +7,6 @@ title: Facts, Evidence, Exhibits, And Citation Table Specialist
 reportsTo: legal-ops-supervisor
 skills:
   - california-litigation-drafting
-  - california-motion-practice
 ---
 
 # Facts & Evidence Agent

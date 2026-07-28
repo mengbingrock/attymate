@@ -58,7 +58,7 @@ Each agent is defined by four files: `AGENTS.md` (role, triggers, handoffs, deli
 | [Source Intake Agent](agents/source-intake-agent/AGENTS.md) | Legal Document Intake and Pleading Review Specialist | legal-ops-supervisor | california-pleading-review, legal-document-intake |
 | [Facts & Evidence Agent](agents/facts-evidence-agent/AGENTS.md) | Facts, Evidence, Exhibits, and Citation Table Specialist | legal-ops-supervisor | california-litigation-drafting |
 | [Legal Research Agent](agents/legal-research-agent/AGENTS.md) | Legal Research and Authority Analysis Specialist | legal-ops-supervisor | legal-research |
-| [Drafting & Assembly Agent](agents/drafting-assembly-agent/AGENTS.md) | California Litigation Drafting and Working-Copy Assembly Specialist | legal-ops-supervisor | california-litigation-drafting, california-motion-practice |
+| [Drafting & Assembly Agent](agents/drafting-assembly-agent/AGENTS.md) | California Litigation Drafting, Motion Practice, and Working-Copy Assembly Specialist | legal-ops-supervisor | california-litigation-drafting |
 | [Legal QA Agent](agents/legal-qa-agent/AGENTS.md) | Confidentiality and Source Discipline Reviewer | legal-ops-supervisor | california-litigation-drafting, legal-research |
 | [Calendar Agent](agents/calendar-agent/AGENTS.md) | Litigation Calendar Proposal Specialist | legal-ops-supervisor | litigation-deadline-management |
 | [Docket Agent](agents/docket-agent/AGENTS.md) | Court Docket Review Specialist | legal-ops-supervisor | court-docket-review |
@@ -76,11 +76,11 @@ Each agent is defined by four files: `AGENTS.md` (role, triggers, handoffs, deli
 
 - [Firm Onboarding](projects/firm-onboarding/PROJECT.md) — import-time onboarding to configure workspace, runtime, local tools, connectors, Email/Calendar/Docket monitor profiles, SOPs, matter mapping, and policy before any live matter work. Twelve setup tasks are owned by the Legal Ops Supervisor, and three paused recurring monitor tasks are imported for Email, Calendar, and Docket monitoring.
 
-Matter intake is the front door owned by Legal Ops. California Motion Practice is a separate downstream capability, and subpoena MTC is one motion profile rather than a separate intake system or sub-organization. Live work begins from a user-created parent issue with a Matter Authorization Package; child issues reference it rather than copying it.
+Matter intake is the front door owned by Legal Ops. California Litigation Drafting includes a Motion Package profile, and subpoena MTC is one motion profile rather than a separate intake system or sub-organization. Live work begins from a user-created parent issue with a Matter Authorization Package; child issues reference it rather than copying it.
 
 ## Skills
 
-`litigation-deadline-management` · `legal-research` · `california-litigation-drafting` · `california-pleading-review` · `legal-matter-intake` · `legal-document-intake` · `court-docket-review` · `california-motion-practice` · `legal-practice-improvement`
+`litigation-deadline-management` · `legal-research` · `california-litigation-drafting` · `california-pleading-review` · `legal-matter-intake` · `legal-document-intake` · `court-docket-review` · `legal-practice-improvement`
 
 ## Import
 
