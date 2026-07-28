@@ -24,9 +24,9 @@ Ask only what is needed for the next safe step. Prefer one batched question over
 - "What should I call this matter for now?"
 - "Should I use only the monitor summary, review the specific source you identified, or wait for a source package?"
 - "Should I close this, proceed with safe local work, or pause for strategy?"
-- "Do you approve this one named hard-gate action, or should I keep all external actions off?"
+- "Decision needed: should we take this external action, or keep the work internal?"
 
-If the lawyer does not know, recommend the safe default: temporary matter label, monitor-summary-only scope, safe local work only, no hard gates, and no external action.
+If the lawyer does not know, recommend the safe default: temporary matter label, monitor-summary-only scope, authorized internal work, and no external action.
 
 ## Safe Defaults
 
@@ -34,14 +34,14 @@ If the lawyer does not know, recommend the safe default: temporary matter label,
 - Source scope: already-approved monitor summary or issue text only.
 - Matter Home: create or use `{workspace}/Matters/{matter-short-name}/` when an output root is approved; otherwise mark the Matter Dashboard `not yet filed into Matter Home`.
 - Output: parent issue documents until a Matter Home/output folder is configured.
-- Hard gates: none approved.
-- Approval profile: relaxed default controls; `sandbox_autopilot` is only a test/demo label, not the only low-friction path.
+- Attorney Decisions: none pending unless an external act, payment, protected-file change, scope expansion, or material strategy choice is necessary.
+- Authorization: parent Matter Safety Contract applies to descendants; `sandbox_autopilot` is only a test/demo label.
 - Learning mode: `off`.
-- Work product: Matter Dashboard, intake summary, coverage table, missing-input list, and proposed next steps.
+- Work product: Matter Dashboard, intake summary, material gaps, and proposed next step.
 
 ## Low-Friction Rule
 
-Do not ask the lawyer to approve routine local/source-bound steps, issue documents, Matter Dashboard updates, local draft recommendations, QA notes, or internal routing when scope is clear. Ask only for external side effects, authentication/payment/new-authority expansion, destructive/protected mutation, or a real source/strategy choice that blocks all useful safe work.
+Do not ask the lawyer to approve source review, local PDF/OCR, routine research, new verified authorities, permitted downloads, working-copy edits, QA, Dashboard updates, issue documents, or internal routing within the parent authorization. Ask only about external acts, payment/budget expansion, protected-file mutation, matter/source expansion or cross-matter use, and material legal strategy.
 
 ## Stop Language
 
@@ -53,6 +53,6 @@ Then give 2-3 choices. Do not paste the full Matter Safety Contract checklist to
 
 Also update the parent Matter Dashboard so the lawyer can see whether the next step belongs to the team or to them.
 
-## Red Gates
+## Authorization Matrix
 
-Use `gating/human-approval-gates.md` as the canonical approval matrix. Proceed on local/source-bound work, output-root artifacts, new output-root working copies, draft recommendations, QA, issue updates, and internal routing. Stop only for external side effects; authentication, payment, or legal-authority expansion; and destructive or protected mutation.
+Use `gating/human-approval-gates.md` as the canonical matrix. Login, MFA, CAPTCHA, connector, and tool failures are Operational Interruptions routed to Legal Ops or the tool owner, not lawyer decisions.

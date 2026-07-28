@@ -2,17 +2,21 @@
 schema: agentcompanies/v1
 kind: task
 slug: run-calendar-monitor
-name: Configure and run Calendar monitor
+name: Run Calendar monitor
 assignee: calendar-agent
 project: firm-onboarding
 priority: medium
 recurring: true
 ---
 
-Run read-only calendar monitoring under the approved `calendar_monitor_profile` in this routine's variables, and report candidate litigation deadline or event findings to Legal Ops Supervisor per `references/monitoring-report-contract.md`. Apply the gating criteria in `gating/calendar-monitoring-gates.md`.
+Run the approved read-only calendar monitoring profile and report candidate litigation deadline or event findings to Legal Ops Supervisor per `references/monitoring-report-contract.md`. Apply the gating criteria in `gating/calendar-monitoring-gates.md`.
 
-## Setup (first run, or whenever the profile is missing)
+Preconditions:
 
-A complete `calendar_monitor_profile` names: provider (`google_calendar`, `outlook_calendar`, or `other`), connector status, authorized/excluded calendars, shared calendars/groups or manual-source export, authorized event-content access, lookback/lookahead windows, deadline/event categories to watch, dedupe rule, redaction policy, routing criteria, policy source, and report cadence.
+- `calendar_monitor_profile` exists in the private Firm Operations Guide or the routine variables.
+- The profile names the provider (`google_calendar`, `outlook_calendar`, or `other`), connector status, authorized calendars/shared calendars/groups or manual-source export, authorized event-content access, exclusions, lookback/lookahead windows, deadline/event categories, dedupe rule, redaction policy, routing criteria, and policy source.
+- The routine is enabled by the board/operator after onboarding confirms the profile is ready.
 
-Configure interactively: ask the user in the chatbox for each choice (provider, calendars, windows, cadence, approvals) instead of assuming defaults, and define the lawyer-facing output shape (one-sentence summary, next action, any approval needed). Store the result in this routine's variables. Then confirm the routine's schedule trigger uses `coalesce_if_active` and `skip_missed` and has a clear status; if paused, report that setup is done but monitoring is not live. Monitoring goes live only after the board/operator enables the routine.
+If the profile is missing, disabled, too broad, or names a live provider connector that is unavailable, do not inspect calendars. Write a `monitor-report` issue document that names the missing setup field and asks Legal Ops for the one next configuration step. If an Outlook/Microsoft calendar connector is unavailable, report `setup-ready / pending connector` or manual-source mode instead of running fake live monitoring.
+
+Work read-only within the approved profile; `gating/calendar-monitoring-gates.md` governs what is in scope and what is gated. Dedupe before creating anything. If there is no new reportable finding, finish silently with a one-line run/routine result. If there is an actionable candidate, create or update one batched `monitor-report` and one Legal Ops triage item. Do not create substantive legal-work child issues directly.

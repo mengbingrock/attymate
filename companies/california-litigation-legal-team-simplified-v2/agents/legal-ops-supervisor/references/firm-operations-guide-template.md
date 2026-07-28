@@ -1,6 +1,6 @@
 # Firm Operations Guide Template
 
-This template is for private deployment setup through a control-plane issue document with key `firm-operations-guide`. Do not commit completed guides to a public package.
+This template is for private deployment setup through a Paperclip issue document with key `firm-operations-guide`. Do not commit completed guides to a public package.
 
 ## Workspace
 
@@ -31,7 +31,7 @@ This template is for private deployment setup through a control-plane issue docu
 - Python command:
 - Python environment:
 - OCR/PDF runtime:
-- Docling or equivalent status:
+- Layout extraction backend or equivalent status (optional):
 - Image/PDF conversion tools:
 - Tool installation approval policy:
 
@@ -124,3 +124,5 @@ This template is for private deployment setup through a control-plane issue docu
 - Green workflows:
 - Yellow workflows:
 - Red workflows:
+- Last readiness smoke:
+- Readiness smoke interpretation:
