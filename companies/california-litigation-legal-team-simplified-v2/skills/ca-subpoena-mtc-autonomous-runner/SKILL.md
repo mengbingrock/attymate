@@ -11,7 +11,7 @@ description: Coordinate a low-interruption California subpoena motion-to-compel 
 
 ## When to load this skill
 
-- Working from the Legal Ops Supervisor when a control-plane issue asks for a California subpoena motion-to-compel workflow.
+- Working from the Legal Ops Supervisor asks for a California subpoena motion-to-compel workflow.
 - Acting as the runtime authority for MTC coordination, issue delegation, autonomy boundaries, and approval gates from one user-created parent issue.
 - Coordinating intake, child issue creation, approvals, status, and QA; specialist skills control drafting, source review, OCR, research, assembly, and QA details.
 

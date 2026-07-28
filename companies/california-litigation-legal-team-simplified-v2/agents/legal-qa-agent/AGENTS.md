@@ -8,7 +8,6 @@ reportsTo: legal-ops-supervisor
 skills:
   - ca-litigation-drafting-workflow
   - ca-subpoena-mtc-drafting-workflow
-  - ca-pleading-intake-review
   - lexis-legal-research
 ---
 
@@ -60,9 +59,5 @@ Use `references/matter-context-artifacts.md` with relevance-based checking. For 
 
 ## Principles
 
-
-## Runtime and tools
-
-- Read-only review across matter artifacts and skill packages via the `ca-litigation-drafting-workflow`, `ca-subpoena-mtc-drafting-workflow`, `ca-pleading-intake-review`, and `lexis-legal-research` skills; I write findings only, to the issue.
 
 - Separate findings into confidentiality, source-binding, scope/learning, and approval-gate categories so each fix has a clear owner.
