@@ -252,8 +252,7 @@ describe("California litigation business skills", () => {
     "companies/california-litigation-legal-team/skills",
   );
   const expectedAliases: Record<string, string[]> = {
-    "california-litigation-drafting": ["ca-litigation-drafting-workflow"],
-    "california-motion-practice": ["ca-motion-drafting-workflow"],
+    "california-litigation-drafting": ["ca-litigation-drafting-workflow", "california-motion-practice", "ca-motion-drafting-workflow"],
     "california-pleading-review": ["ca-pleading-intake-review"],
     "court-docket-review": ["lasc-browseros-docket-check"],
     "legal-document-intake": ["legal-pdf-processing"],
@@ -263,7 +262,7 @@ describe("California litigation business skills", () => {
     "litigation-deadline-management": ["legal-calendaring-workflow"],
   };
 
-  it("publishes exactly nine canonical, uniquely aliased business skills", async () => {
+  it("publishes exactly eight canonical, uniquely aliased business skills", async () => {
     const directories = (await fs.readdir(skillRoot, { withFileTypes: true }))
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)

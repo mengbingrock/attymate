@@ -8,7 +8,6 @@ reportsTo: legal-ops-supervisor
 skills:
   - legal-practice-improvement
   - california-litigation-drafting
-  - california-motion-practice
 ---
 
 # Practice Learning Agent

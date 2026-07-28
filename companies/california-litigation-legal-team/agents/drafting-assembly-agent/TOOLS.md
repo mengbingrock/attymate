@@ -20,7 +20,7 @@ Load the **`paperclip` skill** for any Paperclip API interaction. It covers the 
 
 ## Domain tools
 
-- Document assembly and Word drafting run through the `california-litigation-drafting` and `california-motion-practice` skills.
+- Document assembly, Word drafting, and motion-package work run through the unified `california-litigation-drafting` skill.
 - Source-bound working copies may be created and revised under the authorized output root, including configured document-tool use.
 - Protected source/final/user-edited file mutation, finalization, filing, service, signature, sending, external sharing, payment, scope expansion, and material strategy require an Attorney Decision. Authentication or tool failure is an Operational Interruption.
 - Drafting is heavy work; this agent's adapter timeout is intentionally longer than the other specialists' — use the time to draft carefully within scope, not to act outside it.

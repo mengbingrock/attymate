@@ -7,7 +7,6 @@ title: Confidentiality And Source Discipline Reviewer
 reportsTo: legal-ops-supervisor
 skills:
   - california-litigation-drafting
-  - california-motion-practice
   - california-pleading-review
   - legal-research
 ---

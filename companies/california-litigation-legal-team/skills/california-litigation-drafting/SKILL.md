@@ -1,24 +1,31 @@
 ---
 schema: agentcompanies/v1
 slug: california-litigation-drafting
-name: California Litigation Drafting
-description: Draft and revise source-supported California litigation work product for attorney review, with clear legal issues, material changes, and unresolved decisions.
+name: California Litigation Drafting & Motion Practice
+description: Analyze, draft, revise, assemble, and review source-supported California litigation work product, including motion packages, for attorney review.
 aliases:
   - ca-litigation-drafting-workflow
+  - california-motion-practice
+  - ca-motion-drafting-workflow
 ---
 
-# California Litigation Drafting
+# California Litigation Drafting & Motion Practice
 
 ## Business Purpose
 
-Produce reviewable California litigation work product grounded in the Matter's verified facts, authorities, procedural posture, and approved legal objective.
+Produce reviewable California litigation work product grounded in the Matter's verified facts, authorities, procedural posture, and approved legal objective. A motion, opposition, or reply uses the Motion Package profile below; it is still drafting, with additional procedural and assembly checks.
 
 ## Use When
 
-- The Matter needs a pleading, memorandum, declaration, meet-and-confer letter, proposed order, issue analysis, or revision to a designated working draft.
+- The Matter needs a pleading, memorandum, declaration, meet-and-confer letter, proposed order, issue analysis, motion, opposition, reply, or revision to a designated working draft.
 - Existing work product requires substantive or source-supported revision.
 
-Use California Motion Practice when the requested product is a motion package.
+## Select a Profile
+
+- **Document Drafting** — use for a discrete pleading, memorandum, declaration, letter, proposed order, analysis, or revision.
+- **Motion Package** — use when the requested work is a motion, opposition, reply, reply memorandum, or supporting package. Confirm the procedural vehicle, requested relief, deadline, filing/service context, court or judge requirements, and required components before drafting.
+
+For a subpoena motion to compel, use the Motion Package profile and load `references/motion-practice/subpoena-mtc-checklists.md`. It is a profile, not a separate skill or intake system.
 
 ## Required Inputs
 
@@ -26,6 +33,7 @@ Use California Motion Practice when the requested product is a motion package.
 - Verified Matter facts, authorities, procedural posture, and relevant source documents.
 - Designated working draft and applicable style or formatting requirements.
 - Material legal positions already decided or reserved to the attorney.
+- For Motion Package work: motion type, requested relief, filing/service context, required components, and applicable court or judge requirements.
 
 ## Professional Work
 
@@ -36,9 +44,16 @@ Use California Motion Practice when the requested product is a motion package.
 5. Revise for legal accuracy, clarity, tone, procedural fit, and internal consistency.
 6. Review source support, citations, defined terms, requested relief, exhibits, placeholders, and protected/final boundaries.
 
+For the Motion Package profile, also:
+
+1. Confirm the procedural vehicle, legal standard, requested relief, and filing/service context.
+2. Determine the required package components and build only the needed source, fact, authority, exhibit/RJN, chronology, and replacement artifacts.
+3. Draft and assemble each required component with consistent facts, citations, definitions, requested relief, exhibits, numbering, and any TOC/TOA.
+4. Use `references/motion-practice/motion-drafting-sequence.md` and `references/motion-practice/qa-checklist.md`; use the profile-specific MTC checklist only when applicable.
+
 ## Attorney Deliverable
 
-Use `references/drafting-output-format.md` to provide:
+Use `references/drafting-output-format.md` to provide one controlling work product. For Motion Package work, it must include the principal theory, requested relief, required component drafts, and procedural risks:
 
 - The reviewable draft or revised work product.
 - The important substantive changes.
@@ -48,7 +63,7 @@ Use `references/drafting-output-format.md` to provide:
 
 ## Completion Standard
 
-Drafting is complete when the work product is reviewable, every material fact and authority is traceable, known contrary points are addressed, placeholders are disclosed, and unresolved strategy is presented concisely.
+Drafting is complete when the work product is reviewable, every material fact and authority is traceable, known contrary points are addressed, placeholders are disclosed, and unresolved strategy is presented concisely. A Motion Package is additionally complete only when its components are internally consistent and procedurally responsive.
 
 ## Material Decisions
 
