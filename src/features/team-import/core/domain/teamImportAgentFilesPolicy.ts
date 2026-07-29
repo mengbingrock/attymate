@@ -87,7 +87,7 @@ export function buildAgentFiles(
     '',
     '## Your skills',
     '',
-    'Load these with the Skill tool when the work calls for them:',
+    'Use these skills when the work calls for them (Claude: load via the Skill tool; Codex: invoke via your skills mechanism):',
     ...skillLines,
     '',
     '## Memory protocol',

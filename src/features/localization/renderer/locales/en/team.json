@@ -1434,7 +1434,7 @@
     "selectPrompt": "Choose a folder or webpage to preview the imported team.",
     "skillAlreadyExists": "already exists — will be skipped",
     "skills": "Skills found ({{count}})",
-    "skillsInstallNote": "Skills are installed to ~/.claude/skills and are visible to all team members.",
+    "skillsInstallNote": "Skills are installed to ~/.claude/skills (and ~/.codex/skills when Codex is set up) and are visible to all team members.",
     "skillsToInstall": "Skills to install ({{count}})",
     "smartParse": "Smart (AI) parse",
     "smartParseHint": "An AI job reads the folder and converts any team format. It can take a few minutes.",

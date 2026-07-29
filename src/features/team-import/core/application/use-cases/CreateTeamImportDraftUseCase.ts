@@ -97,11 +97,17 @@ export class CreateTeamImportDraftUseCase {
       try {
         const result = await this.skillsInstaller.install(skill);
         if (result.status === 'skipped') {
-          warnings.push(`Skill "${skill.slug}" already exists and was left untouched.`);
+          warnings.push(
+            `Skill "${skill.slug}" ${result.detail ?? 'already exists'} and was left untouched.`
+          );
         } else if (result.status === 'failed') {
           warnings.push(
             `Skill "${skill.slug}" could not be installed: ${result.detail ?? 'unknown error'}`
           );
+        } else if (result.detail) {
+          // Mixed outcome across runtime skill roots (e.g. new in ~/.codex/skills
+          // but already present in ~/.claude/skills) — worth surfacing.
+          warnings.push(`Skill "${skill.slug}": ${result.detail}.`);
         }
       } catch (error) {
         warnings.push(
