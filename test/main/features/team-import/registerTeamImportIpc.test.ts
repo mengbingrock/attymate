@@ -27,6 +27,7 @@ describe('team import IPC', () => {
     const { handlers, ipcMain } = createIpcHarness();
     const feature: TeamImportFeatureFacade = {
       chooseFolderAndPreview: vi.fn(() => Promise.resolve(null)),
+      smartPreview: vi.fn(),
       createDraft: vi.fn(),
     };
     registerTeamImportIpc(ipcMain, feature);
@@ -41,6 +42,7 @@ describe('team import IPC', () => {
     const { handlers, ipcMain } = createIpcHarness();
     const feature: TeamImportFeatureFacade = {
       chooseFolderAndPreview: vi.fn(),
+      smartPreview: vi.fn(),
       createDraft: vi.fn(),
     };
     registerTeamImportIpc(ipcMain, feature);
@@ -57,6 +59,7 @@ describe('team import IPC', () => {
     const { handlers, ipcMain } = createIpcHarness();
     const feature: TeamImportFeatureFacade = {
       chooseFolderAndPreview: vi.fn(),
+      smartPreview: vi.fn(),
       createDraft: vi.fn((request) => Promise.resolve({ teamName: request.teamName })),
     };
     registerTeamImportIpc(ipcMain, feature);

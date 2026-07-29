@@ -8,18 +8,18 @@ import {
   DialogTitle,
 } from '@renderer/components/ui/dialog';
 import { Input } from '@renderer/components/ui/input';
-import { FolderOpen, X } from 'lucide-react';
+import { FolderOpen, Globe, Loader2, Sparkles, X } from 'lucide-react';
 
 import { validateTeamImportName } from '../../core/domain/teamImportPolicy';
 import { useTeamImportDialog } from '../hooks/useTeamImportDialog';
 
 import type { TeamImportNameValidationCode } from '../../core/domain/teamImportPolicy';
-import type { TeamImportWarning } from '@features/team-import/contracts';
+import type { TeamImportJobProgress, TeamImportWarning } from '@features/team-import/contracts';
 
 interface ImportTeamDialogProps {
   open: boolean;
   onClose: () => void;
-  onImported: (teamName: string) => void;
+  onImported: (teamName: string, applyWarnings?: string[]) => void;
 }
 
 export const ImportTeamDialog = ({
@@ -57,7 +57,42 @@ export const ImportTeamDialog = ({
         return t('teamImport.warningDuplicateMember', warning);
       case 'missingClaudeMd':
         return t('teamImport.warningMissingClaudeMd');
+      case 'bundleMemberDropped':
+        return t('teamImport.warningBundleMemberDropped', warning);
+      case 'bundleSkillDropped':
+        return t('teamImport.warningBundleSkillDropped', warning);
+      case 'bundleFileDropped':
+        return t('teamImport.warningBundleFileDropped', warning);
+      case 'bundleSourceTruncated':
+        return t('teamImport.warningBundleSourceTruncated');
     }
+  };
+  const formatElapsed = (elapsedSeconds: number): string => {
+    const minutes = Math.floor(elapsedSeconds / 60);
+    const seconds = elapsedSeconds % 60;
+    return minutes > 0 ? `${minutes}m ${String(seconds).padStart(2, '0')}s` : `${seconds}s`;
+  };
+  const formatStage = (progress: TeamImportJobProgress): string => {
+    const label = (() => {
+      switch (progress.stage) {
+        case 'reading':
+          return t('teamImport.stageReading');
+        case 'fetching':
+          return t('teamImport.stageFetching');
+        case 'parsing':
+          return t('teamImport.stageParsing');
+        case 'validating':
+          return t('teamImport.stageValidating');
+      }
+    })();
+    const details: string[] = [];
+    if (progress.elapsedSeconds !== undefined) details.push(formatElapsed(progress.elapsedSeconds));
+    if (progress.receivedChars) {
+      details.push(
+        t('teamImport.stageReceivedChars', { chars: progress.receivedChars.toLocaleString() })
+      );
+    }
+    return details.length > 0 ? `${label} (${details.join(' · ')})` : label;
   };
   const state = useTeamImportDialog({
     open,
@@ -73,6 +108,7 @@ export const ImportTeamDialog = ({
       ) {
         return formatNameValidation(code);
       }
+      if (code === 'invalidUrl') return t('teamImport.invalidUrl');
       return null;
     },
   });
@@ -82,6 +118,14 @@ export const ImportTeamDialog = ({
     state.preview.blockingErrors.length === 0 &&
     teamNameError === null &&
     !state.importing;
+  const offerSmartRetry =
+    state.preview !== null &&
+    state.preview.importKind === 'deterministic' &&
+    state.preview.members.length === 0 &&
+    !state.loading;
+  const memberDetailByName = new Map(
+    (state.preview?.memberDetails ?? []).map((detail) => [detail.name, detail])
+  );
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && !state.importing && onClose()}>
@@ -98,14 +142,88 @@ export const ImportTeamDialog = ({
 
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
             <div className="space-y-4">
-              <Button
-                variant="outline"
-                onClick={() => void state.chooseFolder()}
-                disabled={state.loading || state.importing}
-              >
-                <FolderOpen className="mr-1.5 size-3.5" />
-                {state.loading ? t('teamImport.scanning') : t('teamImport.chooseFolder')}
-              </Button>
+              <div className="flex items-center gap-1 rounded-md border border-border p-1 text-sm">
+                <button
+                  type="button"
+                  className={`flex-1 rounded px-3 py-1.5 ${state.sourceKind === 'folder' ? 'bg-surface-hover font-medium text-text' : 'text-text-muted'}`}
+                  onClick={() => state.setSourceKind('folder')}
+                  disabled={state.loading || state.importing}
+                >
+                  <FolderOpen className="mr-1.5 inline size-3.5" />
+                  {t('teamImport.sourceFolder')}
+                </button>
+                <button
+                  type="button"
+                  className={`flex-1 rounded px-3 py-1.5 ${state.sourceKind === 'url' ? 'bg-surface-hover font-medium text-text' : 'text-text-muted'}`}
+                  onClick={() => state.setSourceKind('url')}
+                  disabled={state.loading || state.importing}
+                >
+                  <Globe className="mr-1.5 inline size-3.5" />
+                  {t('teamImport.sourceUrl')}
+                </button>
+              </div>
+
+              {state.sourceKind === 'folder' ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => void state.chooseFolder()}
+                    disabled={state.loading || state.importing}
+                  >
+                    <FolderOpen className="mr-1.5 size-3.5" />
+                    {state.loading ? t('teamImport.scanning') : t('teamImport.chooseFolder')}
+                  </Button>
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-text-muted">
+                    <input
+                      type="checkbox"
+                      checked={state.smart}
+                      onChange={(event) => state.setSmart(event.target.checked)}
+                      disabled={state.loading || state.importing}
+                    />
+                    <Sparkles className="size-3.5" />
+                    {t('teamImport.smartParse')}
+                  </label>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3">
+                  <Input
+                    className="min-w-64 flex-1"
+                    placeholder={t('teamImport.urlPlaceholder')}
+                    value={state.url}
+                    onChange={(event) => state.setUrl(event.target.value)}
+                    disabled={state.loading || state.importing}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => void state.previewUrl()}
+                    disabled={!state.url.trim() || state.loading || state.importing}
+                  >
+                    <Sparkles className="mr-1.5 size-3.5" />
+                    {state.loading ? t('teamImport.scanning') : t('teamImport.fetchUrl')}
+                  </Button>
+                </div>
+              )}
+
+              {state.sourceKind === 'folder' && state.smart ? (
+                <p className="text-xs text-text-muted">{t('teamImport.smartParseHint')}</p>
+              ) : null}
+
+              {state.loading && state.stage ? (
+                <div className="flex items-center gap-2 text-sm text-text-muted" role="status">
+                  <Loader2 className="size-4 animate-spin" />
+                  {formatStage(state.stage)}
+                </div>
+              ) : null}
+
+              {offerSmartRetry ? (
+                <div className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
+                  <p className="text-sm text-text-muted">{t('teamImport.smartRetryPrompt')}</p>
+                  <Button variant="outline" onClick={() => void state.retrySmart()}>
+                    <Sparkles className="mr-1.5 size-3.5" />
+                    {t('teamImport.smartRetryAction')}
+                  </Button>
+                </div>
+              ) : null}
 
               {state.preview ? (
                 <div className="space-y-4 rounded-md border border-border p-4">
@@ -124,23 +242,65 @@ export const ImportTeamDialog = ({
                     ) : null}
                   </div>
 
-                  <div>
-                    <p className="text-sm font-semibold text-text">{t('teamImport.projectPath')}</p>
-                    <p className="break-all text-sm text-text-muted">{state.preview.projectPath}</p>
-                  </div>
+                  {state.preview.projectPath ? (
+                    <div>
+                      <p className="text-sm font-semibold text-text">
+                        {t('teamImport.projectPath')}
+                      </p>
+                      <p className="break-all text-sm text-text-muted">
+                        {state.preview.projectPath}
+                      </p>
+                    </div>
+                  ) : state.preview.sourceLabel ? (
+                    <div>
+                      <p className="text-sm font-semibold text-text">{t('teamImport.source')}</p>
+                      <p className="break-all text-sm text-text-muted">
+                        {state.preview.sourceLabel}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {state.preview.teamDescription ? (
+                    <p className="text-sm text-text-muted">{state.preview.teamDescription}</p>
+                  ) : null}
 
                   <section className="space-y-3">
                     <h3 className="text-sm font-semibold text-text">
                       {t('teamImport.members', { count: state.preview.members.length })}
                     </h3>
-                    {state.preview.members.map((member) => (
-                      <article key={member.name} className="rounded border border-border p-3">
-                        <h4 className="text-sm font-medium text-text">{member.name}</h4>
-                        <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-text-muted">
-                          {member.workflow}
-                        </pre>
-                      </article>
-                    ))}
+                    {state.preview.members.map((member) => {
+                      const detail = memberDetailByName.get(member.name);
+                      return (
+                        <article key={member.name} className="rounded border border-border p-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="text-sm font-medium text-text">{member.name}</h4>
+                            {detail?.role ? (
+                              <span className="text-xs text-text-muted">{detail.role}</span>
+                            ) : null}
+                          </div>
+                          {detail && detail.skills.length > 0 ? (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {detail.skills.map((skill) => (
+                                <span
+                                  key={skill}
+                                  className="rounded-full border border-border px-2 py-0.5 text-xs text-text-muted"
+                                >
+                                  {skill}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                          {detail && detail.memoryFileCount > 0 ? (
+                            <p className="mt-1 text-xs text-text-muted">
+                              {t('teamImport.memoryFiles', { count: detail.memoryFileCount })}
+                            </p>
+                          ) : null}
+                          <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-text-muted">
+                            {member.workflow}
+                          </pre>
+                        </article>
+                      );
+                    })}
                   </section>
 
                   {state.preview.prompt ? (
@@ -154,7 +314,34 @@ export const ImportTeamDialog = ({
                     </section>
                   ) : null}
 
-                  {state.preview.skillsFound.length > 0 ? (
+                  {state.preview.skillPlans && state.preview.skillPlans.length > 0 ? (
+                    <section className="space-y-2">
+                      <h3 className="text-sm font-semibold text-text">
+                        {t('teamImport.skillsToInstall', {
+                          count: state.preview.skillPlans.length,
+                        })}
+                      </h3>
+                      <p className="text-xs text-text-muted">{t('teamImport.skillsInstallNote')}</p>
+                      {state.preview.skillPlans.map((plan) => (
+                        <div
+                          key={plan.slug}
+                          className="flex flex-wrap items-center gap-2 rounded border border-border p-2"
+                        >
+                          <span className="text-sm text-text">{plan.slug}</span>
+                          {plan.alreadyExists ? (
+                            <span className="rounded-full border border-yellow-500/40 px-2 py-0.5 text-xs text-yellow-400">
+                              {t('teamImport.skillAlreadyExists')}
+                            </span>
+                          ) : null}
+                          {plan.description ? (
+                            <span className="w-full text-xs text-text-muted">
+                              {plan.description}
+                            </span>
+                          ) : null}
+                        </div>
+                      ))}
+                    </section>
+                  ) : state.preview.skillsFound.length > 0 ? (
                     <div>
                       <p className="text-sm font-semibold text-text">
                         {t('teamImport.skills', { count: state.preview.skillsFound.length })}
@@ -216,7 +403,11 @@ export const ImportTeamDialog = ({
                 : t('teamImport.selectPrompt')}
             </p>
             <Button onClick={() => void state.createDraft()} disabled={!canCreate || state.loading}>
-              {state.importing ? t('teamImport.creating') : t('teamImport.createDraft')}
+              {state.importing
+                ? t('teamImport.creating')
+                : state.preview?.importKind === 'smart'
+                  ? t('teamImport.createDraftSmart')
+                  : t('teamImport.createDraft')}
             </Button>
           </div>
         </div>

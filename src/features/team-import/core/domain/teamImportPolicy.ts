@@ -4,13 +4,13 @@ import YAML from 'yaml';
 import type { TeamImportFolderSnapshot } from '../application/models/TeamImportFolderSnapshot';
 import type { TeamImportPreview, TeamImportWarning } from '@features/team-import/contracts';
 
-const MEMBER_PREFIX = `## Team collaboration
+export const MEMBER_PREFIX = `## Team collaboration
 - When the lead assigns this board task, use task_start to mark it in progress.
 - Follow the workflow below.
 - Post the result to the board with task_add_comment.
 - Mark the task completed with task_complete, then notify the lead with message_send.`;
 
-const LEAD_PREFIX = `## Team collaboration
+export const LEAD_PREFIX = `## Team collaboration
 - Create board work with task_create. Always provide subject. Set owner only to an actual team member name.
 - Use message_send to notify a member when a separate notification is useful.
 - Read completed work from task comments after the member calls task_add_comment and task_complete.
@@ -111,7 +111,7 @@ export function validateTeamImportName(teamName: string): TeamImportNameValidati
   return null;
 }
 
-function validateImportedMemberName(name: string): ImportedMemberValidationCode | null {
+export function validateImportedMemberName(name: string): ImportedMemberValidationCode | null {
   if (!name.trim()) return 'memberInvalid';
   const lower = name.toLowerCase();
   if (lower === 'user' || lower === 'team-lead' || lower === 'lead') {
@@ -336,6 +336,7 @@ export function buildTeamImportPreview(
   ].sort((left, right) => left.localeCompare(right));
 
   return {
+    importKind: 'deterministic',
     suggestedTeamName: suggestTeamImportName(snapshot.folderName),
     projectPath: snapshot.projectPath,
     members,

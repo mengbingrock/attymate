@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
-import type { TeamImportReviewStorePort } from '../../core/application/ports/TeamImportReviewStorePort';
-import type { TeamImportPreview } from '@features/team-import/contracts';
+import type {
+  TeamImportReviewRecord,
+  TeamImportReviewStorePort,
+} from '../../core/application/ports/TeamImportReviewStorePort';
+import type { TeamImportBundle, TeamImportPreview } from '@features/team-import/contracts';
 
 interface StoredReview {
-  preview: TeamImportPreview;
+  record: TeamImportReviewRecord;
   createdAt: number;
 }
 
@@ -14,7 +17,7 @@ const MAX_STORED_REVIEWS = 10;
 export class InMemoryTeamImportReviewStore implements TeamImportReviewStorePort {
   private readonly reviews = new Map<string, StoredReview>();
 
-  save(preview: Omit<TeamImportPreview, 'reviewId'>): TeamImportPreview {
+  save(preview: Omit<TeamImportPreview, 'reviewId'>, bundle?: TeamImportBundle): TeamImportPreview {
     this.prune();
     while (this.reviews.size >= MAX_STORED_REVIEWS) {
       const oldest = this.reviews.keys().next();
@@ -22,22 +25,25 @@ export class InMemoryTeamImportReviewStore implements TeamImportReviewStorePort 
       this.reviews.delete(oldest.value);
     }
     const storedPreview: TeamImportPreview = { ...preview, reviewId: randomUUID() };
-    this.reviews.set(storedPreview.reviewId, { preview: storedPreview, createdAt: Date.now() });
+    this.reviews.set(storedPreview.reviewId, {
+      record: { preview: storedPreview, ...(bundle ? { bundle } : {}) },
+      createdAt: Date.now(),
+    });
     return storedPreview;
   }
 
-  consume(reviewId: string): TeamImportPreview | null {
+  consume(reviewId: string): TeamImportReviewRecord | null {
     this.prune();
     const stored = this.reviews.get(reviewId);
     if (!stored) return null;
     this.reviews.delete(reviewId);
-    return stored.preview;
+    return stored.record;
   }
 
-  restore(preview: TeamImportPreview): void {
+  restore(record: TeamImportReviewRecord): void {
     this.prune();
-    if (this.reviews.has(preview.reviewId)) return;
-    this.reviews.set(preview.reviewId, { preview, createdAt: Date.now() });
+    if (this.reviews.has(record.preview.reviewId)) return;
+    this.reviews.set(record.preview.reviewId, { record, createdAt: Date.now() });
   }
 
   private prune(): void {

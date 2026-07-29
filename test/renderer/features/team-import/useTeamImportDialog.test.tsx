@@ -9,7 +9,9 @@ import type { TeamImportPreview } from '@features/team-import/contracts';
 const apiMock = vi.hoisted(() => ({
   teamImport: {
     chooseFolderAndPreview: vi.fn(),
+    smartPreview: vi.fn(),
     createDraft: vi.fn(),
+    onJobProgress: vi.fn(() => () => undefined),
   },
 }));
 
@@ -26,6 +28,7 @@ function createDeferred<T>() {
 function preview(reviewId: string, teamName: string): TeamImportPreview {
   return {
     reviewId,
+    importKind: 'deterministic',
     suggestedTeamName: teamName,
     projectPath: `/tmp/${teamName}`,
     members: [{ name: 'writer', workflow: `workflow-${teamName}` }],
@@ -64,7 +67,10 @@ describe('useTeamImportDialog', () => {
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     apiMock.teamImport.chooseFolderAndPreview.mockReset();
+    apiMock.teamImport.smartPreview.mockReset();
     apiMock.teamImport.createDraft.mockReset();
+    apiMock.teamImport.onJobProgress.mockReset();
+    apiMock.teamImport.onJobProgress.mockReturnValue(() => undefined);
   });
 
   afterEach(() => {
@@ -75,7 +81,7 @@ describe('useTeamImportDialog', () => {
   it('keeps only the latest folder preview when requests resolve out of order', async () => {
     const first = createDeferred<TeamImportPreview | null>();
     const second = createDeferred<TeamImportPreview | null>();
-    apiMock.teamImport.chooseFolderAndPreview
+    apiMock.teamImport.smartPreview
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise);
     const host = document.createElement('div');
@@ -112,7 +118,7 @@ describe('useTeamImportDialog', () => {
   });
 
   it('guards create against double submission and closes only after success', async () => {
-    apiMock.teamImport.chooseFolderAndPreview.mockResolvedValue(preview('review-1', 'demo'));
+    apiMock.teamImport.smartPreview.mockResolvedValue(preview('review-1', 'demo'));
     const create = createDeferred<{ teamName: string }>();
     apiMock.teamImport.createDraft.mockReturnValue(create.promise);
     const onClose = vi.fn();
@@ -150,13 +156,13 @@ describe('useTeamImportDialog', () => {
       create.resolve({ teamName: 'demo' });
       await create.promise;
     });
-    expect(onImported).toHaveBeenCalledWith('demo');
+    expect(onImported).toHaveBeenCalledWith('demo', undefined);
     expect(onClose).toHaveBeenCalledTimes(1);
     act(() => root.unmount());
   });
 
   it('maps stable validation codes at the renderer boundary', async () => {
-    apiMock.teamImport.chooseFolderAndPreview.mockResolvedValue(preview('review-1', 'con'));
+    apiMock.teamImport.smartPreview.mockResolvedValue(preview('review-1', 'con'));
     apiMock.teamImport.createDraft.mockRejectedValue(
       new Error(
         "Error invoking remote method 'team-import:create-draft': Error: TEAM_IMPORT_VALIDATION:teamNameReserved"

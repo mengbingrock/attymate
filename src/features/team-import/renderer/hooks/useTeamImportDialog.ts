@@ -2,12 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api } from '@renderer/api';
 
-import type { TeamImportPreview } from '@features/team-import/contracts';
+import type {
+  TeamImportJobProgress,
+  TeamImportPreview,
+  TeamImportSourceRequest,
+} from '@features/team-import/contracts';
+
+export type TeamImportSourceKind = 'folder' | 'url';
 
 interface UseTeamImportDialogInput {
   open: boolean;
   onClose: () => void;
-  onImported: (teamName: string) => void;
+  onImported: (teamName: string, applyWarnings?: string[]) => void;
   inspectErrorFallback: string;
   createErrorFallback: string;
   resolveValidationError?: (code: string) => string | null;
@@ -31,6 +37,10 @@ function resolveRequestError(
 export function useTeamImportDialog(input: UseTeamImportDialogInput) {
   const [preview, setPreview] = useState<TeamImportPreview | null>(null);
   const [teamName, setTeamName] = useState('');
+  const [sourceKind, setSourceKind] = useState<TeamImportSourceKind>('folder');
+  const [url, setUrl] = useState('');
+  const [smart, setSmart] = useState(false);
+  const [stage, setStage] = useState<TeamImportJobProgress | null>(null);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,31 +52,66 @@ export function useTeamImportDialog(input: UseTeamImportDialogInput) {
     importingRef.current = false;
     setPreview(null);
     setTeamName('');
+    setSourceKind('folder');
+    setUrl('');
+    setSmart(false);
+    setStage(null);
     setLoading(false);
     setImporting(false);
     setError(null);
   }, [input.open]);
 
-  const chooseFolder = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    setPreview(null);
-    setTeamName('');
-    setLoading(true);
-    setError(null);
-    try {
-      const nextPreview = await api.teamImport.chooseFolderAndPreview();
-      if (requestId !== requestIdRef.current) return;
-      setPreview(nextPreview);
-      setTeamName(nextPreview?.suggestedTeamName ?? '');
-    } catch (nextError) {
-      if (requestId !== requestIdRef.current) return;
-      setError(
-        resolveRequestError(nextError, input.inspectErrorFallback, input.resolveValidationError)
-      );
-    } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
-    }
-  }, [input.inspectErrorFallback, input.resolveValidationError]);
+  useEffect(() => {
+    if (!input.open) return;
+    return api.teamImport.onJobProgress((progress) => setStage(progress));
+  }, [input.open]);
+
+  const runPreview = useCallback(
+    async (request: TeamImportSourceRequest) => {
+      const requestId = ++requestIdRef.current;
+      setPreview(null);
+      setTeamName('');
+      setStage(null);
+      setLoading(true);
+      setError(null);
+      try {
+        const nextPreview = await api.teamImport.smartPreview(request);
+        if (requestId !== requestIdRef.current) return;
+        setPreview(nextPreview);
+        setTeamName(nextPreview?.suggestedTeamName ?? '');
+      } catch (nextError) {
+        if (requestId !== requestIdRef.current) return;
+        setError(
+          resolveRequestError(nextError, input.inspectErrorFallback, input.resolveValidationError)
+        );
+      } finally {
+        if (requestId === requestIdRef.current) {
+          setLoading(false);
+          setStage(null);
+        }
+      }
+    },
+    [input.inspectErrorFallback, input.resolveValidationError]
+  );
+
+  const chooseFolder = useCallback(
+    () => runPreview({ kind: 'folder', smart }),
+    [runPreview, smart]
+  );
+
+  const previewUrl = useCallback(() => {
+    if (!url.trim()) return Promise.resolve();
+    return runPreview({ kind: 'url', url: url.trim() });
+  }, [runPreview, url]);
+
+  const retrySmart = useCallback(() => {
+    setSmart(true);
+    return runPreview({
+      kind: 'folder',
+      smart: true,
+      ...(preview?.projectPath ? { folderPath: preview.projectPath } : {}),
+    });
+  }, [preview?.projectPath, runPreview]);
 
   const createDraft = useCallback(async () => {
     if (!preview || preview.blockingErrors.length > 0 || importingRef.current) return;
@@ -78,7 +123,7 @@ export function useTeamImportDialog(input: UseTeamImportDialogInput) {
         reviewId: preview.reviewId,
         teamName,
       });
-      input.onImported(result.teamName);
+      input.onImported(result.teamName, result.applyWarnings);
       input.onClose();
     } catch (nextError) {
       setError(
@@ -94,10 +139,19 @@ export function useTeamImportDialog(input: UseTeamImportDialogInput) {
     preview,
     teamName,
     setTeamName,
+    sourceKind,
+    setSourceKind,
+    url,
+    setUrl,
+    smart,
+    setSmart,
+    stage,
     loading,
     importing,
     error,
     chooseFolder,
+    previewUrl,
+    retrySmart,
     createDraft,
   };
 }

@@ -209,9 +209,13 @@ export class HttpAPIClient implements ElectronAPI {
     chooseFolderAndPreview: async () => {
       throw new Error('Team import is only available in the desktop app');
     },
+    smartPreview: async () => {
+      throw new Error('Team import is only available in the desktop app');
+    },
     createDraft: async () => {
       throw new Error('Team import is only available in the desktop app');
     },
+    onJobProgress: () => () => undefined,
   };
 
   constructor(baseUrl: string) {

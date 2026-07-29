@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const hookState = vi.hoisted(() => ({
   preview: {
     reviewId: 'review-1',
+    importKind: 'deterministic',
     suggestedTeamName: 'demo-team',
     projectPath: '/tmp/demo-team',
     members: [{ name: 'writer', workflow: 'WORKFLOW_VISIBLE_MARKER' }],
@@ -16,10 +17,19 @@ const hookState = vi.hoisted(() => ({
   },
   teamName: 'demo-team',
   setTeamName: vi.fn(),
+  sourceKind: 'folder',
+  setSourceKind: vi.fn(),
+  url: '',
+  setUrl: vi.fn(),
+  smart: false,
+  setSmart: vi.fn(),
+  stage: null,
   loading: false,
   importing: false,
   error: null,
   chooseFolder: vi.fn(),
+  previewUrl: vi.fn(),
+  retrySmart: vi.fn(),
   createDraft: vi.fn(),
 }));
 
@@ -47,6 +57,9 @@ vi.mock('@renderer/components/ui/dialog', () => ({
 }));
 vi.mock('lucide-react', () => ({
   FolderOpen: () => <svg />,
+  Globe: () => <svg />,
+  Loader2: () => <svg />,
+  Sparkles: () => <svg />,
   X: () => <svg />,
 }));
 
