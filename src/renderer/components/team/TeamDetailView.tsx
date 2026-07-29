@@ -116,6 +116,9 @@ const sumInjectionTokens = tokenMath[
 const LaunchTeamDialog = lazy(() =>
   import('./dialogs/LaunchTeamDialog').then((m) => ({ default: m.LaunchTeamDialog }))
 );
+// Stable identity: the draft launch dialog re-runs its prefill effect whenever the
+// `members` prop changes, which would discard in-progress provider/model edits.
+const DRAFT_LAUNCH_DIALOG_MEMBERS: never[] = [];
 const ProjectEditorOverlay = lazy(() =>
   import('./editor/ProjectEditorOverlay').then((m) => ({ default: m.ProjectEditorOverlay }))
 );
@@ -2976,7 +2979,7 @@ export const TeamDetailView = memo(function TeamDetailView({
                 mode={launchDialogState.mode}
                 open={launchDialogOpen}
                 teamName={teamName}
-                members={[]}
+                members={DRAFT_LAUNCH_DIALOG_MEMBERS}
                 defaultProjectPath={draftTeamSummary?.projectPath}
                 provisioningError={provisioningError}
                 clearProvisioningError={clearProvisioningError}
