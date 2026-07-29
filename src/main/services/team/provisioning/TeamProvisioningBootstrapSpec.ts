@@ -26,6 +26,7 @@ export interface TeamProvisioningRunTimeoutInput {
 interface RuntimeBootstrapMemberSpec {
   name: string;
   prompt?: string;
+  workflow?: string;
   cwd?: string;
   model?: string;
   provider?: TeamProviderId;
@@ -226,6 +227,28 @@ export function buildDeterministicLaunchBootstrapSpec(
   };
 }
 
+export const STOCK_BOOTSTRAP_SPAWN_WORKFLOW_MAX_CHARS = 2000;
+
+export function buildStockBootstrapSpawnWorkflowBlocks(
+  members: readonly RuntimeBootstrapMemberSpec[]
+): string[] {
+  const lines: string[] = [];
+  for (const member of members) {
+    const workflow = member.workflow?.trim();
+    if (!workflow) continue;
+    const clamped =
+      workflow.length > STOCK_BOOTSTRAP_SPAWN_WORKFLOW_MAX_CHARS
+        ? `${workflow.slice(0, STOCK_BOOTSTRAP_SPAWN_WORKFLOW_MAX_CHARS)}\n[…truncated…]`
+        : workflow;
+    lines.push(
+      '',
+      `--- Spawn prompt for ${member.name} (include this text verbatim at the start of that teammate's spawn prompt) ---`,
+      clamped
+    );
+  }
+  return lines;
+}
+
 export function describeStockBootstrapMember(member: RuntimeBootstrapMemberSpec): string {
   const details: string[] = [];
   if (member.model) details.push(`model: ${member.model}`);
@@ -269,6 +292,7 @@ export function buildStockClaudeBootstrapPrompt(
     for (const member of spec.members) {
       lines.push(describeStockBootstrapMember(member));
     }
+    lines.push(...buildStockBootstrapSpawnWorkflowBlocks(spec.members));
   }
   lines.push(
     '',

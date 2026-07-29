@@ -72,7 +72,7 @@ const TEAM_ROOT_FILES = [
 
 // Subdirs under ~/.claude/teams/{teamName}/
 const TEAM_SUBDIRS = ['inboxes', 'review-decisions'];
-const TEAM_RECURSIVE_SUBDIRS = ['.opencode-runtime', 'members'];
+const TEAM_RECURSIVE_SUBDIRS = ['.opencode-runtime', 'members', 'agents'];
 const ATOMIC_WRITE_TEMP_FILE_PREFIX = '.tmp.';
 const FILE_LOCK_SUFFIX = '.lock';
 const QUARANTINED_OPENCODE_LANE_INDEX_RE = /^lanes\.invalid\.\d+\.json$/;
