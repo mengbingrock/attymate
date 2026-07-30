@@ -26,6 +26,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  # Telemetry verification is skipped when the repo has no Sentry/PostHog secrets
+  # (forks); the app then builds without telemetry baked in.
+  HAS_SENTRY_SECRETS: ${{ secrets.SENTRY_DSN != '' && secrets.SENTRY_AUTH_TOKEN != '' && secrets.SENTRY_ORG != '' && secrets.SENTRY_PROJECT != '' }}
+  HAS_POSTHOG_SECRETS: ${{ secrets.POSTHOG_KEY != '' }}
   IS_RELEASE_BUILD: ${{ github.event_name == 'workflow_dispatch' }}
   RELEASE_TAG: ${{ inputs.release_tag }}
   PUBLISH_RELEASE: ${{ inputs.publish_release }}
@@ -82,7 +86,7 @@ jobs:
           pnpm pkg set version="$VERSION"
 
       - name: Verify Sentry release env
-        if: ${{ env.IS_RELEASE_BUILD == 'true' }}
+        if: ${{ env.IS_RELEASE_BUILD == 'true' && env.HAS_SENTRY_SECRETS == 'true' }}
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -91,7 +95,7 @@ jobs:
         run: node ./scripts/ci/verify-sentry-release.cjs prebuild
 
       - name: Verify PostHog release env
-        if: ${{ env.IS_RELEASE_BUILD == 'true' }}
+        if: ${{ env.IS_RELEASE_BUILD == 'true' && env.HAS_POSTHOG_SECRETS == 'true' }}
         env:
           POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
           POSTHOG_HOST: https://eu.i.posthog.com
@@ -109,7 +113,7 @@ jobs:
         run: pnpm build
 
       - name: Verify Sentry source map upload
-        if: ${{ env.IS_RELEASE_BUILD == 'true' }}
+        if: ${{ env.IS_RELEASE_BUILD == 'true' && env.HAS_SENTRY_SECRETS == 'true' }}
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -118,7 +122,7 @@ jobs:
         run: node ./scripts/ci/verify-sentry-release.cjs postbuild
 
       - name: Verify PostHog renderer bundle
-        if: ${{ env.IS_RELEASE_BUILD == 'true' }}
+        if: ${{ env.IS_RELEASE_BUILD == 'true' && env.HAS_POSTHOG_SECRETS == 'true' }}
         env:
           POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
           POSTHOG_HOST: https://eu.i.posthog.com
@@ -208,7 +212,7 @@ jobs:
         if: ${{ env.IS_RELEASE_BUILD == 'true' }}
         id: runtime-assets
         env:
-          GH_TOKEN: ${{ secrets.RUNTIME_BUILD_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ secrets.RUNTIME_BUILD_DISPATCH_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           RELEASE_REPO="$(node ./scripts/runtime-lock.mjs release-repository)"
@@ -227,7 +231,7 @@ jobs:
       - name: Run and wait for private runtime build
         if: steps.runtime-assets.outputs.missing == '1'
         env:
-          GH_TOKEN: ${{ secrets.RUNTIME_BUILD_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ secrets.RUNTIME_BUILD_DISPATCH_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN:-}" ]; then
@@ -303,7 +307,7 @@ jobs:
       - name: Verify runtime assets
         if: steps.runtime-assets.outputs.missing == '1'
         env:
-          GH_TOKEN: ${{ secrets.RUNTIME_BUILD_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ secrets.RUNTIME_BUILD_DISPATCH_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           RELEASE_REPO="$(node ./scripts/runtime-lock.mjs release-repository)"
@@ -549,7 +553,7 @@ jobs:
 
       - name: Stage bundled runtime (macOS ${{ matrix.arch }})
         env:
-          GH_TOKEN: ${{ secrets.RUNTIME_BUILD_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ secrets.RUNTIME_BUILD_DISPATCH_TOKEN || secrets.GITHUB_TOKEN }}
         shell: bash
         run: node ./scripts/stage-runtime.mjs --platform "darwin-${{ matrix.arch }}"
 
@@ -560,7 +564,7 @@ jobs:
         run: node ./scripts/stage-terminal-platform-runtime.mjs --platform "darwin-${{ matrix.arch }}"
 
       - name: Verify Sentry release env (macOS ${{ matrix.arch }})
-        if: ${{ env.IS_RELEASE_BUILD == 'true' }}
+        if: ${{ env.IS_RELEASE_BUILD == 'true' && env.HAS_SENTRY_SECRETS == 'true' }}
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -569,7 +573,7 @@ jobs:
         run: node ./scripts/ci/verify-sentry-release.cjs prebuild
 
       - name: Verify PostHog release env (macOS ${{ matrix.arch }})
-        if: ${{ env.IS_RELEASE_BUILD == 'true' }}
+        if: ${{ env.IS_RELEASE_BUILD == 'true' && env.HAS_POSTHOG_SECRETS == 'true' }}
         env:
           POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
           POSTHOG_HOST: https://eu.i.posthog.com
@@ -587,7 +591,7 @@ jobs:
         run: pnpm build
 
       - name: Verify Sentry source map upload (macOS ${{ matrix.arch }})
-        if: ${{ env.IS_RELEASE_BUILD == 'true' }}
+        if: ${{ env.IS_RELEASE_BUILD == 'true' && env.HAS_SENTRY_SECRETS == 'true' }}
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -596,7 +600,7 @@ jobs:
         run: node ./scripts/ci/verify-sentry-release.cjs postbuild
 
       - name: Verify PostHog renderer bundle (macOS ${{ matrix.arch }})
-        if: ${{ env.IS_RELEASE_BUILD == 'true' }}
+        if: ${{ env.IS_RELEASE_BUILD == 'true' && env.HAS_POSTHOG_SECRETS == 'true' }}
         env:
           POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
           POSTHOG_HOST: https://eu.i.posthog.com
@@ -694,7 +698,7 @@ jobs:
       - name: Stage bundled runtime (Windows)
         shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.RUNTIME_BUILD_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ secrets.RUNTIME_BUILD_DISPATCH_TOKEN || secrets.GITHUB_TOKEN }}
         run: node ./scripts/stage-runtime.mjs --platform win32-x64
 
       - name: Stage terminal-platform runtime (Windows)
@@ -704,7 +708,7 @@ jobs:
         run: node ./scripts/stage-terminal-platform-runtime.mjs --platform win32-x64
 
       - name: Verify Sentry release env (Windows)
-        if: ${{ env.IS_RELEASE_BUILD == 'true' }}
+        if: ${{ env.IS_RELEASE_BUILD == 'true' && env.HAS_SENTRY_SECRETS == 'true' }}
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -713,7 +717,7 @@ jobs:
         run: node ./scripts/ci/verify-sentry-release.cjs prebuild
 
       - name: Verify PostHog release env (Windows)
-        if: ${{ env.IS_RELEASE_BUILD == 'true' }}
+        if: ${{ env.IS_RELEASE_BUILD == 'true' && env.HAS_POSTHOG_SECRETS == 'true' }}
         env:
           POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
           POSTHOG_HOST: https://eu.i.posthog.com
@@ -731,7 +735,7 @@ jobs:
         run: pnpm build
 
       - name: Verify Sentry source map upload (Windows)
-        if: ${{ env.IS_RELEASE_BUILD == 'true' }}
+        if: ${{ env.IS_RELEASE_BUILD == 'true' && env.HAS_SENTRY_SECRETS == 'true' }}
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -740,7 +744,7 @@ jobs:
         run: node ./scripts/ci/verify-sentry-release.cjs postbuild
 
       - name: Verify PostHog renderer bundle (Windows)
-        if: ${{ env.IS_RELEASE_BUILD == 'true' }}
+        if: ${{ env.IS_RELEASE_BUILD == 'true' && env.HAS_POSTHOG_SECRETS == 'true' }}
         env:
           POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
           POSTHOG_HOST: https://eu.i.posthog.com
@@ -839,7 +843,7 @@ jobs:
 
       - name: Stage bundled runtime (Linux)
         env:
-          GH_TOKEN: ${{ secrets.RUNTIME_BUILD_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ secrets.RUNTIME_BUILD_DISPATCH_TOKEN || secrets.GITHUB_TOKEN }}
         shell: bash
         run: node ./scripts/stage-runtime.mjs --platform linux-x64
 
@@ -850,7 +854,7 @@ jobs:
         run: node ./scripts/stage-terminal-platform-runtime.mjs --platform linux-x64
 
       - name: Verify Sentry release env (Linux)
-        if: ${{ env.IS_RELEASE_BUILD == 'true' }}
+        if: ${{ env.IS_RELEASE_BUILD == 'true' && env.HAS_SENTRY_SECRETS == 'true' }}
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -859,7 +863,7 @@ jobs:
         run: node ./scripts/ci/verify-sentry-release.cjs prebuild
 
       - name: Verify PostHog release env (Linux)
-        if: ${{ env.IS_RELEASE_BUILD == 'true' }}
+        if: ${{ env.IS_RELEASE_BUILD == 'true' && env.HAS_POSTHOG_SECRETS == 'true' }}
         env:
           POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
           POSTHOG_HOST: https://eu.i.posthog.com
@@ -877,7 +881,7 @@ jobs:
         run: pnpm build
 
       - name: Verify Sentry source map upload (Linux)
-        if: ${{ env.IS_RELEASE_BUILD == 'true' }}
+        if: ${{ env.IS_RELEASE_BUILD == 'true' && env.HAS_SENTRY_SECRETS == 'true' }}
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -886,7 +890,7 @@ jobs:
         run: node ./scripts/ci/verify-sentry-release.cjs postbuild
 
       - name: Verify PostHog renderer bundle (Linux)
-        if: ${{ env.IS_RELEASE_BUILD == 'true' }}
+        if: ${{ env.IS_RELEASE_BUILD == 'true' && env.HAS_POSTHOG_SECRETS == 'true' }}
         env:
           POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
           POSTHOG_HOST: https://eu.i.posthog.com
