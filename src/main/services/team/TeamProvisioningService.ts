@@ -6654,7 +6654,15 @@ export class TeamProvisioningService {
 
   private getRunLeadName(run: ProvisioningRun): string {
     const members = Array.isArray(run.request?.members) ? run.request.members : [];
-    return members.find((m) => m.role?.toLowerCase().includes('lead'))?.name || 'team-lead';
+    // Match "lead" on word boundaries only. A substring test elects the wrong
+    // member for roles that merely contain the letters — "Pleading Review
+    // Specialist" is a teammate, not the team lead — and the elected name
+    // decides which runtime lane becomes the lead, so a teammate that wins here
+    // never gets a lane of its own.
+    return (
+      (members.find((m) => isLeadMember(m)) ?? members.find((m) => /\blead\b/i.test(m.role ?? '')))
+        ?.name || 'team-lead'
+    );
   }
 
   private rememberRecentCrossTeamLeadDeliveryMessageIds(
