@@ -1,6 +1,6 @@
 import packageJson from '../../../package.json';
 
-const GITHUB_BUG_REPORT_URL = 'https://github.com/777genius/agent-teams-ai/issues/new';
+const GITHUB_BUG_REPORT_URL = 'https://github.com/mengbingrock/attymate/issues/new';
 const MAX_TITLE_LENGTH = 120;
 const URL_MAX_STACK_LENGTH = 1800;
 const URL_MAX_COMPONENT_STACK_LENGTH = 1200;
