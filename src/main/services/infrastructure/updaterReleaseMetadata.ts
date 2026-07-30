@@ -1,6 +1,6 @@
-const REPO_OWNER = '777genius';
-const REPO_NAME = 'agent-teams-ai';
-const LEGACY_REPO_NAME = 'claude_agent_teams_ui';
+// In-app updates are served from this fork's releases.
+const REPO_OWNER = 'mengbingrock';
+const REPO_NAME = 'attymate';
 
 const UPDATER_SKIP_MARKERS = [
   '[skip-updater]',
@@ -22,11 +22,11 @@ export function buildReleaseAssetBase(version: string, repoName = REPO_NAME): st
 }
 
 export function buildReleaseAssetBases(version: string): readonly string[] {
-  return [buildReleaseAssetBase(version), buildReleaseAssetBase(version, LEGACY_REPO_NAME)];
+  return [buildReleaseAssetBase(version)];
 }
 
 export function getReleaseApiUrls(version: string): readonly string[] {
-  return [REPO_NAME, LEGACY_REPO_NAME].map(
+  return [REPO_NAME].map(
     (repoName) => `https://api.github.com/repos/${REPO_OWNER}/${repoName}/releases/tags/v${version}`
   );
 }
