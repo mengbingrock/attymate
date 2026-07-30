@@ -786,7 +786,9 @@ interface OpenCodeRuntimeControlAck {
   memberName?: string;
   runtimeSessionId?: string;
   idempotencyKey?: string;
-  location?: unknown;
+  // Shape must stay assignable to runtime-control/domain/RuntimeControlAck for
+  // the upstream contracts seam (bindTeamHttpHandlerApis).
+  location?: Readonly<Record<string, string | number | boolean | null>>;
   diagnostics: string[];
   observedAt: string;
 }
@@ -22672,6 +22674,74 @@ export class TeamProvisioningService {
       runId: entry.approval.runId,
       detail: allow ? 'permission-allowed' : 'permission-denied',
     });
+  }
+
+  /**
+   * Upstream contracts compatibility (TeamMemberLifecycleApi): serialize a
+   * roster mutation behind the per-team operation lock.
+   */
+  async runLiveRosterMutation(teamName: string, mutation: () => Promise<void>): Promise<void> {
+    await this.withTeamLock(teamName, mutation);
+  }
+
+  /**
+   * Upstream contracts compatibility (OpenCodeRuntimeControlApi): answer an
+   * OpenCode runtime permission from a raw control-plane payload by routing it
+   * through the same approval-response path the UI uses.
+   */
+  async answerOpenCodeRuntimePermission(raw: unknown): Promise<OpenCodeRuntimeControlAck> {
+    const payload = asRuntimeRecord(raw);
+    const teamName = requireRuntimeString(payload.teamName, 'teamName');
+    const runId = requireRuntimeString(payload.runId, 'runId');
+    const memberName = requireRuntimeString(payload.memberName, 'memberName');
+    const requestId = requireRuntimeString(
+      payload.providerRequestId ?? payload.requestId,
+      'requestId'
+    );
+    const decision = typeof payload.decision === 'string' ? payload.decision : 'reject';
+    const allow = decision === 'allow' || decision === 'approve' || decision === 'always';
+    await this.respondToToolApproval(teamName, runId, requestId, allow);
+    return {
+      ok: true,
+      providerId: 'opencode',
+      teamName,
+      runId,
+      state: 'recorded',
+      memberName,
+      diagnostics: [],
+      observedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Member-work-sync busy signal: a member with a pending tool approval must
+   * not receive queued sync messages until the approval is resolved.
+   */
+  async getMemberToolApprovalBusyStatus(input: {
+    teamName: string;
+    memberName: string;
+    nowIso: string;
+  }): Promise<{ busy: boolean; reason?: string }> {
+    const teamName = input.teamName.trim();
+    const memberName = input.memberName.trim().toLowerCase();
+    if (!teamName || !memberName) return { busy: false };
+
+    const trackedRunId = this.getTrackedRunId(teamName);
+    const trackedRun = trackedRunId ? this.runs.get(trackedRunId) : undefined;
+    const hasNativePendingApproval =
+      trackedRun?.teamName === teamName &&
+      [...trackedRun.pendingApprovals.values()].some(
+        (approval) => (approval.source ?? '').trim().toLowerCase() === memberName
+      );
+    const hasRuntimePendingApproval =
+      this.runtimeToolApprovalCoordinator.hasPendingApprovalForMember(
+        teamName,
+        input.memberName.trim()
+      );
+    if (!hasNativePendingApproval && !hasRuntimePendingApproval) {
+      return { busy: false };
+    }
+    return { busy: true, reason: 'member_tool_approval_pending' };
   }
 
   /**
