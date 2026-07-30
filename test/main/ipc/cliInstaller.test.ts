@@ -124,7 +124,7 @@ function provider(
 function status(providers: CliProviderStatus[]): CliInstallationStatus {
   const authenticatedProvider = providers.find((entry) => entry.authenticated) ?? null;
   return {
-    flavor: 'agent_teams_orchestrator',
+    flavor: 'claude',
     displayName: 'Multimodel runtime',
     supportsSelfUpdate: false,
     showVersionDetails: false,
@@ -168,54 +168,6 @@ describe('cliInstaller IPC handlers', () => {
     registerCliInstallerHandlers(ipcMain);
     await ipcMain.invoke(CLI_INSTALLER_INVALIDATE_STATUS);
     vi.clearAllMocks();
-  });
-
-  it('does not let explicit hidden Gemini refresh poison cached frontend auth status', async () => {
-    service.getStatus.mockResolvedValue(
-      status([
-        provider({ providerId: 'anthropic' }),
-        provider({ providerId: 'codex' }),
-        provider({ providerId: 'opencode', canLoginFromUi: false }),
-      ])
-    );
-    service.getProviderStatus.mockResolvedValue(
-      provider({
-        providerId: 'gemini',
-        authenticated: true,
-        authMethod: 'gemini_api_key',
-        models: ['gemini-2.5-pro'],
-      })
-    );
-
-    const initial = (await ipcMain.invoke(
-      CLI_INSTALLER_GET_STATUS
-    )) as IpcResult<CliInstallationStatus>;
-    expect(initial.success).toBe(true);
-    expect(initial.data?.providers.map((entry) => entry.providerId)).toEqual([
-      'anthropic',
-      'codex',
-      'opencode',
-    ]);
-
-    const gemini = (await ipcMain.invoke(
-      CLI_INSTALLER_GET_PROVIDER_STATUS,
-      'gemini'
-    )) as IpcResult<CliProviderStatus | null>;
-    expect(gemini.success).toBe(true);
-    expect(gemini.data?.authenticated).toBe(true);
-
-    const cached = (await ipcMain.invoke(
-      CLI_INSTALLER_GET_STATUS
-    )) as IpcResult<CliInstallationStatus>;
-    expect(service.getStatus).toHaveBeenCalledTimes(1);
-    expect(cached.success).toBe(true);
-    expect(cached.data?.providers.map((entry) => entry.providerId)).toEqual([
-      'anthropic',
-      'codex',
-      'opencode',
-    ]);
-    expect(cached.data?.authLoggedIn).toBe(false);
-    expect(cached.data?.authMethod).toBeNull();
   });
 
   it('does not patch the global status cache with a project-scoped OpenCode catalog', async () => {
@@ -460,43 +412,6 @@ describe('cliInstaller IPC handlers', () => {
     );
     expect(cachedFull.data?.authLoggedIn).toBe(true);
     expect(cachedFull.data?.providers[1]?.statusMessage).toBe('ChatGPT account ready');
-  });
-
-  it('does not replace a cached full provider status with a deferred startup snapshot', async () => {
-    const fullStatus = status([
-      provider({
-        providerId: 'anthropic',
-        authenticated: true,
-        authMethod: 'oauth_token',
-        verificationState: 'verified',
-        statusMessage: 'Connected',
-      }),
-    ]);
-    const deferredStartupStatus = status([
-      provider({
-        providerId: 'anthropic',
-        supported: false,
-        verificationState: 'unknown',
-        statusMessage: 'Provider status will refresh when needed.',
-      }),
-    ]);
-    service.getStatus.mockResolvedValueOnce(fullStatus);
-
-    const first = (await ipcMain.invoke(
-      CLI_INSTALLER_GET_STATUS
-    )) as IpcResult<CliInstallationStatus>;
-    expect(first.success).toBe(true);
-    expect(first.data?.providers[0]?.statusMessage).toBe('Connected');
-
-    service.getLatestStatusSnapshot.mockReturnValue(deferredStartupStatus);
-    const cached = (await ipcMain.invoke(
-      CLI_INSTALLER_GET_STATUS
-    )) as IpcResult<CliInstallationStatus>;
-
-    expect(service.getStatus).toHaveBeenCalledTimes(1);
-    expect(cached.success).toBe(true);
-    expect(cached.data?.authLoggedIn).toBe(true);
-    expect(cached.data?.providers[0]?.statusMessage).toBe('Connected');
   });
 
   it('does not cache incomplete full provider status responses', async () => {

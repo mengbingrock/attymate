@@ -35,24 +35,6 @@ function createProvider(providerId: CliProviderStatus['providerId']): CliProvide
 }
 
 describe('multimodelProviderVisibility', () => {
-  it('keeps multimodel runtime detection true even when all visible provider cards are hidden', () => {
-    const cliStatus = {
-      flavor: 'agent_teams_orchestrator',
-      providers: [createProvider('gemini')],
-    } satisfies Pick<CliInstallationStatus, 'flavor' | 'providers'>;
-
-    expect(isMultimodelRuntimeStatus(cliStatus)).toBe(true);
-    expect(getVisibleMultimodelProviders(cliStatus.providers)).toHaveLength(0);
-  });
-
-  it('keeps multimodel runtime detection true even before provider metadata arrives', () => {
-    const cliStatus = {
-      flavor: 'agent_teams_orchestrator',
-      providers: [],
-    } satisfies Pick<CliInstallationStatus, 'flavor' | 'providers'>;
-
-    expect(isMultimodelRuntimeStatus(cliStatus)).toBe(true);
-  });
 
   it('filters Gemini from the visible provider cards while keeping supported providers', () => {
     const providers = [

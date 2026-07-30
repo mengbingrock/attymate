@@ -129,8 +129,7 @@ export const McpServerDetailDialog = ({
       .map((entry) => entry.name)
       .sort()
       .join('\0') ?? '';
-  const statusSectionLabel =
-    cliStatus?.flavor === 'agent_teams_orchestrator' ? 'Runtime Status' : 'Claude Status';
+  const statusSectionLabel = false ? 'Runtime Status' : 'Claude Status';
   const apiKeyLookupProjectPath = isProjectScopedMcpScope(scope)
     ? (projectPath ?? undefined)
     : undefined;

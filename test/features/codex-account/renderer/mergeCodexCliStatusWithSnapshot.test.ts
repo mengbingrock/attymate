@@ -8,7 +8,7 @@ import type { CliInstallationStatus } from '../../../../src/shared/types';
 
 function createCliStatus(): CliInstallationStatus {
   return {
-    flavor: 'agent_teams_orchestrator',
+    flavor: 'claude',
     displayName: 'Multimodel runtime',
     supportsSelfUpdate: false,
     showVersionDetails: false,

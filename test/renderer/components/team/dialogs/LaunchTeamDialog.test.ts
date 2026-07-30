@@ -746,7 +746,7 @@ describe('LaunchTeamDialog', () => {
       (_providerId, model, providerStatus) => providerStatus?.models?.includes(model ?? '') ?? false
     );
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -850,7 +850,7 @@ describe('LaunchTeamDialog', () => {
       (_providerId, model, providerStatus) => providerStatus?.models?.includes(model ?? '') ?? false
     );
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -976,7 +976,7 @@ describe('LaunchTeamDialog', () => {
       backend: { kind: 'opencode-cli', label: 'OpenCode CLI' },
     };
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [globalProvider],
     } as any;
     storeState.cliProviderStatusByScope = {
@@ -1225,7 +1225,7 @@ describe('LaunchTeamDialog', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     vi.mocked(isTeamModelAvailableForUi).mockImplementation(() => true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'codex',
@@ -1333,7 +1333,7 @@ describe('LaunchTeamDialog', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     vi.mocked(isTeamModelAvailableForUi).mockImplementation(() => true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'codex',
@@ -1414,7 +1414,7 @@ describe('LaunchTeamDialog', () => {
     localStorage.setItem('team:lastSelectedProvider', 'anthropic');
     localStorage.setItem('team:lastSelectedEffort', 'medium');
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'anthropic',
@@ -1578,7 +1578,7 @@ describe('LaunchTeamDialog', () => {
       (_providerId, model, providerStatus) => providerStatus?.models?.includes(model ?? '') ?? false
     );
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -1688,7 +1688,7 @@ describe('LaunchTeamDialog', () => {
   it('allows OpenCode lead launch with the runtime default model', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -1758,7 +1758,7 @@ describe('LaunchTeamDialog', () => {
   it('allows OpenCode lead launch without teammates for solo runtime teams', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -1838,7 +1838,7 @@ describe('LaunchTeamDialog', () => {
   it('keeps OpenCode lead mixed-provider launches blocked', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -1923,7 +1923,7 @@ describe('LaunchTeamDialog', () => {
   it('prefills and saves Anthropic schedule runtime contract including max effort and fast mode', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'anthropic',
@@ -2043,7 +2043,7 @@ describe('LaunchTeamDialog', () => {
   it('preserves Codex schedule backend lane and effort in edit saves', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'codex',
@@ -2130,7 +2130,7 @@ describe('LaunchTeamDialog', () => {
       () => new Promise(() => undefined)
     );
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'codex',
@@ -2221,7 +2221,7 @@ describe('LaunchTeamDialog', () => {
   it('saves Codex schedule Fast mode when GPT-5.4 ChatGPT eligibility is available', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'codex',
@@ -2343,7 +2343,7 @@ describe('LaunchTeamDialog', () => {
   it('does not restart provider preflight when cli status refresh keeps the same semantic inputs', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'codex',
@@ -2400,7 +2400,7 @@ describe('LaunchTeamDialog', () => {
     expect(vi.mocked(runProviderPrepareDiagnostics)).toHaveBeenCalledTimes(1);
 
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'codex',
@@ -2442,7 +2442,7 @@ describe('LaunchTeamDialog', () => {
   it('keeps the in-flight OpenCode preflight result when live catalog expands during rerender', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -2522,7 +2522,7 @@ describe('LaunchTeamDialog', () => {
     expect(launchButtonWhileChecking?.hasAttribute('disabled')).toBe(false);
 
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -2585,7 +2585,7 @@ describe('LaunchTeamDialog', () => {
   it('keeps launch disabled when selected model preflight fails', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -2743,7 +2743,7 @@ describe('LaunchTeamDialog', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     vi.useFakeTimers();
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'anthropic',

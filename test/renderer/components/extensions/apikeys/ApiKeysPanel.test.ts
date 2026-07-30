@@ -104,7 +104,7 @@ import { ApiKeysPanel } from '@renderer/components/extensions/apikeys/ApiKeysPan
 
 function createCliStatus(): CliInstallationStatus {
   return {
-    flavor: 'agent_teams_orchestrator',
+    flavor: 'claude',
     displayName: 'Multimodel runtime',
     supportsSelfUpdate: false,
     showVersionDetails: false,

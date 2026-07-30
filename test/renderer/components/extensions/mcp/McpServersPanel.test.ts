@@ -26,7 +26,7 @@ interface StoreState {
   runMcpDiagnostics: ReturnType<typeof vi.fn>;
   cliStatusLoading: boolean;
   cliStatus?: {
-    flavor?: 'claude' | 'agent_teams_orchestrator';
+    flavor?: 'claude';
     installed?: boolean;
     binaryPath?: string | null;
     launchError?: string | null;
@@ -345,45 +345,9 @@ describe('McpServersPanel initial browse loading', () => {
     });
   });
 
-  it('uses runtime-aware missing-runtime copy for multimodel diagnostics failures', async () => {
-    storeState.mcpDiagnosticsError = `${CLI_NOT_FOUND_MARKER}: missing runtime`;
-    storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
-    };
-
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(
-        React.createElement(McpServersPanel, {
-          projectPath: null,
-          mcpSearchQuery: '',
-          mcpSearch: vi.fn(),
-          mcpSearchResults: [],
-          mcpSearchLoading: false,
-          mcpSearchWarnings: [],
-          selectedMcpServerId: null,
-          setSelectedMcpServerId: vi.fn(),
-        })
-      );
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).toContain('Multimodel runtime not available');
-    expect(host.textContent).toContain('MCP health checks require Multimodel runtime');
-    expect(host.textContent).not.toContain('Claude CLI not installed');
-
-    await act(async () => {
-      root.unmount();
-      await Promise.resolve();
-    });
-  });
-
   it('does not auto-run diagnostics when the configured runtime is unavailable', async () => {
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       installed: false,
       binaryPath: null,
       launchError: null,
@@ -508,7 +472,7 @@ describe('McpServersPanel initial browse loading', () => {
           selectedMcpServerId: null,
           setSelectedMcpServerId: vi.fn(),
           cliStatus: {
-            flavor: 'agent_teams_orchestrator',
+            flavor: 'claude',
             displayName: 'Multimodel runtime',
             installed: true,
             authLoggedIn: false,
@@ -534,7 +498,7 @@ describe('McpServersPanel initial browse loading', () => {
 
   it('does not block diagnostics when a usable runtime status already exists during background refresh', async () => {
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       installed: true,
       binaryPath: '/usr/local/bin/agent-teams',
       launchError: null,

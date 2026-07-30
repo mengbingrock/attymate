@@ -447,7 +447,7 @@ export const McpServersPanel = ({
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-400" />
             <div>
               <p className="text-sm font-medium text-amber-300">
-                {cliStatus?.flavor === 'agent_teams_orchestrator'
+                {false
                   ? t('mcpPanel.runtime.notAvailable', { runtime: runtimeLabel })
                   : t('mcpPanel.runtime.notInstalled', { runtime: runtimeLabel })}
               </p>

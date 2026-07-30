@@ -18,10 +18,7 @@ on:
       - 'agent-teams-controller/**'
       - 'mcp-server/**'
       - 'packages/**'
-      - 'resources/runtime/**'
       - 'resources/terminal-platform/**'
-      - '.runtime-download/**'
-      - 'runtime.lock.json'
       - 'terminal-platform.lock.json'
       - 'vendor/terminal-platform/**'
       - 'test/**'
@@ -49,10 +46,7 @@ on:
       - 'agent-teams-controller/**'
       - 'mcp-server/**'
       - 'packages/**'
-      - 'resources/runtime/**'
       - 'resources/terminal-platform/**'
-      - '.runtime-download/**'
-      - 'runtime.lock.json'
       - 'terminal-platform.lock.json'
       - 'vendor/terminal-platform/**'
       - 'test/**'
@@ -80,17 +74,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Guard runtime artifacts
-        run: node ./scripts/ci/forbid-runtime-artifacts.cjs
-
       - name: Guard production source file size
         run: node ./scripts/ci/check-source-file-size.mjs
 
       - name: Guard Team Provisioning architecture
         run: node ./scripts/ci/check-team-provisioning-architecture.mjs
-
-      - name: Verify runtime lock
-        run: node ./scripts/ci/verify-runtime-lock.mjs
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6

@@ -51,7 +51,7 @@ export function useEffectiveCliProviderStatus(
     enabled:
       providerId === 'codex' &&
       multimodelEnabled &&
-      loadingCliStatus?.flavor === 'agent_teams_orchestrator' &&
+      false &&
       Boolean(loadingCliStatus?.providers.some((provider) => provider.providerId === 'codex')),
   });
 

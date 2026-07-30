@@ -103,65 +103,6 @@ describe('ClaudeBinaryResolver', () => {
     vi.unstubAllEnvs();
   });
 
-  it('resolves agent_teams_orchestrator runtime from an explicit CLAUDE_CLI_PATH override', async () => {
-    const expectedBinary = '/Users/belief/dev/projects/claude/agent_teams_orchestrator/cli-dev';
-    process.env.CLAUDE_CLI_PATH = expectedBinary;
-
-    accessMock.mockImplementation((filePath) => {
-      if (filePath === expectedBinary) {
-        return Promise.resolve();
-      }
-      return Promise.reject(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
-    });
-
-    const { ClaudeBinaryResolver } = await import('@main/services/team/ClaudeBinaryResolver');
-    ClaudeBinaryResolver.clearCache();
-
-    await expect(ClaudeBinaryResolver.resolve()).resolves.toBe(expectedBinary);
-    expect(accessMock).toHaveBeenCalledWith(expectedBinary, 1);
-    expect(mockResolveInteractiveShellEnvBestEffort).not.toHaveBeenCalled();
-  });
-
-  it('prefers the dedicated CLAUDE_AGENT_TEAMS_ORCHESTRATOR_CLI_PATH override', async () => {
-    const expectedBinary = '/Users/belief/dev/projects/claude/agent_teams_orchestrator/cli-dev';
-    process.env.CLAUDE_AGENT_TEAMS_ORCHESTRATOR_CLI_PATH = expectedBinary;
-
-    accessMock.mockImplementation((filePath) => {
-      if (filePath === expectedBinary) {
-        return Promise.resolve();
-      }
-      return Promise.reject(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
-    });
-
-    const { ClaudeBinaryResolver } = await import('@main/services/team/ClaudeBinaryResolver');
-    ClaudeBinaryResolver.clearCache();
-
-    await expect(ClaudeBinaryResolver.resolve()).resolves.toBe(expectedBinary);
-    expect(accessMock).toHaveBeenCalledWith(expectedBinary, 1);
-    expect(mockResolveInteractiveShellEnvBestEffort).not.toHaveBeenCalled();
-  });
-
-  it('does not wait for shell env before using an explicit absolute runtime override', async () => {
-    const expectedBinary = '/Users/belief/dev/projects/claude/agent_teams_orchestrator/cli-dev';
-    process.env.CLAUDE_AGENT_TEAMS_ORCHESTRATOR_CLI_PATH = expectedBinary;
-    mockResolveInteractiveShellEnvBestEffort.mockRejectedValue(
-      new Error('shell env should not be needed')
-    );
-
-    accessMock.mockImplementation((filePath) => {
-      if (filePath === expectedBinary) {
-        return Promise.resolve();
-      }
-      return Promise.reject(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
-    });
-
-    const { ClaudeBinaryResolver } = await import('@main/services/team/ClaudeBinaryResolver');
-    ClaudeBinaryResolver.clearCache();
-
-    await expect(ClaudeBinaryResolver.resolve()).resolves.toBe(expectedBinary);
-    expect(mockResolveInteractiveShellEnvBestEffort).not.toHaveBeenCalled();
-  });
-
   it('resolves extensionless Windows explicit overrides to a real executable file first', async () => {
     Object.defineProperty(process, 'platform', {
       value: 'win32',
@@ -185,72 +126,6 @@ describe('ClaudeBinaryResolver', () => {
 
     await expect(ClaudeBinaryResolver.resolve()).resolves.toBe(expectedBinary);
     expect(statMock.mock.calls[0]?.[0]).toBe(expectedBinary);
-  });
-
-  it('ignores the dedicated orchestrator overrides when Claude flavor is selected', async () => {
-    process.env.CLAUDE_AGENT_TEAMS_ORCHESTRATOR_CLI_PATH =
-      '/Users/belief/dev/projects/claude/agent_teams_orchestrator/cli-dev';
-    mockGetConfiguredCliFlavor.mockReturnValue('claude');
-    const expectedBinary = path.join('/usr/local/bin', 'claude');
-
-    accessMock.mockImplementation((filePath) => {
-      if (filePath === expectedBinary) {
-        return Promise.resolve();
-      }
-      return Promise.reject(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
-    });
-
-    const { ClaudeBinaryResolver } = await import('@main/services/team/ClaudeBinaryResolver');
-    ClaudeBinaryResolver.clearCache();
-
-    await expect(ClaudeBinaryResolver.resolve()).resolves.toBe(expectedBinary);
-    expect(accessMock).toHaveBeenCalledWith(expectedBinary, 1);
-  });
-
-  it('falls back to claude-multimodel on PATH for agent_teams_orchestrator runtime', async () => {
-    const expectedBinary = path.join('/usr/local/bin', 'claude-multimodel');
-
-    accessMock.mockImplementation((filePath) => {
-      if (filePath === expectedBinary) {
-        return Promise.resolve();
-      }
-      return Promise.reject(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
-    });
-
-    const { ClaudeBinaryResolver } = await import('@main/services/team/ClaudeBinaryResolver');
-    ClaudeBinaryResolver.clearCache();
-
-    await expect(ClaudeBinaryResolver.resolve()).resolves.toBe(expectedBinary);
-    expect(mockResolveInteractiveShellEnvBestEffort).toHaveBeenCalledWith(
-      expect.objectContaining({
-        timeoutMs: 1_500,
-        fallbackEnv: process.env,
-        background: false,
-      })
-    );
-    expect(accessMock).toHaveBeenCalledWith(expectedBinary, 1);
-  });
-
-  it('prefers the bundled runtime binary for packaged agent_teams_orchestrator builds', async () => {
-    const expectedBinary = path.join(
-      '/Applications/Agent Teams AI.app/Contents/Resources',
-      'runtime',
-      'claude-multimodel'
-    );
-
-    accessMock.mockImplementation((filePath) => {
-      if (filePath === expectedBinary) {
-        return Promise.resolve();
-      }
-      return Promise.reject(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
-    });
-
-    const { ClaudeBinaryResolver } = await import('@main/services/team/ClaudeBinaryResolver');
-    ClaudeBinaryResolver.clearCache();
-
-    await expect(ClaudeBinaryResolver.resolve()).resolves.toBe(expectedBinary);
-    expect(accessMock).toHaveBeenCalledWith(expectedBinary, 1);
-    expect(mockResolveInteractiveShellEnvBestEffort).not.toHaveBeenCalled();
   });
 
   it('finds npm-local Claude install in the vendor bin directory', async () => {

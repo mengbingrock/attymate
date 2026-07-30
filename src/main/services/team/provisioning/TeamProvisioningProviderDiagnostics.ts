@@ -228,7 +228,7 @@ export async function probeClaudeRuntime({
   }
 
   if (resolvedProviderId === 'anthropic' || resolvedProviderId === 'codex') {
-    if (resolvedProviderId === 'codex' && getConfiguredCliFlavor() !== 'agent_teams_orchestrator') {
+    if (resolvedProviderId === 'codex') {
       // Stock flavor has no codex control plane in the claude binary
       // (`runtime status` / `auth status` are fork subcommands); the
       // codex-exec one-shot diagnostic performs the real readiness check.

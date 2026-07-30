@@ -89,7 +89,7 @@ function createProviderStatus(providerId: CliProviderId): CliProviderStatus {
 function createCliStatus(providers: CliProviderStatus[] = []): CliInstallationStatus {
   const authenticatedProvider = providers.find((provider) => provider.authenticated) ?? null;
   return {
-    flavor: 'agent_teams_orchestrator',
+    flavor: 'claude',
     displayName: 'Agent Teams Runtime',
     supportsSelfUpdate: false,
     showVersionDetails: true,

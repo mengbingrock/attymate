@@ -107,7 +107,7 @@ describe('McpHealthDiagnosticsService', () => {
       },
     ]);
     const service = new McpHealthDiagnosticsService({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       buildManagementCliEnv: vi.fn(),
       getInstalledMcp: vi.fn(),
       diagnoseMcp,

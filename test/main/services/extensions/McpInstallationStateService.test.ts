@@ -207,7 +207,7 @@ describe('McpInstallationStateService', () => {
         .mockResolvedValueOnce([{ name: 'context7', scope: 'user', transport: 'stdio' }])
         .mockResolvedValueOnce([{ name: 'repo-mcp', scope: 'project', transport: 'http' }]);
       service = new McpInstallationStateService({
-        flavor: 'agent_teams_orchestrator',
+        flavor: 'claude',
         buildManagementCliEnv: vi.fn(),
         diagnoseMcp: vi.fn(),
         getInstalledMcp,
