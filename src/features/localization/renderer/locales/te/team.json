@@ -2887,5 +2887,9 @@
         "weight_many": "agirlik {{count}}"
       }
     }
+  },
+  "matterDashboard": {
+    "title": "కేసు డాష్‌బోర్డ్",
+    "openTooltip": "కేసు డాష్‌బోర్డ్‌ను తెరవండి"
   }
 }

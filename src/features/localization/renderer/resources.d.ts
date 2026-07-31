@@ -4362,6 +4362,10 @@ export default interface Resources {
       title: 'Live runtime status';
       updated: 'updated {{value}}';
     };
+    matterDashboard: {
+      openTooltip: 'Open matter dashboard';
+      title: 'Matter Dashboard';
+    };
     memberDraft: {
       actions: {
         remove: 'Remove member';

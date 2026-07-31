@@ -2887,5 +2887,9 @@
         "weight_many": "weight {{count}}"
       }
     }
+  },
+  "matterDashboard": {
+    "title": "Dashboard ng kaso",
+    "openTooltip": "Buksan ang dashboard ng kaso"
   }
 }

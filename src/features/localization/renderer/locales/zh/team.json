@@ -2001,16 +2001,6 @@
       "cancelled": "取消"
     }
   },
-  "openCodeContextConfigHint": {
-    "summary": "OpenCode 本地模型可以使用 OpenCode 上下文预算，而不是仅限提示词的限制。",
-    "description": "向该队友使用的提供商和模型的 OpenCode 配置添加匹配限制。这有助于 OpenCode 在本地模型溢出其上下文窗口之前进行压缩和修剪。",
-    "replacePrefix": "代替",
-    "and": "和",
-    "replaceSuffix": "使用 OpenCode 设置中的提供商和模型 ID。提示词说明如",
-    "promptInstructionsSuffix": "较弱，因为请求是在模型读取它们之前组装的。",
-    "providerLimits": "提供商限制",
-    "compactionConfig": "压缩配置"
-  },
   "sessions": {
     "noProjectPath": "没有链接项目路径",
     "provisioningHint": "会话将在团队配置后出现",
@@ -2887,5 +2877,9 @@
         "weight_many": "weight {{count}}"
       }
     }
+  },
+  "matterDashboard": {
+    "title": "案件仪表板",
+    "openTooltip": "打开案件仪表板"
   }
 }

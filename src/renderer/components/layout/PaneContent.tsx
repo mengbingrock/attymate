@@ -74,6 +74,11 @@ const TokenUsageDashboard = lazy(() =>
     default: module.TokenUsageDashboard,
   }))
 );
+const MatterDashboardView = lazy(() =>
+  import('@features/matter-dashboard/renderer').then((module) => ({
+    default: module.MatterDashboardView,
+  }))
+);
 
 interface PaneContentProps {
   pane: Pane;
@@ -189,6 +194,11 @@ const PaneTabSlot = ({ tab, isActive, isPaneFocused }: PaneTabSlotProps): React.
           )}
           {tab.type === 'schedules' && <SchedulesView />}
           {tab.type === 'token-usage' && <TokenUsageDashboard initialTeamName={tab.teamName} />}
+          {tab.type === 'matter' && (
+            <div className="size-full overflow-auto p-4">
+              <MatterDashboardView />
+            </div>
+          )}
           {tab.type === 'graph' && (
             <TabUIProvider tabId={tab.id}>
               <TeamGraphTab

@@ -2887,5 +2887,9 @@
         "weight_many": "weight {{count}}"
       }
     }
+  },
+  "matterDashboard": {
+    "title": "사건 대시보드",
+    "openTooltip": "사건 대시보드 열기"
   }
 }

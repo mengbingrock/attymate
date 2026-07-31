@@ -2887,5 +2887,9 @@
         "weight_many": "agirlik {{count}}"
       }
     }
+  },
+  "matterDashboard": {
+    "title": "Bảng điều khiển vụ việc",
+    "openTooltip": "Mở bảng điều khiển vụ việc"
   }
 }

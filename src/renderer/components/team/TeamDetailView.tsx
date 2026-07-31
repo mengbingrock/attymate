@@ -84,6 +84,7 @@ import {
   Play,
   Plus,
   Power,
+  Scale,
   Square,
   Terminal,
   Trash2,
@@ -1482,6 +1483,22 @@ export const TeamDetailView = memo(function TeamDetailView({
       teamName,
     });
   }, [teamName]);
+  const handleOpenMatterTab = useCallback(() => {
+    const state = useStore.getState();
+    const existingMatterTab = state
+      .getAllPaneTabs()
+      .find((tab) => tab.type === 'matter' && tab.teamName === teamName);
+    if (existingMatterTab) {
+      state.setActiveTab(existingMatterTab.id);
+      return;
+    }
+
+    state.openTab({
+      type: 'matter',
+      label: t('matterDashboard.title'),
+      teamName,
+    });
+  }, [t, teamName]);
   const visualizeButtonStyle = useMemo<CSSProperties>(
     () =>
       isLight
@@ -3247,6 +3264,21 @@ export const TeamDetailView = memo(function TeamDetailView({
                         {t('detail.tooltips.openTeamUsage', {
                           defaultValue: 'Open usage dashboard',
                         })}
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={handleOpenMatterTab}
+                          className={TEAM_HEADER_NAV_ACTION_CLASS}
+                        >
+                          <Scale size={11} className="shrink-0" />
+                          {t('matterDashboard.title')}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        {t('matterDashboard.openTooltip')}
                       </TooltipContent>
                     </Tooltip>
                     <div ref={visualizeButtonAnchorRef} className="flex h-8 shrink-0">
