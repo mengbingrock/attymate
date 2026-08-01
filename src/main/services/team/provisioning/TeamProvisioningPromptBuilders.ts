@@ -862,15 +862,66 @@ export function buildLeadRosterContextBlock(
  * (persistent context, stock bootstrap, codex bootstrap) so the habit survives
  * context compaction in every runtime.
  */
-export function buildLeadMatterDashboardInstructions(teamName: string): string {
+export interface LeadMatterInstructionOptions {
+  /** The team has specialist teammates the lead should delegate matter work to. */
+  hasTeammates?: boolean;
+}
+
+export function buildLeadMatterDashboardInstructions(
+  teamName: string,
+  options: LeadMatterInstructionOptions = {}
+): string {
   return [
     `Matter dashboard (MANDATORY — batched updates with user confirmation):`,
     `- Do NOT update the matter dashboard after every task. The case facts each completed task establishes live on the task board (comments, results).`,
-    `- When ALL tasks of a related series of work (a job) are finished: (1) call MCP tool matter_get with { teamName: "${teamName}" } to see the current dashboard state and section schema, (2) compile a list of what the completed work changed about the case — derive it from the completed tasks' comments and results, not from memory, (3) call MCP tool matter_propose with that summary list and ONLY the changed sections.`,
+    `- When ALL tasks of a related series of work (a job) are finished: (1) call MCP tool matter_get with { teamName: "${teamName}" } to see the current dashboard state and section schema, (2) compile a list of what the completed work changed about the case — derive it from the completed tasks' comments and results, not from memory, AND re-scan the project folder for new or changed case documents the work produced or received (filings, orders, productions, correspondence), (3) call MCP tool matter_propose with that summary list and ONLY the changed sections.`,
+    ...(options.hasTeammates
+      ? [
+          `- Delegate matter work to the right specialist instead of doing it all yourself: deadline computation and date verification to a calendar/calendaring specialist, docket confirmation to a docket specialist, document reading and summaries to intake/facts/evidence specialists. Send independent verifications to the specialists IN PARALLEL — message them concurrently, not one after another. Compile their grounded reports; only you call matter_get/matter_propose.`,
+        ]
+      : []),
+    `- If matter_get shows an empty dashboard and the project folder contains case documents not yet reflected in it, perform the initial matter scan: read the documents with your file tools, then propose an initial dashboard from what they establish.`,
     `- The user reviews your proposal in the dashboard and approves or rejects it. The dashboard only changes after approval — matter_propose itself changes nothing.`,
     `- Record ONLY grounded facts established by completed work (filings, service dates, deadlines, deposition status, Bates ranges, stage transitions). NEVER invent dates, amounts, or outcomes; leave unknown fields absent.`,
     `- Include currentStage / nextDeadline changes whenever the case posture changed.`,
     `- If the proposal is rejected, the rejection reason arrives in your inbox: revise the proposal per that reason and re-propose (re-proposing replaces the previous pending proposal).`,
+  ].join('\n');
+}
+
+export interface LeadInitialMatterScanOptions extends LeadMatterInstructionOptions {
+  /**
+   * The runtime lets the lead spawn additional named teammates (stock Claude /
+   * fork). Codex lanes must not spawn teammates and parallelize with private
+   * subagents instead.
+   */
+  canSpawnTeammates?: boolean;
+}
+
+/**
+ * One-time launch instruction for a team whose matter dashboard is still
+ * empty: the lead has the project folder's case documents read (delegating and
+ * parallelizing where a roster exists) and proposes the initial dashboard
+ * through the normal matter_propose review flow. Appended to the lead
+ * bootstrap prompt only when the matter file has no content yet.
+ */
+export function buildLeadInitialMatterScanInstructions(
+  teamName: string,
+  options: LeadInitialMatterScanOptions = {}
+): string {
+  return [
+    `Initial matter scan (do this early, alongside team assembly): this team's matter dashboard is empty.`,
+    `- Read the case documents in the project folder — pleadings, discovery, correspondence, orders, dockets — with your file tools. Sample representative documents rather than exhaustively reading a large folder. Skip binaries you cannot read; never write to source files.`,
+    ...(options.hasTeammates
+      ? [
+          `- Delegate the scan across your specialists and run them IN PARALLEL: intake/facts/evidence specialists read and summarize documents, a calendar/calendaring specialist derives and verifies deadlines, a docket specialist confirms docket facts. Message them concurrently and collect their grounded reports.`,
+        ]
+      : []),
+    options.canSpawnTeammates === false
+      ? `- For large folders, parallelize the reading with your own private subagents, assigning each a different subfolder. Do NOT create, replace, or duplicate teammates — they are launched by the app.`
+      : `- For large folders, you may spawn additional instances of the same specialist type with distinct names (e.g. source-intake-a, source-intake-b) and assign each a different subfolder so they scan concurrently.`,
+    `- If the folder contains no case content, skip this step and proceed.`,
+    `- Otherwise call MCP tool matter_get with { teamName: "${teamName}" } for the current state and section schema, then matter_propose with a summary of what was found and ONLY sections grounded in the documents.`,
+    `- NEVER invent dates, amounts, parties, or outcomes; leave unknown fields absent. The user approves the proposal in the dashboard before anything changes.`,
   ].join('\n');
 }
 
@@ -947,7 +998,7 @@ Constraints:
 
 ${teamCtlOps}
 
-${buildLeadMatterDashboardInstructions(teamName)}
+${buildLeadMatterDashboardInstructions(teamName, { hasTeammates: !isSolo })}
 
 ${actionModeProtocol}
 

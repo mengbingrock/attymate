@@ -6,4 +6,6 @@ export {
   type MatterFeatureFacade,
   type MatterProposalActions,
 } from './composition/createMatterFeature';
+export { initializeMatterFileIfMissing } from './infrastructure/initializeMatterFile';
+export { isMatterEffectivelyEmpty } from './infrastructure/matterScanState';
 export { MatterFileReader } from './infrastructure/MatterFileReader';

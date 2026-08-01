@@ -9,6 +9,7 @@ import {
   interactiveTeamRuntimeService,
   type CodexLaneSpec,
 } from '@features/interactive-team-runtime/main';
+import { isMatterEffectivelyEmpty } from '@features/matter-dashboard/main';
 import { type RuntimeTurnSettledProvider } from '@features/member-work-sync/main';
 import { inspectOpenCodeLocalModelRuntimeReadiness } from '@features/runtime-provider-management/main';
 import {
@@ -12298,10 +12299,18 @@ export class TeamProvisioningService {
         emitProvisioningCheckpoint(run, 'Writing deterministic bootstrap spec file');
         bootstrapSpecPath = await writeDeterministicBootstrapSpecFile(bootstrapSpec);
         run.bootstrapSpecPath = bootstrapSpecPath;
-        if (useStockClaudeBootstrap) {
-          stockBootstrapPrompt = buildStockClaudeBootstrapPrompt(bootstrapSpec, initialUserPrompt);
-        } else if (useCodexLaneRuntime) {
-          stockBootstrapPrompt = buildCodexLeadBootstrapPrompt(bootstrapSpec, initialUserPrompt);
+        if (useStockClaudeBootstrap || useCodexLaneRuntime) {
+          const matterNeedsInitialScan = await isMatterEffectivelyEmpty(
+            getTeamsBasePath(),
+            bootstrapSpec.team.name
+          );
+          stockBootstrapPrompt = useStockClaudeBootstrap
+            ? buildStockClaudeBootstrapPrompt(bootstrapSpec, initialUserPrompt, {
+                matterNeedsInitialScan,
+              })
+            : buildCodexLeadBootstrapPrompt(bootstrapSpec, initialUserPrompt, {
+                matterNeedsInitialScan,
+              });
         } else if (initialUserPrompt) {
           emitProvisioningCheckpoint(
             run,
@@ -14535,17 +14544,26 @@ export class TeamProvisioningService {
         emitProvisioningCheckpoint(run, 'Writing deterministic bootstrap spec file');
         bootstrapSpecPath = await writeDeterministicBootstrapSpecFile(bootstrapSpec);
         run.bootstrapSpecPath = bootstrapSpecPath;
-        if (useStockClaudeBootstrap) {
-          // Interactive relaunches must not carry the refresh-only hydration
-          // instruction — the lead has to actually re-spawn teammates first.
-          stockBootstrapPrompt = buildStockClaudeBootstrapPrompt(
-            bootstrapSpec,
-            useInteractiveRuntime ? '' : prompt
+        if (useStockClaudeBootstrap || useCodexLaneRuntime) {
+          const matterNeedsInitialScan = await isMatterEffectivelyEmpty(
+            getTeamsBasePath(),
+            bootstrapSpec.team.name
           );
-        } else if (useCodexLaneRuntime) {
-          // Lanes are relaunched by the app; the lead only resumes
-          // coordination and rediscovers tasks through the task tools.
-          stockBootstrapPrompt = buildCodexLeadBootstrapPrompt(bootstrapSpec, '');
+          if (useStockClaudeBootstrap) {
+            // Interactive relaunches must not carry the refresh-only hydration
+            // instruction — the lead has to actually re-spawn teammates first.
+            stockBootstrapPrompt = buildStockClaudeBootstrapPrompt(
+              bootstrapSpec,
+              useInteractiveRuntime ? '' : prompt,
+              { matterNeedsInitialScan }
+            );
+          } else {
+            // Lanes are relaunched by the app; the lead only resumes
+            // coordination and rediscovers tasks through the task tools.
+            stockBootstrapPrompt = buildCodexLeadBootstrapPrompt(bootstrapSpec, '', {
+              matterNeedsInitialScan,
+            });
+          }
         } else {
           emitProvisioningCheckpoint(
             run,

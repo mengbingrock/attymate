@@ -6,6 +6,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 import { getConfiguredAgentLanguageName } from './TeamProvisioningAgentLanguage';
+import { buildLeadInitialMatterScanInstructions } from './TeamProvisioningPromptBuilders';
 
 import type { NativeAppManagedBootstrapSpec } from '../bootstrap/NativeAppManagedBootstrapContextBuilder';
 import type {
@@ -264,9 +265,15 @@ export function describeStockBootstrapMember(member: RuntimeBootstrapMemberSpec)
  * Stock Claude Code has no --team-bootstrap-spec flag; the same roster is
  * delivered as the first stdin user turn so the lead assembles the team itself.
  */
+export interface StockClaudeBootstrapPromptOptions {
+  /** The team's matter dashboard has no content yet: instruct an initial folder scan. */
+  matterNeedsInitialScan?: boolean;
+}
+
 export function buildStockClaudeBootstrapPrompt(
   spec: RuntimeBootstrapSpec,
-  initialUserPrompt: string
+  initialUserPrompt: string,
+  options: StockClaudeBootstrapPromptOptions = {}
 ): string {
   const teamLabel = spec.team.displayName?.trim() || spec.team.name;
   const lines: string[] = [];
@@ -325,10 +332,27 @@ export function buildStockClaudeBootstrapPrompt(
     'Matter dashboard (MANDATORY): do NOT update it per task. When a related series of tasks',
     '(a job) is fully complete, call matter_get, compile what the completed work changed about',
     'the case (derive it from task comments/results — grounded facts only, never invented),',
+    're-scan the project folder for new or changed case documents the work produced or received,',
     'then call matter_propose with a summary list and only the changed sections. The user',
     'approves or rejects the proposal in the dashboard; nothing changes until approval. If',
     'rejected, the reason arrives in your inbox — revise and re-propose.'
   );
+  if (spec.members.length > 0) {
+    lines.push(
+      'Delegate matter verification to the right specialist and run independent checks in',
+      'parallel: deadline computation/verification to a calendar specialist, docket facts to a',
+      'docket specialist, document review to intake/facts specialists. You compile and propose.'
+    );
+  }
+  if (options.matterNeedsInitialScan) {
+    lines.push(
+      '',
+      buildLeadInitialMatterScanInstructions(spec.team.name, {
+        hasTeammates: spec.members.length > 0,
+        canSpawnTeammates: true,
+      })
+    );
+  }
   if (initialUserPrompt.trim()) {
     lines.push('', 'Once the team is assembled, start on this task:', '', initialUserPrompt.trim());
   } else {
