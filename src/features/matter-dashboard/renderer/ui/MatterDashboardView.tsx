@@ -463,6 +463,81 @@ const SECTION_LABELS: Record<keyof MatterChanges, string> = {
   postJudgment: 'Post-Judgment',
 };
 
+const MATTER_DASHBOARD_RESPONSIVE_CSS = `
+  .matter-dashboard-main-grid {
+    grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  }
+
+  .matter-dashboard-stage-grid {
+    grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+  }
+
+  .matter-dashboard-stage-detail {
+    border-left: 1px solid ${BORDER};
+    padding-left: 24px;
+    min-height: 420px;
+  }
+
+  .matter-dashboard-trial-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .matter-dashboard-pretrial-row {
+    grid-template-columns: 1.8fr 0.9fr 1.1fr 1fr;
+  }
+
+  .matter-dashboard-trial-secondary-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  @container (max-width: 980px) {
+    .matter-dashboard-main-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @container (max-width: 700px) {
+    .matter-dashboard-stage-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .matter-dashboard-stage-nav {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .matter-dashboard-stage-detail {
+      border-left: 0;
+      border-top: 1px solid ${BORDER};
+      padding-left: 0;
+      padding-top: 20px;
+      min-height: 0;
+    }
+  }
+
+  @container (max-width: 620px) {
+    .matter-dashboard-trial-summary,
+    .matter-dashboard-pretrial-row,
+    .matter-dashboard-trial-secondary-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .matter-dashboard-pretrial-row {
+      row-gap: 6px !important;
+    }
+  }
+
+  @container (max-width: 420px) {
+    .matter-dashboard-stage-nav,
+    .matter-dashboard-trial-summary,
+    .matter-dashboard-pretrial-row,
+    .matter-dashboard-trial-secondary-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+`;
+
 interface MatterDashboardViewProps {
   /** Which case stage is currently in progress. Defaults to discovery. */
   currentStage?: StageId;
@@ -549,8 +624,10 @@ export const MatterDashboardView = memo(function MatterDashboardView({
         borderRadius: 14,
         color: INK,
         fontSize: 14,
+        containerType: 'inline-size',
       }}
     >
+      <style>{MATTER_DASHBOARD_RESPONSIVE_CSS}</style>
       <div
         style={{
           maxWidth: 1440,
@@ -568,9 +645,9 @@ export const MatterDashboardView = memo(function MatterDashboardView({
           />
         )}
         <div
+          className="matter-dashboard-main-grid"
           style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(280px, 340px) minmax(0, 1fr)',
             gap: 20,
             alignItems: 'start',
           }}
@@ -746,14 +823,17 @@ export const MatterDashboardView = memo(function MatterDashboardView({
               Case stage
             </div>
             <div
+              className="matter-dashboard-stage-grid"
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'minmax(200px, 240px) minmax(0, 1fr)',
                 gap: 24,
                 alignItems: 'start',
               }}
             >
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <div
+                className="matter-dashboard-stage-nav"
+                style={{ display: 'flex', flexDirection: 'column' }}
+              >
                 {stages.map((stage, index) => {
                   const done = index < currentIndex;
                   const inProgress = index === currentIndex;
@@ -839,7 +919,10 @@ export const MatterDashboardView = memo(function MatterDashboardView({
                   );
                 })}
               </div>
-              <div style={{ borderLeft: `1px solid ${BORDER}`, paddingLeft: 24, minHeight: 420 }}>
+              <div
+                className="matter-dashboard-stage-detail"
+                style={{ containerType: 'inline-size' }}
+              >
                 {activeStage === 'pleading' && (
                   <PleadingPane data={matter?.pleading} {...selectProps} />
                 )}
@@ -1460,9 +1543,9 @@ const TrialPane = ({
         </span>
       </div>
       <div
+        className="matter-dashboard-trial-summary"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
           gap: '14px 20px',
           marginBottom: 18,
         }}
@@ -1520,9 +1603,9 @@ const TrialPane = ({
         {pretrial.map((deadline) => (
           <div
             key={deadline.k}
+            className="matter-dashboard-pretrial-row"
             style={{
               display: 'grid',
-              gridTemplateColumns: '1.8fr 0.9fr 1.1fr 1fr',
               gap: 10,
               alignItems: 'center',
               padding: '8px 14px',
@@ -1546,7 +1629,10 @@ const TrialPane = ({
           </div>
         ))}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+      <div
+        className="matter-dashboard-trial-secondary-grid"
+        style={{ display: 'grid', gap: 14, marginBottom: 14 }}
+      >
         <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px' }}>
           <PanelTitle>Witnesses</PanelTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
