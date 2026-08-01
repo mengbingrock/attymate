@@ -14,7 +14,10 @@ function makeTask(overrides: Partial<TeamTask> & { id: string }): TeamTask {
   } as TeamTask;
 }
 
-function completedTask(id: string, timestamp = '2026-08-01T11:00:00.000Z'): TeamTask {
+const RECENT_TIMESTAMP = new Date(Date.now() - 60_000).toISOString();
+const STALE_TIMESTAMP = new Date(Date.now() - 60 * 60_000).toISOString();
+
+function completedTask(id: string, timestamp = RECENT_TIMESTAMP): TeamTask {
   return makeTask({
     id,
     status: 'completed',
@@ -138,7 +141,7 @@ describe('TeamDataService.notifyLeadOnJobWrapUp', () => {
           from: 'in_progress',
           to: 'completed',
           actor: 'user',
-          timestamp: '2026-08-01T11:00:00.000Z',
+          timestamp: RECENT_TIMESTAMP,
         },
       ],
     } as Partial<TeamTask> & { id: string });
@@ -148,5 +151,14 @@ describe('TeamDataService.notifyLeadOnJobWrapUp', () => {
     await service.notifyLeadOnJobWrapUp('my-team', 't1');
 
     expect(sendSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips stale completions replayed by the boot-time watcher scan', async () => {
+    const service = createService([completedTask('t1', STALE_TIMESTAMP)]);
+    const sendSpy = spyOnSendMessage(service);
+
+    await service.notifyLeadOnJobWrapUp('my-team', 't1');
+
+    expect(sendSpy).not.toHaveBeenCalled();
   });
 });

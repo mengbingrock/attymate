@@ -2426,6 +2426,13 @@ export class TeamDataService {
       // completion can change matter state.
       if (last.type !== 'status_changed' || last.to !== 'completed') return;
 
+      // Recency gate: the watcher's initial scan on app boot replays task
+      // events for every historical completed task, and the in-memory dedup
+      // set does not survive restarts — without this, each launch of the app
+      // with a quiet board would nudge the lead once per completed task.
+      const completedAtMs = Date.parse(last.timestamp ?? '');
+      if (!Number.isFinite(completedAtMs) || Date.now() - completedAtMs > 10 * 60_000) return;
+
       // Dedup: only nudge once per unique transition (keyed by team+task+timestamp).
       const dedupKey = `${teamName}:${taskId}:${last.timestamp}`;
       if (this.notifiedJobWrapUps.has(dedupKey)) return;
@@ -2461,7 +2468,10 @@ export class TeamDataService {
       ];
       await this.sendMessage(teamName, {
         member: leadName,
-        from: 'system',
+        // The message layer only accepts 'user' or a configured member name as
+        // the sender; 'user' is the established sender for app-originated
+        // notices (see the matter proposal approve/reject notifications).
+        from: 'user',
         text: parts.join('\n'),
         summary: 'All tasks complete — propose a matter dashboard update',
         source: 'system_notification',
