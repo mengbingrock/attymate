@@ -2,6 +2,7 @@ import { buildCodexLeadBootstrapPrompt } from '@main/services/team/provisioning/
 import { buildStockClaudeBootstrapPrompt } from '@main/services/team/provisioning/TeamProvisioningBootstrapSpec';
 import {
   buildGeminiPostLaunchHydrationPrompt,
+  buildLeadInitialMatterScanInstructions,
   buildLeadMatterDashboardInstructions,
   buildMemberSpawnPrompt,
   buildPersistentLeadContext,
@@ -9,7 +10,6 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import type { RuntimeBootstrapSpec } from '@main/services/team/provisioning/TeamProvisioningBootstrapSpec';
-
 import type { MemberSpawnStatusEntry, TeamCreateRequest } from '@shared/types';
 
 function buildPromptWithStatus(status: MemberSpawnStatusEntry): string {
@@ -136,5 +136,83 @@ describe('matter dashboard lead instructions', () => {
     const prompt = buildCodexLeadBootstrapPrompt(bootstrapSpec, '');
     expect(prompt).toContain('Matter dashboard (MANDATORY)');
     expect(prompt).toContain('matter_propose');
+  });
+
+  it('carries the folder re-scan and conditional initial-scan clauses in the standing instruction', () => {
+    const prompt = buildLeadMatterDashboardInstructions('signal-ops');
+    expect(prompt).toContain('re-scan the project folder for new or changed case documents');
+    expect(prompt).toContain('If matter_get shows an empty dashboard');
+    expect(prompt).toContain('perform the initial matter scan');
+  });
+
+  it('adds specialist delegation with parallel checks only when the team has teammates', () => {
+    const solo = buildLeadMatterDashboardInstructions('signal-ops');
+    expect(solo).not.toContain('calendar/calendaring specialist');
+
+    const teamed = buildLeadMatterDashboardInstructions('signal-ops', { hasTeammates: true });
+    expect(teamed).toContain('deadline computation and date verification to a calendar/calendaring specialist');
+    expect(teamed).toContain('docket confirmation to a docket specialist');
+    expect(teamed).toContain('IN PARALLEL');
+    expect(teamed).toContain('only you call matter_get/matter_propose');
+
+    const context = buildPersistentLeadContext({
+      teamName: 'signal-ops',
+      leadName: 'lead',
+      isSolo: false,
+      members: [
+        { name: 'lead', role: 'team-lead' },
+        { name: 'calendar-agent', role: 'calendaring' },
+      ] as TeamCreateRequest['members'],
+    });
+    expect(context).toContain('calendar/calendaring specialist');
+
+    const soloContext = buildPersistentLeadContext({
+      teamName: 'signal-ops',
+      leadName: 'lead',
+      isSolo: true,
+      members: [] as TeamCreateRequest['members'],
+    });
+    expect(soloContext).not.toContain('calendar/calendaring specialist');
+  });
+
+  it('phrases parallel folder fan-out per runtime spawning rules', () => {
+    const spawning = buildLeadInitialMatterScanInstructions('signal-ops', {
+      hasTeammates: true,
+      canSpawnTeammates: true,
+    });
+    expect(spawning).toContain('Delegate the scan across your specialists');
+    expect(spawning).toContain('spawn additional instances of the same specialist type');
+    expect(spawning).toContain('source-intake-a');
+    expect(spawning).not.toContain('Do NOT create, replace, or duplicate teammates');
+
+    const laneSafe = buildLeadInitialMatterScanInstructions('signal-ops', {
+      hasTeammates: true,
+      canSpawnTeammates: false,
+    });
+    expect(laneSafe).toContain('private subagents');
+    expect(laneSafe).toContain('Do NOT create, replace, or duplicate teammates');
+    expect(laneSafe).not.toContain('spawn additional instances of the same specialist type');
+  });
+
+  it('appends the initial matter scan to bootstrap prompts only when the dashboard is empty', () => {
+    const scanMarker = 'Initial matter scan (do this early, alongside team assembly)';
+    expect(buildLeadInitialMatterScanInstructions('signal-ops')).toContain('matter_propose');
+
+    expect(buildStockClaudeBootstrapPrompt(bootstrapSpec, '')).not.toContain(scanMarker);
+    expect(
+      buildStockClaudeBootstrapPrompt(bootstrapSpec, '', { matterNeedsInitialScan: true })
+    ).toContain(scanMarker);
+
+    expect(buildCodexLeadBootstrapPrompt(bootstrapSpec, '')).not.toContain(scanMarker);
+    expect(
+      buildCodexLeadBootstrapPrompt(bootstrapSpec, '', { matterNeedsInitialScan: true })
+    ).toContain(scanMarker);
+  });
+
+  it('mentions the folder re-scan in the short bootstrap matter blocks', () => {
+    expect(buildStockClaudeBootstrapPrompt(bootstrapSpec, '')).toContain(
+      're-scan the project folder'
+    );
+    expect(buildCodexLeadBootstrapPrompt(bootstrapSpec, '')).toContain('re-scan the project folder');
   });
 });

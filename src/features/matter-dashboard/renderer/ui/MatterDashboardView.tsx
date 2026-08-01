@@ -230,6 +230,10 @@ const DEMO_SYS_FIELDS: readonly { l: string; v: string }[] = [
   { l: 'Updated', v: '2026-07-29 16:42' },
 ];
 
+const EMPTY_VALUE = '—';
+const EMPTY_CORE_FIELDS = DEMO_CORE_FIELDS.map((field) => ({ ...field, v: EMPTY_VALUE }));
+const EMPTY_SYS_FIELDS = DEMO_SYS_FIELDS.map((field) => ({ ...field, v: EMPTY_VALUE }));
+
 const REQ_TYPES = [
   'RFP',
   'RFA',
@@ -586,39 +590,47 @@ export const MatterDashboardView = memo(function MatterDashboardView({
     </span>
   );
 
-  const caption = matter?.caption ?? DEMO_CAPTION;
-  const matterNumber = matter?.matterNumber ?? DEMO_MATTER_NUMBER;
-  const statusDefault = matter?.status ?? 'Active';
+  const live = matter !== null;
+  const caption = matter?.caption ?? (live ? 'New matter' : DEMO_CAPTION);
+  const matterNumber = matter?.matterNumber ?? (live ? EMPTY_VALUE : DEMO_MATTER_NUMBER);
+  const statusDefault = matter?.status ?? (live ? 'Planned' : 'Active');
   const nextDeadlineText = matter?.nextDeadline
     ? `${matter.nextDeadline.date} — ${matter.nextDeadline.label}`
-    : DEMO_NEXT_DEADLINE;
+    : live
+      ? null
+      : DEMO_NEXT_DEADLINE;
 
   const coreFields = useMemo(
     () =>
       matter?.coreFields?.length
         ? matter.coreFields.map((field) => ({ l: field.label, v: field.value }))
-        : DEMO_CORE_FIELDS,
+        : matter
+          ? EMPTY_CORE_FIELDS
+          : DEMO_CORE_FIELDS,
     [matter]
   );
   const sysFields = useMemo(
     () =>
       matter?.systemFields?.length
         ? matter.systemFields.map((field) => ({ l: field.label, v: field.value }))
-        : DEMO_SYS_FIELDS,
+        : matter
+          ? EMPTY_SYS_FIELDS
+          : DEMO_SYS_FIELDS,
     [matter]
   );
   const stages = useMemo(
     () =>
       DEMO_STAGE_META.map((stage) => {
-        const live = matter?.stages?.find((entry) => entry.id === stage.id);
-        return live
+        const base = matter ? { ...stage, dates: EMPTY_VALUE, summary: EMPTY_VALUE } : stage;
+        const liveStage = matter?.stages?.find((entry) => entry.id === stage.id);
+        return liveStage
           ? {
-              ...stage,
-              label: live.label ?? stage.label,
-              dates: live.dates ?? stage.dates,
-              summary: live.summary ?? stage.summary,
+              ...base,
+              label: liveStage.label ?? base.label,
+              dates: liveStage.dates ?? base.dates,
+              summary: liveStage.summary ?? base.summary,
             }
-          : stage;
+          : base;
       }),
     [matter]
   );
@@ -700,9 +712,11 @@ export const MatterDashboardView = memo(function MatterDashboardView({
               >
                 {matter ? (
                   <span>
-                    Updated {matter.updatedAt ?? '—'}
-                    {matter.updatedBy ? ` by @${matter.updatedBy}` : ''}
-                    {matter.approvedBy ? ` · approved by ${matter.approvedBy}` : ''}
+                    {matter.updatedAt
+                      ? `Updated ${matter.updatedAt}${
+                          matter.updatedBy ? ` by @${matter.updatedBy}` : ''
+                        }${matter.approvedBy ? ` · approved by ${matter.approvedBy}` : ''}`
+                      : 'No matter updates yet'}
                   </span>
                 ) : (
                   <span
@@ -783,28 +797,30 @@ export const MatterDashboardView = memo(function MatterDashboardView({
                 </div>
               </div>
             </div>
-            <div
-              style={{
-                background: 'oklch(0.96 0.025 27)',
-                border: '1px solid oklch(0.9 0.04 27)',
-                borderRadius: 14,
-                padding: '14px 18px',
-              }}
-            >
+            {nextDeadlineText ? (
               <div
                 style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: RED,
-                  marginBottom: 4,
+                  background: 'oklch(0.96 0.025 27)',
+                  border: '1px solid oklch(0.9 0.04 27)',
+                  borderRadius: 14,
+                  padding: '14px 18px',
                 }}
               >
-                Next deadline
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    color: RED,
+                    marginBottom: 4,
+                  }}
+                >
+                  Next deadline
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{nextDeadlineText}</div>
               </div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{nextDeadlineText}</div>
-            </div>
+            ) : null}
           </div>
 
           {/* Right column: case stage */}
@@ -932,12 +948,14 @@ export const MatterDashboardView = memo(function MatterDashboardView({
                 style={{ containerType: 'inline-size' }}
               >
                 {activeStage === 'pleading' && (
-                  <PleadingPane data={matter?.pleading} {...selectProps} />
+                  <PleadingPane data={matter?.pleading} live={live} {...selectProps} />
                 )}
                 {activeStage === 'discovery' && (
-                  <DiscoveryPane data={matter?.discovery} {...selectProps} />
+                  <DiscoveryPane data={matter?.discovery} live={live} {...selectProps} />
                 )}
-                {activeStage === 'trial' && <TrialPane data={matter?.trial} {...selectProps} />}
+                {activeStage === 'trial' && (
+                  <TrialPane data={matter?.trial} live={live} {...selectProps} />
+                )}
                 {activeStage === 'post' && (
                   <PostJudgmentPane data={matter?.postJudgment} {...selectProps} />
                 )}
@@ -1160,10 +1178,13 @@ const ProposalReviewPanel = ({
 interface PaneProps {
   vals: Vals;
   setVal: SetVal;
+  /** A matter file exists: absent values render empty instead of demo data. */
+  live?: boolean;
 }
 
 const PleadingPane = ({
   data,
+  live,
   vals,
   setVal,
 }: PaneProps & { data?: MatterPleadingDto }): React.JSX.Element => (
@@ -1171,7 +1192,7 @@ const PleadingPane = ({
     <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>
       Pleading{' '}
       <span style={{ fontWeight: 500, color: MUTED, fontSize: 13 }}>
-        · {data?.statusNote ?? 'completed Jun 2025'}
+        · {data?.statusNote ?? (live ? 'not started' : 'completed Jun 2025')}
       </span>
     </div>
     <div
@@ -1188,7 +1209,7 @@ const PleadingPane = ({
           className="hover:underline"
           style={{ fontSize: 13.5, fontWeight: 500, color: ACCENT }}
         >
-          {data?.operativePleading ?? 'First Amended Complaint'}
+          {data?.operativePleading ?? (live ? EMPTY_VALUE : 'First Amended Complaint')}
         </span>
       </div>
       <div>
@@ -1205,20 +1226,23 @@ const PleadingPane = ({
       <div>
         <FieldLabel>Amendment deadline</FieldLabel>
         <div style={{ fontSize: 13.5, fontWeight: 500 }}>
-          {data?.amendmentDeadline ?? 'Jun 30, 2025 — passed'}
+          {data?.amendmentDeadline ?? (live ? EMPTY_VALUE : 'Jun 30, 2025 — passed')}
         </div>
       </div>
     </div>
     <FieldLabel>Causes of action / affirmative defenses</FieldLabel>
     <div style={{ fontSize: 13.5, lineHeight: 1.55, maxWidth: 760 }}>
       {data?.causesOfAction ??
-        'Breach of contract and negligence against Meridian Logistics. Answer filed Jun 9, 2025 asserting 14 affirmative defenses, including statute of limitations and comparative fault.'}
+        (live
+          ? EMPTY_VALUE
+          : 'Breach of contract and negligence against Meridian Logistics. Answer filed Jun 9, 2025 asserting 14 affirmative defenses, including statute of limitations and comparative fault.')}
     </div>
   </div>
 );
 
 const DiscoveryPane = ({
   data,
+  live,
   vals,
   setVal,
 }: PaneProps & { data?: MatterDiscoveryDto }): React.JSX.Element => {
@@ -1233,7 +1257,9 @@ const DiscoveryPane = ({
         due: request.due ?? '—',
         status: request.status ?? 'Draft',
       }))
-    : DEMO_REQUESTS;
+    : live
+      ? []
+      : DEMO_REQUESTS;
   const productions: readonly ProductionRow[] = data?.productions?.length
     ? data.productions.map((production, index) => ({
         k: `p${index + 1}`,
@@ -1241,7 +1267,9 @@ const DiscoveryPane = ({
         bates: production.bates ?? '—',
         date: production.date ?? '—',
       }))
-    : DEMO_PRODUCTIONS;
+    : live
+      ? []
+      : DEMO_PRODUCTIONS;
   const depositions: readonly DepositionRow[] = data?.depositions?.length
     ? data.depositions.map((deposition, index) => ({
         k: `d${index + 1}`,
@@ -1251,9 +1279,14 @@ const DiscoveryPane = ({
         note: deposition.note ?? '',
         noteColor: RED,
       }))
-    : DEMO_DEPOSITIONS;
+    : live
+      ? []
+      : DEMO_DEPOSITIONS;
   const motion = data?.pendingMotion;
-  const motionFields = DEMO_MOTION_TEXT_FIELDS.map((field) => {
+  const motionBaseFields = live
+    ? DEMO_MOTION_TEXT_FIELDS.map((field) => ({ ...field, v: EMPTY_VALUE, vc: undefined }))
+    : DEMO_MOTION_TEXT_FIELDS;
+  const motionFields = motionBaseFields.map((field) => {
     const liveValue = motion?.[MOTION_FIELD_KEYS[field.k]];
     return liveValue !== undefined ? { ...field, v: liveValue } : field;
   });
@@ -1262,7 +1295,7 @@ const DiscoveryPane = ({
       <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>
         Discovery{' '}
         <span style={{ fontWeight: 500, color: ACCENT, fontSize: 13 }}>
-          · {data?.statusNote ?? 'in progress'}
+          · {data?.statusNote ?? (live ? 'no activity recorded yet' : 'in progress')}
         </span>
       </div>
       <div
@@ -1308,6 +1341,11 @@ const DiscoveryPane = ({
           <span>Resp. due</span>
           <span>Status</span>
         </div>
+        {requests.length === 0 && (
+          <div style={{ padding: '10px 14px', fontSize: 12.5, color: MUTED }}>
+            No requests recorded yet.
+          </div>
+        )}
         {requests.map((request) => (
           <div
             key={request.k}
@@ -1361,7 +1399,9 @@ const DiscoveryPane = ({
             minWidth: 0,
           }}
         >
-          <PanelTitle>Meet &amp; confer · {data?.meetConfer?.date ?? 'Jun 3, 2026'}</PanelTitle>
+          <PanelTitle>
+            Meet &amp; confer · {data?.meetConfer?.date ?? (live ? EMPTY_VALUE : 'Jun 3, 2026')}
+          </PanelTitle>
           <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
             <div>
               <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>Method</div>
@@ -1392,15 +1432,18 @@ const DiscoveryPane = ({
             </div>
           </div>
           <div style={{ fontSize: 12.5, lineHeight: 1.5, color: BODY }}>
-            {data?.meetConfer?.notes ?? (
-              <>
-                Privilege and completeness objections re{' '}
-                <span className="hover:underline" style={{ color: ACCENT }}>
-                  Special Interrogatories — Set Two
-                </span>
-                . Next step: motion to compel; deadline reserved.
-              </>
-            )}
+            {data?.meetConfer?.notes ??
+              (live ? (
+                EMPTY_VALUE
+              ) : (
+                <>
+                  Privilege and completeness objections re{' '}
+                  <span className="hover:underline" style={{ color: ACCENT }}>
+                    Special Interrogatories — Set Two
+                  </span>
+                  . Next step: motion to compel; deadline reserved.
+                </>
+              ))}
           </div>
         </div>
         <div
@@ -1478,6 +1521,9 @@ const DiscoveryPane = ({
         >
           <PanelTitle>Productions</PanelTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {productions.length === 0 && (
+              <div style={{ fontSize: 12.5, color: MUTED }}>None recorded yet.</div>
+            )}
             {productions.map((production) => (
               <div
                 key={production.k}
@@ -1513,6 +1559,9 @@ const DiscoveryPane = ({
         >
           <PanelTitle>Depositions</PanelTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {depositions.length === 0 && (
+              <div style={{ fontSize: 12.5, color: MUTED }}>None recorded yet.</div>
+            )}
             {depositions.map((deposition) => (
               <div
                 key={deposition.k}
@@ -1545,6 +1594,7 @@ const DiscoveryPane = ({
 
 const TrialPane = ({
   data,
+  live,
   vals,
   setVal,
 }: PaneProps & { data?: MatterTrialDto }): React.JSX.Element => {
@@ -1557,7 +1607,9 @@ const TrialPane = ({
         src: deadline.source ?? '—',
         s: deadline.status ?? 'Not Started',
       }))
-    : DEMO_PRETRIAL;
+    : live
+      ? []
+      : DEMO_PRETRIAL;
   const witnesses: readonly WitnessRow[] = data?.witnesses?.length
     ? data.witnesses.map((witness, index) => ({
         k: `w${index + 1}`,
@@ -1566,7 +1618,9 @@ const TrialPane = ({
         party: witness.party ?? '—',
         avail: witness.availability ?? 'Unknown',
       }))
-    : DEMO_WITNESSES;
+    : live
+      ? []
+      : DEMO_WITNESSES;
   const exhibits: readonly ExhibitRow[] = data?.exhibits?.length
     ? data.exhibits.map((exhibit, index) => ({
         k: `x${index + 1}`,
@@ -1574,13 +1628,15 @@ const TrialPane = ({
         title: exhibit.title,
         adm: exhibit.admission ?? 'Proposed',
       }))
-    : DEMO_EXHIBITS;
+    : live
+      ? []
+      : DEMO_EXHIBITS;
   return (
     <div>
       <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>
         Trial{' '}
         <span style={{ fontWeight: 500, color: MUTED, fontSize: 13 }}>
-          · {data?.statusNote ?? 'upcoming'}
+          · {data?.statusNote ?? (live ? 'not scheduled' : 'upcoming')}
         </span>
       </div>
       <div
@@ -1593,7 +1649,9 @@ const TrialPane = ({
       >
         <div>
           <FieldLabel>Trial date</FieldLabel>
-          <div style={{ fontSize: 13.5, fontWeight: 600 }}>{data?.trialDate ?? 'Feb 8, 2027'}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 600 }}>
+            {data?.trialDate ?? (live ? EMPTY_VALUE : 'Feb 8, 2027')}
+          </div>
         </div>
         <div>
           <FieldLabel>Trial type</FieldLabel>
@@ -1608,7 +1666,7 @@ const TrialPane = ({
         <div>
           <FieldLabel>Estimated duration</FieldLabel>
           <div style={{ fontSize: 13.5, fontWeight: 500 }}>
-            {data?.estimatedDuration ?? '7 days'}
+            {data?.estimatedDuration ?? (live ? EMPTY_VALUE : '7 days')}
           </div>
         </div>
         <div>
@@ -1641,6 +1699,11 @@ const TrialPane = ({
           marginBottom: 16,
         }}
       >
+        {pretrial.length === 0 && (
+          <div style={{ padding: '10px 14px', fontSize: 12.5, color: MUTED }}>
+            No pretrial deadlines recorded yet.
+          </div>
+        )}
         {pretrial.map((deadline) => (
           <div
             key={deadline.k}
@@ -1677,6 +1740,9 @@ const TrialPane = ({
         <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px' }}>
           <PanelTitle>Witnesses</PanelTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {witnesses.length === 0 && (
+              <div style={{ fontSize: 12.5, color: MUTED }}>None recorded yet.</div>
+            )}
             {witnesses.map((witness) => (
               <div
                 key={witness.k}
@@ -1712,6 +1778,9 @@ const TrialPane = ({
         <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px' }}>
           <PanelTitle>Exhibits</PanelTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {exhibits.length === 0 && (
+              <div style={{ fontSize: 12.5, color: MUTED }}>None recorded yet.</div>
+            )}
             {exhibits.map((exhibit) => (
               <div
                 key={exhibit.k}

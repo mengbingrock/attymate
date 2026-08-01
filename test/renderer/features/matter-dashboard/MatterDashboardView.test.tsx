@@ -158,8 +158,9 @@ describe('MatterDashboardView', () => {
     // currentStage=trial makes the trial pane the default detail view.
     expect(container.textContent).toContain('Pretrial deadlines');
     expect(container.textContent).toContain('Mar 3, 2027');
-    // Untouched sections keep the demo fixture values.
-    expect(container.textContent).toContain('Witness & exhibit lists');
+    // Untouched sections render empty for a live matter — never demo fiction.
+    expect(container.textContent).not.toContain('Witness & exhibit lists');
+    expect(container.textContent).toContain('No pretrial deadlines recorded yet.');
   });
 
   it('renders the proposal review panel and wires approve/reject actions', async () => {
@@ -206,5 +207,23 @@ describe('MatterDashboardView', () => {
       await Promise.resolve();
     });
     expect(rejectProposalMock).toHaveBeenCalledWith('other-team', undefined);
+  });
+
+  it('renders empty values, not demo data, when an initialized empty matter exists', async () => {
+    matterGetMock.mockResolvedValue({
+      matter: { schemaVersion: 1 },
+      proposal: null,
+    } satisfies MatterSnapshotDto);
+    await renderViewAsync({ teamName: 'fresh-team' });
+
+    expect(container.textContent).toContain('New matter');
+    expect(container.textContent).toContain('No matter updates yet');
+    expect(container.textContent).not.toContain('Demo data');
+    expect(container.textContent).not.toContain('Anderson v. Meridian');
+    expect(container.textContent).not.toContain('Daniel Anderson');
+    expect(container.textContent).not.toContain('Next deadline');
+    // Discovery is the default stage: its collections start empty.
+    expect(container.textContent).toContain('No requests recorded yet.');
+    expect(container.textContent).toContain('None recorded yet.');
   });
 });

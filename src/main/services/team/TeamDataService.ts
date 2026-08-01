@@ -1,4 +1,5 @@
 import { NodeApplicationCommandHasher } from '@features/application-command-ledger/main';
+import { initializeMatterFileIfMissing } from '@features/matter-dashboard/main';
 import { TaskBoardCommandFacade } from '@features/task-board-commands';
 import { fromProvisioningMembers, isMixedOpenCodeSideLanePlan } from '@features/team-runtime-lanes';
 import { yieldToEventLoop } from '@main/utils/asyncYield';
@@ -2593,7 +2594,13 @@ export class TeamDataService {
       );
       if (hasActiveTasks) return;
 
-      const leadName = await this.resolveLeadName(teamName);
+      const config = await Promise.resolve()
+        .then(() => readConfigForUiSnapshot(this.configReader, teamName))
+        .catch(() => null);
+      const leadName = this.resolveLeadNameFromConfig(config);
+      const hasTeammates = (config?.members ?? []).some(
+        (member) => !isLeadMember(member) && member.name?.trim() && member.name.trim() !== leadName
+      );
       const parts = [
         `All tasks are complete (last: ${this.getTaskLabel(task)} "${task.subject}").`,
         `Compile what this work changed about the case and propose a matter dashboard update for the user to review.`,
@@ -2601,6 +2608,12 @@ export class TeamDataService {
         wrapAgentBlock(
           [
             `Derive the change list from the completed tasks' comments and results — grounded facts only, never invented; leave unknown fields absent.`,
+            `Also re-scan the project folder for new or changed case documents the work produced or received (filings, orders, productions, correspondence) and fold what they establish into the proposal.`,
+            ...(hasTeammates
+              ? [
+                  `Delegate verification to the right specialist and run independent checks in parallel: deadline computation/verification to a calendar specialist, docket facts to a docket specialist, document review to intake/facts specialists. You compile and propose.`,
+                ]
+              : []),
             `First read the current dashboard state and section schema:`,
             `matter_get { teamName: "${teamName}" }`,
             `Then submit the proposal with only the changed sections:`,
@@ -3690,6 +3703,10 @@ export class TeamDataService {
       tasksDirectoryCreated = true;
 
       const joinedAt = Date.now();
+
+      // Seed an empty matter file so the new team's Matter Dashboard starts
+      // blank instead of showing the demo fixture matter.
+      await initializeMatterFileIfMissing(getTeamsBasePath(), request.teamName);
 
       // Save team-level metadata to team.meta.json (NOT config.json).
       // config.json is CLI territory — created by TeamCreate during provisioning.

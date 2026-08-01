@@ -98,4 +98,11 @@ describe('normalizeMatterProposalDto', () => {
     expect(normalizeMatterProposalDto({ ...validProposal, proposedBy: undefined })).toBeNull();
     expect(normalizeMatterProposalDto({ ...validProposal, summary: [] })).toBeNull();
   });
+
+  it('accepts the minimal initialized-empty matter file', () => {
+    const dto = normalizeMatterDto({ schemaVersion: 1 });
+    expect(dto).not.toBeNull();
+    expect(dto?.schemaVersion).toBe(1);
+    expect(dto?.updatedAt).toBeUndefined();
+  });
 });

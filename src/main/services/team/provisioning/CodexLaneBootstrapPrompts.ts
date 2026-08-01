@@ -1,10 +1,13 @@
 import { describeStockBootstrapMember } from './TeamProvisioningBootstrapSpec';
+import { buildLeadInitialMatterScanInstructions } from './TeamProvisioningPromptBuilders';
 
 import type { RuntimeBootstrapSpec } from './TeamProvisioningBootstrapSpec';
 
 export interface CodexLeadBootstrapOptions {
   /** Existing kanban snapshot lines for relaunches (already formatted). */
   existingTasksSummary?: string;
+  /** The team's matter dashboard has no content yet: instruct an initial folder scan. */
+  matterNeedsInitialScan?: boolean;
 }
 
 /**
@@ -66,10 +69,27 @@ export function buildCodexLeadBootstrapPrompt(
     'Matter dashboard (MANDATORY): do NOT update it per task. When a related series of tasks',
     '(a job) is fully complete, call matter_get, compile what the completed work changed about',
     'the case (derive it from task comments/results — grounded facts only, never invented),',
+    're-scan the project folder for new or changed case documents the work produced or received,',
     'then call matter_propose with a summary list and only the changed sections. The user',
     'approves or rejects the proposal in the dashboard; nothing changes until approval. If',
     'rejected, the reason arrives in your inbox — revise and re-propose.'
   );
+  if (spec.members.length > 0) {
+    lines.push(
+      'Delegate matter verification to the right specialist and run independent checks in',
+      'parallel: deadline computation/verification to a calendar specialist, docket facts to a',
+      'docket specialist, document review to intake/facts specialists. You compile and propose.'
+    );
+  }
+  if (options.matterNeedsInitialScan) {
+    lines.push(
+      '',
+      buildLeadInitialMatterScanInstructions(spec.team.name, {
+        hasTeammates: spec.members.length > 0,
+        canSpawnTeammates: false,
+      })
+    );
+  }
   if (options.existingTasksSummary?.trim()) {
     lines.push('', 'Current kanban tasks:', options.existingTasksSummary.trim());
   }

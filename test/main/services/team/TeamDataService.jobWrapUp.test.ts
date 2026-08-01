@@ -33,10 +33,16 @@ function completedTask(id: string, timestamp = RECENT_TIMESTAMP): TeamTask {
   } as Partial<TeamTask> & { id: string });
 }
 
-function createService(tasks: TeamTask[]): TeamDataService {
+function createService(
+  tasks: TeamTask[],
+  configMembers?: { name: string; agentType?: string; role?: string }[]
+): TeamDataService {
+  const configReader = configMembers
+    ? { getConfig: vi.fn().mockResolvedValue({ name: 'my-team', members: configMembers }) }
+    : // configReader intentionally empty: resolveLeadName falls back to 'team-lead'.
+      {};
   return new TeamDataService(
-    // configReader intentionally empty: resolveLeadName falls back to 'team-lead'.
-    {} as never,
+    configReader as never,
     { getTasks: vi.fn().mockResolvedValue(tasks) } as never,
     {
       listInboxNames: vi.fn().mockResolvedValue([]),
@@ -75,6 +81,30 @@ describe('TeamDataService.notifyLeadOnJobWrapUp', () => {
     expect(request.text).toContain('matter dashboard');
     expect(request.text).toContain('matter_get');
     expect(request.text).toContain('matter_propose');
+    expect(request.text).toContain('re-scan the project folder');
+    // Solo (no config roster): no delegation guidance.
+    expect(request.text).not.toContain('calendar specialist');
+  });
+
+  it('tells a teamed lead to delegate verification to specialists in parallel', async () => {
+    const service = createService(
+      [completedTask('t1')],
+      [
+        { name: 'team-lead', agentType: 'team-lead' },
+        { name: 'calendar-agent', role: 'Litigation Calendar Proposal Specialist' },
+        { name: 'docket-agent', role: 'Court Docket Review Specialist' },
+      ]
+    );
+    const sendSpy = spyOnSendMessage(service);
+
+    await service.notifyLeadOnJobWrapUp('my-team', 't1');
+
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    const [, request] = sendSpy.mock.calls[0];
+    expect(request.member).toBe('team-lead');
+    expect(request.text).toContain('calendar specialist');
+    expect(request.text).toContain('docket specialist');
+    expect(request.text).toContain('in parallel');
   });
 
   it('dedups repeated file events for the same completion transition', async () => {
