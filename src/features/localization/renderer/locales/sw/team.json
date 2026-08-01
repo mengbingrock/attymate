@@ -2887,5 +2887,9 @@
         "weight_many": "uzito {{count}}"
       }
     }
+  },
+  "matterDashboard": {
+    "title": "Dashibodi ya shauri",
+    "openTooltip": "Fungua dashibodi ya shauri"
   }
 }

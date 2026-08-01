@@ -14,40 +14,26 @@ const repositoryRoot = path.resolve(scriptDirectory, '../..');
 const UPDATER_SKIP_MARKER = /\[(skip-updater|test-release|internal-release|no-autoupdate)\]/i;
 const SEMVER_TAG = /^v(\d+)\.(\d+)\.(\d+)(?:[-.][A-Za-z0-9.-]+)?$/;
 
+// The release ships macOS arm64 and Windows x64 only; other platforms were
+// dropped to keep the pipeline simple.
 export function getPromotionLayout(version) {
   const stableAliases = {
     'Agent.Teams.AI-arm64.dmg': `Agent.Teams.AI-${version}-arm64.dmg`,
-    'Agent.Teams.AI-x64.dmg': `Agent.Teams.AI-${version}-x64.dmg`,
     'Agent.Teams.AI.Setup.exe': `Agent.Teams.AI.Setup.${version}.exe`,
-    'Agent.Teams.AI.AppImage': `Agent.Teams.AI-${version}.AppImage`,
-    'agent-teams-ai-amd64.deb': `agent-teams-ai_${version}_amd64.deb`,
-    'agent-teams-ai-x86_64.rpm': `agent-teams-ai-${version}.x86_64.rpm`,
-    'agent-teams-ai.pacman': `agent-teams-ai-${version}.pacman`,
   };
   const legacyStableAliases = {
     'Claude-Agent-Teams-UI-arm64.dmg': stableAliases['Agent.Teams.AI-arm64.dmg'],
-    'Claude-Agent-Teams-UI-x64.dmg': stableAliases['Agent.Teams.AI-x64.dmg'],
     'Claude-Agent-Teams-UI-Setup.exe': stableAliases['Agent.Teams.AI.Setup.exe'],
-    'Claude-Agent-Teams-UI.AppImage': stableAliases['Agent.Teams.AI.AppImage'],
-    'Claude-Agent-Teams-UI-amd64.deb': stableAliases['agent-teams-ai-amd64.deb'],
-    'Claude-Agent-Teams-UI-x86_64.rpm': stableAliases['agent-teams-ai-x86_64.rpm'],
-    'Claude-Agent-Teams-UI.pacman': stableAliases['agent-teams-ai.pacman'],
   };
   const legacyUpdaterAliases = {
     [`Claude.Agent.Teams.UI-${version}-arm64-mac.zip`]: `Agent.Teams.AI-${version}-arm64-mac.zip`,
     [`Claude.Agent.Teams.UI-${version}-arm64.dmg`]: `Agent.Teams.AI-${version}-arm64.dmg`,
-    [`Claude.Agent.Teams.UI-${version}-mac.zip`]: `Agent.Teams.AI-${version}-x64-mac.zip`,
-    [`Claude.Agent.Teams.UI-${version}.dmg`]: `Agent.Teams.AI-${version}-x64.dmg`,
     [`Claude.Agent.Teams.UI.Setup.${version}.exe`]: `Agent.Teams.AI.Setup.${version}.exe`,
-    [`Claude.Agent.Teams.UI-${version}.AppImage`]: `Agent.Teams.AI-${version}.AppImage`,
   };
   const feedSources = {
     windows: `Agent.Teams.AI.Setup.${version}.exe`,
-    linux: `Agent.Teams.AI-${version}.AppImage`,
     macArm64Zip: `Agent.Teams.AI-${version}-arm64-mac.zip`,
     macArm64Dmg: `Agent.Teams.AI-${version}-arm64.dmg`,
-    macX64Zip: `Agent.Teams.AI-${version}-x64-mac.zip`,
-    macX64Dmg: `Agent.Teams.AI-${version}-x64.dmg`,
   };
   const sourceAssets = [
     ...new Set([
@@ -162,13 +148,10 @@ async function describeUpdaterAsset(directory, name) {
 }
 
 export async function buildUpdaterFeeds({ directory, version, releaseDate, feedSources }) {
-  const [windows, linux, macArm64Zip, macArm64Dmg, macX64Zip, macX64Dmg] = await Promise.all([
+  const [windows, macArm64Zip, macArm64Dmg] = await Promise.all([
     describeUpdaterAsset(directory, feedSources.windows),
-    describeUpdaterAsset(directory, feedSources.linux),
     describeUpdaterAsset(directory, feedSources.macArm64Zip),
     describeUpdaterAsset(directory, feedSources.macArm64Dmg),
-    describeUpdaterAsset(directory, feedSources.macX64Zip),
-    describeUpdaterAsset(directory, feedSources.macX64Dmg),
   ]);
 
   const latest = `version: ${version}
@@ -180,16 +163,7 @@ path: ${windows.name}
 sha512: ${windows.sha512}
 releaseDate: '${releaseDate}'
 `;
-  const latestLinux = `version: ${version}
-files:
-  - url: ${linux.name}
-    sha512: ${linux.sha512}
-    size: ${linux.size}
-path: ${linux.name}
-sha512: ${linux.sha512}
-releaseDate: '${releaseDate}'
-`;
-  const macFiles = [macArm64Zip, macArm64Dmg, macX64Zip, macX64Dmg];
+  const macFiles = [macArm64Zip, macArm64Dmg];
   const latestMac = `version: ${version}
 files:
 ${macFiles
@@ -206,7 +180,6 @@ releaseDate: '${releaseDate}'
 
   return {
     'latest.yml': latest,
-    'latest-linux.yml': latestLinux,
     'latest-mac.yml': latestMac,
   };
 }

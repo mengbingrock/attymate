@@ -2053,6 +2053,13 @@ export function initializeNotificationListeners(): () => void {
         return;
       }
 
+      if (event.type === 'matter') {
+        // Matter dashboard has its own subscription (useMatter). Matter file
+        // changes must not fall through to the generic team list/detail
+        // refresh fanout below.
+        return;
+      }
+
       if (event.type === 'log-source-change') {
         if (!event?.teamName || !isTeamVisibleInAnyPane(event.teamName)) {
           return;

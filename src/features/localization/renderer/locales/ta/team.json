@@ -2887,5 +2887,9 @@
         "weight_many": "agirlik {{count}}"
       }
     }
+  },
+  "matterDashboard": {
+    "title": "வழக்கு டாஷ்போர்டு",
+    "openTooltip": "வழக்கு டாஷ்போர்டைத் திற"
   }
 }

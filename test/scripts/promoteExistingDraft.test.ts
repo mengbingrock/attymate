@@ -32,10 +32,10 @@ describe('promote-existing-draft', () => {
   it('defines every stable, legacy, and updater source once', () => {
     const layout = getPromotionLayout('2.9.0');
 
-    expect(layout.sourceAssets).toHaveLength(9);
-    expect(Object.keys(layout.stableAliases)).toHaveLength(7);
-    expect(Object.keys(layout.legacyStableAliases)).toHaveLength(7);
-    expect(Object.keys(layout.legacyUpdaterAliases)).toHaveLength(6);
+    expect(layout.sourceAssets).toHaveLength(3);
+    expect(Object.keys(layout.stableAliases)).toHaveLength(2);
+    expect(Object.keys(layout.legacyStableAliases)).toHaveLength(2);
+    expect(Object.keys(layout.legacyUpdaterAliases)).toHaveLength(3);
     expect(layout.sourceAssets).toContain('Agent.Teams.AI-2.9.0-arm64-mac.zip');
     expect(layout.sourceAssets).toContain('Agent.Teams.AI.Setup.2.9.0.exe');
   });
@@ -69,9 +69,9 @@ describe('promote-existing-draft', () => {
     const windowsSha = createHash('sha512').update(windowsBytes).digest('base64');
     expect(feeds['latest.yml']).toContain('version: 2.9.0');
     expect(feeds['latest.yml']).toContain(`sha512: ${windowsSha}`);
-    expect(feeds['latest-linux.yml']).toContain(layout.feedSources.linux);
     expect(feeds['latest-mac.yml']).toContain(layout.feedSources.macArm64Zip);
-    expect(feeds['latest-mac.yml']).toContain(layout.feedSources.macX64Zip);
+    expect(feeds['latest-mac.yml']).toContain(layout.feedSources.macArm64Dmg);
+    expect(feeds['latest-linux.yml']).toBeUndefined();
   });
 
   it('runs an isolated end-to-end dry run with verified release assets', async () => {
@@ -160,18 +160,15 @@ process.exit(1);
     expect(await readFile(path.join(output, 'latest.yml'), 'utf8')).toContain(
       `Agent.Teams.AI.Setup.${version}.exe`
     );
-    expect(await readFile(path.join(output, 'latest-linux.yml'), 'utf8')).toContain(
-      `Agent.Teams.AI-${version}.AppImage`
-    );
     expect(await readFile(path.join(output, 'latest-mac.yml'), 'utf8')).toContain(
-      `Agent.Teams.AI-${version}-x64-mac.zip`
+      `Agent.Teams.AI-${version}-arm64-mac.zip`
     );
 
     const calls = (await readFile(logPath, 'utf8'))
       .trim()
       .split('\n')
       .map((line) => JSON.parse(line) as string[]);
-    expect(calls.filter((args) => args[0] === 'release' && args[1] === 'download')).toHaveLength(9);
+    expect(calls.filter((args) => args[0] === 'release' && args[1] === 'download')).toHaveLength(3);
     expect(calls.some((args) => args[0] === 'release' && args[1] === 'upload')).toBe(false);
     expect(calls.some((args) => args[0] === 'release' && args[1] === 'edit')).toBe(false);
   });

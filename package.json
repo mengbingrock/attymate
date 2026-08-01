@@ -415,8 +415,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "777genius",
-        "repo": "agent-teams-ai",
+        "owner": "mengbingrock",
+        "repo": "attymate",
         "releaseType": "release"
       }
     ]

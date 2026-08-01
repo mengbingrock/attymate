@@ -1,9 +1,14 @@
+import { buildCodexLeadBootstrapPrompt } from '@main/services/team/provisioning/CodexLaneBootstrapPrompts';
+import { buildStockClaudeBootstrapPrompt } from '@main/services/team/provisioning/TeamProvisioningBootstrapSpec';
 import {
   buildGeminiPostLaunchHydrationPrompt,
+  buildLeadMatterDashboardInstructions,
   buildMemberSpawnPrompt,
   buildPersistentLeadContext,
 } from '@main/services/team/provisioning/TeamProvisioningPromptBuilders';
 import { describe, expect, it } from 'vitest';
+
+import type { RuntimeBootstrapSpec } from '@main/services/team/provisioning/TeamProvisioningBootstrapSpec';
 
 import type { MemberSpawnStatusEntry, TeamCreateRequest } from '@shared/types';
 
@@ -89,5 +94,47 @@ describe('TeamProvisioningPromptBuilders', () => {
 
     expect(prompt).toContain('- @tom: bootstrap confirmed');
     expect(prompt).not.toContain('- @tom: failed to start');
+  });
+});
+
+describe('matter dashboard lead instructions', () => {
+  const bootstrapSpec: RuntimeBootstrapSpec = {
+    version: 1,
+    runId: 'run-1',
+    mode: 'create',
+    initiator: { kind: 'app', source: 'claude_team_agent_teams_orchestrator' },
+    team: { name: 'signal-ops', cwd: '/workspace/project' },
+    lead: {},
+    members: [],
+  };
+
+  it('includes the batched propose-and-confirm instruction in the persistent lead context', () => {
+    const prompt = buildLeadMatterDashboardInstructions('signal-ops');
+    expect(prompt).toContain('Do NOT update the matter dashboard after every task');
+    expect(prompt).toContain('matter_get');
+    expect(prompt).toContain('matter_propose');
+    expect(prompt).toContain('approves or rejects');
+
+    const context = buildPersistentLeadContext({
+      teamName: 'signal-ops',
+      leadName: 'lead',
+      isSolo: false,
+      members: [],
+    });
+    expect(context).toContain('Matter dashboard (MANDATORY');
+    expect(context).toContain('matter_propose');
+  });
+
+  it('includes the matter instruction in the stock Claude bootstrap prompt', () => {
+    const prompt = buildStockClaudeBootstrapPrompt(bootstrapSpec, 'Start here.');
+    expect(prompt).toContain('Matter dashboard (MANDATORY)');
+    expect(prompt).toContain('matter_propose');
+    expect(prompt).toContain('do NOT update it per task');
+  });
+
+  it('includes the matter instruction in the codex lead bootstrap prompt', () => {
+    const prompt = buildCodexLeadBootstrapPrompt(bootstrapSpec, '');
+    expect(prompt).toContain('Matter dashboard (MANDATORY)');
+    expect(prompt).toContain('matter_propose');
   });
 });

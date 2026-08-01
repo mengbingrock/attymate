@@ -205,6 +205,17 @@ declare module 'agent-teams-controller' {
     wrapAgentBlock(text: string): string;
   }
 
+  export interface ControllerMatterApi {
+    readMatter(): Record<string, unknown> | null;
+    readProposal(): Record<string, unknown> | null;
+    submitProposal(proposal: Record<string, unknown>, actor?: string): Record<string, unknown>;
+    applyProposal(approvedBy?: string): {
+      matter: Record<string, unknown>;
+      proposal: Record<string, unknown>;
+    };
+    rejectProposal(): Record<string, unknown>;
+  }
+
   export interface AgentTeamsController {
     tasks: ControllerTaskApi;
     kanban: ControllerKanbanApi;
@@ -215,6 +226,7 @@ declare module 'agent-teams-controller' {
     maintenance: ControllerMaintenanceApi;
     crossTeam: ControllerCrossTeamApi;
     runtime: ControllerRuntimeApi;
+    matter: ControllerMatterApi;
   }
 
   /** Context-free protocol text builders, shared across lead and member prompts. */
@@ -232,7 +244,8 @@ declare module 'agent-teams-controller' {
     | 'message'
     | 'process'
     | 'runtime'
-    | 'crossTeam';
+    | 'crossTeam'
+    | 'matter';
 
   export interface AgentTeamsMcpToolGroup {
     id: AgentTeamsMcpToolGroupId;
@@ -253,6 +266,7 @@ declare module 'agent-teams-controller' {
   export const AGENT_TEAMS_PROCESS_TOOL_NAMES: readonly string[];
   export const AGENT_TEAMS_KANBAN_TOOL_NAMES: readonly string[];
   export const AGENT_TEAMS_RUNTIME_TOOL_NAMES: readonly string[];
+  export const AGENT_TEAMS_MATTER_TOOL_NAMES: readonly string[];
   export const AGENT_TEAMS_MCP_TOOL_GROUPS: readonly AgentTeamsMcpToolGroup[];
   export const AGENT_TEAMS_REGISTERED_TOOL_NAMES: readonly string[];
   export const AGENT_TEAMS_TEAMMATE_OPERATIONAL_TOOL_NAMES: readonly string[];

@@ -2942,5 +2942,9 @@
         "weight_other": "вес {{count}}"
       }
     }
+  },
+  "matterDashboard": {
+    "title": "Панель дела",
+    "openTooltip": "Открыть панель дела"
   }
 }

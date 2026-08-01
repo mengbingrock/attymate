@@ -7,6 +7,11 @@
  */
 
 import {
+  MATTER_ROUTE,
+  type MatterElectronApi,
+  type MatterSnapshotDto,
+} from '@features/matter-dashboard/contracts';
+import {
   createEmptyMemberLogPreviewResponse,
   createEmptyMemberLogStreamResponse,
   createEmptyMemberRuntimeLogTailResponse,
@@ -480,6 +485,15 @@ export class HttpAPIClient implements ElectronAPI {
     onSnapshotChanged: (
       callback: (snapshot: TokenUsageAnalyticsSnapshotDto) => void
     ): (() => void) => this.addEventListener(TOKEN_USAGE_SNAPSHOT_CHANGED, callback),
+  };
+
+  matter: MatterElectronApi['matter'] = {
+    get: (teamName: string): Promise<MatterSnapshotDto> =>
+      this.get<MatterSnapshotDto>(`${MATTER_ROUTE}?teamName=${encodeURIComponent(teamName)}`),
+    applyProposal: (teamName: string): Promise<MatterSnapshotDto> =>
+      this.post<MatterSnapshotDto>(`${MATTER_ROUTE}/apply-proposal`, { teamName }),
+    rejectProposal: (teamName: string, reason?: string): Promise<MatterSnapshotDto> =>
+      this.post<MatterSnapshotDto>(`${MATTER_ROUTE}/reject-proposal`, { teamName, reason }),
   };
 
   getProjects = (): Promise<Project[]> => this.get<Project[]>('/api/projects');

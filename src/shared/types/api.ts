@@ -125,6 +125,7 @@ import type {
 import type { CodexAccountElectronApi } from '@features/codex-account/contracts';
 import type { CodexRuntimeAPI } from '@features/codex-runtime-installer/contracts';
 import type { InteractiveTeamRuntimeElectronApi } from '@features/interactive-team-runtime/contracts';
+import type { MatterElectronApi } from '@features/matter-dashboard/contracts';
 import type { MemberLogStreamApi } from '@features/member-log-stream/contracts';
 import type {
   MemberWorkSyncMetricsRequest,
@@ -958,7 +959,11 @@ export interface WindowsElevationStatus {
  * Complete Electron API exposed to the renderer process via preload script.
  */
 export interface ElectronAPI
-  extends RecentProjectsElectronApi, CodexAccountElectronApi, TokenUsageElectronApi {
+  extends
+    RecentProjectsElectronApi,
+    CodexAccountElectronApi,
+    TokenUsageElectronApi,
+    MatterElectronApi {
   startup?: AppStartupAPI;
   appCloseCoordination?: AppCloseCoordinationElectronApi;
   telemetry: TelemetryAPI;

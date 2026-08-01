@@ -2887,5 +2887,9 @@
         "weight_many": "greutate {{count}}"
       }
     }
+  },
+  "matterDashboard": {
+    "title": "Tablou de bord al dosarului",
+    "openTooltip": "Deschide tabloul de bord al dosarului"
   }
 }

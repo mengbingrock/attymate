@@ -2887,5 +2887,9 @@
         "weight_many": "agirlik {{count}}"
       }
     }
+  },
+  "matterDashboard": {
+    "title": "مقدمے کا ڈیش بورڈ",
+    "openTooltip": "مقدمے کا ڈیش بورڈ کھولیں"
   }
 }

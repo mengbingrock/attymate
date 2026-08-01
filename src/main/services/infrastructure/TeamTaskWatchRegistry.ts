@@ -50,6 +50,8 @@ const TEAM_ROOT_FILES = new Set([
   'sentMessages.json',
   'team.meta.json',
   'members.meta.json',
+  'matter.json',
+  'matter-proposal.json',
   OPENCODE_TASK_LOG_ATTRIBUTION_FILE,
 ]);
 

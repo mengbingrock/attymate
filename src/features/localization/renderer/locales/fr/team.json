@@ -2887,5 +2887,9 @@
         "weight_many": "weight {{count}}"
       }
     }
+  },
+  "matterDashboard": {
+    "title": "Tableau de bord du dossier",
+    "openTooltip": "Ouvrir le tableau de bord du dossier"
   }
 }

@@ -5,6 +5,7 @@
  * Each route file mirrors the corresponding IPC handler.
  */
 
+import { type MatterFeatureFacade, registerMatterHttp } from '@features/matter-dashboard/main';
 import {
   type OrganizationsFeatureFacade,
   registerOrganizationsHttp,
@@ -56,6 +57,7 @@ export interface HttpServices {
   recentProjectsFeature?: RecentProjectsFeatureFacade;
   organizationsFeature?: OrganizationsFeatureFacade;
   tokenUsageFeature?: TokenUsageFeatureFacade;
+  matterFeature?: MatterFeatureFacade;
   memberWorkSyncFeature?: MemberWorkSyncFeatureFacade;
   updaterService: UpdaterService;
   sshConnectionManager: SshConnectionManager;
@@ -89,6 +91,9 @@ export function registerHttpRoutes(
   }
   if (services.tokenUsageFeature) {
     registerTokenUsageHttp(app, services.tokenUsageFeature);
+  }
+  if (services.matterFeature) {
+    registerMatterHttp(app, services.matterFeature);
   }
   registerEventRoutes(app);
 

@@ -857,6 +857,24 @@ export function buildLeadRosterContextBlock(
 }
 
 /**
+ * Standing lead instruction for keeping the Matter Dashboard current through the
+ * propose → user-confirm → apply flow. Injected into every lead prompt variant
+ * (persistent context, stock bootstrap, codex bootstrap) so the habit survives
+ * context compaction in every runtime.
+ */
+export function buildLeadMatterDashboardInstructions(teamName: string): string {
+  return [
+    `Matter dashboard (MANDATORY — batched updates with user confirmation):`,
+    `- Do NOT update the matter dashboard after every task. The case facts each completed task establishes live on the task board (comments, results).`,
+    `- When ALL tasks of a related series of work (a job) are finished: (1) call MCP tool matter_get with { teamName: "${teamName}" } to see the current dashboard state and section schema, (2) compile a list of what the completed work changed about the case — derive it from the completed tasks' comments and results, not from memory, (3) call MCP tool matter_propose with that summary list and ONLY the changed sections.`,
+    `- The user reviews your proposal in the dashboard and approves or rejects it. The dashboard only changes after approval — matter_propose itself changes nothing.`,
+    `- Record ONLY grounded facts established by completed work (filings, service dates, deadlines, deposition status, Bates ranges, stage transitions). NEVER invent dates, amounts, or outcomes; leave unknown fields absent.`,
+    `- Include currentStage / nextDeadline changes whenever the case posture changed.`,
+    `- If the proposal is rejected, the rejection reason arrives in your inbox: revise the proposal per that reason and re-propose (re-proposing replaces the previous pending proposal).`,
+  ].join('\n');
+}
+
+/**
  * Builds the durable lead context — constraints, communication protocol, board MCP ops,
  * and agent block policy — that must survive context compaction.
  *
@@ -928,6 +946,8 @@ Constraints:
 - When messaging "user" (the human): write plain human language. If a task needs a status update, do it yourself via the board MCP tools; never ask the user to run a command.${soloConstraint}
 
 ${teamCtlOps}
+
+${buildLeadMatterDashboardInstructions(teamName)}
 
 ${actionModeProtocol}
 

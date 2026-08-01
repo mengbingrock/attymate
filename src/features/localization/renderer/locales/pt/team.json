@@ -2887,5 +2887,9 @@
         "weight_many": "weight {{count}}"
       }
     }
+  },
+  "matterDashboard": {
+    "title": "Painel do caso",
+    "openTooltip": "Abrir painel do caso"
   }
 }

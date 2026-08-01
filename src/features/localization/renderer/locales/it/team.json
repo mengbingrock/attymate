@@ -2887,5 +2887,9 @@
         "weight_many": "weight {{count}}"
       }
     }
+  },
+  "matterDashboard": {
+    "title": "Cruscotto della pratica",
+    "openTooltip": "Apri il cruscotto della pratica"
   }
 }

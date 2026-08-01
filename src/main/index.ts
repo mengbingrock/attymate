@@ -103,6 +103,11 @@ import {
   createTeamRuntimeRecoveryFeature,
   type TeamRuntimeRecoveryFeatureFacade,
 } from '@features/team-runtime-recovery/main';
+import {
+  createMatterFeature,
+  registerMatterIpc,
+  type MatterFeatureFacade,
+} from '@features/matter-dashboard/main';
 import { TOKEN_USAGE_SNAPSHOT_CHANGED } from '@features/token-usage/contracts';
 import {
   createApplicationCommandLedgerFeature,
@@ -1122,6 +1127,7 @@ let organizationsFeature: OrganizationsFeatureFacade;
 let runtimeProviderManagementFeature: RuntimeProviderManagementFeatureFacade;
 let terminalWorkspaceFeature: TerminalWorkspaceFeatureFacade | null = null;
 let tokenUsageFeature: TokenUsageFeatureFacade | null = null;
+let matterFeature: MatterFeatureFacade | null = null;
 let memberWorkSyncFeature: MemberWorkSyncFeatureFacade | null = null;
 let teamRuntimeRecoveryFeature: TeamRuntimeRecoveryFeatureFacade | null = null;
 let teamDataService: TeamDataService;
@@ -1855,6 +1861,13 @@ function wireFileWatcherEvents(context: ServiceContext): void {
               `[FileWatcher] task comment notify failed for ${teamName}#${taskId}: ${String(e)}`
             )
           );
+        void teamDataService
+          .notifyLeadOnJobWrapUp(teamName, taskId)
+          .catch((e: unknown) =>
+            logger.warn(
+              `[FileWatcher] job wrap-up notify failed for ${teamName}#${taskId}: ${String(e)}`
+            )
+          );
 
         // Schedule debounced backup for changed task file
         if (teamBackupService) {
@@ -2430,6 +2443,13 @@ async function initializeServices(): Promise<void> {
     teamsBasePath: getTeamsBasePath(),
     logger: createLogger('Feature:TerminalWorkspace'),
   });
+  matterFeature = createMatterFeature({
+    teamsBasePath: getTeamsBasePath(),
+    actions: {
+      applyProposal: (teamName) => teamDataService.applyMatterProposal(teamName),
+      rejectProposal: (teamName, reason) => teamDataService.rejectMatterProposal(teamName, reason),
+    },
+  });
   const tokenUsageLogger = createLogger('Feature:TokenUsage');
   tokenUsageFeature = createTokenUsageFeature({
     ledgerPath: join(getAppDataPath(), 'token-usage', 'ledger.json'),
@@ -2993,6 +3013,9 @@ async function initializeServices(): Promise<void> {
   if (tokenUsageFeature) {
     registerTokenUsageIpc(ipcMain, tokenUsageFeature);
   }
+  if (matterFeature) {
+    registerMatterIpc(ipcMain, matterFeature);
+  }
   registerMemberWorkSyncIpc(ipcMain, memberWorkSyncFeature);
   registerMemberLogStreamIpc(ipcMain, memberLogStreamFeature);
 
@@ -3057,6 +3080,7 @@ async function startHttpServer(
         recentProjectsFeature,
         organizationsFeature,
         tokenUsageFeature: tokenUsageFeature ?? undefined,
+        matterFeature: matterFeature ?? undefined,
         memberWorkSyncFeature: memberWorkSyncFeature ?? undefined,
         updaterService,
         sshConnectionManager,

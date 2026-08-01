@@ -102,7 +102,7 @@ export const UpdateDialog = (): React.JSX.Element | null => {
   const filteredNotes = releaseNotes ? stripDownloadsSection(releaseNotes) : releaseNotes;
 
   const releaseUrl = availableVersion
-    ? `https://github.com/777genius/agent-teams-ai/releases/tag/v${availableVersion}`
+    ? `https://github.com/mengbingrock/attymate/releases/tag/v${availableVersion}`
     : null;
 
   const openReleaseOnGitHub = (): void => {

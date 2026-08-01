@@ -61,7 +61,14 @@ export function buildCodexLeadBootstrapPrompt(
     'message_send tool (to: "<teammate>", from: "team-lead") with the task id and clear',
     'instructions. Their replies arrive in your session as messages prefixed',
     '"[Agent Teams message from <name>]". After a teammate reports back, update the task',
-    'status yourself.'
+    'status yourself.',
+    '',
+    'Matter dashboard (MANDATORY): do NOT update it per task. When a related series of tasks',
+    '(a job) is fully complete, call matter_get, compile what the completed work changed about',
+    'the case (derive it from task comments/results — grounded facts only, never invented),',
+    'then call matter_propose with a summary list and only the changed sections. The user',
+    'approves or rejects the proposal in the dashboard; nothing changes until approval. If',
+    'rejected, the reason arrives in your inbox — revise and re-propose.'
   );
   if (options.existingTasksSummary?.trim()) {
     lines.push('', 'Current kanban tasks:', options.existingTasksSummary.trim());

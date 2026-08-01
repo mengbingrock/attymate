@@ -2887,5 +2887,9 @@
         "weight_many": "weight {{count}}"
       }
     }
+  },
+  "matterDashboard": {
+    "title": "Papan pemuka perkara",
+    "openTooltip": "Buka papan pemuka perkara"
   }
 }

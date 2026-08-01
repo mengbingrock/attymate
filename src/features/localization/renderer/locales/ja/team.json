@@ -2887,5 +2887,9 @@
         "weight_many": "weight {{count}}"
       }
     }
+  },
+  "matterDashboard": {
+    "title": "案件ダッシュボード",
+    "openTooltip": "案件ダッシュボードを開く"
   }
 }

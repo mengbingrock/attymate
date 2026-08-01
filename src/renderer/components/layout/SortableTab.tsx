@@ -23,6 +23,7 @@ import {
   Network,
   Pin,
   Puzzle,
+  Scale,
   Search,
   Settings,
   Users,
@@ -59,6 +60,7 @@ const TAB_ICONS = {
   schedules: Calendar,
   graph: Network,
   'token-usage': Gauge,
+  matter: Scale,
 } as const;
 
 export const SortableTab = ({

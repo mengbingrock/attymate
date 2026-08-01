@@ -1279,6 +1279,16 @@ export class FileWatcher extends EventEmitter {
       return;
     }
 
+    if (relative === 'matter.json' || relative === 'matter-proposal.json') {
+      const event: TeamChangeEvent = {
+        type: 'matter',
+        teamName,
+        detail: relative,
+      };
+      this.emit('team-change', event);
+      return;
+    }
+
     if (relative === OPENCODE_TASK_LOG_ATTRIBUTION_FILE) {
       const event: TeamChangeEvent = {
         type: 'log-source-change',

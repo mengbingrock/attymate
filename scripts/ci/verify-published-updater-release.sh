@@ -33,14 +33,12 @@ fi
 [[ "$RELEASE_ID" =~ ^[0-9]+$ ]] || fail_usage "RELEASE_ID must be numeric"
 
 VERSION="${TAG#v}"
-REQUIRED_FEEDS=(latest.yml latest-linux.yml latest-mac.yml)
+# The release ships macOS arm64 and Windows x64 only.
+REQUIRED_FEEDS=(latest.yml latest-mac.yml)
 REQUIRED_ASSETS=(
   "Agent.Teams.AI.Setup.${VERSION}.exe"
-  "Agent.Teams.AI-${VERSION}.AppImage"
   "Agent.Teams.AI-${VERSION}-arm64-mac.zip"
   "Agent.Teams.AI-${VERSION}-arm64.dmg"
-  "Agent.Teams.AI-${VERSION}-x64-mac.zip"
-  "Agent.Teams.AI-${VERSION}-x64.dmg"
   "${REQUIRED_FEEDS[@]}"
 )
 SKIP_MARKER_PATTERN='\[(skip-updater|test-release|internal-release|no-autoupdate)\]'
@@ -76,15 +74,10 @@ verify_feed_contents() {
       latest.yml)
         required_references=("Agent.Teams.AI.Setup.${VERSION}.exe")
         ;;
-      latest-linux.yml)
-        required_references=("Agent.Teams.AI-${VERSION}.AppImage")
-        ;;
       latest-mac.yml)
         required_references=(
           "Agent.Teams.AI-${VERSION}-arm64-mac.zip"
           "Agent.Teams.AI-${VERSION}-arm64.dmg"
-          "Agent.Teams.AI-${VERSION}-x64-mac.zip"
-          "Agent.Teams.AI-${VERSION}-x64.dmg"
         )
         ;;
     esac
@@ -160,7 +153,6 @@ verify_once() {
     done
 
     if [[ -f "${temporary_directory}/latest.yml" && \
-      -f "${temporary_directory}/latest-linux.yml" && \
       -f "${temporary_directory}/latest-mac.yml" ]]; then
       verify_feed_contents "$temporary_directory"
     fi

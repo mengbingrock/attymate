@@ -2889,5 +2889,9 @@
         "weight_other": "вага {{count}}"
       }
     }
+  },
+  "matterDashboard": {
+    "title": "Панель справи",
+    "openTooltip": "Відкрити панель справи"
   }
 }
