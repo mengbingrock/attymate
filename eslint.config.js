@@ -122,6 +122,31 @@ export default defineConfig([
       ],
     },
   },
+  // Feature-specific architecture guard rails - matter-dashboard
+  {
+    name: 'feature-matter-dashboard-public-entrypoints',
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/features/matter-dashboard/**/*'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '@features/matter-dashboard/contracts/**',
+                '@features/matter-dashboard/main/**',
+                '@features/matter-dashboard/preload/**',
+                '@features/matter-dashboard/renderer/**',
+              ],
+              message:
+                'Import matter-dashboard only through its public entrypoints: @features/matter-dashboard/contracts, @features/matter-dashboard/main, @features/matter-dashboard/preload, or @features/matter-dashboard/renderer.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   {
     name: 'feature-recent-projects-core-domain-guards',
     files: ['src/features/recent-projects/core/domain/**/*.ts'],

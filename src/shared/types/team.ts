@@ -1358,7 +1358,8 @@ export interface TeamChangeEvent {
     | 'member-turn-settled'
     | 'member-advisory'
     | 'process'
-    | 'member-spawn';
+    | 'member-spawn'
+    | 'matter';
   teamName: string;
   runId?: string;
   detail?: string;

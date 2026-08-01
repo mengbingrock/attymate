@@ -1,13 +1,30 @@
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+
+import { useMatter } from '../hooks/useMatter';
+
+import type {
+  MatterChanges,
+  MatterDiscoveryDto,
+  MatterDto,
+  MatterPendingMotionDto,
+  MatterPleadingDto,
+  MatterPostJudgmentDto,
+  MatterProposalDto,
+  MatterTrialDto,
+} from '../../contracts';
 
 /**
  * Matter Dashboard — React port of the "Matter Dashboard v2" Claude Design
  * component (claude.ai/design project 2184a839, `Matter Dashboard v2.dc.html`).
  *
  * The design ships with a demo litigation matter (Anderson v. Meridian
- * Logistics) baked in; the matter content below is that fixture data, not
- * localized app chrome. Field edits and stage selection are kept in local
- * component state, mirroring the original DCLogic behavior.
+ * Logistics) baked in; the `DEMO_*` fixtures below are that data. When a
+ * `teamName` is provided, live values from the team's `matter.json` overlay
+ * the fixtures section by section (`useMatter`), and a pending update
+ * proposal from the team lead renders as a review panel the user can approve
+ * or reject. Field edits and stage selection are kept in local component
+ * state, mirroring the original DCLogic behavior; local edits reset when an
+ * approved update lands.
  */
 
 const ACCENT = 'oklch(0.52 0.17 262)';
@@ -77,6 +94,8 @@ const ToneSelect = ({
 }: ToneSelectProps): React.JSX.Element => {
   const value = vals[valueKey] ?? defaultValue;
   const tone = plain ? { bg: '#fff', fg: INK } : toneFor(value);
+  // Live data may carry values outside the design's canonical option lists.
+  const effectiveOptions = options.includes(value) ? options : [value, ...options];
   return (
     <select
       value={value}
@@ -94,7 +113,7 @@ const ToneSelect = ({
         maxWidth: '100%',
       }}
     >
-      {options.map((option) => (
+      {effectiveOptions.map((option) => (
         <option key={option} value={option}>
           {option}
         </option>
@@ -165,7 +184,11 @@ const PanelTitle = ({ children }: { children: React.ReactNode }): React.JSX.Elem
 const STAGE_ORDER = ['pleading', 'discovery', 'trial', 'post'] as const;
 type StageId = (typeof STAGE_ORDER)[number];
 
-const STAGE_META: readonly { id: StageId; label: string; dates: string; summary: string }[] = [
+const DEMO_CAPTION = 'Anderson v. Meridian Logistics, Inc.';
+const DEMO_MATTER_NUMBER = 'AM-2025-0148';
+const DEMO_NEXT_DEADLINE = 'Aug 14, 2026 — Opposition to Motion to Compel';
+
+const DEMO_STAGE_META: readonly { id: StageId; label: string; dates: string; summary: string }[] = [
   {
     id: 'pleading',
     label: 'Pleading',
@@ -182,7 +205,7 @@ const STAGE_META: readonly { id: StageId; label: string; dates: string; summary:
   { id: 'post', label: 'Post-Judgment', dates: '—', summary: 'Not started' },
 ];
 
-const CORE_FIELDS: readonly { l: string; v: string; req?: boolean }[] = [
+const DEMO_CORE_FIELDS: readonly { l: string; v: string; req?: boolean }[] = [
   { l: 'Client', v: 'Daniel Anderson' },
   { l: 'Client ID', v: 'c9d2f8a1-…-41ab' },
   { l: 'Matter No.', v: 'AM-2025-0148' },
@@ -200,7 +223,7 @@ const CORE_FIELDS: readonly { l: string; v: string; req?: boolean }[] = [
   { l: 'Docs workspace', v: 'Anderson v. Meridian / Case Files', req: true },
 ];
 
-const SYS_FIELDS: readonly { l: string; v: string }[] = [
+const DEMO_SYS_FIELDS: readonly { l: string; v: string }[] = [
   { l: 'Matter ID', v: '3f8a1c2e-7b4d-4e90-a1f3-6c2d5e8b9b7d' },
   { l: 'Control issue', v: 'CTL-0148' },
   { l: 'Created', v: '2025-03-12 09:14' },
@@ -229,7 +252,7 @@ const REQ_STATUSES = [
   'Withdrawn',
 ];
 
-const REQUESTS: readonly {
+interface RequestRow {
   k: string;
   type: string;
   set: string;
@@ -237,7 +260,9 @@ const REQUESTS: readonly {
   served: string;
   due: string;
   status: string;
-}[] = [
+}
+
+const DEMO_REQUESTS: readonly RequestRow[] = [
   {
     k: 'r1',
     type: 'RFP',
@@ -285,21 +310,31 @@ const REQUESTS: readonly {
   },
 ];
 
-const PRODUCTIONS: readonly { k: string; type: string; bates: string; date: string }[] = [
+interface ProductionRow {
+  k: string;
+  type: string;
+  bates: string;
+  date: string;
+}
+
+const DEMO_PRODUCTIONS: readonly ProductionRow[] = [
   { k: 'p1', type: 'Initial', bates: 'MER000001–004212', date: 'Oct 14, 2025' },
   { k: 'p2', type: 'Supplemental', bates: 'MER004213–005871', date: 'Jan 22, 2026' },
 ];
 const PRODUCTION_TYPES = ['Initial', 'Supplemental', 'Corrected', 'Rolling', 'Privilege Log'];
 
 const DEPO_OPTS = ['Not Started', 'In Review', 'Complete', 'Needs Follow-up'];
-const DEPOSITIONS: readonly {
+
+interface DepositionRow {
   k: string;
   name: string;
   taken: string;
   review: string;
   note: string;
   noteColor: string;
-}[] = [
+}
+
+const DEMO_DEPOSITIONS: readonly DepositionRow[] = [
   {
     k: 'd1',
     name: 'D. Anderson',
@@ -318,7 +353,7 @@ const DEPOSITIONS: readonly {
   },
 ];
 
-const MOTION_TEXT_FIELDS: readonly { k: string; l: string; v: string; vc?: string }[] = [
+const DEMO_MOTION_TEXT_FIELDS: readonly { k: string; l: string; v: string; vc?: string }[] = [
   { k: 'mo_type', l: 'Motion type', v: 'Motion to Compel Further Responses' },
   { k: 'mo_req', l: 'Related request', v: 'Special Interrogatories — Set Two' },
   { k: 'mo_resv', l: 'Reservation', v: 'Jun 20, 2026' },
@@ -336,8 +371,27 @@ const MOTION_OUTCOMES = [
   'Withdrawn',
 ];
 
+const MOTION_FIELD_KEYS: Record<string, keyof MatterPendingMotionDto> = {
+  mo_type: 'motionType',
+  mo_req: 'relatedRequest',
+  mo_resv: 'reservation',
+  mo_filed: 'filed',
+  mo_opp: 'oppositionDue',
+  mo_reply: 'replyDue',
+  mo_hear: 'hearing',
+};
+
 const PRETRIAL_STATUSES = ['Not Started', 'Prepared', 'Filed', 'Served', 'Complete'];
-const PRETRIAL: readonly { k: string; t: string; d: string; src: string; s: string }[] = [
+
+interface PretrialRow {
+  k: string;
+  t: string;
+  d: string;
+  src: string;
+  s: string;
+}
+
+const DEMO_PRETRIAL: readonly PretrialRow[] = [
   {
     k: 'pt1',
     t: 'Witness & exhibit lists',
@@ -364,44 +418,81 @@ const PRETRIAL: readonly { k: string; t: string; d: string; src: string; s: stri
 
 const WITNESS_ROLES = ['Fact', 'Expert', 'PMQ', 'Custodian', 'Impeachment'];
 const WITNESS_AVAIL = ['Confirmed', 'Tentative', 'Conflict', 'Unknown'];
-const WITNESSES: readonly {
+
+interface WitnessRow {
   k: string;
   name: string;
   role: string;
   party: string;
   avail: string;
-}[] = [
+}
+
+const DEMO_WITNESSES: readonly WitnessRow[] = [
   { k: 'w1', name: 'D. Anderson', role: 'Fact', party: 'Plaintiff', avail: 'Confirmed' },
   { k: 'w2', name: 'K. Ramos', role: 'PMQ', party: 'Defendant', avail: 'Tentative' },
   { k: 'w3', name: 'Dr. E. Chou', role: 'Expert', party: 'Plaintiff', avail: 'Confirmed' },
 ];
 
 const EXHIBIT_ADMISSIONS = ['Proposed', 'Marked', 'Admitted', 'Excluded', 'Withdrawn'];
-const EXHIBITS: readonly { k: string; num: string; title: string; adm: string }[] = [
+
+interface ExhibitRow {
+  k: string;
+  num: string;
+  title: string;
+  adm: string;
+}
+
+const DEMO_EXHIBITS: readonly ExhibitRow[] = [
   { k: 'x1', num: '101', title: 'Master Services Agreement', adm: 'Proposed' },
   { k: 'x2', num: '102', title: 'Delivery logs 2024–2025', adm: 'Proposed' },
   { k: 'x3', num: '201', title: 'Meridian operations manual', adm: 'Marked' },
 ];
+
+const SECTION_LABELS: Record<keyof MatterChanges, string> = {
+  caption: 'Caption',
+  status: 'Status',
+  matterNumber: 'Matter No.',
+  currentStage: 'Current stage',
+  coreFields: 'Matter fields',
+  systemFields: 'System fields',
+  stages: 'Stage summaries',
+  nextDeadline: 'Next deadline',
+  pleading: 'Pleading',
+  discovery: 'Discovery',
+  trial: 'Trial',
+  postJudgment: 'Post-Judgment',
+};
 
 interface MatterDashboardViewProps {
   /** Which case stage is currently in progress. Defaults to discovery. */
   currentStage?: StageId;
   /** Show required-field markers next to fields the intake contract requires. */
   showRequiredMarkers?: boolean;
+  /** Team whose live matter data overlays the demo fixture. */
+  teamName?: string;
 }
 
 export const MatterDashboardView = memo(function MatterDashboardView({
   currentStage = 'discovery',
   showRequiredMarkers = true,
+  teamName,
 }: MatterDashboardViewProps): React.JSX.Element {
+  const { matter, proposal, acting, applyProposal, rejectProposal } = useMatter(teamName);
   const [selectedStage, setSelectedStage] = useState<StageId | null>(null);
   const [vals, setVals] = useState<Vals>({});
   const setVal = useCallback<SetVal>((key, value) => {
     setVals((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  const currentIndex = STAGE_ORDER.includes(currentStage)
-    ? STAGE_ORDER.indexOf(currentStage)
+  // Local inline edits are display-only; an approved update supersedes them.
+  const matterUpdatedAt = matter?.updatedAt;
+  useEffect(() => {
+    setVals({});
+  }, [matterUpdatedAt]);
+
+  const effectiveCurrentStage = matter?.currentStage ?? currentStage;
+  const currentIndex = STAGE_ORDER.includes(effectiveCurrentStage)
+    ? STAGE_ORDER.indexOf(effectiveCurrentStage)
     : STAGE_ORDER.indexOf('discovery');
   const activeStage: StageId = selectedStage ?? STAGE_ORDER[currentIndex];
   const reqOn = showRequiredMarkers;
@@ -410,6 +501,43 @@ export const MatterDashboardView = memo(function MatterDashboardView({
       {' '}
       *
     </span>
+  );
+
+  const caption = matter?.caption ?? DEMO_CAPTION;
+  const matterNumber = matter?.matterNumber ?? DEMO_MATTER_NUMBER;
+  const statusDefault = matter?.status ?? 'Active';
+  const nextDeadlineText = matter?.nextDeadline
+    ? `${matter.nextDeadline.date} — ${matter.nextDeadline.label}`
+    : DEMO_NEXT_DEADLINE;
+
+  const coreFields = useMemo(
+    () =>
+      matter?.coreFields?.length
+        ? matter.coreFields.map((field) => ({ l: field.label, v: field.value }))
+        : DEMO_CORE_FIELDS,
+    [matter]
+  );
+  const sysFields = useMemo(
+    () =>
+      matter?.systemFields?.length
+        ? matter.systemFields.map((field) => ({ l: field.label, v: field.value }))
+        : DEMO_SYS_FIELDS,
+    [matter]
+  );
+  const stages = useMemo(
+    () =>
+      DEMO_STAGE_META.map((stage) => {
+        const live = matter?.stages?.find((entry) => entry.id === stage.id);
+        return live
+          ? {
+              ...stage,
+              label: live.label ?? stage.label,
+              dates: live.dates ?? stage.dates,
+              summary: live.summary ?? stage.summary,
+            }
+          : stage;
+      }),
+    [matter]
   );
 
   const selectProps = { vals, setVal };
@@ -428,248 +556,301 @@ export const MatterDashboardView = memo(function MatterDashboardView({
           maxWidth: 1440,
           margin: '0 auto',
           padding: 20,
-          display: 'grid',
-          gridTemplateColumns: 'minmax(280px, 340px) minmax(0, 1fr)',
-          gap: 20,
-          alignItems: 'start',
         }}
       >
-        {/* Left column: matter card + next deadline */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div
-            style={{
-              background: '#fff',
-              border: `1px solid ${BORDER}`,
-              borderRadius: 14,
-              padding: '20px 22px',
-              boxShadow: '0 1px 2px rgba(16,24,40,0.04)',
-            }}
-          >
-            <h1 style={{ margin: 0, fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
-              Anderson v. Meridian Logistics, Inc.
-              {reqOn && requiredMark}
-            </h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '10px 0 16px' }}>
-              <ToneSelect
-                valueKey="core_status"
-                defaultValue="Active"
-                options={['Planned', 'Active', 'Completed', 'Archived']}
-                {...selectProps}
-              />
-              {reqOn && requiredMark}
-              <span style={{ fontSize: 12.5, color: MUTED }}>AM-2025-0148</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-              {CORE_FIELDS.map((field) => (
-                <div
-                  key={field.l}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '125px 1fr',
-                    gap: 10,
-                    alignItems: 'center',
-                    fontSize: 12.5,
-                  }}
-                >
-                  <span style={{ color: MUTED }}>
-                    {field.l}
-                    {reqOn && field.req && requiredMark}
-                  </span>
-                  <InlineInput
-                    valueKey={`core_${field.l}`}
-                    defaultValue={field.v}
-                    negativeMargin
-                    {...selectProps}
-                  />
-                </div>
-              ))}
-            </div>
-            <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${HAIRLINE}` }}>
+        {proposal && (
+          <ProposalReviewPanel
+            proposal={proposal}
+            matter={matter}
+            acting={acting}
+            onApprove={applyProposal}
+            onReject={rejectProposal}
+          />
+        )}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(280px, 340px) minmax(0, 1fr)',
+            gap: 20,
+            alignItems: 'start',
+          }}
+        >
+          {/* Left column: matter card + next deadline */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div
+              style={{
+                background: '#fff',
+                border: `1px solid ${BORDER}`,
+                borderRadius: 14,
+                padding: '20px 22px',
+                boxShadow: '0 1px 2px rgba(16,24,40,0.04)',
+              }}
+            >
+              <h1 style={{ margin: 0, fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
+                {caption}
+                {reqOn && requiredMark}
+              </h1>
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '10px 0 16px' }}
+              >
+                <ToneSelect
+                  valueKey="core_status"
+                  defaultValue={statusDefault}
+                  options={['Planned', 'Active', 'Completed', 'Archived']}
+                  {...selectProps}
+                />
+                {reqOn && requiredMark}
+                <span style={{ fontSize: 12.5, color: MUTED }}>{matterNumber}</span>
+              </div>
               <div
                 style={{
-                  fontSize: 10.5,
-                  fontWeight: 700,
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  color: FAINT,
-                  marginBottom: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  margin: '-6px 0 14px',
+                  fontSize: 11.5,
+                  color: MUTED,
+                  flexWrap: 'wrap',
                 }}
               >
-                System
+                {matter ? (
+                  <span>
+                    Updated {matter.updatedAt ?? '—'}
+                    {matter.updatedBy ? ` by @${matter.updatedBy}` : ''}
+                    {matter.approvedBy ? ` · approved by ${matter.approvedBy}` : ''}
+                  </span>
+                ) : (
+                  <span
+                    style={{
+                      border: '1px solid #d6dae2',
+                      borderRadius: 99,
+                      padding: '1px 9px',
+                      fontWeight: 600,
+                      background: '#f7f8fa',
+                    }}
+                  >
+                    Demo data
+                  </span>
+                )}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {SYS_FIELDS.map((field) => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                {coreFields.map((field) => (
                   <div
                     key={field.l}
                     style={{
                       display: 'grid',
                       gridTemplateColumns: '125px 1fr',
                       gap: 10,
-                      fontSize: 12,
-                      color: MUTED,
+                      alignItems: 'center',
+                      fontSize: 12.5,
                     }}
                   >
-                    <span>{field.l}</span>
-                    <span
-                      style={{
-                        fontFamily: 'ui-monospace, monospace',
-                        fontSize: 11.5,
-                        overflowWrap: 'anywhere',
-                      }}
-                    >
-                      {field.v}
+                    <span style={{ color: MUTED }}>
+                      {field.l}
+                      {reqOn && 'req' in field && field.req === true && requiredMark}
                     </span>
+                    <InlineInput
+                      valueKey={`core_${field.l}`}
+                      defaultValue={field.v}
+                      negativeMargin
+                      {...selectProps}
+                    />
                   </div>
                 ))}
               </div>
+              <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${HAIRLINE}` }}>
+                <div
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    color: FAINT,
+                    marginBottom: 8,
+                  }}
+                >
+                  System
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {sysFields.map((field) => (
+                    <div
+                      key={field.l}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '125px 1fr',
+                        gap: 10,
+                        fontSize: 12,
+                        color: MUTED,
+                      }}
+                    >
+                      <span>{field.l}</span>
+                      <span
+                        style={{
+                          fontFamily: 'ui-monospace, monospace',
+                          fontSize: 11.5,
+                          overflowWrap: 'anywhere',
+                        }}
+                      >
+                        {field.v}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div
+              style={{
+                background: 'oklch(0.96 0.025 27)',
+                border: '1px solid oklch(0.9 0.04 27)',
+                borderRadius: 14,
+                padding: '14px 18px',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  color: RED,
+                  marginBottom: 4,
+                }}
+              >
+                Next deadline
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{nextDeadlineText}</div>
             </div>
           </div>
+
+          {/* Right column: case stage */}
           <div
             style={{
-              background: 'oklch(0.96 0.025 27)',
-              border: '1px solid oklch(0.9 0.04 27)',
+              background: '#fff',
+              border: `1px solid ${BORDER}`,
               borderRadius: 14,
-              padding: '14px 18px',
+              padding: '22px 24px',
+              boxShadow: '0 1px 2px rgba(16,24,40,0.04)',
+              minWidth: 0,
             }}
           >
             <div
               style={{
                 fontSize: 11,
                 fontWeight: 700,
-                letterSpacing: '0.06em',
+                letterSpacing: '0.08em',
                 textTransform: 'uppercase',
-                color: RED,
-                marginBottom: 4,
+                color: MUTED,
+                marginBottom: 14,
               }}
             >
-              Next deadline
+              Case stage
             </div>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>
-              Aug 14, 2026 — Opposition to Motion to Compel
-            </div>
-          </div>
-        </div>
-
-        {/* Right column: case stage */}
-        <div
-          style={{
-            background: '#fff',
-            border: `1px solid ${BORDER}`,
-            borderRadius: 14,
-            padding: '22px 24px',
-            boxShadow: '0 1px 2px rgba(16,24,40,0.04)',
-            minWidth: 0,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: MUTED,
-              marginBottom: 14,
-            }}
-          >
-            Case stage
-          </div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(200px, 240px) minmax(0, 1fr)',
-              gap: 24,
-              alignItems: 'start',
-            }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {STAGE_META.map((stage, index) => {
-                const done = index < currentIndex;
-                const inProgress = index === currentIndex;
-                const active = activeStage === stage.id;
-                return (
-                  <button
-                    key={stage.id}
-                    type="button"
-                    onClick={() => setSelectedStage(stage.id)}
-                    className="hover:bg-[#f4f5f8]"
-                    style={{
-                      display: 'flex',
-                      gap: 12,
-                      cursor: 'pointer',
-                      padding: '10px 12px',
-                      borderRadius: 10,
-                      background: active ? 'oklch(0.97 0.012 262)' : 'transparent',
-                      border: 'none',
-                      textAlign: 'left',
-                      font: 'inherit',
-                    }}
-                  >
-                    <div
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(200px, 240px) minmax(0, 1fr)',
+                gap: 24,
+                alignItems: 'start',
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {stages.map((stage, index) => {
+                  const done = index < currentIndex;
+                  const inProgress = index === currentIndex;
+                  const active = activeStage === stage.id;
+                  return (
+                    <button
+                      key={stage.id}
+                      type="button"
+                      onClick={() => setSelectedStage(stage.id)}
+                      className="hover:bg-[#f4f5f8]"
                       style={{
                         display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: 4,
+                        gap: 12,
+                        cursor: 'pointer',
+                        padding: '10px 12px',
+                        borderRadius: 10,
+                        background: active ? 'oklch(0.97 0.012 262)' : 'transparent',
+                        border: 'none',
+                        textAlign: 'left',
+                        font: 'inherit',
                       }}
                     >
-                      <span
+                      <div
                         style={{
-                          width: 22,
-                          height: 22,
-                          borderRadius: 99,
                           display: 'flex',
+                          flexDirection: 'column',
                           alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 11,
-                          fontWeight: 700,
-                          background: done ? INK : inProgress ? ACCENT : '#d6dae2',
-                          color: done || inProgress ? '#fff' : BODY,
-                          flexShrink: 0,
+                          gap: 4,
                         }}
                       >
-                        {done ? '✓' : String(index + 1)}
-                      </span>
-                      <span
-                        style={{
-                          width: 2,
-                          flex: 1,
-                          background: done ? INK : BORDER,
-                          borderRadius: 2,
-                          minHeight: 14,
-                        }}
-                      />
-                    </div>
-                    <div style={{ paddingBottom: 10 }}>
-                      <div
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 600,
-                          color: done || inProgress ? INK : MUTED,
-                        }}
-                      >
-                        {stage.label}
+                        <span
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: 99,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            background: done ? INK : inProgress ? ACCENT : '#d6dae2',
+                            color: done || inProgress ? '#fff' : BODY,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {done ? '✓' : String(index + 1)}
+                        </span>
+                        <span
+                          style={{
+                            width: 2,
+                            flex: 1,
+                            background: done ? INK : BORDER,
+                            borderRadius: 2,
+                            minHeight: 14,
+                          }}
+                        />
                       </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: inProgress ? ACCENT : MUTED,
-                        }}
-                      >
-                        {done ? 'Completed' : inProgress ? 'In progress' : 'Upcoming'}
+                      <div style={{ paddingBottom: 10 }}>
+                        <div
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: done || inProgress ? INK : MUTED,
+                          }}
+                        >
+                          {stage.label}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: inProgress ? ACCENT : MUTED,
+                          }}
+                        >
+                          {done ? 'Completed' : inProgress ? 'In progress' : 'Upcoming'}
+                        </div>
+                        <div style={{ fontSize: 12, color: MUTED }}>{stage.dates}</div>
+                        <div style={{ fontSize: 12, color: BODY, marginTop: 3 }}>
+                          {stage.summary}
+                        </div>
                       </div>
-                      <div style={{ fontSize: 12, color: MUTED }}>{stage.dates}</div>
-                      <div style={{ fontSize: 12, color: BODY, marginTop: 3 }}>{stage.summary}</div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            <div style={{ borderLeft: `1px solid ${BORDER}`, paddingLeft: 24, minHeight: 420 }}>
-              {activeStage === 'pleading' && <PleadingPane {...selectProps} />}
-              {activeStage === 'discovery' && <DiscoveryPane {...selectProps} />}
-              {activeStage === 'trial' && <TrialPane {...selectProps} />}
-              {activeStage === 'post' && <PostJudgmentPane {...selectProps} />}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ borderLeft: `1px solid ${BORDER}`, paddingLeft: 24, minHeight: 420 }}>
+                {activeStage === 'pleading' && (
+                  <PleadingPane data={matter?.pleading} {...selectProps} />
+                )}
+                {activeStage === 'discovery' && (
+                  <DiscoveryPane data={matter?.discovery} {...selectProps} />
+                )}
+                {activeStage === 'trial' && <TrialPane data={matter?.trial} {...selectProps} />}
+                {activeStage === 'post' && (
+                  <PostJudgmentPane data={matter?.postJudgment} {...selectProps} />
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -678,16 +859,229 @@ export const MatterDashboardView = memo(function MatterDashboardView({
   );
 });
 
+interface ProposalReviewPanelProps {
+  proposal: MatterProposalDto;
+  matter: MatterDto | null;
+  acting: boolean;
+  onApprove: () => Promise<void>;
+  onReject: (reason?: string) => Promise<void>;
+}
+
+function describeDiffValue(value: unknown): string {
+  if (value === undefined || value === null || value === '') return '—';
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => describeDiffValue(item)).join('; ');
+  }
+  if (typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>)
+      .filter((entry) => typeof entry === 'string' && entry.trim())
+      .join(' · ');
+  }
+  return String(value);
+}
+
+function buildSectionDiffRows(
+  sectionKey: keyof MatterChanges,
+  proposed: unknown,
+  current: unknown
+): { label: string; before: string; after: string }[] {
+  if (Array.isArray(proposed)) {
+    return [
+      {
+        label: `${SECTION_LABELS[sectionKey]} (replaces list)`,
+        before: describeDiffValue(current),
+        after: describeDiffValue(proposed),
+      },
+    ];
+  }
+  if (proposed !== null && typeof proposed === 'object') {
+    const currentRecord =
+      current !== null && typeof current === 'object' ? (current as Record<string, unknown>) : {};
+    return Object.entries(proposed as Record<string, unknown>).map(([key, value]) => ({
+      label: `${SECTION_LABELS[sectionKey]} · ${key}`,
+      before: describeDiffValue(currentRecord[key]),
+      after: describeDiffValue(value),
+    }));
+  }
+  return [
+    {
+      label: SECTION_LABELS[sectionKey],
+      before: describeDiffValue(current),
+      after: describeDiffValue(proposed),
+    },
+  ];
+}
+
+const ProposalReviewPanel = ({
+  proposal,
+  matter,
+  acting,
+  onApprove,
+  onReject,
+}: ProposalReviewPanelProps): React.JSX.Element => {
+  const [reason, setReason] = useState('');
+
+  const diffRows = useMemo(() => {
+    const currentRecord = (matter ?? {}) as Record<string, unknown>;
+    return (Object.keys(proposal.changes) as (keyof MatterChanges)[]).flatMap((sectionKey) =>
+      buildSectionDiffRows(sectionKey, proposal.changes[sectionKey], currentRecord[sectionKey])
+    );
+  }, [proposal, matter]);
+
+  return (
+    <div
+      style={{
+        background: 'oklch(0.97 0.02 262)',
+        border: '1px solid oklch(0.88 0.05 262)',
+        borderRadius: 14,
+        padding: '16px 20px',
+        marginBottom: 20,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          gap: 10,
+          flexWrap: 'wrap',
+          marginBottom: 8,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            color: ACCENT_DARK,
+          }}
+        >
+          Proposed dashboard update — awaiting your review
+        </span>
+        <span style={{ fontSize: 12, color: MUTED }}>
+          by @{proposal.proposedBy} · {proposal.proposedAt}
+        </span>
+      </div>
+      <ul style={{ margin: '0 0 10px', paddingLeft: 18 }}>
+        {proposal.summary.map((line, index) => (
+          <li key={index} style={{ fontSize: 13, lineHeight: 1.5 }}>
+            {line}
+          </li>
+        ))}
+      </ul>
+      {proposal.taskRefs && proposal.taskRefs.length > 0 && (
+        <div style={{ fontSize: 12, color: MUTED, marginBottom: 10 }}>
+          From tasks: {proposal.taskRefs.map((taskId) => `#${taskId.slice(0, 8)}`).join(', ')}
+        </div>
+      )}
+      <div
+        style={{
+          background: '#fff',
+          border: `1px solid ${BORDER}`,
+          borderRadius: 10,
+          padding: '10px 14px',
+          marginBottom: 12,
+          maxHeight: 260,
+          overflowY: 'auto',
+        }}
+      >
+        {diffRows.map((row, index) => (
+          <div
+            key={index}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(140px, 220px) 1fr',
+              gap: 10,
+              padding: '4px 0',
+              borderBottom: index < diffRows.length - 1 ? `1px solid ${HAIRLINE}` : undefined,
+              fontSize: 12.5,
+            }}
+          >
+            <span style={{ color: MUTED }}>{row.label}</span>
+            <span style={{ overflowWrap: 'anywhere' }}>
+              {row.before !== row.after && (
+                <span style={{ color: FAINT, textDecoration: 'line-through', marginRight: 8 }}>
+                  {row.before}
+                </span>
+              )}
+              <span style={{ fontWeight: 600 }}>{row.after}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          disabled={acting}
+          onClick={() => void onApprove()}
+          style={{
+            font: 'inherit',
+            fontSize: 12.5,
+            fontWeight: 700,
+            color: '#fff',
+            background: acting ? '#a9b3c9' : ACCENT,
+            border: 'none',
+            borderRadius: 8,
+            padding: '6px 14px',
+            cursor: acting ? 'default' : 'pointer',
+          }}
+        >
+          Approve &amp; update
+        </button>
+        <button
+          type="button"
+          disabled={acting}
+          onClick={() => void onReject(reason.trim() || undefined)}
+          style={{
+            font: 'inherit',
+            fontSize: 12.5,
+            fontWeight: 700,
+            color: RED,
+            background: '#fff',
+            border: '1px solid oklch(0.85 0.06 27)',
+            borderRadius: 8,
+            padding: '6px 14px',
+            cursor: acting ? 'default' : 'pointer',
+          }}
+        >
+          Reject
+        </button>
+        <input
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Rejection reason (sent to the lead)"
+          style={{
+            font: 'inherit',
+            fontSize: 12.5,
+            padding: '5px 10px',
+            borderRadius: 8,
+            border: '1px solid #d6dae2',
+            flex: 1,
+            minWidth: 220,
+          }}
+        />
+      </div>
+    </div>
+  );
+};
+
 interface PaneProps {
   vals: Vals;
   setVal: SetVal;
 }
 
-const PleadingPane = ({ vals, setVal }: PaneProps): React.JSX.Element => (
+const PleadingPane = ({
+  data,
+  vals,
+  setVal,
+}: PaneProps & { data?: MatterPleadingDto }): React.JSX.Element => (
   <div>
     <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>
       Pleading{' '}
-      <span style={{ fontWeight: 500, color: MUTED, fontSize: 13 }}>· completed Jun 2025</span>
+      <span style={{ fontWeight: 500, color: MUTED, fontSize: 13 }}>
+        · {data?.statusNote ?? 'completed Jun 2025'}
+      </span>
     </div>
     <div
       style={{
@@ -703,14 +1097,14 @@ const PleadingPane = ({ vals, setVal }: PaneProps): React.JSX.Element => (
           className="hover:underline"
           style={{ fontSize: 13.5, fontWeight: 500, color: ACCENT }}
         >
-          First Amended Complaint
+          {data?.operativePleading ?? 'First Amended Complaint'}
         </span>
       </div>
       <div>
         <FieldLabel>Pleading type</FieldLabel>
         <ToneSelect
           valueKey="plead_type"
-          defaultValue="Complaint"
+          defaultValue={data?.pleadingType ?? 'Complaint'}
           options={['Complaint', 'Answer', 'Cross-Complaint', 'Petition', 'Response', 'Other']}
           plain
           vals={vals}
@@ -719,24 +1113,66 @@ const PleadingPane = ({ vals, setVal }: PaneProps): React.JSX.Element => (
       </div>
       <div>
         <FieldLabel>Amendment deadline</FieldLabel>
-        <div style={{ fontSize: 13.5, fontWeight: 500 }}>Jun 30, 2025 — passed</div>
+        <div style={{ fontSize: 13.5, fontWeight: 500 }}>
+          {data?.amendmentDeadline ?? 'Jun 30, 2025 — passed'}
+        </div>
       </div>
     </div>
     <FieldLabel>Causes of action / affirmative defenses</FieldLabel>
     <div style={{ fontSize: 13.5, lineHeight: 1.55, maxWidth: 760 }}>
-      Breach of contract and negligence against Meridian Logistics. Answer filed Jun 9, 2025
-      asserting 14 affirmative defenses, including statute of limitations and comparative fault.
+      {data?.causesOfAction ??
+        'Breach of contract and negligence against Meridian Logistics. Answer filed Jun 9, 2025 asserting 14 affirmative defenses, including statute of limitations and comparative fault.'}
     </div>
   </div>
 );
 
-const DiscoveryPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
+const DiscoveryPane = ({
+  data,
+  vals,
+  setVal,
+}: PaneProps & { data?: MatterDiscoveryDto }): React.JSX.Element => {
   const selectProps = { vals, setVal };
+  const requests: readonly RequestRow[] = data?.requests?.length
+    ? data.requests.map((request, index) => ({
+        k: `r${index + 1}`,
+        type: request.type,
+        set: request.set ?? '—',
+        parties: request.parties ?? '—',
+        served: request.served ?? '—',
+        due: request.due ?? '—',
+        status: request.status ?? 'Draft',
+      }))
+    : DEMO_REQUESTS;
+  const productions: readonly ProductionRow[] = data?.productions?.length
+    ? data.productions.map((production, index) => ({
+        k: `p${index + 1}`,
+        type: production.type,
+        bates: production.bates ?? '—',
+        date: production.date ?? '—',
+      }))
+    : DEMO_PRODUCTIONS;
+  const depositions: readonly DepositionRow[] = data?.depositions?.length
+    ? data.depositions.map((deposition, index) => ({
+        k: `d${index + 1}`,
+        name: deposition.name,
+        taken: deposition.taken ?? '—',
+        review: deposition.review ?? 'Not Started',
+        note: deposition.note ?? '',
+        noteColor: RED,
+      }))
+    : DEMO_DEPOSITIONS;
+  const motion = data?.pendingMotion;
+  const motionFields = DEMO_MOTION_TEXT_FIELDS.map((field) => {
+    const liveValue = motion?.[MOTION_FIELD_KEYS[field.k]];
+    return liveValue !== undefined ? { ...field, v: liveValue } : field;
+  });
   return (
     <div>
       <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>
         Discovery{' '}
-        <span style={{ fontWeight: 500, color: ACCENT, fontSize: 13 }}>· in progress</span>
+        <span style={{ fontWeight: 500, color: ACCENT, fontSize: 13 }}>
+          · {data?.statusNote ?? 'in progress'}
+        </span>
       </div>
       <div
         style={{
@@ -780,7 +1216,7 @@ const DiscoveryPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
           <span>Resp. due</span>
           <span>Status</span>
         </div>
-        {REQUESTS.map((request) => (
+        {requests.map((request) => (
           <div
             key={request.k}
             style={{
@@ -822,13 +1258,13 @@ const DiscoveryPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px' }}>
-          <PanelTitle>Meet &amp; confer · Jun 3, 2026</PanelTitle>
+          <PanelTitle>Meet &amp; confer · {data?.meetConfer?.date ?? 'Jun 3, 2026'}</PanelTitle>
           <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
             <div>
               <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>Method</div>
               <ToneSelect
                 valueKey="mc_method"
-                defaultValue="Videoconference"
+                defaultValue={data?.meetConfer?.method ?? 'Videoconference'}
                 options={['Letter', 'Email', 'Telephone', 'Videoconference', 'In Person', 'Other']}
                 plain
                 small
@@ -839,7 +1275,7 @@ const DiscoveryPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
               <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>Outcome</div>
               <ToneSelect
                 valueKey="mc_outcome"
-                defaultValue="Unresolved"
+                defaultValue={data?.meetConfer?.outcome ?? 'Unresolved'}
                 options={[
                   'Resolved',
                   'Partially Resolved',
@@ -853,11 +1289,15 @@ const DiscoveryPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
             </div>
           </div>
           <div style={{ fontSize: 12.5, lineHeight: 1.5, color: BODY }}>
-            Privilege and completeness objections re{' '}
-            <span className="hover:underline" style={{ color: ACCENT }}>
-              Special Interrogatories — Set Two
-            </span>
-            . Next step: motion to compel; deadline reserved.
+            {data?.meetConfer?.notes ?? (
+              <>
+                Privilege and completeness objections re{' '}
+                <span className="hover:underline" style={{ color: ACCENT }}>
+                  Special Interrogatories — Set Two
+                </span>
+                . Next step: motion to compel; deadline reserved.
+              </>
+            )}
           </div>
         </div>
         <div
@@ -881,7 +1321,7 @@ const DiscoveryPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
             Pending motion
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {MOTION_TEXT_FIELDS.map((field) => (
+            {motionFields.map((field) => (
               <div
                 key={field.k}
                 style={{
@@ -915,7 +1355,7 @@ const DiscoveryPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
               <span>
                 <ToneSelect
                   valueKey="mo_outcome"
-                  defaultValue="Pending"
+                  defaultValue={motion?.outcome ?? 'Pending'}
                   options={MOTION_OUTCOMES}
                   small
                   {...selectProps}
@@ -927,7 +1367,7 @@ const DiscoveryPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
         <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px' }}>
           <PanelTitle>Productions</PanelTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {PRODUCTIONS.map((production) => (
+            {productions.map((production) => (
               <div
                 key={production.k}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5 }}
@@ -949,7 +1389,7 @@ const DiscoveryPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
         <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px' }}>
           <PanelTitle>Depositions</PanelTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {DEPOSITIONS.map((deposition) => (
+            {depositions.map((deposition) => (
               <div
                 key={deposition.k}
                 style={{
@@ -979,12 +1419,45 @@ const DiscoveryPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
   );
 };
 
-const TrialPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
+const TrialPane = ({
+  data,
+  vals,
+  setVal,
+}: PaneProps & { data?: MatterTrialDto }): React.JSX.Element => {
   const selectProps = { vals, setVal };
+  const pretrial: readonly PretrialRow[] = data?.pretrialDeadlines?.length
+    ? data.pretrialDeadlines.map((deadline, index) => ({
+        k: `pt${index + 1}`,
+        t: deadline.title,
+        d: deadline.due ?? '—',
+        src: deadline.source ?? '—',
+        s: deadline.status ?? 'Not Started',
+      }))
+    : DEMO_PRETRIAL;
+  const witnesses: readonly WitnessRow[] = data?.witnesses?.length
+    ? data.witnesses.map((witness, index) => ({
+        k: `w${index + 1}`,
+        name: witness.name,
+        role: witness.role ?? 'Fact',
+        party: witness.party ?? '—',
+        avail: witness.availability ?? 'Unknown',
+      }))
+    : DEMO_WITNESSES;
+  const exhibits: readonly ExhibitRow[] = data?.exhibits?.length
+    ? data.exhibits.map((exhibit, index) => ({
+        k: `x${index + 1}`,
+        num: exhibit.number,
+        title: exhibit.title,
+        adm: exhibit.admission ?? 'Proposed',
+      }))
+    : DEMO_EXHIBITS;
   return (
     <div>
       <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>
-        Trial <span style={{ fontWeight: 500, color: MUTED, fontSize: 13 }}>· upcoming</span>
+        Trial{' '}
+        <span style={{ fontWeight: 500, color: MUTED, fontSize: 13 }}>
+          · {data?.statusNote ?? 'upcoming'}
+        </span>
       </div>
       <div
         style={{
@@ -996,13 +1469,13 @@ const TrialPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
       >
         <div>
           <FieldLabel>Trial date</FieldLabel>
-          <div style={{ fontSize: 13.5, fontWeight: 600 }}>Feb 8, 2027</div>
+          <div style={{ fontSize: 13.5, fontWeight: 600 }}>{data?.trialDate ?? 'Feb 8, 2027'}</div>
         </div>
         <div>
           <FieldLabel>Trial type</FieldLabel>
           <ToneSelect
             valueKey="trial_type"
-            defaultValue="Jury Trial"
+            defaultValue={data?.trialType ?? 'Jury Trial'}
             options={['Court Trial', 'Jury Trial']}
             plain
             {...selectProps}
@@ -1010,13 +1483,15 @@ const TrialPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
         </div>
         <div>
           <FieldLabel>Estimated duration</FieldLabel>
-          <div style={{ fontSize: 13.5, fontWeight: 500 }}>7 days</div>
+          <div style={{ fontSize: 13.5, fontWeight: 500 }}>
+            {data?.estimatedDuration ?? '7 days'}
+          </div>
         </div>
         <div>
           <FieldLabel>Setting status</FieldLabel>
           <ToneSelect
             valueKey="trial_status"
-            defaultValue="Set"
+            defaultValue={data?.settingStatus ?? 'Set'}
             options={['Set', 'Confirmed', 'Continued', 'Vacated', 'Completed']}
             {...selectProps}
           />
@@ -1042,7 +1517,7 @@ const TrialPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
           marginBottom: 16,
         }}
       >
-        {PRETRIAL.map((deadline) => (
+        {pretrial.map((deadline) => (
           <div
             key={deadline.k}
             style={{
@@ -1075,7 +1550,7 @@ const TrialPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
         <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px' }}>
           <PanelTitle>Witnesses</PanelTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {WITNESSES.map((witness) => (
+            {witnesses.map((witness) => (
               <div
                 key={witness.k}
                 style={{
@@ -1110,7 +1585,7 @@ const TrialPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
         <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px' }}>
           <PanelTitle>Exhibits</PanelTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {EXHIBITS.map((exhibit) => (
+            {exhibits.map((exhibit) => (
               <div
                 key={exhibit.k}
                 style={{
@@ -1136,21 +1611,29 @@ const TrialPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
         </div>
       </div>
       <div style={{ fontSize: 12.5, color: MUTED }}>
-        Continuances: none · Motions in limine, trial sessions, verdict and post-trial motions
-        populate once trial begins.
+        {data?.continuancesNote ??
+          'Continuances: none · Motions in limine, trial sessions, verdict and post-trial motions populate once trial begins.'}
       </div>
     </div>
   );
 };
 
-const PostJudgmentPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
+const PostJudgmentPane = ({
+  data,
+  vals,
+  setVal,
+}: PaneProps & { data?: MatterPostJudgmentDto }): React.JSX.Element => {
   const selectProps = { vals, setVal };
   const placeholder = <div style={{ fontSize: 13.5, fontWeight: 500, color: FAINT }}>—</div>;
+  const textOrPlaceholder = (value?: string): React.JSX.Element =>
+    value ? <div style={{ fontSize: 13.5, fontWeight: 500 }}>{value}</div> : placeholder;
   return (
     <div>
       <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>
         Post-Judgment Enforcement{' '}
-        <span style={{ fontWeight: 500, color: MUTED, fontSize: 13 }}>· not started</span>
+        <span style={{ fontWeight: 500, color: MUTED, fontSize: 13 }}>
+          · {data?.statusNote ?? 'not started'}
+        </span>
       </div>
       <div
         style={{
@@ -1164,7 +1647,7 @@ const PostJudgmentPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
           <FieldLabel>Judgment status</FieldLabel>
           <ToneSelect
             valueKey="pj_judgment"
-            defaultValue="None"
+            defaultValue={data?.judgmentStatus ?? 'None'}
             options={['None', 'Entered', 'Stayed', 'Satisfied', 'Vacated', 'On Appeal']}
             plain
             {...selectProps}
@@ -1172,17 +1655,17 @@ const PostJudgmentPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
         </div>
         <div>
           <FieldLabel>Judgment date</FieldLabel>
-          {placeholder}
+          {textOrPlaceholder(data?.judgmentDate)}
         </div>
         <div>
           <FieldLabel>Judgment amount</FieldLabel>
-          {placeholder}
+          {textOrPlaceholder(data?.judgmentAmount)}
         </div>
         <div>
           <FieldLabel>Enforcement status</FieldLabel>
           <ToneSelect
             valueKey="pj_enforce"
-            defaultValue="Not Started"
+            defaultValue={data?.enforcementStatus ?? 'Not Started'}
             options={[
               'Not Started',
               'Investigating Assets',
@@ -1197,11 +1680,11 @@ const PostJudgmentPane = ({ vals, setVal }: PaneProps): React.JSX.Element => {
         </div>
         <div>
           <FieldLabel>Enforcement deadline</FieldLabel>
-          {placeholder}
+          {textOrPlaceholder(data?.enforcementDeadline)}
         </div>
         <div>
           <FieldLabel>Enforcement actions</FieldLabel>
-          {placeholder}
+          {textOrPlaceholder(data?.enforcementActions)}
         </div>
       </div>
       <div style={{ fontSize: 12.5, color: MUTED }}>

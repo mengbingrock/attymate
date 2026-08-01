@@ -2,6 +2,7 @@ import { createAppCloseCoordinationBridge } from '@features/app-close-coordinati
 import { createCodexAccountBridge } from '@features/codex-account/preload';
 import { createCodexRuntimeInstallerBridge } from '@features/codex-runtime-installer/preload';
 import { createInteractiveTeamRuntimeBridge } from '@features/interactive-team-runtime/preload';
+import { createMatterBridge } from '@features/matter-dashboard/preload';
 import { createMemberLogStreamBridge } from '@features/member-log-stream/preload';
 import { createMemberWorkSyncBridge } from '@features/member-work-sync/preload';
 import { createOrganizationsBridge } from '@features/organizations/preload';
@@ -600,6 +601,7 @@ const electronAPI: ElectronAPI = {
   terminalWorkspace: createTerminalWorkspaceBridge(ipcRenderer),
   interactiveTeamRuntime: createInteractiveTeamRuntimeBridge(ipcRenderer),
   tokenUsage: createTokenUsageBridge(ipcRenderer),
+  matter: createMatterBridge(ipcRenderer),
   telemetry: {
     getSentryContext: () => ipcRenderer.invoke(TELEMETRY_GET_SENTRY_CONTEXT),
     getSentryStatus: () => ipcRenderer.invoke(TELEMETRY_GET_SENTRY_STATUS),

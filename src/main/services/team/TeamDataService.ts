@@ -450,6 +450,8 @@ export class TeamDataService {
   private processHealthTeams = new Set<string>();
   /** Tracks notified task-start transitions to avoid duplicate lead notifications. */
   private notifiedTaskStarts = new Set<string>();
+  /** Tracks notified job wrap-up completions to avoid duplicate matter-dashboard nudges. */
+  private notifiedJobWrapUps = new Set<string>();
   private taskCommentNotificationInitialization: Promise<void> | null = null;
   private taskCommentNotificationProcessInFlight = new Map<string, Promise<void>>();
   private taskCommentNotificationActiveProcess = new Map<string, string | undefined>();
@@ -2396,6 +2398,128 @@ export class TeamDataService {
       });
     } catch (error) {
       logger.warn(`[TeamDataService] notifyLeadOnTeammateTaskStart failed: ${String(error)}`);
+    }
+  }
+
+  /**
+   * Called when a task file changes on disk. When the change is a terminal
+   * completed transition AND it leaves the board with no remaining active
+   * tasks, nudges the lead once to compile a matter dashboard update proposal.
+   *
+   * Deliberately NOT per-task: the matter dashboard is updated in batches —
+   * after a related series of tasks (a job) wraps up — through the
+   * matter_propose → user-confirm flow. This board-quiet gate is a backstop
+   * heuristic; on boards with long-lived unrelated open tasks it may never
+   * fire, and the standing lead-prompt instruction remains the primary driver.
+   */
+  async notifyLeadOnJobWrapUp(teamName: string, taskId: string): Promise<void> {
+    try {
+      const tasks = await this.taskReader.getTasks(teamName);
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
+
+      const events = task.historyEvents;
+      if (!Array.isArray(events) || events.length === 0) return;
+
+      const last = events[events.length - 1];
+      // Any actor counts (lead, teammate, or manual UI completion) — every
+      // completion can change matter state.
+      if (last.type !== 'status_changed' || last.to !== 'completed') return;
+
+      // Dedup: only nudge once per unique transition (keyed by team+task+timestamp).
+      const dedupKey = `${teamName}:${taskId}:${last.timestamp}`;
+      if (this.notifiedJobWrapUps.has(dedupKey)) return;
+      this.notifiedJobWrapUps.add(dedupKey);
+      // Prevent unbounded growth in long-running sessions.
+      if (this.notifiedJobWrapUps.size > 500) {
+        const first = this.notifiedJobWrapUps.values().next().value!;
+        this.notifiedJobWrapUps.delete(first);
+      }
+
+      // Board-quiet gate: while any other task is still active the job is
+      // still running, so stay silent.
+      const hasActiveTasks = tasks.some(
+        (t) => t.id !== taskId && (t.status === 'pending' || t.status === 'in_progress')
+      );
+      if (hasActiveTasks) return;
+
+      const leadName = await this.resolveLeadName(teamName);
+      const parts = [
+        `All tasks are complete (last: ${this.getTaskLabel(task)} "${task.subject}").`,
+        `Compile what this work changed about the case and propose a matter dashboard update for the user to review.`,
+        '',
+        wrapAgentBlock(
+          [
+            `Derive the change list from the completed tasks' comments and results — grounded facts only, never invented; leave unknown fields absent.`,
+            `First read the current dashboard state and section schema:`,
+            `matter_get { teamName: "${teamName}" }`,
+            `Then submit the proposal with only the changed sections:`,
+            `matter_propose { teamName: "${teamName}", summary: ["<what changed>", ...], changes: { <changed sections> }, taskRefs: ["<taskId>", ...] }`,
+            `The user approves or rejects the proposal in the dashboard; do not re-propose unless it is rejected or new facts emerge.`,
+          ].join('\n')
+        ),
+      ];
+      await this.sendMessage(teamName, {
+        member: leadName,
+        from: 'system',
+        text: parts.join('\n'),
+        summary: 'All tasks complete — propose a matter dashboard update',
+        source: 'system_notification',
+      });
+    } catch (error) {
+      logger.warn(`[TeamDataService] notifyLeadOnJobWrapUp failed: ${String(error)}`);
+    }
+  }
+
+  /**
+   * Applies the pending matter dashboard proposal (user approval action from
+   * the dashboard UI) and notifies the lead. The controller merge is the only
+   * writer of matter.json.
+   */
+  async applyMatterProposal(teamName: string): Promise<void> {
+    this.getController(teamName).matter.applyProposal('user');
+    try {
+      const leadName = await this.resolveLeadName(teamName);
+      await this.sendMessage(teamName, {
+        member: leadName,
+        from: 'user',
+        text: 'User approved your matter dashboard update — it is now live on the dashboard.',
+        summary: 'Matter dashboard update approved',
+        source: 'system_notification',
+      });
+    } catch (error) {
+      logger.warn(`[TeamDataService] matter approval notify failed: ${String(error)}`);
+    }
+  }
+
+  /**
+   * Rejects the pending matter dashboard proposal (user action from the
+   * dashboard UI) and sends the reason to the lead so it can revise and
+   * re-propose.
+   */
+  async rejectMatterProposal(teamName: string, reason?: string): Promise<void> {
+    this.getController(teamName).matter.rejectProposal();
+    try {
+      const leadName = await this.resolveLeadName(teamName);
+      const trimmedReason = reason?.trim();
+      const parts = [
+        trimmedReason
+          ? `User rejected the matter dashboard proposal: ${trimmedReason}`
+          : 'User rejected the matter dashboard proposal.',
+        '',
+        wrapAgentBlock(
+          'Revise the proposal per the rejection reason and re-propose with matter_propose (grounded facts only; re-proposing replaces the previous pending proposal). Do not apply anything yourself.'
+        ),
+      ];
+      await this.sendMessage(teamName, {
+        member: leadName,
+        from: 'user',
+        text: parts.join('\n'),
+        summary: 'Matter dashboard proposal rejected',
+        source: 'system_notification',
+      });
+    } catch (error) {
+      logger.warn(`[TeamDataService] matter rejection notify failed: ${String(error)}`);
     }
   }
 

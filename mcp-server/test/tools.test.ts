@@ -2517,4 +2517,71 @@ describe('agent-teams-mcp tools', () => {
     ).rejects.toThrow(expected);
     await expect(getTool('task_list').execute(params)).rejects.toThrow(expected);
   });
+
+  describe('matter dashboard tools', () => {
+    it('validates matter_propose schema: summary required, unknown sections rejected', () => {
+      const propose = getTool('matter_propose');
+      expect(
+        propose.parameters?.safeParse({
+          teamName: 'alpha',
+          summary: ['Motion to compel filed Jul 10, 2026'],
+          changes: { discovery: { pendingMotion: { filed: 'Jul 10, 2026' } } },
+        }).success
+      ).toBe(true);
+      expect(
+        propose.parameters?.safeParse({
+          teamName: 'alpha',
+          summary: [],
+          changes: { caption: 'X v. Y' },
+        }).success
+      ).toBe(false);
+      expect(
+        propose.parameters?.safeParse({
+          teamName: 'alpha',
+          summary: ['x'],
+          changes: { madeUpSection: { anything: true } },
+        }).success
+      ).toBe(false);
+    });
+
+    it('records a pending proposal for user review and exposes it via matter_get', async () => {
+      const claudeDir = makeClaudeDir();
+      writeTeamConfig(claudeDir, 'alpha', {
+        members: [{ name: 'team-lead', agentType: 'team-lead' }],
+      });
+
+      const proposeResult = parseJsonToolResult(
+        await getTool('matter_propose').execute({
+          claudeDir,
+          teamName: 'alpha',
+          from: 'team-lead',
+          summary: ['Motion to compel filed Jul 10, 2026'],
+          changes: { discovery: { pendingMotion: { filed: 'Jul 10, 2026' } } },
+          taskRefs: ['task-1'],
+        })
+      );
+      expect(proposeResult.submitted).toBe(true);
+      expect(proposeResult.pendingUserReview).toBe(true);
+      expect(proposeResult.proposal.proposedBy).toBe('team-lead');
+
+      const proposalFile = path.join(claudeDir, 'teams', 'alpha', 'matter-proposal.json');
+      expect(fs.existsSync(proposalFile)).toBe(true);
+      // matter.json is only written on user approval — never by the agent tools.
+      expect(fs.existsSync(path.join(claudeDir, 'teams', 'alpha', 'matter.json'))).toBe(false);
+
+      const getResult = parseJsonToolResult(
+        await getTool('matter_get').execute({ claudeDir, teamName: 'alpha' })
+      );
+      expect(getResult.matter).toBeNull();
+      expect(getResult.pendingProposal.summary).toEqual(['Motion to compel filed Jul 10, 2026']);
+      expect(getResult.sectionReference).toContain('matter_propose');
+    });
+
+    it('fails closed when the team config does not exist', async () => {
+      const claudeDir = makeClaudeDir();
+      await expect(getTool('matter_get').execute({ claudeDir, teamName: 'ghost' })).rejects.toThrow(
+        'Unknown team "ghost". Board tools require an existing configured team with config.json.'
+      );
+    });
+  });
 });

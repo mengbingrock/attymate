@@ -8,6 +8,7 @@ const { AGENT_TEAMS_MCP_TOOL_GROUPS, AGENT_TEAMS_REGISTERED_TOOL_NAMES } =
 import { registerCrossTeamTools } from './crossTeamTools';
 import { registerKanbanTools } from './kanbanTools';
 import { registerLeadTools } from './leadTools';
+import { registerMatterTools } from './matterTools';
 import { registerMessageTools } from './messageTools';
 import { registerProcessTools } from './processTools';
 import { registerReviewTools } from './reviewTools';
@@ -27,6 +28,7 @@ const REGISTRATION_BY_GROUP = {
   runtime: registerRuntimeTools,
   workSync: registerWorkSyncTools,
   crossTeam: registerCrossTeamTools,
+  matter: registerMatterTools,
 } as const;
 
 export const AGENT_TEAMS_MCP_REGISTRATION_GROUPS = AGENT_TEAMS_MCP_TOOL_GROUPS.map((group) => ({

@@ -196,7 +196,7 @@ const PaneTabSlot = ({ tab, isActive, isPaneFocused }: PaneTabSlotProps): React.
           {tab.type === 'token-usage' && <TokenUsageDashboard initialTeamName={tab.teamName} />}
           {tab.type === 'matter' && (
             <div className="size-full overflow-auto p-4">
-              <MatterDashboardView />
+              <MatterDashboardView teamName={tab.teamName} />
             </div>
           )}
           {tab.type === 'graph' && (

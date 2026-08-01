@@ -320,7 +320,14 @@ export function buildStockClaudeBootstrapPrompt(
     'you spawned; they do not poll the task board or their inbox on their own. Assigning a task',
     '(task_create/task_set_owner with a teammate owner) does NOT start it. To make a teammate',
     'do work you MUST call the SendMessage tool (to: "<teammate>") with the task id and what to',
-    'do, then wait for their reply. After they report back, update the task status yourself.'
+    'do, then wait for their reply. After they report back, update the task status yourself.',
+    '',
+    'Matter dashboard (MANDATORY): do NOT update it per task. When a related series of tasks',
+    '(a job) is fully complete, call matter_get, compile what the completed work changed about',
+    'the case (derive it from task comments/results — grounded facts only, never invented),',
+    'then call matter_propose with a summary list and only the changed sections. The user',
+    'approves or rejects the proposal in the dashboard; nothing changes until approval. If',
+    'rejected, the reason arrives in your inbox — revise and re-propose.'
   );
   if (initialUserPrompt.trim()) {
     lines.push('', 'Once the team is assembled, start on this task:', '', initialUserPrompt.trim());
