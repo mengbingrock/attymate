@@ -490,6 +490,10 @@ const MATTER_DASHBOARD_RESPONSIVE_CSS = `
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
+  .matter-dashboard-discovery-secondary-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
   @container (max-width: 980px) {
     .matter-dashboard-main-grid {
       grid-template-columns: minmax(0, 1fr);
@@ -521,6 +525,10 @@ const MATTER_DASHBOARD_RESPONSIVE_CSS = `
     .matter-dashboard-pretrial-row,
     .matter-dashboard-trial-secondary-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .matter-dashboard-discovery-secondary-grid {
+      grid-template-columns: minmax(0, 1fr);
     }
 
     .matter-dashboard-pretrial-row {
@@ -1273,7 +1281,7 @@ const DiscoveryPane = ({
         style={{
           border: `1px solid ${BORDER}`,
           borderRadius: 10,
-          overflow: 'hidden',
+          overflowX: 'auto',
           marginBottom: 16,
         }}
       >
@@ -1281,6 +1289,7 @@ const DiscoveryPane = ({
           style={{
             display: 'grid',
             gridTemplateColumns: '1.5fr 1.5fr 1.4fr 0.9fr 0.9fr 1.2fr',
+            minWidth: 640,
             gap: 10,
             padding: '9px 14px',
             background: '#f7f8fa',
@@ -1305,6 +1314,7 @@ const DiscoveryPane = ({
             style={{
               display: 'grid',
               gridTemplateColumns: '1.5fr 1.5fr 1.4fr 0.9fr 0.9fr 1.2fr',
+              minWidth: 640,
               gap: 10,
               alignItems: 'center',
               padding: '8px 14px',
@@ -1339,8 +1349,18 @@ const DiscoveryPane = ({
           </div>
         ))}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px' }}>
+      <div
+        className="matter-dashboard-discovery-secondary-grid"
+        style={{ display: 'grid', gap: 14 }}
+      >
+        <div
+          style={{
+            border: `1px solid ${BORDER}`,
+            borderRadius: 10,
+            padding: '14px 16px',
+            minWidth: 0,
+          }}
+        >
           <PanelTitle>Meet &amp; confer · {data?.meetConfer?.date ?? 'Jun 3, 2026'}</PanelTitle>
           <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
             <div>
@@ -1389,6 +1409,7 @@ const DiscoveryPane = ({
             borderRadius: 10,
             background: 'oklch(0.985 0.008 27)',
             padding: '14px 16px',
+            minWidth: 0,
           }}
         >
           <div
@@ -1409,7 +1430,7 @@ const DiscoveryPane = ({
                 key={field.k}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '110px 1fr',
+                  gridTemplateColumns: '110px minmax(0, 1fr)',
                   gap: 8,
                   alignItems: 'center',
                   fontSize: 12.5,
@@ -1428,7 +1449,7 @@ const DiscoveryPane = ({
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: '110px 1fr',
+                gridTemplateColumns: '110px minmax(0, 1fr)',
                 gap: 8,
                 alignItems: 'center',
                 fontSize: 12.5,
@@ -1447,13 +1468,26 @@ const DiscoveryPane = ({
             </div>
           </div>
         </div>
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px' }}>
+        <div
+          style={{
+            border: `1px solid ${BORDER}`,
+            borderRadius: 10,
+            padding: '14px 16px',
+            minWidth: 0,
+          }}
+        >
           <PanelTitle>Productions</PanelTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {productions.map((production) => (
               <div
                 key={production.k}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5 }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  fontSize: 12.5,
+                  flexWrap: 'wrap',
+                }}
               >
                 <ToneSelect
                   valueKey={production.k}
@@ -1469,7 +1503,14 @@ const DiscoveryPane = ({
             ))}
           </div>
         </div>
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px' }}>
+        <div
+          style={{
+            border: `1px solid ${BORDER}`,
+            borderRadius: 10,
+            padding: '14px 16px',
+            minWidth: 0,
+          }}
+        >
           <PanelTitle>Depositions</PanelTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {depositions.map((deposition) => (
