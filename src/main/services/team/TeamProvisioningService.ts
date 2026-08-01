@@ -9,7 +9,10 @@ import {
   interactiveTeamRuntimeService,
   type CodexLaneSpec,
 } from '@features/interactive-team-runtime/main';
-import { isMatterEffectivelyEmpty } from '@features/matter-dashboard/main';
+import {
+  initializeMatterFileIfMissing,
+  isMatterEffectivelyEmpty,
+} from '@features/matter-dashboard/main';
 import { type RuntimeTurnSettledProvider } from '@features/member-work-sync/main';
 import { inspectOpenCodeLocalModelRuntimeReadiness } from '@features/runtime-provider-management/main';
 import {
@@ -12233,6 +12236,11 @@ export class TeamProvisioningService {
         const tasksDir = path.join(getTasksBasePath(), request.teamName);
         await fs.promises.mkdir(teamDir, { recursive: true });
         await fs.promises.mkdir(tasksDir, { recursive: true });
+        // Seed an empty matter file so the new team's Matter Dashboard starts
+        // blank instead of showing the demo fixture. createTeamConfig covers
+        // draft creation; this covers the default create+launch path, which
+        // never goes through createTeamConfig.
+        await initializeMatterFileIfMissing(getTeamsBasePath(), request.teamName);
         await this.teamMetaStore.writeMeta(request.teamName, {
           displayName: request.displayName,
           description: request.description,
