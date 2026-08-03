@@ -1,0 +1,30 @@
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+src = ["mcp_package", "scripts", "tests"]
+extend-exclude = [
+    ".git",
+    ".link-backups",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "build",
+    "dist",
+    "raw",
+    "wiki",
+]
+
+[tool.ruff.lint]
+select = [
+    "E4",
+    "E7",
+    "E9",
+    "F",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"link.py" = ["E402"]
+"serve.py" = ["E402", "E701", "F541"]
+"mcp_package/link_mcp/server.py" = ["E402"]
+"tests/*.py" = ["E402"]

@@ -30,10 +30,18 @@ describe('resolveLinkCommandInvocation', () => {
   });
 
   it('falls back to the installed lnk command', () => {
-    expect(resolveLinkCommandInvocation({})).toEqual({
+    expect(resolveLinkCommandInvocation({}, null)).toEqual({
       command: 'lnk',
       prefixArgs: [],
       displayName: 'lnk',
+    });
+  });
+
+  it('uses the packaged Link source before falling back to PATH', () => {
+    expect(resolveLinkCommandInvocation({}, '/resources/link/link.py')).toEqual({
+      command: 'python3',
+      prefixArgs: ['/resources/link/link.py'],
+      displayName: 'python3 /resources/link/link.py',
     });
   });
 });

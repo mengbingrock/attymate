@@ -69,15 +69,20 @@ or HTTP. The dashboard then offers explicit operations:
   sends it to the lead. The lead projects only grounded changes through the
   existing `matter_propose` review gate.
 
-Electron and browser clients use the same feature operations. Local AttyMate
-development automatically detects a sibling `../link/link.py` checkout and
-runs it through Python, so Link source changes are immediately testable without
-a Homebrew/global installation. Runtime selection order is:
+Electron and browser clients use the same feature operations. Link's
+MIT-licensed CLI runtime is vendored under `vendor/link` and included as an
+unpacked application resource. Local development and packaged builds prefer
+that source, so a separate Link clone or global installation is not required.
+Python 3.10+ must still be available. Runtime selection order is:
 
 1. `AGENT_TEAMS_LINK_COMMAND` — explicit executable override.
 2. `AGENT_TEAMS_LINK_SCRIPT` through `AGENT_TEAMS_LINK_PYTHON` (defaults to
    `python3`).
-3. Global `lnk` resolved from the enriched application PATH.
+3. Vendored `vendor/link/link.py` in development or the packaged Link resource.
+4. Global `lnk` resolved from the enriched application PATH.
+
+See `THIRD_PARTY_NOTICES.md` and `vendor/link/UPSTREAM.md` for the upstream
+citation, MIT license, and base revision.
 
 Link never writes `matter.json`; user approval remains the only apply path.
 

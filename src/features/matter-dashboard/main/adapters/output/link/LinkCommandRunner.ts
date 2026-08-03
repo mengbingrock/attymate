@@ -1,4 +1,6 @@
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 
 import { buildEnrichedEnv } from '@main/utils/cliEnv';
 
@@ -26,13 +28,21 @@ function readEnvValue(env: NodeJS.ProcessEnv, name: string): string | null {
   return value ? value : null;
 }
 
+function packagedLinkScript(): string | null {
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  if (!resourcesPath) return null;
+  const script = path.join(resourcesPath, 'link', 'link.py');
+  return existsSync(script) ? script : null;
+}
+
 /**
  * Resolve Link without a shell. Production/global installs use `lnk`; local
  * AttyMate development can point at a Link source checkout and invoke its
  * non-executable `link.py` through Python.
  */
 export function resolveLinkCommandInvocation(
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  bundledScript: string | null = packagedLinkScript()
 ): LinkCommandInvocation {
   const command = readEnvValue(env, 'AGENT_TEAMS_LINK_COMMAND');
   if (command) {
@@ -46,6 +56,15 @@ export function resolveLinkCommandInvocation(
       command: python,
       prefixArgs: [script],
       displayName: `${python} ${script}`,
+    };
+  }
+
+  if (bundledScript) {
+    const python = readEnvValue(env, 'AGENT_TEAMS_LINK_PYTHON') ?? 'python3';
+    return {
+      command: python,
+      prefixArgs: [bundledScript],
+      displayName: `${python} ${bundledScript}`,
     };
   }
 

@@ -66,19 +66,29 @@ function augmentRuntimeToolPath() {
   ]);
 }
 
-function configureLocalLinkCheckout(env) {
+function configureLinkSource(env) {
   if (env[linkCommandEnv]?.trim() || env[linkScriptEnv]?.trim()) {
     return null;
   }
 
-  const siblingScript = path.resolve(uiRepoRoot, '..', 'link', 'link.py');
-  if (!fs.existsSync(siblingScript)) {
+  const candidates = [
+    {
+      script: path.resolve(uiRepoRoot, 'vendor', 'link', 'link.py'),
+      label: 'vendored Link source',
+    },
+    {
+      script: path.resolve(uiRepoRoot, '..', 'link', 'link.py'),
+      label: 'local Link checkout',
+    },
+  ];
+  const selected = candidates.find((candidate) => fs.existsSync(candidate.script));
+  if (!selected) {
     return null;
   }
 
-  env[linkScriptEnv] = siblingScript;
+  env[linkScriptEnv] = selected.script;
   env[linkPythonEnv] = env[linkPythonEnv]?.trim() || 'python3';
-  return siblingScript;
+  return selected;
 }
 
 function runOrExit(cmd, args, options = {}) {
@@ -787,9 +797,9 @@ async function main() {
     UV_THREADPOOL_SIZE: process.env.UV_THREADPOOL_SIZE?.trim() || '16',
     CLAUDE_AGENT_TEAMS_ORCHESTRATOR_CLI_PATH: resolvedRuntime.binaryPath,
   };
-  const localLinkScript = configureLocalLinkCheckout(uiEnv);
-  if (localLinkScript) {
-    process.stdout.write(`Using local Link checkout: ${localLinkScript}\n`);
+  const linkSource = configureLinkSource(uiEnv);
+  if (linkSource) {
+    process.stdout.write(`Using ${linkSource.label}: ${linkSource.script}\n`);
   }
   ensureMinimumNodeOldSpaceEnv(uiEnv);
   delete uiEnv.CLAUDE_CLI_PATH;
