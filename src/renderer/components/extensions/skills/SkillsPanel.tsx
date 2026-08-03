@@ -166,7 +166,7 @@ export const SkillsPanel = ({
   );
   const codexAccount = useCodexAccountSnapshot({
     enabled:
-      loadingCliStatus?.flavor === 'agent_teams_orchestrator' &&
+      false &&
       Boolean(loadingCliStatus?.providers.some((provider) => provider.providerId === 'codex')),
   });
   const codexSnapshotPending =
@@ -198,19 +198,7 @@ export const SkillsPanel = ({
     () => isCodexSkillOverlayAvailable(effectiveCliStatus),
     [effectiveCliStatus]
   );
-  const skillsAudienceLabel = useMemo(() => {
-    if (effectiveCliStatus?.flavor !== 'agent_teams_orchestrator') {
-      return null;
-    }
-
-    const providerNames = getVisibleMultimodelProviders(effectiveCliStatus.providers ?? [])
-      .filter((provider) =>
-        isCliExtensionCapabilityAvailable(getCliProviderExtensionCapability(provider, 'skills'))
-      )
-      .map((provider) => provider.displayName);
-
-    return formatRuntimeAudienceLabel(providerNames);
-  }, [effectiveCliStatus]);
+  const skillsAudienceLabel = useMemo(() => null, []);
   const codexOnlySkillsCount = useMemo(
     () => mergedSkills.filter((skill) => getSkillAudience(skill.rootKind) === 'codex').length,
     [mergedSkills]
@@ -352,7 +340,7 @@ export const SkillsPanel = ({
 
   return (
     <div className="flex flex-col gap-4">
-      {effectiveCliStatus?.flavor === 'agent_teams_orchestrator' && (
+      {false && (
         <div className="rounded-md border border-blue-500/30 bg-blue-500/5 px-4 py-3 text-sm text-blue-300">
           {codexSnapshotPending
             ? t('store.provider.checkingStatus')

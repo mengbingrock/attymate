@@ -9,7 +9,10 @@ import {
   interactiveTeamRuntimeService,
   type CodexLaneSpec,
 } from '@features/interactive-team-runtime/main';
-import { isMatterEffectivelyEmpty } from '@features/matter-dashboard/main';
+import {
+  initializeMatterFileIfMissing,
+  isMatterEffectivelyEmpty,
+} from '@features/matter-dashboard/main';
 import { type RuntimeTurnSettledProvider } from '@features/member-work-sync/main';
 import { inspectOpenCodeLocalModelRuntimeReadiness } from '@features/runtime-provider-management/main';
 import {
@@ -787,7 +790,9 @@ interface OpenCodeRuntimeControlAck {
   memberName?: string;
   runtimeSessionId?: string;
   idempotencyKey?: string;
-  location?: unknown;
+  // Shape must stay assignable to runtime-control/domain/RuntimeControlAck for
+  // the upstream contracts seam (bindTeamHttpHandlerApis).
+  location?: Readonly<Record<string, string | number | boolean | null>>;
   diagnostics: string[];
   observedAt: string;
 }
@@ -1102,11 +1107,6 @@ function getRunRuntimeFailureLabel(run: ProvisioningRun): string {
 }
 
 function buildMissingCliError(): Error {
-  if (getConfiguredCliFlavor() === 'agent_teams_orchestrator') {
-    return new Error(
-      'Multimodel runtime not found. The packaged app must include resources/runtime/claude-multimodel, or development must provide CLAUDE_AGENT_TEAMS_ORCHESTRATOR_CLI_PATH.'
-    );
-  }
   return new Error('Claude CLI not found; install it or provide a valid path');
 }
 
@@ -10618,7 +10618,7 @@ export class TeamProvisioningService {
         effectiveMembers.push(effectiveMember);
         continue;
       }
-      if (providerId === 'codex' && getConfiguredCliFlavor() !== 'agent_teams_orchestrator') {
+      if (providerId === 'codex') {
         // Stock codex lanes launch without -m and inherit the user's own codex
         // default model; the fork's `model list` control-plane CLI does not
         // exist on the stock runtime, so default-model resolution must not run.
@@ -12198,7 +12198,6 @@ export class TeamProvisioningService {
       const promptSize = getPromptSizeSummary(initialUserPrompt);
       let child: ReturnType<typeof spawn> | undefined;
       const runtimeMode = resolveTeamRuntimeMode({
-        cliFlavor: getConfiguredCliFlavor(),
         leadProviderId: request.providerId,
       });
       const useStockClaudeBootstrap = runtimeMode === 'stock-claude';
@@ -12237,6 +12236,11 @@ export class TeamProvisioningService {
         const tasksDir = path.join(getTasksBasePath(), request.teamName);
         await fs.promises.mkdir(teamDir, { recursive: true });
         await fs.promises.mkdir(tasksDir, { recursive: true });
+        // Seed an empty matter file so the new team's Matter Dashboard starts
+        // blank instead of showing the demo fixture. createTeamConfig covers
+        // draft creation; this covers the default create+launch path, which
+        // never goes through createTeamConfig.
+        await initializeMatterFileIfMissing(getTeamsBasePath(), request.teamName);
         await this.teamMetaStore.writeMeta(request.teamName, {
           displayName: request.displayName,
           description: request.description,
@@ -14473,7 +14477,6 @@ export class TeamProvisioningService {
       const promptSize = getPromptSizeSummary(prompt);
       let child: ReturnType<typeof spawn> | undefined;
       const runtimeMode = resolveTeamRuntimeMode({
-        cliFlavor: getConfiguredCliFlavor(),
         leadProviderId: request.providerId,
       });
       const useStockClaudeBootstrap = runtimeMode === 'stock-claude';
@@ -22701,6 +22704,74 @@ export class TeamProvisioningService {
   }
 
   /**
+   * Upstream contracts compatibility (TeamMemberLifecycleApi): serialize a
+   * roster mutation behind the per-team operation lock.
+   */
+  async runLiveRosterMutation(teamName: string, mutation: () => Promise<void>): Promise<void> {
+    await this.withTeamLock(teamName, mutation);
+  }
+
+  /**
+   * Upstream contracts compatibility (OpenCodeRuntimeControlApi): answer an
+   * OpenCode runtime permission from a raw control-plane payload by routing it
+   * through the same approval-response path the UI uses.
+   */
+  async answerOpenCodeRuntimePermission(raw: unknown): Promise<OpenCodeRuntimeControlAck> {
+    const payload = asRuntimeRecord(raw);
+    const teamName = requireRuntimeString(payload.teamName, 'teamName');
+    const runId = requireRuntimeString(payload.runId, 'runId');
+    const memberName = requireRuntimeString(payload.memberName, 'memberName');
+    const requestId = requireRuntimeString(
+      payload.providerRequestId ?? payload.requestId,
+      'requestId'
+    );
+    const decision = typeof payload.decision === 'string' ? payload.decision : 'reject';
+    const allow = decision === 'allow' || decision === 'approve' || decision === 'always';
+    await this.respondToToolApproval(teamName, runId, requestId, allow);
+    return {
+      ok: true,
+      providerId: 'opencode',
+      teamName,
+      runId,
+      state: 'recorded',
+      memberName,
+      diagnostics: [],
+      observedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Member-work-sync busy signal: a member with a pending tool approval must
+   * not receive queued sync messages until the approval is resolved.
+   */
+  async getMemberToolApprovalBusyStatus(input: {
+    teamName: string;
+    memberName: string;
+    nowIso: string;
+  }): Promise<{ busy: boolean; reason?: string }> {
+    const teamName = input.teamName.trim();
+    const memberName = input.memberName.trim().toLowerCase();
+    if (!teamName || !memberName) return { busy: false };
+
+    const trackedRunId = this.getTrackedRunId(teamName);
+    const trackedRun = trackedRunId ? this.runs.get(trackedRunId) : undefined;
+    const hasNativePendingApproval =
+      trackedRun?.teamName === teamName &&
+      [...trackedRun.pendingApprovals.values()].some(
+        (approval) => (approval.source ?? '').trim().toLowerCase() === memberName
+      );
+    const hasRuntimePendingApproval =
+      this.runtimeToolApprovalCoordinator.hasPendingApprovalForMember(
+        teamName,
+        input.memberName.trim()
+      );
+    if (!hasNativePendingApproval && !hasRuntimePendingApproval) {
+      return { busy: false };
+    }
+    return { busy: true, reason: 'member_tool_approval_pending' };
+  }
+
+  /**
    * Respond to a pending tool approval — sends control_response to CLI stdin.
    * Validates runId match and requestId existence before writing.
    */
@@ -23782,10 +23853,7 @@ export class TeamProvisioningService {
   ): Promise<{ warning?: string }> {
     const ports = this.getProviderDiagnosticsPorts();
     let probeOverride: { binaryPath: string; args: string[] } | undefined;
-    if (
-      resolveTeamProviderId(providerId) === 'codex' &&
-      getConfiguredCliFlavor() !== 'agent_teams_orchestrator'
-    ) {
+    if (resolveTeamProviderId(providerId) === 'codex') {
       // Stock flavor has no codex control plane in the claude binary; ping the
       // codex CLI itself (fork-style --settings args do not apply to it).
       const codexPath = await CodexBinaryResolver.resolve();

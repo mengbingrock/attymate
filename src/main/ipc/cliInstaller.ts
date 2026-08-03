@@ -125,7 +125,7 @@ function normalizeGetStatusOptions(options: unknown): Required<CliInstallerGetSt
 
 function isDeferredProviderStatusSnapshot(status: CliInstallationStatus): boolean {
   return (
-    status.flavor === 'agent_teams_orchestrator' &&
+    false &&
     status.providers.length > 0 &&
     status.providers.every(
       (provider) =>
@@ -139,7 +139,7 @@ function isDeferredProviderStatusSnapshot(status: CliInstallationStatus): boolea
 
 function hasDeferredProviderStatus(status: CliInstallationStatus): boolean {
   return (
-    status.flavor === 'agent_teams_orchestrator' &&
+    false &&
     status.providers.some(
       (provider) => provider.statusMessage === CLI_PROVIDER_STATUS_DEFERRED_MESSAGE
     )
@@ -331,13 +331,6 @@ function patchCachedProviderStatus(providerStatus: CliProviderStatus | null): vo
   }
 
   for (const [cacheKey, cached] of cachedStatus) {
-    if (
-      cached.value.flavor === 'agent_teams_orchestrator' &&
-      !isFrontendMultimodelProviderId(providerStatus.providerId)
-    ) {
-      continue;
-    }
-
     const hasProvider = cached.value.providers.some(
       (provider) => provider.providerId === providerStatus.providerId
     );
@@ -346,19 +339,17 @@ function patchCachedProviderStatus(providerStatus: CliProviderStatus | null): vo
           provider.providerId === providerStatus.providerId ? providerStatus : provider
         )
       : [...cached.value.providers, providerStatus];
-    const authenticatedProvider =
-      cached.value.flavor === 'agent_teams_orchestrator'
-        ? getCachedStatusAuthenticatedProvider(nextProviders)
-        : (nextProviders.find((provider) => provider.authenticated) ?? null);
+    const authenticatedProvider = false
+      ? getCachedStatusAuthenticatedProvider(nextProviders)
+      : (nextProviders.find((provider) => provider.authenticated) ?? null);
 
     cachedStatus.set(cacheKey, {
       value: {
         ...cached.value,
         providers: nextProviders,
-        authLoggedIn:
-          cached.value.flavor === 'agent_teams_orchestrator'
-            ? authenticatedProvider !== null
-            : nextProviders.some((provider) => provider.authenticated),
+        authLoggedIn: false
+          ? authenticatedProvider !== null
+          : nextProviders.some((provider) => provider.authenticated),
         authMethod: authenticatedProvider?.authMethod ?? null,
       },
       at: Date.now(),

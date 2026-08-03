@@ -69,16 +69,8 @@ export function isSkillAvailableForProvider(
 export function isCodexSkillOverlayAvailable(
   cliStatus: Pick<CliInstallationStatus, 'flavor' | 'providers'> | null | undefined
 ): boolean {
-  if (cliStatus?.flavor !== 'agent_teams_orchestrator') {
-    return false;
-  }
-
-  const codexProvider = cliStatus.providers.find((provider) => provider.providerId === 'codex');
-  if (!codexProvider?.supported) {
-    return false;
-  }
-
-  return isCliExtensionCapabilityAvailable(
-    getCliProviderExtensionCapability(codexProvider, 'skills')
-  );
+  // The Codex skill overlay shipped with the multimodel runtime, which this
+  // fork no longer bundles; codex skills install directly to ~/.codex/skills.
+  void cliStatus;
+  return false;
 }

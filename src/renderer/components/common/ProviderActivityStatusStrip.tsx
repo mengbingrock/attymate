@@ -220,12 +220,7 @@ function useProviderActivityDisplay({
   return {
     displayProviderIds,
     providerStateMap,
-    shouldRender:
-      isElectronMode() &&
-      multimodelEnabled &&
-      renderCliStatus?.flavor === 'agent_teams_orchestrator' &&
-      renderCliStatus.installed &&
-      displayProviderIds.length > 0,
+    shouldRender: false,
   };
 }
 

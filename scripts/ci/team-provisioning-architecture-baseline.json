@@ -1,0 +1,9 @@
+{
+  "rules": {
+    "facadeInheritance": {},
+    "serviceHostDeclaration": {},
+    "serviceHostCast": {},
+    "protectedAbstractDependency": {},
+    "createFromServiceFactory": {}
+  }
+}

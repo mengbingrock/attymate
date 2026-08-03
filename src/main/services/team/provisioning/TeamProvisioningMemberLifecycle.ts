@@ -145,11 +145,6 @@ function getTeamRuntimeEventsDir(teamName: string): string {
 }
 
 function buildMissingCliError(): Error {
-  if (getConfiguredCliFlavor() === 'agent_teams_orchestrator') {
-    return new Error(
-      'Multimodel runtime not found. The packaged app must include resources/runtime/claude-multimodel, or development must provide CLAUDE_AGENT_TEAMS_ORCHESTRATOR_CLI_PATH.'
-    );
-  }
   return new Error('Claude CLI not found; install it or provide a valid path');
 }
 

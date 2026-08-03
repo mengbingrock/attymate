@@ -2,17 +2,23 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    branches:
+      - main
+      - dev
+      # Long-lived integration branches: pushes here previously ran no CI at all,
+      # which let multi-day test regressions land unnoticed (they only surfaced
+      # through PR #252's merge CI).
+      - refactor/team-provisioning-round2-reapply
+      - refactor/hosted-web-feature-boundaries
     paths:
       - 'src/**'
+      - 'landing/**'
+      - 'bin/**'
       - 'scripts/**'
       - 'agent-teams-controller/**'
       - 'mcp-server/**'
       - 'packages/**'
-      - 'resources/runtime/**'
       - 'resources/terminal-platform/**'
-      - '.runtime-download/**'
-      - 'runtime.lock.json'
       - 'terminal-platform.lock.json'
       - 'vendor/terminal-platform/**'
       - 'test/**'
@@ -26,17 +32,21 @@ on:
       - 'vitest*.config.*'
       - 'tailwind.config.*'
       - 'eslint.config.*'
+      - '*.js'
+      - '*.cjs'
+      - '*.mjs'
+      - '*.ts'
+      - '*.tsx'
   pull_request:
     paths:
       - 'src/**'
+      - 'landing/**'
+      - 'bin/**'
       - 'scripts/**'
       - 'agent-teams-controller/**'
       - 'mcp-server/**'
       - 'packages/**'
-      - 'resources/runtime/**'
       - 'resources/terminal-platform/**'
-      - '.runtime-download/**'
-      - 'runtime.lock.json'
       - 'terminal-platform.lock.json'
       - 'vendor/terminal-platform/**'
       - 'test/**'
@@ -50,6 +60,11 @@ on:
       - 'vitest*.config.*'
       - 'tailwind.config.*'
       - 'eslint.config.*'
+      - '*.js'
+      - '*.cjs'
+      - '*.mjs'
+      - '*.ts'
+      - '*.tsx'
 
 jobs:
   validate:
@@ -59,11 +74,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Guard runtime artifacts
-        run: node ./scripts/ci/forbid-runtime-artifacts.cjs
+      - name: Guard production source file size
+        run: node ./scripts/ci/check-source-file-size.mjs
 
-      - name: Verify runtime lock
-        run: node ./scripts/ci/verify-runtime-lock.mjs
+      - name: Guard Team Provisioning architecture
+        run: node ./scripts/ci/check-team-provisioning-architecture.mjs
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -86,6 +101,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Rebuild test SQLite native module for Node
+        run: node ./scripts/ci/rebuild-better-sqlite3-node.cjs
 
       - name: Audit dependencies
         run: pnpm dlx pnpm@11.4.0 --pm-on-fail=ignore audit --audit-level high
@@ -128,6 +146,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Rebuild test SQLite native module for Node
+        run: node ./scripts/ci/rebuild-better-sqlite3-node.cjs
 
       - name: Test workspace packages
         if: matrix.shard == 1

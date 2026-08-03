@@ -244,7 +244,7 @@ export default defineConfig([
                 'electron',
               ],
               message:
-                'recent-projects renderer/ui must stay presentational. Move transport, store access, and navigation logic into hooks or adapters.',
+                'recent-projects renderer/ui must stay presentational. Move transport, store access, and navigation logic into hooks or dedicated boundary modules.',
             },
           ],
         },
@@ -363,7 +363,7 @@ export default defineConfig([
                 'electron',
               ],
               message:
-                'organizations renderer/ui must stay presentational. Move transport, store access, and navigation logic into hooks or adapters.',
+                'organizations renderer/ui must stay presentational. Move transport, store access, and navigation logic into hooks or dedicated boundary modules.',
             },
           ],
         },

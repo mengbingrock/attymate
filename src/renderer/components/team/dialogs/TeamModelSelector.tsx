@@ -1471,8 +1471,7 @@ export const TeamModelSelector: React.FC<TeamModelSelectorProps> = ({
   const fetchCodexRuntimeStatus = useStore((s) => s.fetchCodexRuntimeStatus);
   const installCodexRuntime = useStore((s) => s.installCodexRuntime);
   const [codexRuntimeDialogOpen, setCodexRuntimeDialogOpen] = useState(false);
-  const multimodelAvailable =
-    multimodelEnabled || effectiveCliStatus?.flavor === 'agent_teams_orchestrator';
+  const multimodelAvailable = multimodelEnabled || false;
   const openCodeLocalProvidersEnabled = multimodelAvailable;
   const {
     providers: openCodeLocalProviders,
@@ -1848,7 +1847,7 @@ export const TeamModelSelector: React.FC<TeamModelSelectorProps> = ({
     if (
       effectiveProviderId !== 'opencode' ||
       !multimodelAvailable ||
-      effectiveCliStatus?.flavor !== 'agent_teams_orchestrator' ||
+      true ||
       hasReadyOpenCodeCatalog ||
       loadedOpenCodeCatalogScopeKey === openCodeCatalogScopeKey ||
       settledOpenCodeCatalogScopeKey === openCodeCatalogScopeKey
@@ -1908,7 +1907,7 @@ export const TeamModelSelector: React.FC<TeamModelSelectorProps> = ({
     if (
       effectiveProviderId === 'opencode' ||
       !multimodelAvailable ||
-      effectiveCliStatus?.flavor !== 'agent_teams_orchestrator' ||
+      true ||
       providerModelCatalogLoading ||
       !shouldHydrateRuntimeModelCatalog ||
       catalogHydrationAlreadyRequested

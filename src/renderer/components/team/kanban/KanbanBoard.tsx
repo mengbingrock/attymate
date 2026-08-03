@@ -25,7 +25,7 @@ import {
   Waypoints,
 } from 'lucide-react';
 
-import { KanbanColumn } from './KanbanColumn';
+import { KANBAN_COLUMN_CONTROL_INSET_CLASS, KanbanColumn } from './KanbanColumn';
 import { KanbanFilterPopover } from './KanbanFilterPopover';
 import {
   KanbanGridLayout,
@@ -533,7 +533,10 @@ export const KanbanBoard = memo(function KanbanBoard({
         <button
           type="button"
           onClick={addHandler}
-          className="ml-2 flex w-[calc(100%_-_0.5rem)] items-center justify-center gap-1.5 rounded-md border border-dashed border-[var(--color-border)] p-3 text-xs text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-border-emphasis)] hover:text-[var(--color-text-secondary)]"
+          className={cn(
+            KANBAN_COLUMN_CONTROL_INSET_CLASS,
+            'flex items-center justify-center gap-1.5 rounded-md border border-dashed border-[var(--color-border)] p-3 text-xs text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-border-emphasis)] hover:text-[var(--color-text-secondary)]'
+          )}
         >
           <Plus size={13} />
           {t('kanban.board.addTask')}
@@ -543,7 +546,12 @@ export const KanbanBoard = memo(function KanbanBoard({
       if (columnTasks.length === 0) {
         return (
           addButton ?? (
-            <div className="ml-2 w-[calc(100%_-_0.5rem)] rounded-md border border-dashed border-[var(--color-border)] p-3 text-xs text-[var(--color-text-muted)]">
+            <div
+              className={cn(
+                KANBAN_COLUMN_CONTROL_INSET_CLASS,
+                'rounded-md border border-dashed border-[var(--color-border)] p-3 text-xs text-[var(--color-text-muted)]'
+              )}
+            >
               {t('kanban.board.noTasks')}
             </div>
           )
@@ -557,7 +565,10 @@ export const KanbanBoard = memo(function KanbanBoard({
           <button
             type="button"
             onClick={() => revealNextTasks(columnId, columnTasks.length)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 text-xs text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-border-emphasis)] hover:text-[var(--color-text-secondary)]"
+            className={cn(
+              KANBAN_COLUMN_CONTROL_INSET_CLASS,
+              'flex items-center justify-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 text-xs text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-border-emphasis)] hover:text-[var(--color-text-secondary)]'
+            )}
           >
             <ChevronDown size={13} />
             {t('kanban.board.showMore', { count: nextRevealCount })}

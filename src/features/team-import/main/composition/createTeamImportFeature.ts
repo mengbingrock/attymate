@@ -33,6 +33,7 @@ export interface TeamImportFeatureFacade {
 export interface TeamImportFeatureDependencies {
   teamDataService: TeamDataService;
   skillsMutationService: SkillsMutationService;
+  onTeamCreated?: (teamName: string) => void;
 }
 
 const NO_PROGRESS: TeamImportProgressPort = { report: () => undefined };
@@ -57,7 +58,7 @@ export function createTeamImportFeature(
   );
   const createDraftUseCase = new CreateTeamImportDraftUseCase(
     reviewStore,
-    new TeamDataImportDraftRepository(dependencies.teamDataService),
+    new TeamDataImportDraftRepository(dependencies.teamDataService, dependencies.onTeamCreated),
     new TeamAgentFilesWriter(),
     skillsInstaller
   );
