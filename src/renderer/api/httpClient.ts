@@ -9,6 +9,8 @@
 import {
   MATTER_ROUTE,
   type MatterElectronApi,
+  type MatterEvidenceStatusDto,
+  type MatterLinkOperationResultDto,
   type MatterSnapshotDto,
 } from '@features/matter-dashboard/contracts';
 import {
@@ -490,6 +492,16 @@ export class HttpAPIClient implements ElectronAPI {
   matter: MatterElectronApi['matter'] = {
     get: (teamName: string): Promise<MatterSnapshotDto> =>
       this.get<MatterSnapshotDto>(`${MATTER_ROUTE}?teamName=${encodeURIComponent(teamName)}`),
+    getLinkStatus: (teamName: string): Promise<MatterEvidenceStatusDto> =>
+      this.get<MatterEvidenceStatusDto>(
+        `${MATTER_ROUTE}/link-status?teamName=${encodeURIComponent(teamName)}`
+      ),
+    initializeLink: (teamName: string): Promise<MatterLinkOperationResultDto> =>
+      this.post<MatterLinkOperationResultDto>(`${MATTER_ROUTE}/link-initialize`, { teamName }),
+    requestLinkRefresh: (teamName: string): Promise<MatterLinkOperationResultDto> =>
+      this.post<MatterLinkOperationResultDto>(`${MATTER_ROUTE}/link-refresh`, { teamName }),
+    requestLinkProposal: (teamName: string): Promise<MatterLinkOperationResultDto> =>
+      this.post<MatterLinkOperationResultDto>(`${MATTER_ROUTE}/link-proposal`, { teamName }),
     applyProposal: (teamName: string): Promise<MatterSnapshotDto> =>
       this.post<MatterSnapshotDto>(`${MATTER_ROUTE}/apply-proposal`, { teamName }),
     rejectProposal: (teamName: string, reason?: string): Promise<MatterSnapshotDto> =>

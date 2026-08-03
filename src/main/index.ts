@@ -145,7 +145,10 @@ import {
 } from '@main/services/team/opencode/bridge/OpenCodeMcpBridgeEnv';
 import { ReviewApplierService } from '@main/services/team/ReviewApplierService';
 import { TeamBackupService } from '@main/services/team/TeamBackupService';
-import { TeamConfigReader } from '@main/services/team/TeamConfigReader';
+import {
+  resolveProjectPathFromConfig,
+  TeamConfigReader,
+} from '@main/services/team/TeamConfigReader';
 import { TeamInboxWriter } from '@main/services/team/TeamInboxWriter';
 import {
   resolveAgentTeamsMcpLaunchSpec,
@@ -2326,8 +2329,18 @@ async function initializeServices(): Promise<void> {
     teamsBasePath: getTeamsBasePath(),
     logger: createLogger('Feature:TerminalWorkspace'),
   });
+  const matterConfigReader = new TeamConfigReader();
   matterFeature = createMatterFeature({
     teamsBasePath: getTeamsBasePath(),
+    resolveProjectPath: async (teamName) => {
+      const config = await matterConfigReader.getConfig(teamName);
+      return config ? (resolveProjectPathFromConfig(config) ?? null) : null;
+    },
+    leadNotifier: {
+      notifyLead: async (teamName, summary, text) => {
+        await teamDataService.sendUserInstructionToLead({ teamName, summary, text });
+      },
+    },
     actions: {
       applyProposal: (teamName) => teamDataService.applyMatterProposal(teamName),
       rejectProposal: (teamName, reason) => teamDataService.rejectMatterProposal(teamName, reason),

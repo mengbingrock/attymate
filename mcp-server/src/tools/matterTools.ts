@@ -157,6 +157,19 @@ const changesSchema = z
   })
   .strict();
 
+const evidenceRefSchema = z
+  .object({
+    path: z.string().min(1),
+    source: z.string().min(1).optional(),
+    title: z.string().min(1).optional(),
+    page: z.number().int().positive().optional(),
+    section: z.string().min(1).optional(),
+    dateUpdated: z.string().min(1).optional(),
+    relationship: z.string().min(1).optional(),
+    fieldPaths: z.array(z.string().min(1)).optional(),
+  })
+  .strict();
+
 const MATTER_SECTION_REFERENCE = [
   'Matter sections (send only changed ones in matter_propose changes):',
   '- caption, status, matterNumber, currentStage (pleading|discovery|trial|post)',
@@ -199,14 +212,30 @@ export function registerMatterTools(server: Pick<FastMCP, 'addTool'>) {
       summary: z.array(z.string().min(1)).min(1),
       changes: changesSchema,
       taskRefs: z.array(z.string().min(1)).optional(),
+      sourceMode: z.enum(['direct-scan', 'link']).optional(),
+      sourceRevision: z.string().min(1).optional(),
+      evidence: z.array(evidenceRefSchema).max(50).optional(),
     }),
-    execute: async ({ teamName, claudeDir, from, summary, changes, taskRefs }) => {
+    execute: async ({
+      teamName,
+      claudeDir,
+      from,
+      summary,
+      changes,
+      taskRefs,
+      sourceMode,
+      sourceRevision,
+      evidence,
+    }) => {
       assertConfiguredTeam(teamName, claudeDir);
       const proposal = getController(teamName, claudeDir).matter.submitProposal(
         {
           summary,
           changes,
           ...(taskRefs && taskRefs.length > 0 ? { taskRefs } : {}),
+          ...(sourceMode ? { sourceMode } : {}),
+          ...(sourceRevision ? { sourceRevision } : {}),
+          ...(evidence && evidence.length > 0 ? { evidence } : {}),
         },
         from
       );
