@@ -2526,6 +2526,14 @@ describe('agent-teams-mcp tools', () => {
           teamName: 'alpha',
           summary: ['Motion to compel filed Jul 10, 2026'],
           changes: { discovery: { pendingMotion: { filed: 'Jul 10, 2026' } } },
+          sourceMode: 'link',
+          sourceRevision: 'revision-123',
+          evidence: [
+            {
+              path: 'wiki/sources/motion.md',
+              fieldPaths: ['discovery.pendingMotion.filed'],
+            },
+          ],
         }).success
       ).toBe(true);
       expect(
@@ -2558,11 +2566,16 @@ describe('agent-teams-mcp tools', () => {
           summary: ['Motion to compel filed Jul 10, 2026'],
           changes: { discovery: { pendingMotion: { filed: 'Jul 10, 2026' } } },
           taskRefs: ['task-1'],
+          sourceMode: 'link',
+          sourceRevision: 'revision-123',
+          evidence: [{ path: 'wiki/sources/motion.md' }],
         })
       );
       expect(proposeResult.submitted).toBe(true);
       expect(proposeResult.pendingUserReview).toBe(true);
       expect(proposeResult.proposal.proposedBy).toBe('team-lead');
+      expect(proposeResult.proposal.sourceMode).toBe('link');
+      expect(proposeResult.proposal.evidence[0].path).toBe('wiki/sources/motion.md');
 
       const proposalFile = path.join(claudeDir, 'teams', 'alpha', 'matter-proposal.json');
       expect(fs.existsSync(proposalFile)).toBe(true);

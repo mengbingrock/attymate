@@ -1,6 +1,12 @@
 import { createLogger } from '@shared/utils/logger';
 
-import { MATTER_ROUTE, type MatterSnapshotDto } from '../../../../contracts';
+import {
+  MATTER_ROUTE,
+  type MatterEvidenceStatusDto,
+  type MatterLinkOperation,
+  type MatterLinkOperationResultDto,
+  type MatterSnapshotDto,
+} from '../../../../contracts';
 
 import type { MatterFeatureFacade } from '../../../composition/createMatterFeature';
 import type { FastifyInstance } from 'fastify';
@@ -8,6 +14,38 @@ import type { FastifyInstance } from 'fastify';
 const logger = createLogger('Feature:Matter:HTTP');
 
 const EMPTY_SNAPSHOT: MatterSnapshotDto = { matter: null, proposal: null };
+
+function linkStatusError(summary: string): MatterEvidenceStatusDto {
+  return {
+    source: 'link',
+    checkedAt: new Date().toISOString(),
+    projectPath: null,
+    state: 'error',
+    available: false,
+    queryReady: false,
+    summary,
+    counts: {
+      sourceFiles: 0,
+      sourcePages: 0,
+      representedFiles: 0,
+      pendingFiles: 0,
+      staleFiles: 0,
+      secretWarnings: 0,
+    },
+  };
+}
+
+function linkOperationError(
+  operation: MatterLinkOperation,
+  summary: string
+): MatterLinkOperationResultDto {
+  return {
+    operation,
+    accepted: false,
+    message: summary,
+    status: linkStatusError(summary),
+  };
+}
 
 function readTeamName(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -24,6 +62,65 @@ export function registerMatterHttp(app: FastifyInstance, feature: MatterFeatureF
       } catch (error) {
         logger.error('Failed to load matter snapshot via HTTP', error);
         return EMPTY_SNAPSHOT;
+      }
+    }
+  );
+
+  const linkOperationRoutes: {
+    path: string;
+    operation: MatterLinkOperation;
+    run: (teamName: string) => Promise<MatterLinkOperationResultDto>;
+  }[] = [
+    {
+      path: 'link-initialize',
+      operation: 'initialize',
+      run: (teamName) => feature.initializeLink(teamName),
+    },
+    {
+      path: 'link-refresh',
+      operation: 'refresh-request',
+      run: (teamName) => feature.requestLinkRefresh(teamName),
+    },
+    {
+      path: 'link-proposal',
+      operation: 'proposal-request',
+      run: (teamName) => feature.requestLinkProposal(teamName),
+    },
+  ];
+  for (const route of linkOperationRoutes) {
+    app.post<{ Body: { teamName?: string } }>(
+      `${MATTER_ROUTE}/${route.path}`,
+      async (request, reply): Promise<MatterLinkOperationResultDto> => {
+        const teamName = readTeamName(request.body?.teamName);
+        if (!teamName) {
+          void reply.status(400);
+          return linkOperationError(route.operation, 'teamName is required');
+        }
+        try {
+          return await route.run(teamName);
+        } catch (error) {
+          logger.error(`Failed to run matter ${route.operation} via HTTP`, error);
+          void reply.status(500);
+          return linkOperationError(route.operation, 'Link matter operation failed.');
+        }
+      }
+    );
+  }
+
+  app.get<{ Querystring: { teamName?: string } }>(
+    `${MATTER_ROUTE}/link-status`,
+    async (request, reply): Promise<MatterEvidenceStatusDto> => {
+      const teamName = readTeamName(request.query?.teamName);
+      if (!teamName) {
+        void reply.status(400);
+        return linkStatusError('teamName is required');
+      }
+      try {
+        return await feature.getLinkStatus(teamName);
+      } catch (error) {
+        logger.error('Failed to load Link matter evidence status via HTTP', error);
+        void reply.status(500);
+        return linkStatusError('Link matter evidence status could not be loaded.');
       }
     }
   );

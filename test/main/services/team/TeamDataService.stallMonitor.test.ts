@@ -130,4 +130,35 @@ describe('TeamDataService stall-monitor helpers', () => {
       })
     );
   });
+
+  it('routes user-initiated app instructions with a controller-valid sender', async () => {
+    const service = createService({
+      getConfig: vi.fn(async () => ({
+        name: 'demo',
+        members: [{ name: 'lead', role: 'Team Lead' }],
+      })),
+    });
+
+    const expectedResult = { messageId: 'msg-link' } as SendMessageResult;
+    const sendMessageSpy = vi.spyOn(service, 'sendMessage').mockResolvedValue(expectedResult);
+
+    await expect(
+      service.sendUserInstructionToLead({
+        teamName: 'demo',
+        summary: 'Build Link-backed matter proposal',
+        text: 'Use the bounded Link evidence packet.',
+      })
+    ).resolves.toBe(expectedResult);
+
+    expect(sendMessageSpy).toHaveBeenCalledWith(
+      'demo',
+      expect.objectContaining({
+        member: 'lead',
+        from: 'user',
+        summary: 'Build Link-backed matter proposal',
+        text: 'Use the bounded Link evidence packet.',
+        source: 'system_notification',
+      })
+    );
+  });
 });

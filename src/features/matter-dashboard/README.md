@@ -45,6 +45,49 @@ watcher (`TeamTaskWatchRegistry` allowlist + `FileWatcher.processTeamsChange`
 classify them as `TeamChangeEvent { type: 'matter' }`). The renderer store
 ignores these events; only `useMatter` refetches.
 
+## Link evidence provider
+
+`createMatterFeature` resolves a team's configured project path and asks
+`LinkMatterEvidenceSourceAdapter` for provider-neutral evidence operations. A
+status check runs:
+
+```text
+lnk ingest-status <project-path> --json
+```
+
+It normalizes Link's provider-specific states and counts before they cross IPC
+or HTTP. The dashboard then offers explicit operations:
+
+- **Initialize Link** runs `lnk init <project-path>` and rechecks status. It is
+  user-triggered because it creates Link's generated wiki structure inside the
+  configured project folder.
+- **Ask lead to ingest** sends the lead a safety-gated Link ingestion request
+  for pending/stale sources. The app does not generate source pages itself.
+- **Build proposal from Link** runs five bounded `lnk query ... --budget medium
+--json` calls, prefers substantive context-packet extracts over abbreviated
+  recall capsules, deduplicates the evidence, fingerprints the packet, and
+  sends it to the lead. The lead projects only grounded changes through the
+  existing `matter_propose` review gate.
+
+Electron and browser clients use the same feature operations. Link's
+MIT-licensed indexing and retrieval source is vendored under `vendor/link` and
+included as an unpacked application resource. It is trimmed to the dashboard's
+`init`, `ingest-status`, and `query` contract; unrelated Link CLI and web features
+are not shipped. Local development and packaged builds prefer that source, so a
+separate Link clone or global installation is not required.
+Python 3.10+ must still be available. Runtime selection order is:
+
+1. `AGENT_TEAMS_LINK_COMMAND` — explicit executable override.
+2. `AGENT_TEAMS_LINK_SCRIPT` through `AGENT_TEAMS_LINK_PYTHON` (defaults to
+   `python3`).
+3. Vendored `vendor/link/link.py` in development or the packaged Link resource.
+4. Global `lnk` resolved from the enriched application PATH.
+
+See `THIRD_PARTY_NOTICES.md` and `vendor/link/UPSTREAM.md` for the upstream
+citation, MIT license, and base revision.
+
+Link never writes `matter.json`; user approval remains the only apply path.
+
 ## Known limitations
 
 - Human inline edits in the view are local component state only: they are not

@@ -73,6 +73,30 @@ function assertProposalInput(proposal) {
   if (proposal.taskRefs !== undefined && !Array.isArray(proposal.taskRefs)) {
     throw new Error('Matter proposal taskRefs must be an array of task ids');
   }
+  if (
+    proposal.sourceMode !== undefined &&
+    proposal.sourceMode !== 'direct-scan' &&
+    proposal.sourceMode !== 'link'
+  ) {
+    throw new Error('Matter proposal sourceMode must be direct-scan or link');
+  }
+  if (
+    proposal.sourceRevision !== undefined &&
+    (typeof proposal.sourceRevision !== 'string' || !proposal.sourceRevision.trim())
+  ) {
+    throw new Error('Matter proposal sourceRevision must be a non-empty string');
+  }
+  if (proposal.evidence !== undefined) {
+    if (
+      !Array.isArray(proposal.evidence) ||
+      proposal.evidence.length > 50 ||
+      !proposal.evidence.every(
+        (item) => isPlainObject(item) && typeof item.path === 'string' && item.path.trim()
+      )
+    ) {
+      throw new Error('Matter proposal evidence must contain at most 50 source references');
+    }
+  }
   if (Buffer.byteLength(JSON.stringify(proposal), 'utf8') > MAX_PAYLOAD_BYTES) {
     throw new Error('Matter proposal is too large (max 256 KB)');
   }
@@ -103,6 +127,13 @@ function submitProposal(context, proposal, actor) {
       changes: proposal.changes,
       ...(Array.isArray(proposal.taskRefs) && proposal.taskRefs.length > 0
         ? { taskRefs: proposal.taskRefs.map((taskId) => String(taskId)) }
+        : {}),
+      ...(proposal.sourceMode ? { sourceMode: proposal.sourceMode } : {}),
+      ...(typeof proposal.sourceRevision === 'string' && proposal.sourceRevision.trim()
+        ? { sourceRevision: proposal.sourceRevision.trim() }
+        : {}),
+      ...(Array.isArray(proposal.evidence) && proposal.evidence.length > 0
+        ? { evidence: proposal.evidence }
         : {}),
     };
     writeJsonFileSync(proposalPath(context), record, { trailingNewline: true });

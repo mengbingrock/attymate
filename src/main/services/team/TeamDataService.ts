@@ -2761,6 +2761,28 @@ export class TeamDataService {
     });
   }
 
+  /**
+   * Deliver an actionable instruction initiated by a user gesture in the app.
+   * The controller message layer accepts `user` or a configured team member as
+   * the sender, while `source` retains that the app generated the envelope.
+   */
+  async sendUserInstructionToLead(args: {
+    teamName: string;
+    summary: string;
+    text: string;
+    taskRefs?: TaskRef[];
+  }): Promise<SendMessageResult> {
+    const leadName = await this.resolveLeadName(args.teamName);
+    return this.sendMessage(args.teamName, {
+      member: leadName,
+      from: 'user',
+      summary: args.summary,
+      text: args.text,
+      ...(args.taskRefs && args.taskRefs.length > 0 ? { taskRefs: args.taskRefs } : {}),
+      source: TASK_COMMENT_NOTIFICATION_SOURCE,
+    });
+  }
+
   private resolveLeadNameFromConfig(config: TeamConfig | null): string {
     if (!config) return 'team-lead';
     const members = config.members ?? [];

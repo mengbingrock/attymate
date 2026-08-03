@@ -342,6 +342,15 @@
       {
         "from": "mcp-server/package.json",
         "to": "mcp-server/package.json"
+      },
+      {
+        "from": "vendor/link",
+        "to": "link",
+        "filter": [
+          "**/*.py",
+          "LICENSE",
+          "UPSTREAM.md"
+        ]
       }
     ],
     "npmRebuild": false,

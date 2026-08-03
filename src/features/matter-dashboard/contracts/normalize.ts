@@ -21,6 +21,7 @@ import type {
   MatterTrialDto,
   MatterWitnessDto,
 } from './dto';
+import type { MatterEvidenceRefDto, MatterEvidenceSourceMode } from './evidence';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -40,6 +41,29 @@ function readStageId(value: unknown): MatterStageId | undefined {
   return value === 'pleading' || value === 'discovery' || value === 'trial' || value === 'post'
     ? value
     : undefined;
+}
+
+function readEvidenceSourceMode(value: unknown): MatterEvidenceSourceMode | undefined {
+  return value === 'direct-scan' || value === 'link' ? value : undefined;
+}
+
+function normalizeEvidenceRef(value: unknown): MatterEvidenceRefDto | null {
+  const record = isRecord(value) ? value : null;
+  const path = readString(record?.path);
+  if (!path) return null;
+  const page =
+    typeof record?.page === 'number' && record.page > 0 ? Math.floor(record.page) : undefined;
+  const fieldPaths = readStringArray(record?.fieldPaths);
+  return pruneUndefined({
+    path,
+    source: readString(record?.source),
+    title: readString(record?.title),
+    page,
+    section: readString(record?.section),
+    dateUpdated: readString(record?.dateUpdated),
+    relationship: readString(record?.relationship),
+    fieldPaths: fieldPaths.length > 0 ? fieldPaths : undefined,
+  });
 }
 
 function pruneUndefined<T extends object>(record: T): T {
@@ -313,6 +337,9 @@ export function normalizeMatterProposalDto(value: unknown): MatterProposalDto | 
   const summary = readStringArray(value.summary);
   if (!proposedAt || !proposedBy || summary.length === 0) return null;
   const taskRefs = readStringArray(value.taskRefs);
+  const evidence = normalizeArray(value.evidence, normalizeEvidenceRef);
+  const sourceMode = readEvidenceSourceMode(value.sourceMode);
+  const sourceRevision = readString(value.sourceRevision);
   return {
     schemaVersion: MATTER_SCHEMA_VERSION,
     proposedAt,
@@ -320,5 +347,8 @@ export function normalizeMatterProposalDto(value: unknown): MatterProposalDto | 
     summary,
     changes: normalizeMatterChanges(value.changes),
     ...(taskRefs.length > 0 ? { taskRefs } : {}),
+    ...(sourceMode ? { sourceMode } : {}),
+    ...(sourceRevision ? { sourceRevision } : {}),
+    ...(evidence.length > 0 ? { evidence } : {}),
   };
 }

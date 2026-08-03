@@ -1,3 +1,5 @@
+import type { MatterEvidenceRefDto, MatterEvidenceSourceMode } from './evidence';
+
 export const MATTER_SCHEMA_VERSION = 1;
 
 export type MatterStageId = 'pleading' | 'discovery' | 'trial' | 'post';
@@ -163,6 +165,12 @@ export interface MatterProposalDto {
   changes: MatterChanges;
   /** Task ids the facts were established by. */
   taskRefs?: string[];
+  /** How the proposing lead found the supporting case evidence. */
+  sourceMode?: MatterEvidenceSourceMode;
+  /** Fingerprint of the bounded evidence packet used for this proposal. */
+  sourceRevision?: string;
+  /** Source references supporting the proposed fields. */
+  evidence?: MatterEvidenceRefDto[];
 }
 
 export interface MatterSnapshotDto {

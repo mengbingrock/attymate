@@ -81,6 +81,16 @@ describe('normalizeMatterProposalDto', () => {
     summary: ['Motion to compel filed Jul 10, 2026'],
     changes: { discovery: { pendingMotion: { filed: 'Jul 10, 2026' } } },
     taskRefs: ['task-1', 42, ''],
+    sourceMode: 'link',
+    sourceRevision: 'revision-123',
+    evidence: [
+      {
+        path: 'wiki/sources/motion.md',
+        source: 'filings/motion.pdf',
+        fieldPaths: ['discovery.pendingMotion.filed', ''],
+      },
+      { title: 'missing path' },
+    ],
   };
 
   it('round-trips a valid proposal and filters bad task refs', () => {
@@ -90,6 +100,15 @@ describe('normalizeMatterProposalDto', () => {
     expect(proposal?.summary).toEqual(['Motion to compel filed Jul 10, 2026']);
     expect(proposal?.changes.discovery?.pendingMotion?.filed).toBe('Jul 10, 2026');
     expect(proposal?.taskRefs).toEqual(['task-1']);
+    expect(proposal?.sourceMode).toBe('link');
+    expect(proposal?.sourceRevision).toBe('revision-123');
+    expect(proposal?.evidence).toEqual([
+      {
+        path: 'wiki/sources/motion.md',
+        source: 'filings/motion.pdf',
+        fieldPaths: ['discovery.pendingMotion.filed'],
+      },
+    ]);
   });
 
   it('returns null when identity or summary is missing', () => {

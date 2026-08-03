@@ -2,7 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api } from '@renderer/api';
 
-import type { MatterDto, MatterProposalDto, MatterSnapshotDto } from '../../contracts';
+import type {
+  MatterDto,
+  MatterEvidenceStatusDto,
+  MatterLinkOperation,
+  MatterLinkOperationResultDto,
+  MatterProposalDto,
+  MatterSnapshotDto,
+} from '../../contracts';
 
 const LIVE_RELOAD_DEBOUNCE_MS = 300;
 
@@ -15,6 +22,14 @@ export interface UseMatterResult {
   /** True while a user approve/reject action is in flight. */
   acting: boolean;
   error: string | null;
+  linkStatus: MatterEvidenceStatusDto | null;
+  linkActing: boolean;
+  linkMessage: string | null;
+  linkError: string | null;
+  checkLinkStatus: () => Promise<void>;
+  initializeLink: () => Promise<void>;
+  requestLinkRefresh: () => Promise<void>;
+  requestLinkProposal: () => Promise<void>;
   applyProposal: () => Promise<void>;
   rejectProposal: (reason?: string) => Promise<void>;
   reload: () => Promise<void>;
@@ -31,6 +46,10 @@ export function useMatter(teamName?: string): UseMatterResult {
   const [loading, setLoading] = useState(Boolean(teamName));
   const [acting, setActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [linkStatus, setLinkStatus] = useState<MatterEvidenceStatusDto | null>(null);
+  const [linkActing, setLinkActing] = useState(false);
+  const [linkMessage, setLinkMessage] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSeqRef = useRef(0);
 
@@ -54,11 +73,55 @@ export function useMatter(teamName?: string): UseMatterResult {
     requestSeqRef.current += 1;
     setSnapshot(EMPTY_SNAPSHOT);
     setError(null);
+    setLinkStatus(null);
+    setLinkMessage(null);
+    setLinkError(null);
     setLoading(Boolean(teamName));
     if (teamName) {
       void load();
     }
   }, [teamName, load]);
+
+  const checkLinkStatus = useCallback(async (): Promise<void> => {
+    if (!teamName) return;
+    setLinkActing(true);
+    try {
+      const status = await api.matter.getLinkStatus(teamName);
+      setLinkStatus(status);
+      setLinkMessage(status.summary);
+      setLinkError(null);
+    } catch (statusError) {
+      setLinkError(String(statusError));
+    } finally {
+      setLinkActing(false);
+    }
+  }, [teamName]);
+
+  const runLinkOperation = useCallback(
+    async (operation: MatterLinkOperation): Promise<void> => {
+      if (!teamName) return;
+      setLinkActing(true);
+      setLinkMessage(null);
+      try {
+        let result: MatterLinkOperationResultDto;
+        if (operation === 'initialize') {
+          result = await api.matter.initializeLink(teamName);
+        } else if (operation === 'refresh-request') {
+          result = await api.matter.requestLinkRefresh(teamName);
+        } else {
+          result = await api.matter.requestLinkProposal(teamName);
+        }
+        setLinkStatus(result.status);
+        setLinkMessage(result.message);
+        setLinkError(result.accepted ? null : result.message);
+      } catch (operationError) {
+        setLinkError(String(operationError));
+      } finally {
+        setLinkActing(false);
+      }
+    },
+    [teamName]
+  );
 
   useEffect(() => {
     if (!teamName) return;
@@ -134,6 +197,14 @@ export function useMatter(teamName?: string): UseMatterResult {
     loading,
     acting,
     error,
+    linkStatus,
+    linkActing,
+    linkMessage,
+    linkError,
+    checkLinkStatus,
+    initializeLink: () => runLinkOperation('initialize'),
+    requestLinkRefresh: () => runLinkOperation('refresh-request'),
+    requestLinkProposal: () => runLinkOperation('proposal-request'),
     applyProposal,
     rejectProposal,
     reload: load,

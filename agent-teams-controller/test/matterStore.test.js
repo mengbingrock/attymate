@@ -43,11 +43,15 @@ describe('matterStore', () => {
     expect(() =>
       matterStore.submitProposal(context, { summary: [], changes: { caption: 'X' } })
     ).toThrow(/summary/);
+    expect(() => matterStore.submitProposal(context, { summary: ['a'], changes: {} })).toThrow(
+      /changes/
+    );
     expect(() =>
-      matterStore.submitProposal(context, { summary: ['a'], changes: {} })
-    ).toThrow(/changes/);
-    expect(() =>
-      matterStore.submitProposal(context, { summary: ['a'], changes: { caption: 'X' }, taskRefs: 'x' })
+      matterStore.submitProposal(context, {
+        summary: ['a'],
+        changes: { caption: 'X' },
+        taskRefs: 'x',
+      })
     ).toThrow(/taskRefs/);
     expect(() =>
       matterStore.submitProposal(context, {
@@ -78,6 +82,34 @@ describe('matterStore', () => {
     const onDisk = readFileJson(context, 'matter-proposal.json');
     expect(onDisk.summary).toEqual(['second']);
     expect(onDisk.taskRefs).toBeUndefined();
+  });
+
+  it('preserves Link evidence metadata on a pending proposal', () => {
+    const context = makeContext();
+    const proposal = matterStore.submitProposal(
+      context,
+      {
+        summary: ['operative complaint confirmed'],
+        changes: { pleading: { operativePleading: 'First Amended Complaint' } },
+        sourceMode: 'link',
+        sourceRevision: 'revision-123',
+        evidence: [
+          {
+            path: 'wiki/sources/complaint.md',
+            source: 'pleadings/complaint.pdf',
+            fieldPaths: ['pleading.operativePleading'],
+          },
+        ],
+      },
+      'team-lead'
+    );
+
+    expect(proposal.sourceMode).toBe('link');
+    expect(proposal.sourceRevision).toBe('revision-123');
+    expect(proposal.evidence).toHaveLength(1);
+    expect(readFileJson(context, 'matter-proposal.json').evidence[0].path).toBe(
+      'wiki/sources/complaint.md'
+    );
   });
 
   it('errors when applying or rejecting with no pending proposal', () => {
@@ -131,7 +163,10 @@ describe('matterStore', () => {
       {
         summary: ['update'],
         changes: {
-          coreFields: [{ label: 'Client', value: 'New' }, { label: 'Judge', value: 'Hon. X' }],
+          coreFields: [
+            { label: 'Client', value: 'New' },
+            { label: 'Judge', value: 'Hon. X' },
+          ],
           discovery: {
             requests: [{ type: 'RFP', status: 'Complete' }],
             pendingMotion: { outcome: 'Granted' },

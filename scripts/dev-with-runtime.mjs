@@ -34,6 +34,9 @@ const terminalPlatformRootEnv = 'CLAUDE_TERMINAL_PLATFORM_ROOT';
 const legacyTerminalPlatformRootEnv = 'TERMINAL_PLATFORM_ROOT';
 const terminalDaemonBinaryEnv = 'CLAUDE_TERMINAL_DAEMON_BINARY';
 const organizationDemoEnv = 'AGENT_TEAMS_ORG_DEMO';
+const linkCommandEnv = 'AGENT_TEAMS_LINK_COMMAND';
+const linkScriptEnv = 'AGENT_TEAMS_LINK_SCRIPT';
+const linkPythonEnv = 'AGENT_TEAMS_LINK_PYTHON';
 
 function prependPathEntries(entries) {
   const currentPath = process.env.PATH ?? '';
@@ -61,6 +64,31 @@ function augmentRuntimeToolPath() {
     '/opt/homebrew/bin',
     '/usr/local/bin',
   ]);
+}
+
+function configureLinkSource(env) {
+  if (env[linkCommandEnv]?.trim() || env[linkScriptEnv]?.trim()) {
+    return null;
+  }
+
+  const candidates = [
+    {
+      script: path.resolve(uiRepoRoot, 'vendor', 'link', 'link.py'),
+      label: 'vendored Link source',
+    },
+    {
+      script: path.resolve(uiRepoRoot, '..', 'link', 'link.py'),
+      label: 'local Link checkout',
+    },
+  ];
+  const selected = candidates.find((candidate) => fs.existsSync(candidate.script));
+  if (!selected) {
+    return null;
+  }
+
+  env[linkScriptEnv] = selected.script;
+  env[linkPythonEnv] = env[linkPythonEnv]?.trim() || 'python3';
+  return selected;
 }
 
 function runOrExit(cmd, args, options = {}) {
@@ -769,6 +797,10 @@ async function main() {
     UV_THREADPOOL_SIZE: process.env.UV_THREADPOOL_SIZE?.trim() || '16',
     CLAUDE_AGENT_TEAMS_ORCHESTRATOR_CLI_PATH: resolvedRuntime.binaryPath,
   };
+  const linkSource = configureLinkSource(uiEnv);
+  if (linkSource) {
+    process.stdout.write(`Using ${linkSource.label}: ${linkSource.script}\n`);
+  }
   ensureMinimumNodeOldSpaceEnv(uiEnv);
   delete uiEnv.CLAUDE_CLI_PATH;
   const uiPackageManager = readPackageManagerCommand(uiRepoRoot);
