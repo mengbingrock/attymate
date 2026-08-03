@@ -470,7 +470,7 @@ The desktop app auto-discovers Claude Code projects from `~/.claude/`.
 
 ### Link integration
 
-The Matter Dashboard uses the vendored Link CLI runtime in `vendor/link`; a separate
+The Matter Dashboard uses the trimmed vendored Link runtime in `vendor/link`; a separate
 Link clone or global `lnk` installation is not required. Python 3.10+ must be available
 to execute the bundled source. Explicit Link command, script, and Python environment
 overrides remain supported for development and testing.

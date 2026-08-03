@@ -70,9 +70,11 @@ or HTTP. The dashboard then offers explicit operations:
   existing `matter_propose` review gate.
 
 Electron and browser clients use the same feature operations. Link's
-MIT-licensed CLI runtime is vendored under `vendor/link` and included as an
-unpacked application resource. Local development and packaged builds prefer
-that source, so a separate Link clone or global installation is not required.
+MIT-licensed indexing and retrieval source is vendored under `vendor/link` and
+included as an unpacked application resource. It is trimmed to the dashboard's
+`init`, `ingest-status`, and `query` contract; unrelated Link CLI and web features
+are not shipped. Local development and packaged builds prefer that source, so a
+separate Link clone or global installation is not required.
 Python 3.10+ must still be available. Runtime selection order is:
 
 1. `AGENT_TEAMS_LINK_COMMAND` — explicit executable override.

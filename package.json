@@ -349,8 +349,7 @@
         "filter": [
           "**/*.py",
           "LICENSE",
-          "UPSTREAM.md",
-          "pyproject.toml"
+          "UPSTREAM.md"
         ]
       }
     ],

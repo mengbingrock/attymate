@@ -1,6 +1,7 @@
 # Link upstream provenance
 
-This directory vendors the Link command-line runtime used by AttyMate's Matter Dashboard.
+This directory vendors the minimal Link indexing and retrieval runtime used by
+AttyMate's Matter Dashboard.
 
 - Upstream project: https://github.com/gowtham0992/link
 - License: MIT
@@ -13,5 +14,13 @@ The vendored snapshot includes the local direct-project indexing changes used by
 AttyMate integration. Those changes allow Link to index a matter workspace directly,
 without requiring users to move every source into a separate `raw/` directory.
 
+To avoid shipping unused code, the snapshot is trimmed to AttyMate's three-command
+contract: `init`, `ingest-status`, and `query`. `link.py` is an AttyMate-specific thin
+wrapper around the retained upstream modules. The retained `link_core` files are the
+transitive Python import closure of initialization, source coverage analysis, index
+construction, backlink construction, and query packet retrieval. Link's web server,
+MCP, backup, sharing, Obsidian import, agent hooks, and generic CLI renderers are not
+included.
+
 The complete upstream license is preserved in `LICENSE`. AttyMate invokes this source
-through Python and does not rename the upstream Link APIs or claim authorship of Link.
+through Python and does not claim authorship of the retained Link implementation.

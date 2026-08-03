@@ -2,7 +2,8 @@
 
 ## Link
 
-AttyMate includes a vendored copy of the Link local knowledge and retrieval runtime.
+AttyMate includes a trimmed, vendored copy of the Link local knowledge and retrieval
+runtime for `init`, `ingest-status`, and `query`.
 
 - Project: [gowtham0992/link](https://github.com/gowtham0992/link)
 - License: MIT
