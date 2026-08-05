@@ -12,12 +12,18 @@ import type { TeamImportFolderSourcePort } from '../../core/application/ports/Te
 import type { Dirent, Stats } from 'node:fs';
 import type { FileHandle } from 'node:fs/promises';
 
+/** Canonical bundle an app export drops at the root of the folder. */
+export const TEAM_IMPORT_BUNDLE_FILE = 'team-import-bundle.json';
+
 export const TEAM_IMPORT_LIMITS = {
   maxAgentFiles: 32,
   maxSkillFiles: 64,
   maxAgentFileBytes: 256 * 1024,
   maxClaudeMdBytes: 512 * 1024,
   maxSkillFileBytes: 64 * 1024,
+  // The bundle inlines every agent workflow and skill file, so it is sized
+  // against the whole-source budget rather than the per-file one.
+  maxBundleFileBytes: 2 * 1024 * 1024,
   maxTotalBytes: 2 * 1024 * 1024,
 } as const;
 
@@ -258,12 +264,23 @@ export class SafeLocalTeamImportFolderSource implements TeamImportFolderSourcePo
       budget,
     });
 
+    // Its own budget: the bundle restates the same team the markdown describes,
+    // so charging it to the scan budget would halve the source ceiling.
+    const bundleJson = await readBoundRegularUtf8File({
+      filePath: path.join(realRoot, TEAM_IMPORT_BUNDLE_FILE),
+      realRoot,
+      maxBytes: TEAM_IMPORT_LIMITS.maxBundleFileBytes,
+      budget: { totalBytes: 0 },
+      optional: true,
+    });
+
     return {
       projectPath: realRoot,
       folderName: path.basename(realRoot),
       agentFiles,
       claudeMd: claudeMd ?? undefined,
       skills,
+      ...(bundleJson ? { bundleJson } : {}),
       warnings: [],
     };
   }

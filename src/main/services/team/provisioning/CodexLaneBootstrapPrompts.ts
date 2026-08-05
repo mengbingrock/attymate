@@ -1,3 +1,5 @@
+import { MATTER_SKILL_SLUG } from '@features/matter-dashboard/contracts';
+
 import { describeStockBootstrapMember } from './TeamProvisioningBootstrapSpec';
 import { buildLeadInitialMatterScanInstructions } from './TeamProvisioningPromptBuilders';
 
@@ -66,19 +68,16 @@ export function buildCodexLeadBootstrapPrompt(
     '"[Agent Teams message from <name>]". After a teammate reports back, update the task',
     'status yourself.',
     '',
-    'Matter dashboard (MANDATORY): do NOT update it per task. When a related series of tasks',
-    '(a job) is fully complete, call matter_get, compile what the completed work changed about',
-    'the case (derive it from task comments/results — grounded facts only, never invented),',
-    're-scan the project folder for new or changed case documents the work produced or received,',
-    'then call matter_propose with a summary list and only the changed sections. The user',
-    'approves or rejects the proposal in the dashboard; nothing changes until approval. If',
-    'rejected, the reason arrives in your inbox — revise and re-propose.'
+    `Matter dashboard (MANDATORY): do NOT update it per task. When a related series of tasks`,
+    `(a job) is fully complete, load the "${MATTER_SKILL_SLUG}" skill and follow it — the app also`,
+    'sends you that skill when the user asks for a refresh or the board goes quiet. You may only',
+    'propose (matter_get then matter_propose); the user approves in the dashboard and nothing',
+    'changes until then. Grounded facts only — never invent dates, amounts, or outcomes.'
   );
   if (spec.members.length > 0) {
     lines.push(
-      'Delegate matter verification to the right specialist and run independent checks in',
-      'parallel: deadline computation/verification to a calendar specialist, docket facts to a',
-      'docket specialist, document review to intake/facts specialists. You compile and propose.'
+      'Delegate matter work to the right specialist (calendaring, docket, intake/facts) and',
+      'message them in parallel. You compile and propose.'
     );
   }
   if (options.matterNeedsInitialScan) {

@@ -11,6 +11,7 @@ import {
   type MatterElectronApi,
   type MatterEvidenceStatusDto,
   type MatterLinkOperationResultDto,
+  type MatterRefreshResultDto,
   type MatterSnapshotDto,
 } from '@features/matter-dashboard/contracts';
 import {
@@ -64,6 +65,7 @@ import type {
   RuntimeProviderCompanionStatusDto,
   RuntimeProviderManagementApi,
 } from '@features/runtime-provider-management/contracts';
+import type { TeamExportElectronApi } from '@features/team-export/contracts';
 import type { TeamImportApi } from '@features/team-import/contracts';
 import type { TerminalWorkspaceElectronApi } from '@features/terminal-workspace/contracts';
 import type {
@@ -223,6 +225,12 @@ export class HttpAPIClient implements ElectronAPI {
       throw new Error('Team import is only available in the desktop app');
     },
     onJobProgress: () => () => undefined,
+  };
+
+  teamExport: TeamExportElectronApi['teamExport'] = {
+    run: async () => {
+      throw new Error('Team export is only available in the desktop app');
+    },
   };
 
   constructor(baseUrl: string) {
@@ -502,6 +510,8 @@ export class HttpAPIClient implements ElectronAPI {
       this.post<MatterLinkOperationResultDto>(`${MATTER_ROUTE}/link-refresh`, { teamName }),
     requestLinkProposal: (teamName: string): Promise<MatterLinkOperationResultDto> =>
       this.post<MatterLinkOperationResultDto>(`${MATTER_ROUTE}/link-proposal`, { teamName }),
+    requestRefresh: (teamName: string): Promise<MatterRefreshResultDto> =>
+      this.post<MatterRefreshResultDto>(`${MATTER_ROUTE}/request-refresh`, { teamName }),
     applyProposal: (teamName: string): Promise<MatterSnapshotDto> =>
       this.post<MatterSnapshotDto>(`${MATTER_ROUTE}/apply-proposal`, { teamName }),
     rejectProposal: (teamName: string, reason?: string): Promise<MatterSnapshotDto> =>

@@ -8,6 +8,7 @@ import { createMemberWorkSyncBridge } from '@features/member-work-sync/preload';
 import { createOrganizationsBridge } from '@features/organizations/preload';
 import { createRecentProjectsBridge } from '@features/recent-projects/preload';
 import { createRuntimeProviderManagementBridge } from '@features/runtime-provider-management/preload';
+import { createTeamExportBridge } from '@features/team-export/preload';
 import { createTeamImportBridge } from '@features/team-import/preload';
 import { createTerminalWorkspaceBridge } from '@features/terminal-workspace/preload';
 import { createTmuxInstallerBridge } from '@features/tmux-installer/preload';
@@ -594,6 +595,7 @@ const electronAPI: ElectronAPI = {
   }),
   ...createRecentProjectsBridge(),
   teamImport: createTeamImportBridge(ipcRenderer),
+  teamExport: createTeamExportBridge(ipcRenderer),
   runtimeProviderManagement: createRuntimeProviderManagementBridge(ipcRenderer),
   memberWorkSync: createMemberWorkSyncBridge(ipcRenderer),
   memberLogStream: createMemberLogStreamBridge(),

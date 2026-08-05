@@ -60,51 +60,37 @@ function createService(
   );
 }
 
+/**
+ * The nudge's wording lives in the matter feature now (it delivers the user's
+ * matter-dashboard skill), so this service is only responsible for deciding
+ * *when* a wrap-up refresh is requested.
+ */
 function spyOnSendMessage(service: TeamDataService) {
-  return vi
-    .spyOn(service, 'sendMessage')
-    .mockResolvedValue({ delivered: true } as never);
+  const requester = vi.fn().mockResolvedValue({ accepted: true });
+  service.setMatterRefreshRequester(requester);
+  return requester;
 }
 
 describe('TeamDataService.notifyLeadOnJobWrapUp', () => {
-  it('nudges the lead once when the last active task completes', async () => {
+  it('requests one matter refresh when the last active task completes', async () => {
     const service = createService([completedTask('t1')]);
     const sendSpy = spyOnSendMessage(service);
 
     await service.notifyLeadOnJobWrapUp('my-team', 't1');
 
     expect(sendSpy).toHaveBeenCalledTimes(1);
-    const [teamName, request] = sendSpy.mock.calls[0];
+    const [teamName, completedTaskLabel] = sendSpy.mock.calls[0];
     expect(teamName).toBe('my-team');
-    expect(request.member).toBe('team-lead');
-    expect(request.source).toBe('system_notification');
-    expect(request.text).toContain('matter dashboard');
-    expect(request.text).toContain('matter_get');
-    expect(request.text).toContain('matter_propose');
-    expect(request.text).toContain('re-scan the project folder');
-    // Solo (no config roster): no delegation guidance.
-    expect(request.text).not.toContain('calendar specialist');
+    expect(completedTaskLabel).toContain('Task t1');
   });
 
-  it('tells a teamed lead to delegate verification to specialists in parallel', async () => {
-    const service = createService(
-      [completedTask('t1')],
-      [
-        { name: 'team-lead', agentType: 'team-lead' },
-        { name: 'calendar-agent', role: 'Litigation Calendar Proposal Specialist' },
-        { name: 'docket-agent', role: 'Court Docket Review Specialist' },
-      ]
-    );
-    const sendSpy = spyOnSendMessage(service);
+  it('stays silent when no matter refresh requester is wired in', async () => {
+    const service = createService([completedTask('t1')]);
+    const messageSpy = vi.spyOn(service, 'sendMessage').mockResolvedValue({} as never);
 
     await service.notifyLeadOnJobWrapUp('my-team', 't1');
 
-    expect(sendSpy).toHaveBeenCalledTimes(1);
-    const [, request] = sendSpy.mock.calls[0];
-    expect(request.member).toBe('team-lead');
-    expect(request.text).toContain('calendar specialist');
-    expect(request.text).toContain('docket specialist');
-    expect(request.text).toContain('in parallel');
+    expect(messageSpy).not.toHaveBeenCalled();
   });
 
   it('dedups repeated file events for the same completion transition', async () => {

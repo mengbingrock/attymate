@@ -26,10 +26,16 @@ export interface UseMatterResult {
   linkActing: boolean;
   linkMessage: string | null;
   linkError: string | null;
+  /** True while the lead is being asked to refresh the dashboard. */
+  refreshActing: boolean;
+  refreshMessage: string | null;
+  refreshError: string | null;
   checkLinkStatus: () => Promise<void>;
   initializeLink: () => Promise<void>;
   requestLinkRefresh: () => Promise<void>;
   requestLinkProposal: () => Promise<void>;
+  /** Ask the team lead to scan the case folder and propose an update. */
+  requestRefresh: () => Promise<void>;
   applyProposal: () => Promise<void>;
   rejectProposal: (reason?: string) => Promise<void>;
   reload: () => Promise<void>;
@@ -50,6 +56,9 @@ export function useMatter(teamName?: string): UseMatterResult {
   const [linkActing, setLinkActing] = useState(false);
   const [linkMessage, setLinkMessage] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [refreshActing, setRefreshActing] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSeqRef = useRef(0);
 
@@ -76,6 +85,8 @@ export function useMatter(teamName?: string): UseMatterResult {
     setLinkStatus(null);
     setLinkMessage(null);
     setLinkError(null);
+    setRefreshMessage(null);
+    setRefreshError(null);
     setLoading(Boolean(teamName));
     if (teamName) {
       void load();
@@ -122,6 +133,22 @@ export function useMatter(teamName?: string): UseMatterResult {
     },
     [teamName]
   );
+
+  const requestRefresh = useCallback(async (): Promise<void> => {
+    if (!teamName) return;
+    setRefreshActing(true);
+    setRefreshMessage(null);
+    setRefreshError(null);
+    try {
+      const result = await api.matter.requestRefresh(teamName);
+      setRefreshMessage(result.message);
+      if (!result.accepted) setRefreshError(result.message);
+    } catch (refreshFailure) {
+      setRefreshError(String(refreshFailure));
+    } finally {
+      setRefreshActing(false);
+    }
+  }, [teamName]);
 
   useEffect(() => {
     if (!teamName) return;
@@ -201,10 +228,14 @@ export function useMatter(teamName?: string): UseMatterResult {
     linkActing,
     linkMessage,
     linkError,
+    refreshActing,
+    refreshMessage,
+    refreshError,
     checkLinkStatus,
     initializeLink: () => runLinkOperation('initialize'),
     requestLinkRefresh: () => runLinkOperation('refresh-request'),
     requestLinkProposal: () => runLinkOperation('proposal-request'),
+    requestRefresh,
     applyProposal,
     rejectProposal,
     reload: load,

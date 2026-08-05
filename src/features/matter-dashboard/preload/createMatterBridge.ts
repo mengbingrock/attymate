@@ -6,6 +6,7 @@ import {
   MATTER_LINK_REQUEST_PROPOSAL,
   MATTER_LINK_REQUEST_REFRESH,
   MATTER_REJECT_PROPOSAL,
+  MATTER_REQUEST_REFRESH,
   type MatterElectronApi,
 } from '../contracts';
 
@@ -20,6 +21,7 @@ export function createMatterBridge(ipcRenderer: IpcRenderer): MatterElectronApi[
       ipcRenderer.invoke(MATTER_LINK_REQUEST_REFRESH, teamName),
     requestLinkProposal: (teamName: string) =>
       ipcRenderer.invoke(MATTER_LINK_REQUEST_PROPOSAL, teamName),
+    requestRefresh: (teamName: string) => ipcRenderer.invoke(MATTER_REQUEST_REFRESH, teamName),
     applyProposal: (teamName: string) => ipcRenderer.invoke(MATTER_APPLY_PROPOSAL, teamName),
     rejectProposal: (teamName: string, reason?: string) =>
       ipcRenderer.invoke(MATTER_REJECT_PROPOSAL, teamName, reason),

@@ -1,5 +1,9 @@
 import type { MatterSnapshotDto } from './dto';
-import type { MatterEvidenceStatusDto, MatterLinkOperationResultDto } from './evidence';
+import type {
+  MatterEvidenceStatusDto,
+  MatterLinkOperationResultDto,
+  MatterRefreshResultDto,
+} from './evidence';
 
 export interface MatterElectronApi {
   matter: {
@@ -8,6 +12,7 @@ export interface MatterElectronApi {
     initializeLink(teamName: string): Promise<MatterLinkOperationResultDto>;
     requestLinkRefresh(teamName: string): Promise<MatterLinkOperationResultDto>;
     requestLinkProposal(teamName: string): Promise<MatterLinkOperationResultDto>;
+    requestRefresh(teamName: string): Promise<MatterRefreshResultDto>;
     applyProposal(teamName: string): Promise<MatterSnapshotDto>;
     rejectProposal(teamName: string, reason?: string): Promise<MatterSnapshotDto>;
   };

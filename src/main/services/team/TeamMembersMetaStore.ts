@@ -32,6 +32,19 @@ function normalizeFastMode(value: unknown): TeamMember['fastMode'] {
   return value === 'inherit' || value === 'on' || value === 'off' ? value : undefined;
 }
 
+function normalizeSkills(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const slugs = [
+    ...new Set(
+      value
+        .filter((slug): slug is string => typeof slug === 'string')
+        .map((slug) => slug.trim())
+        .filter(Boolean)
+    ),
+  ];
+  return slugs.length > 0 ? slugs : undefined;
+}
+
 function normalizeMember(member: TeamMember): TeamMember | null {
   const trimmedName = member.name?.trim();
   if (!trimmedName) {
@@ -42,6 +55,7 @@ function normalizeMember(member: TeamMember): TeamMember | null {
     name: trimmedName,
     role: typeof member.role === 'string' ? member.role.trim() || undefined : undefined,
     workflow: typeof member.workflow === 'string' ? member.workflow.trim() || undefined : undefined,
+    skills: normalizeSkills(member.skills),
     isolation: member.isolation === 'worktree' ? ('worktree' as const) : undefined,
     providerId,
     providerBackendId: migrateProviderBackendId(
