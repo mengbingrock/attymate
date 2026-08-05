@@ -26,6 +26,8 @@ import type {
   InteractiveRuntimeStatusDto,
   OpenConsoleResultDto,
 } from '../contracts';
+import { isClaudeComposerSubmitted } from '../core/domain/claudePaneState';
+
 import type { InteractiveRuntimeBinding } from '../core/domain/runtimeBinding';
 
 export type { InteractiveRuntimeBinding } from '../core/domain/runtimeBinding';
@@ -174,7 +176,13 @@ export class InteractiveTeamRuntimeService {
     // Paste FIRST: interactive Claude creates the session transcript only
     // after the first input is submitted, so detection must follow the paste.
     input.callbacks.checkpoint('Pasting bootstrap prompt into lead pane');
-    await tmux.pasteTextIntoPane(leadPaneId, input.bootstrapPrompt);
+    await tmux.pasteTextIntoPane(leadPaneId, input.bootstrapPrompt, {
+      // The bootstrap is large enough that Enter can be coalesced into the
+      // paste instead of submitting it. Submission is visible in the pane:
+      // the composer stops showing the collapsed "[Pasted text …]" chip (and
+      // pending input in general) once the message is actually sent.
+      verifySubmitted: (paneTail) => isClaudeComposerSubmitted(paneTail),
+    });
 
     // Launcher env material no longer needed once claude is running.
     await fs.promises.rm(launcherDir, { recursive: true, force: true }).catch(() => {});

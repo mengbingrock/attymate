@@ -52,6 +52,14 @@ export interface ListRuntimeProcessesOptions {
  */
 const RUNTIME_PROCESS_TABLE_CACHE_TTL_MS = 30_000;
 
+/**
+ * How long to let the pane settle before checking whether a pasted input was
+ * actually submitted, and how many extra Enters to try. Large pastes need the
+ * composer to finish ingesting before Enter means "submit".
+ */
+const PASTE_SUBMIT_VERIFY_DELAY_MS = 700;
+const PASTE_SUBMIT_RETRY_LIMIT = 5;
+
 interface RuntimeProcessTableCacheEntry {
   rows: RuntimeProcessTableRow[];
   expiresAtMs: number;
@@ -442,11 +450,19 @@ export class TmuxPlatformCommandExecutor {
    * Deliver arbitrary multi-line text into a pane via tmux buffers with
    * bracketed paste (the Claude TUI treats it as one input), then submit with
    * Enter. Avoids send-keys argv limits and shell escaping entirely.
+   *
+   * Submission cannot be fire-and-forget: TUIs detect a paste by input timing,
+   * and an Enter that lands while the composer is still ingesting a large
+   * paste is coalesced into the paste as a newline instead of submitting. A
+   * ~140-line lead bootstrap regularly lost its Enter that way, leaving the
+   * prompt sitting in the composer and the launch timing out. When the caller
+   * can tell from the pane content whether the input went through
+   * (`verifySubmitted`), keep re-sending Enter until it does.
    */
   async pasteTextIntoPane(
     paneId: string,
     text: string,
-    options?: { submit?: boolean }
+    options?: { submit?: boolean; verifySubmitted?: (paneTail: string) => boolean }
   ): Promise<void> {
     const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'agteams-paste-'));
     const tempFile = path.join(tempDir, 'buffer.txt');
@@ -469,10 +485,23 @@ export class TmuxPlatformCommandExecutor {
         throw new Error(paste.stderr || `Failed to paste into tmux pane ${paneId}`);
       }
       if (options?.submit !== false) {
+        const sendEnter = async (): Promise<void> => {
+          const submit = await this.execTmux(['send-keys', '-t', paneId, 'Enter'], 3_000);
+          if (submit.exitCode !== 0) {
+            throw new Error(submit.stderr || `Failed to submit input in tmux pane ${paneId}`);
+          }
+        };
         await new Promise((resolve) => setTimeout(resolve, 350));
-        const submit = await this.execTmux(['send-keys', '-t', paneId, 'Enter'], 3_000);
-        if (submit.exitCode !== 0) {
-          throw new Error(submit.stderr || `Failed to submit input in tmux pane ${paneId}`);
+        await sendEnter();
+        if (options?.verifySubmitted) {
+          for (let attempt = 0; attempt < PASTE_SUBMIT_RETRY_LIMIT; attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, PASTE_SUBMIT_VERIFY_DELAY_MS));
+            const tail = await this.capturePaneTail(paneId, 25).catch(() => null);
+            // A dead pane means verification is moot; the caller's own
+            // liveness checks report that failure with a better message.
+            if (tail === null || options.verifySubmitted(tail)) return;
+            await sendEnter();
+          }
         }
       }
     } finally {
