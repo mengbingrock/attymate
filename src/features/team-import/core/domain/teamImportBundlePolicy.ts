@@ -351,6 +351,11 @@ export function parseTeamImportBundle(
   const context: BudgetContext = { totalBytes: 0, warnings };
   const members = parseMembers(root.members, context);
   const skills = parseSkills(root.skills, context);
+  const requestedLeadName =
+    typeof teamRaw.suggestedLeadName === 'string' ? teamRaw.suggestedLeadName.trim() : '';
+  const suggestedLeadName = members.find(
+    (member) => member.name.toLowerCase() === requestedLeadName.toLowerCase()
+  )?.name;
 
   const blockingErrors: string[] = [];
   if (members.length === 0) {
@@ -382,6 +387,7 @@ export function parseTeamImportBundle(
               ...(typeof teamRaw.leadPrompt === 'string' && teamRaw.leadPrompt.trim()
                 ? { leadPrompt: teamRaw.leadPrompt.trim() }
                 : {}),
+              ...(suggestedLeadName ? { suggestedLeadName } : {}),
             },
             members,
             skills,

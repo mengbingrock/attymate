@@ -1,6 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
-
+import { parseTeamImportBundle } from '@features/team-import/core/domain/teamImportBundlePolicy';
 import {
   assembleBundleJson,
   buildMemberExtractionPrompt,
@@ -8,9 +7,10 @@ import {
   parseMemberJobOutput,
   parseSkillJobOutput,
   parseTeamImportPlan,
+  reconcileTeamImportPlanWithStructuredAgents,
   selectDumpFiles,
 } from '@features/team-import/core/domain/teamImportParallelParse';
-import { parseTeamImportBundle } from '@features/team-import/core/domain/teamImportBundlePolicy';
+import { describe, expect, it } from 'vitest';
 
 const DUMP = {
   label: 'demo-package',
@@ -29,7 +29,12 @@ describe('parseTeamImportPlan', () => {
     const plan = parseTeamImportPlan(
       JSON.stringify({
         schema: 'team-import-plan/v1',
-        team: { name: 'demo', description: 'd', leadPromptPaths: ['COMPANY.md'] },
+        team: {
+          name: 'demo',
+          description: 'd',
+          suggestedLeadName: 'scout',
+          leadPromptPaths: ['COMPANY.md'],
+        },
         members: [
           { name: 'scout', role: 'researcher', sourcePaths: ['agents/scout/AGENTS.md'] },
           { role: 'nameless is dropped', sourcePaths: [] },
@@ -40,11 +45,64 @@ describe('parseTeamImportPlan', () => {
     expect(plan?.members).toHaveLength(1);
     expect(plan?.skills).toHaveLength(1);
     expect(plan?.team.leadPromptPaths).toEqual(['COMPANY.md']);
+    expect(plan?.team.suggestedLeadName).toBe('scout');
   });
 
   it('returns null without members or valid JSON', () => {
     expect(parseTeamImportPlan('no json here')).toBeNull();
     expect(parseTeamImportPlan(JSON.stringify({ members: [] }))).toBeNull();
+  });
+});
+
+describe('reconcileTeamImportPlanWithStructuredAgents', () => {
+  it('restores a reportsTo-null root agent omitted by the model and recommends it as lead', () => {
+    const dump = {
+      label: 'legal-team',
+      truncated: false,
+      files: [
+        { path: 'COMPANY.md', content: '# Company' },
+        {
+          path: 'agents/legal-ops-supervisor/AGENTS.md',
+          content:
+            '---\nkind: agent\nslug: legal-ops-supervisor\ntitle: Matter Services Supervisor\nreportsTo: null\n---\nLead workflow',
+        },
+        {
+          path: 'agents/legal-research-agent/AGENTS.md',
+          content:
+            '---\nkind: agent\nslug: legal-research-agent\ntitle: Researcher\nreportsTo: legal-ops-supervisor\n---\nResearch workflow',
+        },
+      ],
+    };
+    const plan = parseTeamImportPlan(
+      JSON.stringify({
+        schema: 'team-import-plan/v1',
+        team: {
+          name: 'legal-team',
+          description: 'legal team',
+          leadPromptPaths: ['COMPANY.md', 'agents/legal-ops-supervisor/AGENTS.md'],
+        },
+        members: [
+          {
+            name: 'legal-research-agent',
+            role: 'Researcher',
+            sourcePaths: ['agents/legal-research-agent/AGENTS.md'],
+          },
+        ],
+        skills: [],
+      })
+    )!;
+
+    const reconciled = reconcileTeamImportPlanWithStructuredAgents(plan, dump);
+
+    expect(reconciled.members.map((member) => member.name)).toEqual([
+      'legal-research-agent',
+      'legal-ops-supervisor',
+    ]);
+    expect(reconciled.team.suggestedLeadName).toBe('legal-ops-supervisor');
+    expect(reconciled.team.leadPromptPaths).toEqual(['COMPANY.md']);
+    expect(
+      reconciled.members.find((member) => member.name === 'legal-ops-supervisor')?.sourcePaths
+    ).toEqual(['agents/legal-ops-supervisor/AGENTS.md']);
   });
 });
 
@@ -83,7 +141,12 @@ describe('assembleBundleJson', () => {
     const plan = parseTeamImportPlan(
       JSON.stringify({
         schema: 'team-import-plan/v1',
-        team: { name: 'demo-team', description: 'a demo team', leadPromptPaths: ['COMPANY.md'] },
+        team: {
+          name: 'demo-team',
+          description: 'a demo team',
+          suggestedLeadName: 'scout',
+          leadPromptPaths: ['COMPANY.md'],
+        },
         members: [{ name: 'scout', role: 'researcher', sourcePaths: ['agents/scout/AGENTS.md'] }],
         skills: [{ slug: 'research', description: 'research skill', sourcePaths: [] }],
       })
@@ -114,6 +177,7 @@ describe('assembleBundleJson', () => {
     const { bundle, blockingErrors } = parseTeamImportBundle(json);
     expect(blockingErrors).toEqual([]);
     expect(bundle?.team.leadPrompt).toContain('Company constitution');
+    expect(bundle?.team.suggestedLeadName).toBe('scout');
     expect(bundle?.members[0].memoryFiles).toEqual([
       { relativePath: 'memory/notes.md', content: 'remember things' },
     ]);
@@ -181,5 +245,7 @@ describe('prompt builders', () => {
     expect(prompt).toContain('Scout instructions');
     expect(prompt).not.toContain('Company constitution');
     expect(buildPlanExtractionPrompt(DUMP)).toContain('team-import-plan/v1');
+    expect(buildPlanExtractionPrompt(DUMP)).toContain('Include EVERY source-defined agent');
+    expect(buildPlanExtractionPrompt(DUMP)).toContain('reportsTo value is null');
   });
 });

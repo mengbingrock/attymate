@@ -24,7 +24,12 @@ function member(overrides: Partial<TeamImportBundleMember> = {}): TeamImportBund
 function bundle(): TeamImportBundle {
   return {
     schema: 'team-import-bundle/v1',
-    team: { name: 'legal-team', description: 'A team.', leadPrompt: 'Coordinate.' },
+    team: {
+      name: 'legal-team',
+      description: 'A team.',
+      leadPrompt: 'Coordinate.',
+      suggestedLeadName: 'researcher',
+    },
     members: [member()],
     skills: [
       {
@@ -121,6 +126,7 @@ describe('bundleToPreview', () => {
     });
     expect(preview.importKind).toBe('smart');
     expect(preview.suggestedTeamName).toBe('legal-team');
+    expect(preview.suggestedLeadName).toBe('researcher');
     expect(preview.members[0].workflow).toBe('Research carefully.');
     expect(preview.memberDetails?.[0]).toEqual({
       name: 'researcher',

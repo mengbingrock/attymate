@@ -55,7 +55,13 @@ export interface TeamImportBundleSkill {
 
 export interface TeamImportBundle {
   schema: typeof TEAM_IMPORT_BUNDLE_SCHEMA;
-  team: { name: string; description?: string; leadPrompt?: string };
+  team: {
+    name: string;
+    description?: string;
+    leadPrompt?: string;
+    /** Source-declared root agent to preselect as the imported team lead. */
+    suggestedLeadName?: string;
+  };
   members: TeamImportBundleMember[];
   skills: TeamImportBundleSkill[];
 }
@@ -92,6 +98,8 @@ export interface TeamImportPreview {
   reviewId: string;
   importKind: 'deterministic' | 'smart';
   suggestedTeamName: string;
+  /** Validated member name recommended by the imported source. */
+  suggestedLeadName?: string;
   projectPath: string;
   sourceLabel?: string;
   teamDescription?: string;

@@ -1,4 +1,5 @@
 import { TEAM_IMPORT_BUNDLE_SCHEMA } from '@features/team-import/contracts';
+import YAML from 'yaml';
 
 import { extractJsonObjectText } from './teamImportBundlePolicy';
 
@@ -31,7 +32,12 @@ export interface TeamImportPlanSkill {
 }
 
 export interface TeamImportParsePlan {
-  team: { name: string; description: string; leadPromptPaths: string[] };
+  team: {
+    name: string;
+    description: string;
+    leadPromptPaths: string[];
+    suggestedLeadName?: string;
+  };
   members: TeamImportPlanMember[];
   skills: TeamImportPlanSkill[];
 }
@@ -49,6 +55,7 @@ Respond with ONLY a single JSON object — no prose, no markdown fence — match
   "team": {
     "name": "<kebab-case team name>",
     "description": "<one-paragraph team purpose>",
+    "suggestedLeadName": "<name of the source-declared root/coordinator agent, which must also appear in members>",
     "leadPromptPaths": ["<path of a team-level document (company constitution, operations manual, orchestration config)>"]
   },
   "members": [
@@ -62,6 +69,11 @@ Respond with ONLY a single JSON object — no prose, no markdown fence — match
 Rules:
 - At most 20 members and 20 skills. Prefer fewer, well-grounded entries.
 - Use the exact FILE paths from the source. Never invent paths.
+- Include EVERY source-defined agent in "members", including a root agent, supervisor, coordinator,
+  manager, intended lead, or an agent whose reportsTo value is null. A lead is still a full agent
+  profile and must never be replaced by the anonymous team lead or omitted from "members".
+- Set "suggestedLeadName" to that root/coordinator agent's member name when the source identifies one.
+- "leadPromptPaths" is only for team-level documents. Never put a per-agent file under agents/ in it.
 - When a source keeps one agent across several files (for example AGENTS.md, SOUL.md, TOOLS.md, HEARTBEAT.md in one agent folder), list all of them in that member's "sourcePaths".
 - Omit members or skills you cannot ground in the source.
 - ${DATA_NOT_INSTRUCTIONS}`,
@@ -204,14 +216,138 @@ export function parseTeamImportPlan(raw: string): TeamImportParsePlan | null {
     if (skills.length >= 20) break;
   }
   if (members.length === 0) return null;
+  const requestedLeadName = asString(team.suggestedLeadName);
+  const suggestedLeadName = members.find(
+    (member) => member.name.toLowerCase() === requestedLeadName.toLowerCase()
+  )?.name;
   return {
     team: {
       name: asString(team.name),
       description: asString(team.description),
       leadPromptPaths: asStringArray(team.leadPromptPaths, 20),
+      ...(suggestedLeadName ? { suggestedLeadName } : {}),
     },
     members,
     skills,
+  };
+}
+
+interface StructuredAgentSource {
+  member: TeamImportPlanMember;
+  reportsTo: string | null | undefined;
+  directoryPath: string;
+}
+
+function normalizeSourcePath(sourcePath: string): string {
+  return sourcePath
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/\/{2,}/g, '/');
+}
+
+function readStructuredAgentSource(
+  file: TeamImportRawSourceFile,
+  dump: TeamImportRawSourceDump
+): StructuredAgentSource | null {
+  const normalizedPath = normalizeSourcePath(file.path);
+  const pathMatch = /(?:^|\/)agents\/([^/]+)\/(?:AGENTS|AGENT)\.md$/i.exec(normalizedPath);
+  if (!pathMatch) return null;
+  const frontmatterMatch = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(file.content);
+  if (!frontmatterMatch) return null;
+
+  try {
+    const raw: unknown = YAML.parse(frontmatterMatch[1]);
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const fields = raw as Record<string, unknown>;
+    if (typeof fields.kind !== 'string' || fields.kind.trim().toLowerCase() !== 'agent')
+      return null;
+    const name = typeof fields.slug === 'string' ? fields.slug.trim() : '';
+    if (!name) return null;
+    const directoryPath = normalizedPath.slice(0, normalizedPath.lastIndexOf('/'));
+    const siblingPaths = dump.files
+      .map((candidate) => normalizeSourcePath(candidate.path))
+      .filter(
+        (candidate) => candidate !== normalizedPath && candidate.startsWith(`${directoryPath}/`)
+      );
+    const sourcePaths = [normalizedPath, ...siblingPaths].slice(0, 40);
+    const roleField =
+      typeof fields.title === 'string'
+        ? fields.title
+        : typeof fields.description === 'string'
+          ? fields.description
+          : typeof fields.name === 'string'
+            ? fields.name
+            : 'Imported agent';
+    return {
+      member: { name, role: roleField.trim(), sourcePaths },
+      reportsTo:
+        fields.reportsTo === null
+          ? null
+          : typeof fields.reportsTo === 'string'
+            ? fields.reportsTo.trim()
+            : undefined,
+      directoryPath,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Structured company packages already identify every agent and their reporting
+ * root. Reconcile that deterministic evidence with the model plan so a planner
+ * cannot silently turn the root profile into an anonymous lead prompt.
+ */
+export function reconcileTeamImportPlanWithStructuredAgents(
+  plan: TeamImportParsePlan,
+  dump: TeamImportRawSourceDump
+): TeamImportParsePlan {
+  const structured = dump.files
+    .map((file) => readStructuredAgentSource(file, dump))
+    .filter((entry): entry is StructuredAgentSource => entry !== null);
+  if (structured.length === 0) return plan;
+
+  const members = plan.members.map((member) => ({
+    ...member,
+    sourcePaths: [...member.sourcePaths],
+  }));
+  const byName = new Map(members.map((member) => [member.name.toLowerCase(), member]));
+  for (const source of structured) {
+    const key = source.member.name.toLowerCase();
+    const existing = byName.get(key);
+    if (existing) {
+      existing.sourcePaths = [
+        ...new Set([...existing.sourcePaths, ...source.member.sourcePaths]),
+      ].slice(0, 40);
+      continue;
+    }
+    if (members.length >= 20) break;
+    const added = { ...source.member, sourcePaths: [...source.member.sourcePaths] };
+    members.push(added);
+    byName.set(key, added);
+  }
+
+  const plannedLead = plan.team.suggestedLeadName
+    ? byName.get(plan.team.suggestedLeadName.toLowerCase())?.name
+    : undefined;
+  const rootAgents = structured.filter((source) => source.reportsTo === null);
+  const sourceLead =
+    rootAgents.length === 1 ? byName.get(rootAgents[0].member.name.toLowerCase())?.name : undefined;
+  const agentDirectories = structured.map((source) => `${source.directoryPath}/`);
+
+  return {
+    ...plan,
+    team: {
+      ...plan.team,
+      leadPromptPaths: plan.team.leadPromptPaths.filter((sourcePath) => {
+        const normalized = normalizeSourcePath(sourcePath);
+        return !agentDirectories.some(
+          (directory) => normalized.startsWith(directory) || directory.endsWith(`/${normalized}`)
+        );
+      }),
+      ...(plannedLead || sourceLead ? { suggestedLeadName: plannedLead ?? sourceLead } : {}),
+    },
+    members,
   };
 }
 
@@ -405,6 +541,7 @@ export function assembleBundleJson(
     team: {
       name: plan.team.name,
       description: plan.team.description,
+      ...(plan.team.suggestedLeadName ? { suggestedLeadName: plan.team.suggestedLeadName } : {}),
       leadPrompt: leadPromptSections.join('\n\n'),
     },
     members: memberJobs.map((member) => ({
