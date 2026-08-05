@@ -12,7 +12,7 @@ export const AGENT_MEMORY_FILE = 'memory/MEMORY.md';
 export const CLAUDE_AGENT_DEFINITION_FILE = 'claude-agent-definition.md';
 
 function yamlScalar(value: string): string {
-  return /^[\w][\w .,\-()/]*$/.test(value) ? value : JSON.stringify(value);
+  return /^\w[\w .,\-()/]*$/.test(value) ? value : JSON.stringify(value);
 }
 
 function yamlList(values: readonly string[]): string {

@@ -113,8 +113,9 @@ export function parseRuntimeProcessTable(output: string): RuntimeProcessTableRow
   return rows;
 }
 
+let pasteBufferSequence = 0;
+
 export class TmuxPlatformCommandExecutor {
-  static #pasteBufferSequence = 0;
   readonly #wslService: TmuxWslService;
   readonly #packageManagerResolver: TmuxPackageManagerResolver;
   #runtimeProcessTableCache: RuntimeProcessTableCacheEntry | null = null;
@@ -452,9 +453,8 @@ export class TmuxPlatformCommandExecutor {
     // Name must be unique across CONCURRENT pastes (codex lanes brief several
     // panes at once): a timestamp alone collides within one millisecond and
     // the first paste's -d deletes the shared buffer ("no buffer agteams-…").
-    TmuxPlatformCommandExecutor.#pasteBufferSequence =
-      (TmuxPlatformCommandExecutor.#pasteBufferSequence + 1) % Number.MAX_SAFE_INTEGER;
-    const bufferName = `agteams-${process.pid.toString(36)}-${Date.now().toString(36)}-${TmuxPlatformCommandExecutor.#pasteBufferSequence.toString(36)}`;
+    pasteBufferSequence = (pasteBufferSequence + 1) % Number.MAX_SAFE_INTEGER;
+    const bufferName = `agteams-${process.pid.toString(36)}-${Date.now().toString(36)}-${pasteBufferSequence.toString(36)}`;
     try {
       await fs.promises.writeFile(tempFile, text, { mode: 0o600 });
       const load = await this.execTmux(['load-buffer', '-b', bufferName, tempFile], 5_000);

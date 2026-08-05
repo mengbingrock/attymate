@@ -38,7 +38,7 @@ export function detectCodexPaneState(tail: string): CodexPaneState {
   }
   // Idle footer: status line `<model> <effort> · <cwd>` is the bottommost
   // content, with the `›` composer line just above it.
-  const hasStatusFooter = /·/.test(last);
+  const hasStatusFooter = last.includes('·');
   const hasComposerAbove = lines.slice(-4).some((line) => /^\s*›/.test(line));
   if (hasStatusFooter && hasComposerAbove) {
     return 'ready';

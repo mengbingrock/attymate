@@ -52,7 +52,7 @@ export function sanitizeBundleRelativePath(relativePath: string): string | null 
   const segments = normalized.split('/');
   for (const segment of segments) {
     if (!segment || segment === '.' || segment === '..') return null;
-    if (!/^[\w][\w.\- ]*$/.test(segment) || segment.endsWith('.') || segment.endsWith(' ')) {
+    if (!/^\w[\w.\- ]*$/.test(segment) || segment.endsWith('.') || segment.endsWith(' ')) {
       return null;
     }
   }
