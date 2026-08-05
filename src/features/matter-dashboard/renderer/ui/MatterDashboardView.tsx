@@ -677,6 +677,69 @@ function LinkEvidencePanel({
   );
 }
 
+interface MatterActionsBarProps {
+  readonly acting: boolean;
+  readonly message: string | null;
+  readonly error: string | null;
+  readonly onRefresh: () => Promise<void>;
+}
+
+/**
+ * Always-available dashboard actions, above the state-gated Link controls. The
+ * refresh button asks the team lead to follow the matter-dashboard skill; the
+ * dashboard itself still only changes when the user approves the proposal.
+ */
+function MatterActionsBar({
+  acting,
+  message,
+  error,
+  onRefresh,
+}: MatterActionsBarProps): React.JSX.Element {
+  return (
+    <div
+      style={{
+        background: '#fff',
+        border: `1px solid ${BORDER}`,
+        borderRadius: 12,
+        padding: '12px 16px',
+        marginBottom: 12,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        flexWrap: 'wrap',
+      }}
+    >
+      <div style={{ minWidth: 240, flex: 1 }}>
+        <div style={{ fontSize: 12, fontWeight: 750 }}>Matter dashboard</div>
+        <div style={{ color: error ? RED : MUTED, fontSize: 11.5, marginTop: 4 }}>
+          {error ??
+            message ??
+            'Ask the team lead to scan the case folder and propose an update for your review.'}
+        </div>
+      </div>
+      <button
+        type="button"
+        disabled={acting}
+        onClick={() => void onRefresh()}
+        style={{
+          border: `1px solid ${ACCENT}`,
+          borderRadius: 8,
+          background: ACCENT,
+          color: '#fff',
+          cursor: acting ? 'default' : 'pointer',
+          font: 'inherit',
+          fontSize: 12,
+          fontWeight: 650,
+          padding: '5px 10px',
+        }}
+      >
+        {acting ? 'Asking lead…' : 'Refresh dashboard'}
+      </button>
+    </div>
+  );
+}
+
 interface MatterDashboardViewProps {
   /** Which case stage is currently in progress. Defaults to discovery. */
   currentStage?: StageId;
@@ -705,6 +768,10 @@ export const MatterDashboardView = memo(function MatterDashboardView({
     initializeLink,
     requestLinkRefresh,
     requestLinkProposal,
+    refreshActing,
+    refreshMessage,
+    refreshError,
+    requestRefresh,
   } = useMatter(teamName);
   const [selectedStage, setSelectedStage] = useState<StageId | null>(null);
   const [vals, setVals] = useState<Vals>({});
@@ -796,6 +863,14 @@ export const MatterDashboardView = memo(function MatterDashboardView({
           padding: 20,
         }}
       >
+        {teamName && (
+          <MatterActionsBar
+            acting={refreshActing}
+            message={refreshMessage}
+            error={refreshError}
+            onRefresh={requestRefresh}
+          />
+        )}
         {teamName && (
           <LinkEvidencePanel
             status={linkStatus}

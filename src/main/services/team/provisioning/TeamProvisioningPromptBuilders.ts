@@ -1,3 +1,4 @@
+import { MATTER_SKILL_SLUG } from '@features/matter-dashboard/contracts';
 import { resolveTeamProviderId } from '@main/services/runtime/providerRuntimeEnv';
 import { AGENT_BLOCK_CLOSE, AGENT_BLOCK_OPEN, wrapAgentBlock } from '@shared/constants/agentBlocks';
 import { CROSS_TEAM_PREFIX_TAG } from '@shared/constants/crossTeam';
@@ -873,18 +874,14 @@ export function buildLeadMatterDashboardInstructions(
 ): string {
   return [
     `Matter dashboard (MANDATORY — batched updates with user confirmation):`,
-    `- Do NOT update the matter dashboard after every task. The case facts each completed task establishes live on the task board (comments, results).`,
-    `- When ALL tasks of a related series of work (a job) are finished: (1) call MCP tool matter_get with { teamName: "${teamName}" } to see the current dashboard state and section schema, (2) compile a list of what the completed work changed about the case — derive it from the completed tasks' comments and results, not from memory, AND re-scan the project folder for new or changed case documents the work produced or received (filings, orders, productions, correspondence), (3) call MCP tool matter_propose with that summary list and ONLY the changed sections.`,
+    `- Do NOT update it per task. When a related series of work (a job) finishes, load the "${MATTER_SKILL_SLUG}" skill and follow it. The app also sends you that skill whenever the user asks for a refresh or the board goes quiet.`,
+    `- You may only propose: call MCP tools matter_get then matter_propose with { teamName: "${teamName}" }. The user approves or rejects in the dashboard; nothing changes until they approve.`,
+    `- Grounded facts only — never invent dates, amounts, parties, or outcomes; leave unknown fields absent.`,
     ...(options.hasTeammates
       ? [
-          `- Delegate matter work to the right specialist instead of doing it all yourself: deadline computation and date verification to a calendar/calendaring specialist, docket confirmation to a docket specialist, document reading and summaries to intake/facts/evidence specialists. Send independent verifications to the specialists IN PARALLEL — message them concurrently, not one after another. Compile their grounded reports; only you call matter_get/matter_propose.`,
+          `- Delegate matter work to the right specialist (calendaring, docket, intake/facts) and message them IN PARALLEL; only you call matter_get/matter_propose.`,
         ]
       : []),
-    `- If matter_get shows an empty dashboard and the project folder contains case documents not yet reflected in it, perform the initial matter scan: read the documents with your file tools, then propose an initial dashboard from what they establish.`,
-    `- The user reviews your proposal in the dashboard and approves or rejects it. The dashboard only changes after approval — matter_propose itself changes nothing.`,
-    `- Record ONLY grounded facts established by completed work (filings, service dates, deadlines, deposition status, Bates ranges, stage transitions). NEVER invent dates, amounts, or outcomes; leave unknown fields absent.`,
-    `- Include currentStage / nextDeadline changes whenever the case posture changed.`,
-    `- If the proposal is rejected, the rejection reason arrives in your inbox: revise the proposal per that reason and re-propose (re-proposing replaces the previous pending proposal).`,
   ].join('\n');
 }
 
@@ -910,18 +907,15 @@ export function buildLeadInitialMatterScanInstructions(
 ): string {
   return [
     `Initial matter scan (do this early, alongside team assembly): this team's matter dashboard is empty.`,
-    `- Read the case documents in the project folder — pleadings, discovery, correspondence, orders, dockets — with your file tools. Sample representative documents rather than exhaustively reading a large folder. Skip binaries you cannot read; never write to source files.`,
+    `- Load the "${MATTER_SKILL_SLUG}" skill and follow its initial-scan steps for { teamName: "${teamName}" }: read the case documents in the project folder, then propose an initial dashboard. If the folder holds no case content, skip it.`,
     ...(options.hasTeammates
       ? [
-          `- Delegate the scan across your specialists and run them IN PARALLEL: intake/facts/evidence specialists read and summarize documents, a calendar/calendaring specialist derives and verifies deadlines, a docket specialist confirms docket facts. Message them concurrently and collect their grounded reports.`,
+          `- Delegate the scan across your specialists and message them IN PARALLEL, giving each a different subfolder.`,
         ]
       : []),
     options.canSpawnTeammates === false
-      ? `- For large folders, parallelize the reading with your own private subagents, assigning each a different subfolder. Do NOT create, replace, or duplicate teammates — they are launched by the app.`
-      : `- For large folders, you may spawn additional instances of the same specialist type with distinct names (e.g. source-intake-a, source-intake-b) and assign each a different subfolder so they scan concurrently.`,
-    `- If the folder contains no case content, skip this step and proceed.`,
-    `- Otherwise call MCP tool matter_get with { teamName: "${teamName}" } for the current state and section schema, then matter_propose with a summary of what was found and ONLY sections grounded in the documents.`,
-    `- NEVER invent dates, amounts, parties, or outcomes; leave unknown fields absent. The user approves the proposal in the dashboard before anything changes.`,
+      ? `- For large folders, parallelize with your own private subagents. Do NOT create, replace, or duplicate teammates — they are launched by the app.`
+      : `- For large folders, you may spawn additional instances of the same specialist type with distinct names (e.g. source-intake-a, source-intake-b), one subfolder each.`,
   ].join('\n');
 }
 
@@ -1119,10 +1113,9 @@ export function buildDeterministicLaunchHydrationPrompt(
   request: TeamLaunchRequest,
   members: TeamCreateRequest['members'],
   tasks: TeamTask[],
-  isResume: boolean
+  isResume: boolean,
+  leadName = 'team-lead'
 ): string {
-  const leadName =
-    members.find((member) => member.role?.toLowerCase().includes('lead'))?.name || 'team-lead';
   const isSolo = members.length === 0;
   const projectName = path.basename(request.cwd);
   const startLabel = isResume ? 'Team Start (resume)' : 'Team Start';

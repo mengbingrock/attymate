@@ -40,12 +40,12 @@ import { tmpdir } from 'os';
 import { join, posix as pathPosix, win32 as pathWin32 } from 'path';
 
 import { ClaudeMultimodelBridgeService } from '../runtime/ClaudeMultimodelBridgeService';
-import { providerConnectionService } from '../runtime/ProviderConnectionService';
 import {
   CliProviderModelAvailabilityService,
   type ProviderModelAvailabilityContext,
   type ProviderModelAvailabilitySnapshot,
 } from '../runtime/CliProviderModelAvailabilityService';
+import { providerConnectionService } from '../runtime/ProviderConnectionService';
 import { ClaudeBinaryResolver } from '../team/ClaudeBinaryResolver';
 import { getCliFlavorUiOptions, getConfiguredCliFlavor } from '../team/cliFlavor';
 

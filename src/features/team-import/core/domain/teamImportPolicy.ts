@@ -21,6 +21,8 @@ export const LEAD_PREFIX = `## Team collaboration
 
 interface ParsedFrontmatter {
   name?: string;
+  /** Claude subagent definitions put the member's role here. */
+  description?: string;
   skills: string[];
 }
 
@@ -71,13 +73,15 @@ export function parseTeamImportFrontmatter(content: string): ParsedFrontmatter {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { skills: [] };
     const fields = parsed as Record<string, unknown>;
     const name = typeof fields.name === 'string' ? fields.name.trim() || undefined : undefined;
+    const description =
+      typeof fields.description === 'string' ? fields.description.trim() || undefined : undefined;
     const skills = Array.isArray(fields.skills)
       ? fields.skills
           .filter((skill): skill is string => typeof skill === 'string')
           .map((skill) => skill.trim())
           .filter(Boolean)
       : [];
-    return { name, skills: [...new Set(skills)] };
+    return { name, ...(description ? { description } : {}), skills: [...new Set(skills)] };
   } catch {
     return { skills: [] };
   }
@@ -302,7 +306,9 @@ export function buildTeamImportPreview(
     seenNames.add(normalized);
     members.push({
       name,
-      role: 'member',
+      // Claude subagent definitions carry the role in `description:`; without
+      // one there is nothing better to say than the generic label.
+      role: frontmatter.description ?? 'member',
       workflow: buildMemberWorkflow(
         frontmatter.skills,
         extractTeamImportMarkdownBody(file.content)

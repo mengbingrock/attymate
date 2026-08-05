@@ -177,6 +177,7 @@
     "@tiptap/pm": "^3.20.4",
     "@tiptap/react": "^3.20.4",
     "@tiptap/starter-kit": "^3.20.4",
+    "@types/yazl": "^3.3.1",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",
     "@xterm/xterm": "^6.0.0",
@@ -230,6 +231,7 @@
     "unified": "^11.0.5",
     "ws": "^8.21.0",
     "yaml": "^2.9.0",
+    "yazl": "^3.3.1",
     "yet-another-react-lightbox": "^3.29.1",
     "zustand": "^4.5.0"
   },
@@ -246,12 +248,13 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/ssh2": "^1.15.5",
+    "@types/yauzl": "^3.4.0",
     "@typescript/native": "npm:typescript@7.0.2",
     "@vitejs/plugin-react": "^4.3.1",
     "@vitest/coverage-v8": "^3.2.5",
     "autoprefixer": "^10.4.17",
     "electron": "^40.10.0",
-    "electron-builder": "^26.8.1",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
@@ -280,7 +283,8 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.54.0",
     "vite": "^6.4.3",
-    "vitest": "^3.2.5"
+    "vitest": "^3.2.5",
+    "yauzl": "^3.4.0"
   },
   "build": {
     "appId": "com.agent-teams.app",
@@ -431,7 +435,7 @@
       }
     ]
   },
-  "packageManager": "pnpm@11.13.0+sha512.88d94724d8f2e6c186744a5584c6e59ecac869ec7ba15e9cb4cd628e8dc7066820b2481d8ee3b51ea8da323a7378068aa58c556a3720d32b7c20a051d088363a",
+  "packageManager": "pnpm@11.13.1+sha512.b2fc7683b8a6525414e7d13e1ba28caaddde96bf66ec540bfaeb7e702b81f3e0be4d1f295edf7f9fe0396740a8dce4509c582ddf79891f4543fea32d37645f25",
   "knip": {
     "entry": [
       "src/main/index.ts",

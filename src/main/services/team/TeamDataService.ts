@@ -453,6 +453,14 @@ export class TeamDataService {
   private notifiedTaskStarts = new Set<string>();
   /** Tracks notified job wrap-up completions to avoid duplicate matter-dashboard nudges. */
   private notifiedJobWrapUps = new Set<string>();
+  /**
+   * Late-bound because the matter feature is built on top of this service (its
+   * lead notifier calls sendUserInstructionToLead), so it cannot be a
+   * constructor dependency. Unset means job wrap-ups raise no nudge.
+   */
+  private matterRefreshRequester:
+    | ((teamName: string, completedTaskLabel: string) => Promise<unknown>)
+    | null = null;
   private taskCommentNotificationInitialization: Promise<void> | null = null;
   private taskCommentNotificationProcessInFlight = new Map<string, Promise<void>>();
   private taskCommentNotificationActiveProcess = new Map<string, string | undefined>();
@@ -2413,6 +2421,13 @@ export class TeamDataService {
    * heuristic; on boards with long-lived unrelated open tasks it may never
    * fire, and the standing lead-prompt instruction remains the primary driver.
    */
+  /** Wires the matter feature's refresh request in once it has been composed. */
+  setMatterRefreshRequester(
+    requester: (teamName: string, completedTaskLabel: string) => Promise<unknown>
+  ): void {
+    this.matterRefreshRequester = requester;
+  }
+
   async notifyLeadOnJobWrapUp(teamName: string, taskId: string): Promise<void> {
     try {
       const tasks = await this.taskReader.getTasks(teamName);
@@ -2451,44 +2466,11 @@ export class TeamDataService {
       );
       if (hasActiveTasks) return;
 
-      const config = await Promise.resolve()
-        .then(() => readConfigForUiSnapshot(this.configReader, teamName))
-        .catch(() => null);
-      const leadName = this.resolveLeadNameFromConfig(config);
-      const hasTeammates = (config?.members ?? []).some(
-        (member) => !isLeadMember(member) && member.name?.trim() && member.name.trim() !== leadName
-      );
-      const parts = [
-        `All tasks are complete (last: ${this.getTaskLabel(task)} "${task.subject}").`,
-        `Compile what this work changed about the case and propose a matter dashboard update for the user to review.`,
-        '',
-        wrapAgentBlock(
-          [
-            `Derive the change list from the completed tasks' comments and results — grounded facts only, never invented; leave unknown fields absent.`,
-            `Also re-scan the project folder for new or changed case documents the work produced or received (filings, orders, productions, correspondence) and fold what they establish into the proposal.`,
-            ...(hasTeammates
-              ? [
-                  `Delegate verification to the right specialist and run independent checks in parallel: deadline computation/verification to a calendar specialist, docket facts to a docket specialist, document review to intake/facts specialists. You compile and propose.`,
-                ]
-              : []),
-            `First read the current dashboard state and section schema:`,
-            `matter_get { teamName: "${teamName}" }`,
-            `Then submit the proposal with only the changed sections:`,
-            `matter_propose { teamName: "${teamName}", summary: ["<what changed>", ...], changes: { <changed sections> }, taskRefs: ["<taskId>", ...] }`,
-            `The user approves or rejects the proposal in the dashboard; do not re-propose unless it is rejected or new facts emerge.`,
-          ].join('\n')
-        ),
-      ];
-      await this.sendMessage(teamName, {
-        member: leadName,
-        // The message layer only accepts 'user' or a configured member name as
-        // the sender; 'user' is the established sender for app-originated
-        // notices (see the matter proposal approve/reject notifications).
-        from: 'user',
-        text: parts.join('\n'),
-        summary: 'All tasks complete — propose a matter dashboard update',
-        source: 'system_notification',
-      });
+      // The matter feature owns the wording: it delivers the user's own
+      // matter-dashboard skill plus this team's runtime facts, so the wrap-up
+      // nudge and the dashboard's Refresh button say exactly the same thing.
+      if (!this.matterRefreshRequester) return;
+      await this.matterRefreshRequester(teamName, `${this.getTaskLabel(task)} "${task.subject}"`);
     } catch (error) {
       logger.warn(`[TeamDataService] notifyLeadOnJobWrapUp failed: ${String(error)}`);
     }
@@ -3633,6 +3615,9 @@ export class TeamDataService {
           })(),
           role: member.role?.trim() || undefined,
           workflow: member.workflow?.trim() || undefined,
+          // Kept so an imported member's skill assignment survives for the life
+          // of the team; the per-agent markdown is a copy, not the record.
+          skills: member.skills?.length ? [...member.skills] : undefined,
           isolation: member.isolation === 'worktree' ? ('worktree' as const) : undefined,
           providerId: normalizeOptionalTeamProviderId(member.providerId),
           providerBackendId: member.providerBackendId,

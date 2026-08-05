@@ -53,6 +53,17 @@ export interface MatterEvidenceRefDto {
   fieldPaths?: string[];
 }
 
+/** Whether the lead was asked for a first scan or an incremental update. */
+export type MatterRefreshMode = 'initial-scan' | 'update';
+
+export interface MatterRefreshResultDto {
+  accepted: boolean;
+  mode: MatterRefreshMode;
+  message: string;
+  /** False when the seeded skill was missing and the bundled copy was sent. */
+  usedInstalledSkill: boolean;
+}
+
 export type MatterLinkOperation = 'initialize' | 'refresh-request' | 'proposal-request';
 
 export interface MatterLinkOperationResultDto {

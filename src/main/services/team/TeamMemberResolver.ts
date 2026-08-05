@@ -1,5 +1,10 @@
 import { buildPlannedMemberLaneIdentity } from '@features/team-runtime-lanes';
 import { getMemberColorByName } from '@shared/constants/memberColors';
+import {
+  isLeadAgentType,
+  isResolvedTeamLead,
+  resolveTeamLeadIdentity,
+} from '@shared/utils/leadDetection';
 import { migrateProviderBackendId } from '@shared/utils/providerBackend';
 import { buildTeamMemberColorMap } from '@shared/utils/teamMemberColors';
 import { normalizeTeamMemberMcpPolicy } from '@shared/utils/teamMemberMcpPolicy';
@@ -95,6 +100,7 @@ export class TeamMemberResolver {
       leadResolvedFastMode?: boolean | null;
     }
   ): TeamMemberSnapshot[] {
+    const leadIdentity = resolveTeamLeadIdentity(config);
     const names = new Set<string>();
     const explicitNames = new Set<string>();
     const seenNames = new Set<string>();
@@ -317,13 +323,19 @@ export class TeamMemberResolver {
             : undefined)
       );
       const agentId = configMember?.agentId ?? metaMember?.agentId;
+      const rawAgentType = configMember?.agentType ?? metaMember?.agentType;
+      const agentType = isResolvedTeamLead({ name, agentId }, leadIdentity)
+        ? (rawAgentType ?? 'team-lead')
+        : isLeadAgentType(rawAgentType)
+          ? 'general-purpose'
+          : rawAgentType;
       members.push({
         name,
         agentId,
         currentTaskId: currentTask?.id ?? null,
         taskCount: ownedTasks.length,
         color: configMember?.color ?? metaMember?.color ?? getMemberColorByName(name),
-        agentType: configMember?.agentType ?? metaMember?.agentType,
+        agentType,
         role: configMember?.role ?? metaMember?.role,
         workflow: configMember?.workflow ?? metaMember?.workflow,
         isolation: configMember?.isolation ?? metaMember?.isolation,

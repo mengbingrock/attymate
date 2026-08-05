@@ -73,6 +73,24 @@ describe('parseTeamImportBundle', () => {
     expect(bundle?.skills[0].slug).toBe('legal-research');
   });
 
+  it('keeps a member reference to a skill the target already has installed', () => {
+    // Pruning against the bundle alone used to sever a member from a skill the
+    // user already owned — the association was silently deleted at import.
+    const { bundle } = parseTeamImportBundle(validBundleJson(), {
+      existingSkillSlugs: new Set(['unknown-skill']),
+    });
+
+    expect(bundle?.members[0].skills).toEqual(['legal-research', 'unknown-skill']);
+  });
+
+  it('still drops a reference to a slug that exists nowhere', () => {
+    const { bundle } = parseTeamImportBundle(validBundleJson(), {
+      existingSkillSlugs: new Set(['something-else']),
+    });
+
+    expect(bundle?.members[0].skills).toEqual(['legal-research']);
+  });
+
   it('blocks on garbage output', () => {
     const { bundle, blockingErrors } = parseTeamImportBundle('total nonsense');
     expect(bundle).toBeNull();

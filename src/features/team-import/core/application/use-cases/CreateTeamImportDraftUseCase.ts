@@ -44,7 +44,9 @@ export class CreateTeamImportDraftUseCase {
       throw error;
     }
 
-    const applyWarnings = bundle ? await this.applyBundleArtifacts(teamName, bundle) : [];
+    const applyWarnings = bundle
+      ? await this.applyBundleArtifacts(teamName, bundle, preview.projectPath)
+      : [];
     return { teamName, ...(applyWarnings.length > 0 ? { applyWarnings } : {}) };
   }
 
@@ -72,12 +74,22 @@ export class CreateTeamImportDraftUseCase {
 
   private async applyBundleArtifacts(
     teamName: string,
-    bundle: TeamImportBundle
+    bundle: TeamImportBundle,
+    projectPath: string
   ): Promise<string[]> {
     const warnings: string[] = [];
     const skillDescriptions = new Map(
       bundle.skills.map((skill) => [skill.slug, skill.description])
     );
+    // A team's skills belong to its project folder. Without one (URL import)
+    // they can only go to the user-wide roots, which is worth saying out loud
+    // because they are then shared with every other team on this machine.
+    const skillTarget = projectPath.trim() ? { projectPath: projectPath.trim() } : undefined;
+    if (!skillTarget && bundle.skills.length > 0) {
+      warnings.push(
+        'This source has no project folder, so its skills were installed for all teams (~/.claude/skills) instead of just this one.'
+      );
+    }
 
     for (const member of bundle.members) {
       try {
@@ -95,7 +107,7 @@ export class CreateTeamImportDraftUseCase {
 
     for (const skill of bundle.skills) {
       try {
-        const result = await this.skillsInstaller.install(skill);
+        const result = await this.skillsInstaller.install(skill, skillTarget);
         if (result.status === 'skipped') {
           warnings.push(
             `Skill "${skill.slug}" ${result.detail ?? 'already exists'} and was left untouched.`

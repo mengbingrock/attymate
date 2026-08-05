@@ -4,14 +4,35 @@ Live litigation Matter Dashboard for a team, kept current by the **team lead
 agent** through a batched, user-confirmed update flow. Follows the
 [Feature Architecture Standard](../../../docs/FEATURE_ARCHITECTURE_STANDARD.md).
 
+## The workflow lives in a skill, not in the app
+
+The instructions the lead follows — initial folder scan, batched update scan,
+delegation, grounding rules — are an **ordinary user skill** at
+`~/.claude/skills/matter-dashboard/SKILL.md` (and `~/.codex/skills/` when Codex
+is set up). `MatterSkillSeeder` writes it once, when the slug is missing, and
+never touches it again: the user owns it, edits it like any other skill, and
+those edits take effect immediately because `MatterRefreshCoordinator` reads the
+file from disk (falling back to the bundled `MATTER_SKILL_MARKDOWN` only when it
+is absent). Deleting the folder re-seeds it on the next start.
+
+Lead prompts therefore carry only a ~3-line pointer to the skill. The skill
+itself is team- and runtime-agnostic; `buildMatterSkillInvocationPrompt` adds
+the situational parts (team, project path, initial scan vs update, and whether
+the runtime permits spawning extra specialists — false for codex lanes, decided
+by `readTeamRuntimeFacts` from the runtime binding *and* the team's provider so
+the answer is still right for a stopped team).
+
 ## Update lifecycle (propose → confirm → apply)
 
 The dashboard is NOT updated per task. The flow is:
 
-1. A related series of tasks (a job) completes. The app nudges the lead once
-   when the board goes quiet (`TeamDataService.notifyLeadOnJobWrapUp`); the
-   standing lead-prompt instruction
-   (`buildLeadMatterDashboardInstructions`) is the primary driver.
+1. A refresh is requested — either by the user (**Refresh dashboard** in the
+   dashboard header → `matter:request-refresh`) or automatically when a job's
+   last task completes (`TeamDataService.notifyLeadOnJobWrapUp`, which delegates
+   to `requestJobWrapUpRefresh`). Both paths deliver the same skill-backed
+   message through `sendUserInstructionToLead`. A team that has never launched
+   has no lead to address: that returns `accepted: false` with an explanation
+   rather than throwing.
 2. The lead calls MCP tool `matter_get`, compiles a list of what the completed
    work changed (derived from task comments/results), and calls
    `matter_propose` with that summary plus only the changed sections. This
@@ -30,7 +51,10 @@ approval (`agent-teams-controller/src/internal/matterStore.js`).
 ## Layers
 
 - `contracts/` — `MatterDto` / `MatterProposalDto` (fixture-faithful v1
-  schema), tolerant normalizers, IPC channels + HTTP route.
+  schema), tolerant normalizers, IPC channels + HTTP route, and the skill slug
+  that lead prompts across the app name.
+- `core/domain/matterSkillDefinition.ts` — the SKILL.md markdown that is seeded
+  to the user's skill roots.
 - `main/` — read-only `MatterFileReader`, `createMatterFeature` composition
   (apply/reject delegate to `TeamDataService`), IPC + HTTP adapters.
 - `preload/` — `createMatterBridge`.

@@ -35,6 +35,7 @@ function buildSynthesizedConfig(options: SynthesizeStockClaudeTeamStateOptions):
   name: string;
   description?: string;
   createdAt: number;
+  lead: { name: string; agentId: string };
   leadAgentId: string;
   leadSessionId: string;
   members: SynthesizedConfigMember[];
@@ -74,6 +75,7 @@ function buildSynthesizedConfig(options: SynthesizeStockClaudeTeamStateOptions):
     name: options.teamName,
     ...(options.description?.trim() ? { description: options.description.trim() } : {}),
     createdAt: now,
+    lead: { name: lead.name, agentId: leadAgentId },
     leadAgentId,
     leadSessionId: options.leadSessionId ?? '',
     members: [lead, ...members],

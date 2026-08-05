@@ -15,6 +15,16 @@ export {
   type MatterLinkLeadNotifier,
 } from './application/MatterLinkCoordinator';
 export {
+  MatterRefreshCoordinator,
+  type MatterRefreshCoordinatorDeps,
+  type MatterRefreshRequest,
+  type MatterTeamRuntimeFacts,
+} from './application/MatterRefreshCoordinator';
+export {
+  buildMatterSkillInvocationPrompt,
+  type MatterSkillInvocationInput,
+} from './application/MatterSkillLeadPrompt';
+export {
   createMatterFeature,
   type CreateMatterFeatureDeps,
   type MatterFeatureFacade,
@@ -23,3 +33,5 @@ export {
 export { initializeMatterFileIfMissing } from './infrastructure/initializeMatterFile';
 export { MatterFileReader } from './infrastructure/MatterFileReader';
 export { isMatterEffectivelyEmpty } from './infrastructure/matterScanState';
+export { MatterSkillSeeder } from './infrastructure/MatterSkillSeeder';
+export { readTeamRuntimeFacts } from './infrastructure/teamRuntimeFacts';

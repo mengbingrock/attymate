@@ -8,6 +8,8 @@ export interface TeamMember {
   role?: string;
   /** Per-agent workflow/instructions injected into spawn prompt. */
   workflow?: string;
+  /** Slugs of the skills assigned to this member, from the team's skill roots. */
+  skills?: string[];
   /** Opt-in runtime isolation for persistent teammates. Omitted means shared workspace. */
   isolation?: 'worktree';
   providerId?: TeamProviderId;
@@ -20,6 +22,12 @@ export interface TeamMember {
   joinedAt?: number;
   cwd?: string;
   removedAt?: number;
+}
+
+/** Canonical, structured identity for the process that leads a team. */
+export interface TeamLeadIdentity {
+  name: string;
+  agentId?: string;
 }
 
 export type TeamMemberMcpScope = 'user' | 'project' | 'local';
@@ -38,6 +46,10 @@ export interface TeamConfig {
   color?: string;
   language?: string;
   members?: TeamMember[];
+  /** Preferred lead identity. Never derive this from role or prompt wording. */
+  lead?: TeamLeadIdentity;
+  /** Legacy/runtime lead identifier retained for existing CLI-created configs. */
+  leadAgentId?: string;
   projectPath?: string;
   projectPathHistory?: string[];
   leadSessionId?: string;
@@ -1463,6 +1475,8 @@ export interface TeamProvisioningMemberInput {
   role?: string;
   /** Per-agent workflow/instructions injected into spawn prompt. */
   workflow?: string;
+  /** Skill slugs this member uses, persisted so the assignment survives import. */
+  skills?: string[];
   /** Opt-in: run this teammate in its own git worktree. */
   isolation?: 'worktree';
   /** Resolved runtime working directory. Usually app-managed for isolated teammates. */

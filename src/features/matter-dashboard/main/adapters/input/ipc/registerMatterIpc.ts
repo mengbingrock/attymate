@@ -8,8 +8,10 @@ import {
   MATTER_LINK_REQUEST_PROPOSAL,
   MATTER_LINK_REQUEST_REFRESH,
   MATTER_REJECT_PROPOSAL,
+  MATTER_REQUEST_REFRESH,
   type MatterEvidenceStatusDto,
   type MatterLinkOperationResultDto,
+  type MatterRefreshResultDto,
   type MatterSnapshotDto,
 } from '../../../../contracts';
 
@@ -84,6 +86,18 @@ export function registerMatterIpc(ipcMain: IpcMain, feature: MatterFeatureFacade
   );
 
   ipcMain.handle(
+    MATTER_REQUEST_REFRESH,
+    async (_event, teamName: unknown): Promise<MatterRefreshResultDto> => {
+      try {
+        return await feature.requestDashboardRefresh(assertTeamName(teamName));
+      } catch (error) {
+        logger.error('Failed to request a matter dashboard refresh', error);
+        throw error;
+      }
+    }
+  );
+
+  ipcMain.handle(
     MATTER_APPLY_PROPOSAL,
     async (_event, teamName: unknown): Promise<MatterSnapshotDto> => {
       try {
@@ -117,6 +131,7 @@ export function removeMatterIpc(ipcMain: IpcMain): void {
   ipcMain.removeHandler(MATTER_LINK_INITIALIZE);
   ipcMain.removeHandler(MATTER_LINK_REQUEST_REFRESH);
   ipcMain.removeHandler(MATTER_LINK_REQUEST_PROPOSAL);
+  ipcMain.removeHandler(MATTER_REQUEST_REFRESH);
   ipcMain.removeHandler(MATTER_APPLY_PROPOSAL);
   ipcMain.removeHandler(MATTER_REJECT_PROPOSAL);
 }
