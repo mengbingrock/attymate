@@ -718,6 +718,36 @@ export async function buildAgentTeamsMcpServerSpec(
   };
 }
 
+/**
+ * The key the Claude CLI uses for a cwd's local scope in ~/.claude.json.
+ *
+ * The CLI identifies a "project" by the enclosing git work tree, not by the
+ * literal cwd: `claude mcp add -s local` run inside a repo subfolder stores the
+ * server under `projects[<repo root>]`, and sessions in that subfolder read
+ * from the same key. Writing the uniform-MCP lease under the raw team cwd
+ * therefore produced an entry the CLI never loads whenever the team's folder
+ * lives inside a repository — teammates came up without the agent-teams server.
+ *
+ * Walk to the nearest ancestor with a `.git` entry (a directory for a normal
+ * clone, a file for worktrees and submodules). A folder outside any repository
+ * is its own project, exactly as the CLI treats it.
+ */
+export function resolveClaudeLocalScopeKey(projectPath: string): string {
+  const resolved = path.resolve(projectPath);
+  let current = resolved;
+  for (;;) {
+    try {
+      fs.statSync(path.join(current, '.git'));
+      return current;
+    } catch {
+      // No .git here; keep walking up.
+    }
+    const parent = path.dirname(current);
+    if (parent === current) return resolved;
+    current = parent;
+  }
+}
+
 export class TeamMcpConfigBuilder {
   private readonly stockClaudeUniformMcpLeases = new Map<string, StockClaudeUniformMcpLeaseState>();
   private readonly stockClaudeUniformMcpLeaseAcquireInFlight = new Map<
@@ -739,7 +769,10 @@ export class TeamMcpConfigBuilder {
     projectPath: string,
     controlApiBaseUrl?: string | null
   ): Promise<StockClaudeUniformMcpLease> {
-    const normalizedProjectPath = path.resolve(projectPath);
+    // Key by the CLI's project identity, not the raw cwd — see
+    // resolveClaudeLocalScopeKey. Two teams in the same repo share one entry
+    // through refcounting.
+    const normalizedProjectPath = resolveClaudeLocalScopeKey(projectPath);
     const active = this.stockClaudeUniformMcpLeases.get(normalizedProjectPath);
     if (active) {
       active.refCount += 1;
@@ -754,6 +787,7 @@ export class TeamMcpConfigBuilder {
 
     const acquire = this.installStockClaudeUniformMcpLease(
       normalizedProjectPath,
+      path.resolve(projectPath),
       controlApiBaseUrl
     );
     this.stockClaudeUniformMcpLeaseAcquireInFlight.set(normalizedProjectPath, acquire);
@@ -766,6 +800,7 @@ export class TeamMcpConfigBuilder {
 
   private async installStockClaudeUniformMcpLease(
     normalizedProjectPath: string,
+    rawTeamCwd: string,
     controlApiBaseUrl?: string | null
   ): Promise<StockClaudeUniformMcpLease> {
     const configPath = path.join(getHomeDir(), '.claude.json');
@@ -776,6 +811,25 @@ export class TeamMcpConfigBuilder {
     await withFileLock(configPath, async () => {
       const root = await this.readClaudeRootConfig(configPath);
       const projects = this.getOrCreateObject(root, 'projects');
+
+      // Earlier builds keyed the lease by the raw team cwd, which the CLI
+      // ignores for folders inside a repository — delete that dead entry so it
+      // does not linger in the user's config forever.
+      let removedLegacyEntry = false;
+      if (rawTeamCwd !== normalizedProjectPath) {
+        const legacyProject = this.getObject(projects[rawTeamCwd]);
+        const legacyServers = this.getObject(legacyProject?.mcpServers);
+        if (legacyServers && legacyServers[MCP_SERVER_NAME] !== undefined) {
+          delete legacyServers[MCP_SERVER_NAME];
+          if (Object.keys(legacyServers).length === 0 && legacyProject) {
+            delete legacyProject.mcpServers;
+          }
+          removedLegacyEntry = true;
+        }
+      }
+      const persist = () =>
+        atomicWriteAsync(configPath, `${JSON.stringify(root, null, 2)}\n`, { mode: 0o600 });
+
       const project = this.getOrCreateObject(projects, normalizedProjectPath);
       const mcpServers = this.getOrCreateObject(project, 'mcpServers');
       const existing = mcpServers[MCP_SERVER_NAME];
@@ -786,11 +840,12 @@ export class TeamMcpConfigBuilder {
             `Local MCP server "${MCP_SERVER_NAME}" already exists for ${normalizedProjectPath} with a different configuration`
           );
         }
+        if (removedLegacyEntry) await persist();
         return;
       }
 
       mcpServers[MCP_SERVER_NAME] = installedConfig;
-      await atomicWriteAsync(configPath, `${JSON.stringify(root, null, 2)}\n`, { mode: 0o600 });
+      await persist();
       removeOnRelease = true;
     });
 

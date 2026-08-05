@@ -64,6 +64,7 @@ vi.mock('@main/utils/shellEnv', async (importOriginal) => {
 import {
   clearResolvedNodePathForTests,
   resolveAgentTeamsMcpLaunchSpec,
+  resolveClaudeLocalScopeKey,
   TeamMcpConfigBuilder,
 } from '@main/services/team/TeamMcpConfigBuilder';
 import { setAppDataBasePath, setClaudeBasePathOverride } from '@main/utils/pathDecoder';
@@ -336,6 +337,88 @@ describe('TeamMcpConfigBuilder', () => {
       projects: Record<string, { mcpServers?: Record<string, unknown> }>;
     };
     expect(parsed.projects[projectDir]?.mcpServers?.['agent-teams']).toBeUndefined();
+  });
+
+  it('keys the lease by the enclosing repository, the way the CLI does', async () => {
+    // `claude mcp add -s local` run inside a repo subfolder stores under the
+    // repo root, and sessions in the subfolder read from there. A lease keyed
+    // by the raw team cwd is invisible to every teammate.
+    mockSourceWorkspaceEntryAvailable();
+    mockHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'team-mcp-home-'));
+    createdDirs.push(mockHomeDir);
+    const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'team-mcp-repo-'));
+    createdDirs.push(repoDir);
+    fs.mkdirSync(path.join(repoDir, '.git'));
+    const caseDir = path.join(repoDir, 'cases', 'CaseNO.1234567');
+    fs.mkdirSync(caseDir, { recursive: true });
+    const builder = new TeamMcpConfigBuilder();
+
+    const lease = await builder.acquireStockClaudeUniformMcpLease(caseDir);
+
+    const parsed = JSON.parse(fs.readFileSync(path.join(mockHomeDir, '.claude.json'), 'utf8')) as {
+      projects: Record<string, { mcpServers?: Record<string, unknown> }>;
+    };
+    expect(parsed.projects[repoDir]?.mcpServers?.['agent-teams']).toBeDefined();
+    expect(parsed.projects[caseDir]).toBeUndefined();
+    await lease.release();
+  });
+
+  it('removes the dead cwd-keyed entry left by earlier builds', async () => {
+    mockSourceWorkspaceEntryAvailable();
+    mockHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'team-mcp-home-'));
+    createdDirs.push(mockHomeDir);
+    const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'team-mcp-repo-'));
+    createdDirs.push(repoDir);
+    fs.mkdirSync(path.join(repoDir, '.git'));
+    const caseDir = path.join(repoDir, 'case');
+    fs.mkdirSync(caseDir);
+    const claudeConfigPath = path.join(mockHomeDir, '.claude.json');
+    fs.writeFileSync(
+      claudeConfigPath,
+      JSON.stringify({
+        projects: {
+          [caseDir]: { mcpServers: { 'agent-teams': { command: 'stale' } }, allowedTools: ['Read'] },
+        },
+      })
+    );
+    const builder = new TeamMcpConfigBuilder();
+
+    const lease = await builder.acquireStockClaudeUniformMcpLease(caseDir);
+
+    const parsed = JSON.parse(fs.readFileSync(claudeConfigPath, 'utf8')) as {
+      projects: Record<
+        string,
+        { mcpServers?: Record<string, unknown>; allowedTools?: string[] }
+      >;
+    };
+    expect(parsed.projects[caseDir]?.mcpServers).toBeUndefined();
+    // Unrelated project settings survive the cleanup.
+    expect(parsed.projects[caseDir]?.allowedTools).toEqual(['Read']);
+    expect(parsed.projects[repoDir]?.mcpServers?.['agent-teams']).toBeDefined();
+    await lease.release();
+  });
+
+  it('resolves the CLI project key through .git directories, files, and their absence', () => {
+    const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scope-key-repo-'));
+    createdDirs.push(repoDir);
+    fs.mkdirSync(path.join(repoDir, '.git'));
+    const nested = path.join(repoDir, 'a', 'b');
+    fs.mkdirSync(nested, { recursive: true });
+    expect(resolveClaudeLocalScopeKey(nested)).toBe(repoDir);
+    expect(resolveClaudeLocalScopeKey(repoDir)).toBe(repoDir);
+
+    // Worktrees and submodules mark the root with a .git FILE.
+    const worktreeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scope-key-wt-'));
+    createdDirs.push(worktreeDir);
+    fs.writeFileSync(path.join(worktreeDir, '.git'), 'gitdir: elsewhere\n');
+    const worktreeNested = path.join(worktreeDir, 'sub');
+    fs.mkdirSync(worktreeNested);
+    expect(resolveClaudeLocalScopeKey(worktreeNested)).toBe(worktreeDir);
+
+    // Outside any repository, the folder is its own project.
+    const bareDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scope-key-bare-'));
+    createdDirs.push(bareDir);
+    expect(resolveClaudeLocalScopeKey(bareDir)).toBe(bareDir);
   });
 
   it('refuses to overwrite a conflicting local project Agent Teams MCP entry', async () => {
