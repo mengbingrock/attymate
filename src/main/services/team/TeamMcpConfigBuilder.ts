@@ -835,13 +835,24 @@ export class TeamMcpConfigBuilder {
       const existing = mcpServers[MCP_SERVER_NAME];
 
       if (existing !== undefined) {
-        if (!this.mcpConfigsEqual(existing, installedConfig)) {
+        if (this.mcpConfigsEqual(existing, installedConfig)) {
+          if (removedLegacyEntry) await persist();
+          return;
+        }
+        // The entry's env carries the control URL, which changes across app
+        // runs — an entry left behind by a killed app therefore never compares
+        // equal, and throwing here would block every future team launch in the
+        // project. If the launch shape (command + args) is ours, this is our
+        // own stale entry: adopt it and refresh the run-specific env. Only a
+        // server we did not write is a genuine conflict.
+        if (!this.isOwnMcpServerShape(existing, installedConfig)) {
           throw new Error(
             `Local MCP server "${MCP_SERVER_NAME}" already exists for ${normalizedProjectPath} with a different configuration`
           );
         }
-        if (removedLegacyEntry) await persist();
-        return;
+        logger.info(
+          `Refreshing stale local MCP server "${MCP_SERVER_NAME}" for ${normalizedProjectPath} (left by a previous app run)`
+        );
       }
 
       mcpServers[MCP_SERVER_NAME] = installedConfig;
@@ -941,6 +952,20 @@ export class TeamMcpConfigBuilder {
     const created: Record<string, unknown> = {};
     parent[key] = created;
     return created;
+  }
+
+  /**
+   * Same server launch (command + args), ignoring env: env holds the
+   * run-specific control URL, so two of our own entries from different app
+   * runs differ only there.
+   */
+  private isOwnMcpServerShape(existing: unknown, installed: McpServerConfig): boolean {
+    const entry = this.getObject(existing);
+    if (!entry) return false;
+    return (
+      entry.command === installed.command &&
+      JSON.stringify(entry.args ?? []) === JSON.stringify(installed.args ?? [])
+    );
   }
 
   private mcpConfigsEqual(left: unknown, right: unknown): boolean {

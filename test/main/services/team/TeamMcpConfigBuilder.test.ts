@@ -421,7 +421,7 @@ describe('TeamMcpConfigBuilder', () => {
     expect(resolveClaudeLocalScopeKey(bareDir)).toBe(bareDir);
   });
 
-  it('refuses to overwrite a conflicting local project Agent Teams MCP entry', async () => {
+  it('refuses to overwrite a foreign local project Agent Teams MCP entry', async () => {
     mockSourceWorkspaceEntryAvailable();
     mockHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'team-mcp-home-'));
     createdDirs.push(mockHomeDir);
@@ -437,6 +437,40 @@ describe('TeamMcpConfigBuilder', () => {
       new TeamMcpConfigBuilder().acquireStockClaudeUniformMcpLease(projectDir)
     ).rejects.toThrow('already exists');
     expect(JSON.parse(fs.readFileSync(claudeConfigPath, 'utf8'))).toEqual(original);
+  });
+
+  it('adopts its own stale entry whose control URL points at a dead app run', async () => {
+    // A killed app never releases its lease. The leftover entry differs only in
+    // env (the run-specific control URL), and throwing on it would block every
+    // future team launch in the project.
+    mockSourceWorkspaceEntryAvailable();
+    mockHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'team-mcp-home-'));
+    createdDirs.push(mockHomeDir);
+    const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'team-mcp-project-'));
+    createdDirs.push(projectDir);
+    const claudeConfigPath = path.join(mockHomeDir, '.claude.json');
+    const builder = new TeamMcpConfigBuilder();
+
+    // First run installs, then "dies" without releasing.
+    await builder.acquireStockClaudeUniformMcpLease(projectDir, 'http://127.0.0.1:1111');
+
+    // Next app run, new control port, fresh builder instance.
+    const nextRun = new TeamMcpConfigBuilder();
+    const lease = await nextRun.acquireStockClaudeUniformMcpLease(
+      projectDir,
+      'http://127.0.0.1:2222'
+    );
+
+    const parsed = JSON.parse(fs.readFileSync(claudeConfigPath, 'utf8')) as {
+      projects: Record<
+        string,
+        { mcpServers?: Record<string, { env?: Record<string, string> }> }
+      >;
+    };
+    expect(parsed.projects[projectDir]?.mcpServers?.['agent-teams']?.env).toMatchObject({
+      CLAUDE_TEAM_CONTROL_URL: 'http://127.0.0.1:2222',
+    });
+    await lease.release();
   });
 
   it('config filename contains pid, timestamp, and uuid', async () => {
