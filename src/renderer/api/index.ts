@@ -16,6 +16,9 @@ import { HttpAPIClient } from './httpClient';
 
 import type { ElectronAPI } from '@shared/types/api';
 
+type RendererAPI = ElectronAPI &
+  Required<Pick<ElectronAPI, 'openCodeRuntime' | 'runtimeProviderManagement'>>;
+
 /**
  * Resolves the base URL for the HTTP API client.
  *
@@ -56,7 +59,7 @@ function getImpl(): ElectronAPI {
  */
 export const isElectronMode = (): boolean => !!window.electronAPI;
 
-export const api: ElectronAPI = new Proxy({} as ElectronAPI, {
+export const api: RendererAPI = new Proxy({} as RendererAPI, {
   get(_target, prop, receiver) {
     const impl = getImpl();
     const value = Reflect.get(impl, prop, receiver) as unknown;

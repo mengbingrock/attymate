@@ -19,7 +19,7 @@ function isOpenCodeWindowsNodeModulesSymlinkPermissionText(value: string): boole
     lower.includes('opencode') &&
     lower.includes('node_modules') &&
     (WINDOWS_DRIVE_PATH_PATTERN.test(value) ||
-      lower.includes('appdata\\local\\claude-multimodel-nodejs'))
+      lower.includes('appdata\\local\\legacy-agent-runtime'))
   );
 }
 

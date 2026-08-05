@@ -6,7 +6,6 @@ import { getShellPreferredHome } from '@main/utils/shellEnv';
 
 import { configManager } from '../infrastructure/ConfigManager';
 
-import { applyOpenCodeAutoUpdatePolicy } from './openCodeAutoUpdatePolicy';
 import {
   applyConfiguredRuntimeBackendsEnv,
   applyProviderRuntimeEnv,
@@ -74,12 +73,6 @@ export function buildRuntimeBaseEnv(options: BuildRuntimeBaseEnvOptions = {}): {
     env.PATH = mergedPath;
   }
   applyAgentTeamsIdentityEnv(env);
-  const policyAppliedEnv = applyOpenCodeAutoUpdatePolicy(env);
-  if (policyAppliedEnv.OPENCODE_DISABLE_AUTOUPDATE === undefined) {
-    delete env.OPENCODE_DISABLE_AUTOUPDATE;
-  }
-  Object.assign(env, policyAppliedEnv);
-
   const explicitHome = getFirstNonEmptyEnvValue(options.env?.HOME, options.env?.USERPROFILE);
   const fallbackHome = getFirstNonEmptyEnvValue(
     env.HOME,

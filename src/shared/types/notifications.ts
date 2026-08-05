@@ -392,7 +392,7 @@ export interface AppConfig {
       };
     };
   };
-  /** Runtime backend preferences for app-launched agent_teams_orchestrator sessions */
+  /** Legacy runtime backend preferences retained for persisted notification compatibility. */
   runtime: {
     providerBackends: {
       gemini: 'auto' | 'api' | 'cli-sdk';

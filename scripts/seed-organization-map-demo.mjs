@@ -100,7 +100,7 @@ const DEMO_ORGANIZATIONS = [
             teams: [
               'Anthropic Connector',
               'Codex Connector',
-              'OpenCode Connector',
+              'CLI Health Monitor',
               'Model Routing',
               'Credential Vault',
             ],

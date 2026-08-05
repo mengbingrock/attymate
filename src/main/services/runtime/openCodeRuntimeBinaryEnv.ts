@@ -48,9 +48,9 @@ export function applyOpenCodeRuntimeBinaryEnv(
 
   // Facts:
   // - The app-managed OpenCode status is resolved from the app runtime manifest.
-  // - Released claude-multimodel builds have used both OPENCODE_BIN_PATH and
+  // - Legacy runtime builds used both OPENCODE_BIN_PATH and
   //   CLAUDE_MULTIMODEL_OPENCODE_BIN_PATH while the managed runtime path evolved.
-  // - Older claude-multimodel readiness inventory still resolves "opencode" through PATH.
+  // - Older readiness inventory also resolved "opencode" through PATH.
   // - Exposing the selected binary directory keeps both checks on the same runtime.
   prependPathEntry(env, path.dirname(nextBinaryPath));
 }

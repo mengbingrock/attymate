@@ -14,8 +14,6 @@ import { ClaudeMemberTranscriptPreviewSource } from '../adapters/output/sources/
 import { ClaudeMemberTranscriptStreamSource } from '../adapters/output/sources/ClaudeMemberTranscriptStreamSource';
 import { CodexNativeMemberTracePreviewSource } from '../adapters/output/sources/CodexNativeMemberTracePreviewSource';
 import { CodexNativeMemberTraceStreamSource } from '../adapters/output/sources/CodexNativeMemberTraceStreamSource';
-import { OpenCodeMemberRuntimePreviewSource } from '../adapters/output/sources/OpenCodeMemberRuntimePreviewSource';
-import { OpenCodeMemberRuntimeStreamSource } from '../adapters/output/sources/OpenCodeMemberRuntimeStreamSource';
 import { MemberRuntimeLogTailReader } from '../application/MemberRuntimeLogTailReader';
 import { isMemberLogStreamReadEnabled } from '../featureGates';
 
@@ -29,7 +27,6 @@ import type { LoggerPort } from '../../core/application/ports/LoggerPort';
 import type { MemberLogStreamTrackingPort } from '../../core/application/ports/MemberLogStreamTrackingPort';
 import type { GetMemberLogPreviewsInput } from '../../core/application/use-cases/GetMemberLogPreviewsUseCase';
 import type { GetMemberLogStreamInput } from '../../core/application/use-cases/GetMemberLogStreamUseCase';
-import type { ClaudeMultimodelBridgeService } from '@main/services/runtime/ClaudeMultimodelBridgeService';
 import type { TeamLogSourceTracker } from '@main/services/team/TeamLogSourceTracker';
 import type { TeamMemberLogsFinder } from '@main/services/team/TeamMemberLogsFinder';
 
@@ -59,7 +56,6 @@ class TeamLogSourceTrackerMemberStreamPort implements MemberLogStreamTrackingPor
 export function createMemberLogStreamFeature(deps: {
   logsFinder: TeamMemberLogsFinder;
   logSourceTracker: TeamLogSourceTracker;
-  runtimeBridge: ClaudeMultimodelBridgeService;
   configReader?: TeamConfigReader;
   runtimeLogTailReader?: MemberRuntimeLogTailReader;
   logger: LoggerPort;
@@ -75,12 +71,10 @@ export function createMemberLogStreamFeature(deps: {
       chunkBuilder,
       deps.logger
     ),
-    new OpenCodeMemberRuntimeStreamSource(deps.runtimeBridge, chunkBuilder),
     new CodexNativeMemberTraceStreamSource(configReader),
   ];
   const previewSources = [
     new ClaudeMemberTranscriptPreviewSource(deps.logsFinder, strictParser, deps.logger),
-    new OpenCodeMemberRuntimePreviewSource(deps.runtimeBridge),
     new CodexNativeMemberTracePreviewSource(configReader),
   ];
   const getUseCase = new GetMemberLogStreamUseCase({

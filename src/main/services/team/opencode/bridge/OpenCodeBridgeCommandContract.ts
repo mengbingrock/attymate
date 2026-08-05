@@ -405,7 +405,7 @@ export interface OpenCodeBackfillTaskLedgerCommandData {
   diagnostics: string[];
 }
 
-export type OpenCodeBridgePeerName = 'claude_team' | 'agent_teams_orchestrator';
+export type OpenCodeBridgePeerName = 'claude_team' | 'legacy_runtime';
 
 export type OpenCodeBridgeFailureKind =
   | 'unsupported_schema'
@@ -743,7 +743,7 @@ export function validateOpenCodeBridgeHandshake(input: {
       return {
         ok: false,
         reason:
-          'OpenCode app-managed bootstrap is required, but the orchestrator does not advertise contract version 1. Update agent_teams_orchestrator and restart the app.',
+          'OpenCode app-managed bootstrap depended on a legacy runtime bridge that has been removed.',
       };
     }
   }
@@ -1011,7 +1011,7 @@ function isPeerIdentity(value: unknown): value is OpenCodeBridgePeerIdentity {
 
   if (
     value.schemaVersion !== OPEN_CODE_BRIDGE_SCHEMA_VERSION ||
-    (value.peer !== 'claude_team' && value.peer !== 'agent_teams_orchestrator') ||
+    (value.peer !== 'claude_team' && value.peer !== 'legacy_runtime') ||
     typeof value.appVersion !== 'string' ||
     !isNullableString(value.gitSha) ||
     !isNullableString(value.buildId)

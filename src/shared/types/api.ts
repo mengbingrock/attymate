@@ -1105,14 +1105,14 @@ export interface ElectronAPI
   // CLI Installer API
   cliInstaller: CliInstallerAPI;
 
-  // OpenCode app-managed runtime installer API
-  openCodeRuntime: OpenCodeRuntimeAPI;
+  // Legacy compatibility only; new builds do not expose an OpenCode installer.
+  openCodeRuntime?: OpenCodeRuntimeAPI;
 
   // Codex app-managed runtime installer API
   codexRuntime: CodexRuntimeAPI;
 
   // Runtime nested provider management API
-  runtimeProviderManagement: RuntimeProviderManagementApi;
+  runtimeProviderManagement?: RuntimeProviderManagementApi;
 
   // Member actionable-work sync diagnostics API
   memberWorkSync: MemberWorkSyncElectronApi;

@@ -488,117 +488,6 @@ describe('CLI status visibility during completed install state', () => {
     window.localStorage.clear();
   });
 
-  it('opens focused provider onboarding without exposing the removed multi-plan shortcut', async () => {
-    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    storeState.cliInstallerState = 'idle';
-    storeState.openCodeRuntimeStatus = {
-      installed: true,
-      source: 'app-managed',
-      state: 'ready',
-      version: '1.17.18',
-    };
-    storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
-      displayName: 'Multimodel runtime',
-      supportsSelfUpdate: false,
-      showVersionDetails: false,
-      showBinaryPath: false,
-      authLoggedIn: true,
-      providers: [
-        {
-          providerId: 'opencode',
-          displayName: 'OpenCode',
-          supported: true,
-          authenticated: true,
-          authMethod: 'managed',
-          verificationState: 'verified',
-          statusMessage: null,
-          models: ['xai/grok-4.3'],
-          canLoginFromUi: false,
-          capabilities: { teamLaunch: true, oneShot: true },
-        },
-      ],
-    });
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner));
-      await Promise.resolve();
-    });
-
-    expect(host.querySelector('[data-testid="quick-connect-all-plans"]')).toBeNull();
-    await act(async () => {
-      host.querySelector<HTMLButtonElement>('[data-testid="quick-connect-supergrok"]')?.click();
-      await Promise.resolve();
-    });
-    expect(runtimeProviderOnboardingDialogProps?.mode).toBe('provider');
-    expect(runtimeProviderOnboardingDialogProps?.providerId).toBe('xai');
-
-    await act(async () => {
-      root.unmount();
-      await Promise.resolve();
-    });
-  });
-
-  it('opens connected OpenCode providers in settings without restarting onboarding', async () => {
-    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    storeState.cliInstallerState = 'idle';
-    storeState.openCodeRuntimeStatus = {
-      installed: true,
-      source: 'app-managed',
-      state: 'ready',
-      version: '1.17.18',
-    };
-    storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
-      displayName: 'Multimodel runtime',
-      supportsSelfUpdate: false,
-      showVersionDetails: false,
-      showBinaryPath: false,
-      authLoggedIn: true,
-      providers: [
-        {
-          providerId: 'opencode',
-          displayName: 'OpenCode',
-          supported: true,
-          authenticated: true,
-          authMethod: 'managed',
-          verificationState: 'verified',
-          statusMessage: null,
-          models: ['xai/grok-4.3'],
-          canLoginFromUi: false,
-          capabilities: { teamLaunch: true, oneShot: true },
-        },
-      ],
-    });
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner));
-      await Promise.resolve();
-    });
-    await act(async () => {
-      host.querySelector<HTMLButtonElement>('[data-testid="manage-supergrok"]')?.click();
-      await Promise.resolve();
-    });
-
-    expect(runtimeProviderOnboardingDialogProps).toBeNull();
-    expect(providerRuntimeSettingsDialogProps).toMatchObject({
-      initialProviderId: 'opencode',
-      initialRuntimeProviderId: 'xai',
-      initialRuntimeProviderAction: 'select',
-    });
-
-    await act(async () => {
-      root.unmount();
-      await Promise.resolve();
-    });
-  });
-
   it('does not expose the legacy runtime toggle or multimodel banner label', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     const host = document.createElement('div');
@@ -779,54 +668,11 @@ describe('CLI status visibility during completed install state', () => {
     });
   });
 
-  it('shows deferred multimodel provider snapshots as pending instead of disconnected', async () => {
-    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    storeState.cliInstallerState = 'idle';
-    storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
-      displayName: 'Multimodel runtime',
-      supportsSelfUpdate: false,
-      showVersionDetails: false,
-      showBinaryPath: false,
-      authLoggedIn: false,
-      authStatusChecking: true,
-      providers: [
-        createDeferredMultimodelProvider('anthropic', 'Anthropic'),
-        createDeferredMultimodelProvider('codex', 'Codex'),
-        createDeferredMultimodelProvider('opencode', 'OpenCode'),
-      ],
-    });
-    storeState.cliProviderStatusLoading = {
-      anthropic: true,
-      codex: true,
-      opencode: true,
-    };
-
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner));
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).toContain('Checking providers...');
-    expect(host.textContent).toContain('Checking...');
-    expect(host.textContent).not.toContain('Providers: 0 connected');
-    expect(host.textContent).not.toContain('Models unavailable for this runtime build');
-
-    await act(async () => {
-      root.unmount();
-      await Promise.resolve();
-    });
-  });
-
   it('renders Anthropic legacy fallback status as connected with model badges', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliInstallerState = 'idle';
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'Multimodel runtime',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -878,188 +724,11 @@ describe('CLI status visibility during completed install state', () => {
     });
   });
 
-  it('renders OpenCode inventory fallback with model badges instead of unavailable text', async () => {
-    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    quickConnectConnectedCount = 7;
-    storeState.cliInstallerState = 'idle';
-    storeState.openCodeRuntimeStatus = {
-      installed: true,
-      source: 'path',
-      state: 'ready',
-    };
-    storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
-      displayName: 'Multimodel runtime',
-      supportsSelfUpdate: false,
-      showVersionDetails: false,
-      showBinaryPath: false,
-      authLoggedIn: true,
-      authStatusChecking: false,
-      providers: [
-        {
-          providerId: 'anthropic',
-          displayName: 'Anthropic',
-          supported: true,
-          authenticated: true,
-          authMethod: 'api_key',
-          verificationState: 'verified',
-          statusMessage: null,
-          models: ['claude-haiku-4-5'],
-          modelAvailability: [],
-          canLoginFromUi: true,
-          capabilities: {
-            teamLaunch: true,
-            oneShot: true,
-          },
-          backend: null,
-          modelCatalog: null,
-          modelCatalogRefreshState: 'idle',
-          runtimeCapabilities: null,
-        },
-        createCodexNativeRolloutProvider({
-          state: 'ready',
-          statusMessage: 'ChatGPT account ready',
-          models: ['gpt-5.4'],
-        }),
-        {
-          providerId: 'opencode',
-          displayName: 'OpenCode (200+ models)',
-          supported: false,
-          authenticated: false,
-          authMethod: null,
-          verificationState: 'unknown',
-          statusMessage: null,
-          models: ['opencode/big-pickle'],
-          modelAvailability: [],
-          canLoginFromUi: false,
-          capabilities: {
-            teamLaunch: false,
-            oneShot: false,
-          },
-          backend: null,
-          availableBackends: [],
-          modelCatalog: null,
-          modelCatalogRefreshState: 'idle',
-          runtimeCapabilities: null,
-        },
-      ],
-    });
-
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner));
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).toContain('OpenCode');
-    expect(host.textContent).toContain('Ready to run agents');
-    expect(host.textContent).toContain('Providers: 10 connected');
-    expect(host.textContent).toContain('Models available');
-    expect(host.textContent).toContain('big-pickle');
-    expect(host.textContent).not.toContain('Checking...');
-    expect(host.textContent).not.toContain('Provider status unavailable');
-    expect(host.textContent).not.toContain('Models unavailable for this runtime build');
-
-    await act(async () => {
-      root.unmount();
-      await Promise.resolve();
-    });
-  });
-
-  it('keeps connected provider details visible while a refresh is in flight', async () => {
-    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    storeState.cliInstallerState = 'idle';
-    storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
-      displayName: 'Multimodel runtime',
-      supportsSelfUpdate: false,
-      showVersionDetails: false,
-      showBinaryPath: false,
-      authLoggedIn: true,
-      authStatusChecking: true,
-      providers: [
-        {
-          providerId: 'anthropic',
-          displayName: 'Anthropic',
-          supported: true,
-          authenticated: true,
-          authMethod: 'oauth',
-          verificationState: 'verified',
-          statusMessage: 'Connected via Anthropic subscription',
-          models: ['claude-3-5-sonnet'],
-          modelAvailability: [],
-          canLoginFromUi: true,
-          capabilities: {
-            teamLaunch: true,
-            oneShot: true,
-          },
-          backend: null,
-        },
-        createCodexNativeRolloutProvider({
-          state: 'ready',
-          statusMessage: 'ChatGPT account ready',
-          models: ['gpt-5-codex'],
-        }),
-        {
-          providerId: 'opencode',
-          displayName: 'OpenCode (200+ models)',
-          supported: true,
-          authenticated: true,
-          authMethod: 'opencode_managed',
-          verificationState: 'verified',
-          statusMessage: null,
-          models: [],
-          modelAvailability: [],
-          canLoginFromUi: false,
-          capabilities: {
-            teamLaunch: true,
-            oneShot: false,
-          },
-          backend: { kind: 'opencode-cli', label: 'OpenCode CLI' },
-          modelCatalog: null,
-          modelCatalogRefreshState: 'idle',
-          runtimeCapabilities: {
-            modelCatalog: {
-              dynamic: true,
-              source: 'runtime',
-            },
-          },
-        },
-      ],
-    });
-    storeState.cliProviderStatusLoading = {
-      codex: true,
-      opencode: true,
-    };
-
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner));
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).toContain('Providers: 3 connected');
-    expect(host.textContent).toContain('ChatGPT account ready');
-    expect(host.textContent).toContain('Loading models...');
-    expect(host.textContent).not.toContain('Checking...');
-
-    await act(async () => {
-      root.unmount();
-      await Promise.resolve();
-    });
-  });
-
   it('shows an OpenCode install action on the dashboard when the OpenCode CLI is missing', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliInstallerState = 'idle';
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'Multimodel runtime',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -1180,7 +849,7 @@ describe('CLI status visibility during completed install state', () => {
       state: 'idle',
     };
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'Multimodel runtime',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -1241,64 +910,6 @@ describe('CLI status visibility during completed install state', () => {
     });
   });
 
-  it('hides a transient Codex install action while account status is loading', async () => {
-    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    codexAccountHookState.loading = true;
-    storeState.cliInstallerState = 'idle';
-    storeState.codexRuntimeStatus = {
-      installed: false,
-      source: 'missing',
-      state: 'idle',
-    };
-    storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
-      displayName: 'Multimodel runtime',
-      supportsSelfUpdate: false,
-      showVersionDetails: false,
-      showBinaryPath: false,
-      authLoggedIn: false,
-      providers: [
-        createCodexNativeRolloutProvider({
-          authenticated: false,
-          authMethod: null,
-          verificationState: 'error',
-          state: 'runtime-missing',
-          available: false,
-          selectable: false,
-          statusMessage: 'Codex CLI not found. Install Codex to use native account management.',
-          detailMessage: 'Codex native runtime is missing.',
-          models: [],
-        }),
-      ],
-    });
-
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner));
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).toContain('Checking...');
-    expect(host.textContent).toContain('Checking providers...');
-    expect(host.textContent).not.toContain('Codex CLI not found');
-    expect(host.textContent).not.toContain('Ready to run agents');
-    expect(host.textContent).not.toContain('Connect a provider to get started');
-    expect(host.textContent).not.toContain('Providers: 1 connected');
-    expect(
-      Array.from(host.querySelectorAll('button')).some(
-        (button) => button.textContent?.trim() === 'Install'
-      )
-    ).toBe(false);
-
-    await act(async () => {
-      root.unmount();
-      await Promise.resolve();
-    });
-  });
-
   it('opens the shared Codex update dialog for an installed stale runtime', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliInstallerState = 'idle';
@@ -1312,7 +923,7 @@ describe('CLI status visibility during completed install state', () => {
       state: 'ready',
     };
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'Multimodel runtime',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -1376,7 +987,7 @@ describe('CLI status visibility during completed install state', () => {
     };
     storeState.openCodeRuntimeStatusLoading = true;
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'Multimodel runtime',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -1435,7 +1046,7 @@ describe('CLI status visibility during completed install state', () => {
     };
     storeState.openCodeRuntimeStatusLoading = false;
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'Multimodel runtime',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -1488,7 +1099,7 @@ describe('CLI status visibility during completed install state', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliInstallerState = 'idle';
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'Multimodel runtime',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -1541,7 +1152,7 @@ describe('CLI status visibility during completed install state', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliInstallerState = 'idle';
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'Multimodel runtime',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -1659,7 +1270,7 @@ describe('CLI status visibility during completed install state', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliInstallerState = 'idle';
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'Multimodel runtime',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -1715,7 +1326,7 @@ describe('CLI status visibility during completed install state', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliInstallerState = 'idle';
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'Multimodel runtime',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -1808,7 +1419,7 @@ describe('CLI status visibility during completed install state', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliInstallerState = 'idle';
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'Multimodel runtime',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -1902,7 +1513,7 @@ describe('CLI status visibility during completed install state', () => {
     storeState.cliInstallerState = 'idle';
     storeState.fetchCliProviderStatus = vi.fn(() => Promise.resolve(false));
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'Multimodel runtime',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -1984,7 +1595,7 @@ describe('CLI status visibility during completed install state', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliInstallerState = 'idle';
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       authLoggedIn: false,
       providers: [
         {
@@ -2028,7 +1639,7 @@ describe('CLI status visibility during completed install state', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliInstallerState = 'idle';
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       authLoggedIn: false,
       providers: [
         {
@@ -2111,7 +1722,7 @@ describe('CLI status visibility during completed install state', () => {
       },
     };
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       authLoggedIn: false,
       providers: [
         {
@@ -2164,7 +1775,7 @@ describe('CLI status visibility during completed install state', () => {
       },
     };
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       authLoggedIn: false,
       providers: [
         {
@@ -2204,110 +1815,6 @@ describe('CLI status visibility during completed install state', () => {
     });
   });
 
-  it('periodically refreshes Anthropic subscription limits while subscription mode is active', async () => {
-    vi.useFakeTimers();
-    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    storeState.cliInstallerState = 'idle';
-    let finishRefresh: ((refreshed: boolean) => void) | null = null;
-    storeState.fetchCliProviderStatus = vi.fn(
-      () =>
-        new Promise<boolean>((resolve) => {
-          finishRefresh = resolve;
-        })
-    );
-    storeState.appConfig.providerConnections = {
-      anthropic: {
-        authMode: 'oauth',
-        fastModeDefault: false,
-      },
-      codex: {
-        preferredAuthMode: 'auto',
-      },
-    };
-    storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
-      authLoggedIn: true,
-      providers: [
-        {
-          providerId: 'anthropic',
-          displayName: 'Anthropic',
-          supported: true,
-          authenticated: true,
-          authMethod: 'claude.ai',
-          verificationState: 'verified',
-          statusMessage: 'Connected via Anthropic subscription',
-          models: ['claude-sonnet-4-5'],
-          canLoginFromUi: true,
-          capabilities: {
-            teamLaunch: true,
-            oneShot: true,
-          },
-          connection: {
-            supportsOAuth: true,
-            supportsApiKey: true,
-            configurableAuthModes: ['auto', 'oauth', 'api_key'],
-            configuredAuthMode: 'oauth',
-            apiKeyConfigured: false,
-            apiKeySource: null,
-            apiKeySourceLabel: null,
-          },
-          subscriptionRateLimits: {
-            primary: {
-              usedPercent: 12,
-              windowDurationMins: 300,
-              resetsAt: 1_762_547_200,
-            },
-            secondary: {
-              usedPercent: 37,
-              windowDurationMins: 10_080,
-              resetsAt: 1_762_891_200,
-            },
-          },
-        },
-      ],
-    });
-
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    try {
-      await act(async () => {
-        root.render(React.createElement(CliStatusBanner));
-        await Promise.resolve();
-      });
-
-      expect(storeState.fetchCliProviderStatus).not.toHaveBeenCalled();
-
-      await act(async () => {
-        vi.advanceTimersByTime(60_000);
-        await Promise.resolve();
-      });
-
-      expect(storeState.fetchCliProviderStatus).toHaveBeenCalledWith('anthropic', {
-        silent: true,
-      });
-      expect(host.textContent).toContain('88%');
-      expect(host.textContent).toContain('63%');
-      expect(host.querySelectorAll('.skeleton-shimmer')).toHaveLength(2);
-
-      await act(async () => {
-        finishRefresh?.(true);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-
-      expect(host.querySelectorAll('.skeleton-shimmer')).toHaveLength(0);
-      expect(host.querySelectorAll('.dashboard-rate-limit-refreshed')).toHaveLength(2);
-    } finally {
-      await act(async () => {
-        root.unmount();
-        await Promise.resolve();
-      });
-      vi.useRealTimers();
-    }
-  });
-
   it('does not periodically refresh Anthropic limits while API key mode is active', async () => {
     vi.useFakeTimers();
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
@@ -2322,7 +1829,7 @@ describe('CLI status visibility during completed install state', () => {
       },
     };
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       authLoggedIn: true,
       providers: [
         {
@@ -2377,349 +1884,6 @@ describe('CLI status visibility during completed install state', () => {
     }
   });
 
-  it('does not fall back to direct-Claude auth copy when only hidden multimodel providers are available', async () => {
-    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    storeState.cliInstallerState = 'idle';
-    storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
-      authLoggedIn: true,
-      providers: [
-        {
-          providerId: 'gemini',
-          displayName: 'Gemini',
-          supported: true,
-          authenticated: true,
-          authMethod: 'cli_oauth_personal',
-          verificationState: 'verified',
-          statusMessage: 'Resolved to CLI SDK',
-          models: [],
-          canLoginFromUi: true,
-          capabilities: {
-            teamLaunch: true,
-            oneShot: true,
-          },
-        },
-      ],
-    });
-
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner));
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).not.toContain('Authenticated');
-    expect(host.textContent).not.toContain('Providers:');
-    expect(host.textContent).toContain('Connect a provider to get started');
-    expect(host.firstElementChild?.classList.contains('border-l-4')).toBe(false);
-
-    await act(async () => {
-      root.unmount();
-      await Promise.resolve();
-    });
-  });
-
-  it('shows provider setup guidance when only hidden providers are authenticated', async () => {
-    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    storeState.cliInstallerState = 'idle';
-    storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
-      authLoggedIn: true,
-      showVersionDetails: false,
-      showBinaryPath: false,
-      supportsSelfUpdate: false,
-      providers: [
-        {
-          providerId: 'anthropic',
-          displayName: 'Anthropic',
-          supported: true,
-          authenticated: false,
-          authMethod: null,
-          verificationState: 'unknown',
-          statusMessage: 'Authentication required',
-          models: [],
-          canLoginFromUi: true,
-          capabilities: {
-            teamLaunch: true,
-            oneShot: true,
-          },
-        },
-        {
-          providerId: 'codex',
-          displayName: 'Codex',
-          supported: true,
-          authenticated: false,
-          authMethod: null,
-          verificationState: 'unknown',
-          statusMessage: 'Authentication required',
-          models: [],
-          canLoginFromUi: true,
-          capabilities: {
-            teamLaunch: true,
-            oneShot: true,
-          },
-        },
-        {
-          providerId: 'gemini',
-          displayName: 'Gemini',
-          supported: true,
-          authenticated: true,
-          authMethod: 'cli_oauth_personal',
-          verificationState: 'verified',
-          statusMessage: 'Resolved to CLI SDK',
-          models: [],
-          canLoginFromUi: true,
-          capabilities: {
-            teamLaunch: true,
-            oneShot: true,
-          },
-        },
-      ],
-    });
-
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner));
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).toContain('Connect a provider to get started');
-    expect(host.textContent).not.toContain('Ready to run agents');
-    expect(host.firstElementChild?.classList.contains('border-l-4')).toBe(false);
-
-    await act(async () => {
-      root.unmount();
-      await Promise.resolve();
-    });
-  });
-
-  it('collapses dashboard provider cards down to the header summary', async () => {
-    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    storeState.cliInstallerState = 'idle';
-    storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
-      displayName: 'agent_teams_orchestrator',
-      supportsSelfUpdate: false,
-      showVersionDetails: false,
-      showBinaryPath: false,
-      authLoggedIn: true,
-      providers: [
-        {
-          providerId: 'anthropic',
-          displayName: 'Anthropic',
-          supported: true,
-          authenticated: true,
-          authMethod: 'oauth',
-          verificationState: 'verified',
-          statusMessage: 'Connected via Anthropic subscription',
-          models: ['claude-sonnet-4-5'],
-          canLoginFromUi: true,
-          capabilities: {
-            teamLaunch: true,
-            oneShot: true,
-          },
-          connection: {
-            supportsOAuth: true,
-            supportsApiKey: true,
-            configurableAuthModes: ['auto', 'oauth', 'api_key'],
-            configuredAuthMode: 'oauth',
-            apiKeyConfigured: false,
-            apiKeySource: null,
-            apiKeySourceLabel: null,
-          },
-        },
-      ],
-    });
-
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner));
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).toContain('Providers: 1 connected');
-    expect(host.textContent).toContain('Anthropic');
-
-    const collapseHeader = host.querySelector<HTMLElement>(
-      '[role="button"][aria-label="Collapse provider details"]'
-    );
-    expect(collapseHeader).not.toBeNull();
-
-    await act(async () => {
-      collapseHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).toContain('Providers: 1 connected');
-    expect(host.textContent).not.toContain('Anthropic');
-    expect(host.textContent).not.toContain('Manage');
-    expect(
-      host.querySelector('[role="button"][aria-label="Expand provider details"]')
-    ).not.toBeNull();
-
-    await act(async () => {
-      root.unmount();
-      await Promise.resolve();
-    });
-  });
-
-  it('restores the collapsed dashboard provider banner after remount', async () => {
-    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    storeState.cliInstallerState = 'idle';
-    storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
-      displayName: 'agent_teams_orchestrator',
-      supportsSelfUpdate: false,
-      showVersionDetails: false,
-      showBinaryPath: false,
-      authLoggedIn: true,
-      providers: [
-        {
-          providerId: 'codex',
-          displayName: 'Codex',
-          supported: true,
-          authenticated: true,
-          authMethod: 'chatgpt',
-          verificationState: 'verified',
-          statusMessage: 'ChatGPT account ready',
-          models: ['gpt-5.4'],
-          canLoginFromUi: false,
-          capabilities: {
-            teamLaunch: true,
-            oneShot: true,
-          },
-          connection: {
-            supportsOAuth: false,
-            supportsApiKey: true,
-            configurableAuthModes: ['auto', 'chatgpt', 'api_key'],
-            configuredAuthMode: 'chatgpt',
-            apiKeyConfigured: true,
-            apiKeySource: 'environment',
-            apiKeySourceLabel: 'Detected from OPENAI_API_KEY',
-            codex: {
-              preferredAuthMode: 'chatgpt',
-              effectiveAuthMode: 'chatgpt',
-              appServerState: 'healthy',
-              appServerStatusMessage: null,
-              managedAccount: {
-                type: 'chatgpt',
-                email: 'user@example.com',
-                planType: 'pro',
-              },
-              requiresOpenaiAuth: false,
-              login: {
-                status: 'idle',
-                error: null,
-                startedAt: null,
-              },
-              rateLimits: null,
-              launchAllowed: true,
-              launchIssueMessage: null,
-              launchReadinessState: 'ready_chatgpt',
-            },
-          },
-          backend: {
-            kind: 'codex-native',
-            label: 'Codex native',
-            endpointLabel: 'codex exec --json',
-            authMethodDetail: 'chatgpt',
-          },
-        },
-      ],
-    });
-
-    const firstHost = document.createElement('div');
-    document.body.appendChild(firstHost);
-    const firstRoot = createRoot(firstHost);
-
-    await act(async () => {
-      firstRoot.render(React.createElement(CliStatusBanner));
-      await Promise.resolve();
-    });
-
-    const collapseHeader = firstHost.querySelector<HTMLElement>(
-      '[role="button"][aria-label="Collapse provider details"]'
-    );
-    expect(collapseHeader).not.toBeNull();
-
-    await act(async () => {
-      collapseHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    await act(async () => {
-      firstRoot.unmount();
-      await Promise.resolve();
-    });
-
-    const secondHost = document.createElement('div');
-    document.body.appendChild(secondHost);
-    const secondRoot = createRoot(secondHost);
-
-    await act(async () => {
-      secondRoot.render(React.createElement(CliStatusBanner));
-      await Promise.resolve();
-    });
-
-    expect(secondHost.textContent).toContain('Providers: 1 connected');
-    expect(secondHost.textContent).not.toContain('ChatGPT account ready');
-    expect(
-      secondHost.querySelector('[role="button"][aria-label="Expand provider details"]')
-    ).not.toBeNull();
-
-    await act(async () => {
-      secondRoot.unmount();
-      await Promise.resolve();
-    });
-  });
-
-  it('shows a degraded runtime warning when a binary is found but the health check fails', async () => {
-    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    storeState.cliInstallerState = 'idle';
-    storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
-      displayName: 'agent_teams_orchestrator',
-      supportsSelfUpdate: false,
-      showVersionDetails: false,
-      showBinaryPath: false,
-      installed: false,
-      installedVersion: null,
-      binaryPath: '/Users/tester/.claude/local/node_modules/.bin/claude',
-      launchError: 'spawn EACCES',
-    });
-
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner));
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).toContain('failed to start');
-    expect(host.textContent).toContain('Multimodel runtime was found but failed to start');
-    expect(host.textContent).toContain('Re-check');
-    expect(host.textContent).toContain(
-      'The configured Multimodel runtime failed its startup health check.'
-    );
-    expect(host.textContent).not.toContain('Reinstall Claude CLI');
-
-    await act(async () => {
-      root.unmount();
-      await Promise.resolve();
-    });
-  });
-
   it('keeps installed controls visible in settings and wires the Extensions button correctly', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = createInstalledCliStatus({
@@ -2761,7 +1925,7 @@ describe('CLI status visibility during completed install state', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliInstallerState = 'idle';
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'Multimodel runtime',
       supportsSelfUpdate: true,
       showVersionDetails: false,
@@ -2980,7 +2144,7 @@ describe('CLI status visibility during completed install state', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliInstallerState = 'idle';
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'agent_teams_orchestrator',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -3050,7 +2214,7 @@ describe('CLI status visibility during completed install state', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliInstallerState = 'idle';
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'agent_teams_orchestrator',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -3080,194 +2244,6 @@ describe('CLI status visibility during completed install state', () => {
     expect(host.textContent).toContain('Ready');
     expect(host.textContent).toContain('Current runtime: Codex native');
     expect(host.textContent).not.toContain('Connected via API key');
-
-    await act(async () => {
-      root.unmount();
-      await Promise.resolve();
-    });
-  });
-
-  it('shows remaining Codex subscription limits on the dashboard card when ChatGPT mode is active', async () => {
-    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    storeState.cliInstallerState = 'idle';
-    codexAccountHookState.snapshot = {
-      preferredAuthMode: 'auto',
-      effectiveAuthMode: 'chatgpt',
-      launchAllowed: true,
-      launchIssueMessage: null,
-      launchReadinessState: 'ready_chatgpt',
-      appServerState: 'healthy',
-      appServerStatusMessage: null,
-      managedAccount: {
-        type: 'chatgpt',
-        email: 'user@example.com',
-        planType: 'pro',
-      },
-      apiKey: {
-        available: true,
-        source: 'environment',
-        sourceLabel: 'Detected from OPENAI_API_KEY',
-      },
-      requiresOpenaiAuth: false,
-      login: {
-        status: 'idle',
-        error: null,
-        startedAt: null,
-      },
-      rateLimits: {
-        limitId: 'plan-pro',
-        limitName: 'Pro',
-        primary: {
-          usedPercent: 5,
-          windowDurationMins: 300,
-          resetsAt: 1_762_547_200,
-        },
-        secondary: {
-          usedPercent: 41,
-          windowDurationMins: 10_080,
-          resetsAt: 1_762_891_200,
-        },
-        credits: {
-          hasCredits: false,
-          unlimited: false,
-          balance: null,
-        },
-        planType: 'pro',
-      },
-      updatedAt: new Date().toISOString(),
-    };
-    storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
-      displayName: 'agent_teams_orchestrator',
-      supportsSelfUpdate: false,
-      showVersionDetails: false,
-      showBinaryPath: false,
-      authLoggedIn: true,
-      providers: [
-        createCodexNativeRolloutProvider({
-          authenticated: false,
-          authMethod: null,
-          verificationState: 'unknown',
-          statusMessage: 'Connect a ChatGPT account to use your Codex subscription.',
-          connection: {
-            supportsOAuth: false,
-            supportsApiKey: true,
-            configurableAuthModes: ['auto', 'chatgpt', 'api_key'],
-            configuredAuthMode: 'auto',
-            apiKeyConfigured: true,
-            apiKeySource: 'environment',
-            apiKeySourceLabel: 'Detected from OPENAI_API_KEY',
-            codex: {
-              preferredAuthMode: 'auto',
-              effectiveAuthMode: null,
-              appServerState: 'healthy',
-              appServerStatusMessage: null,
-              managedAccount: null,
-              requiresOpenaiAuth: false,
-              login: {
-                status: 'idle',
-                error: null,
-                startedAt: null,
-              },
-              rateLimits: null,
-              launchAllowed: false,
-              launchIssueMessage: 'Connect a ChatGPT account to use your Codex subscription.',
-              launchReadinessState: 'missing_auth',
-            },
-          },
-          backend: {
-            kind: 'codex-native',
-            label: 'Codex native',
-            endpointLabel: 'codex exec --json',
-            authMethodDetail: null,
-          },
-        }),
-      ],
-    });
-
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner));
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).toContain('Providers: 1 connected');
-    expect(host.textContent).toContain('ChatGPT account ready');
-    expect(host.textContent).not.toContain(
-      'Connect a ChatGPT account to use your Codex subscription.'
-    );
-    expect(host.textContent).toContain('5h left');
-    expect(host.textContent).toContain('95%');
-    expect(host.textContent).toContain('Weekly left');
-    expect(host.textContent).toContain('59%');
-    expect(host.textContent).toContain('resets');
-
-    const previousSnapshot = codexAccountHookState.snapshot;
-    const previousRateLimits = previousSnapshot?.rateLimits;
-    const previousPrimary = previousRateLimits?.primary;
-    if (!previousSnapshot || !previousRateLimits || !previousPrimary) {
-      throw new Error('Expected the Codex rate-limit fixture to be available');
-    }
-
-    codexAccountHookState.rateLimitsLoading = true;
-    codexAccountHookState.snapshot = {
-      ...previousSnapshot,
-      rateLimits: null,
-    };
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner));
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).toContain('95%');
-    expect(host.textContent).toContain('59%');
-    expect(host.querySelectorAll('.skeleton-shimmer')).toHaveLength(2);
-    expect(host.querySelector('[aria-busy="true"]')?.getAttribute('aria-label')).toBe(
-      'Rate limits loading'
-    );
-
-    codexAccountHookState.rateLimitsLoading = false;
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner));
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).toContain('95%');
-    expect(host.textContent).toContain('59%');
-    expect(host.querySelectorAll('.skeleton-shimmer')).toHaveLength(0);
-    expect(host.querySelectorAll('.dashboard-rate-limit-refreshed')).toHaveLength(0);
-
-    codexAccountHookState.snapshot = {
-      ...previousSnapshot,
-      rateLimits: {
-        ...previousRateLimits,
-        primary: {
-          usedPercent: 8,
-          windowDurationMins: previousPrimary.windowDurationMins ?? null,
-          resetsAt: previousPrimary.resetsAt ?? null,
-        },
-        secondary: previousRateLimits.secondary
-          ? {
-              usedPercent: 43,
-              windowDurationMins: previousRateLimits.secondary.windowDurationMins ?? null,
-              resetsAt: previousRateLimits.secondary.resetsAt ?? null,
-            }
-          : null,
-      },
-      updatedAt: new Date(Date.now() + 1_000).toISOString(),
-    };
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).toContain('92%');
-    expect(host.textContent).toContain('57%');
-    expect(host.querySelectorAll('.dashboard-rate-limit-refreshed')).toHaveLength(2);
 
     await act(async () => {
       root.unmount();
@@ -3307,7 +2283,7 @@ describe('CLI status visibility during completed install state', () => {
       updatedAt: new Date().toISOString(),
     };
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'agent_teams_orchestrator',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -3347,106 +2323,6 @@ describe('CLI status visibility during completed install state', () => {
     });
   });
 
-  it('refreshes Claude Code and Codex subscription limits when the dashboard becomes active', async () => {
-    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    storeState.cliInstallerState = 'idle';
-    storeState.appConfig.providerConnections = {
-      anthropic: {
-        authMode: 'oauth',
-        fastModeDefault: false,
-      },
-      codex: {
-        preferredAuthMode: 'chatgpt',
-      },
-    };
-    storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
-      authLoggedIn: true,
-      providers: [
-        {
-          providerId: 'anthropic',
-          displayName: 'Anthropic',
-          supported: true,
-          authenticated: true,
-          authMethod: 'claude.ai',
-          verificationState: 'verified',
-          statusMessage: 'Connected via Anthropic subscription',
-          models: ['claude-sonnet-4-5'],
-          canLoginFromUi: true,
-          capabilities: {
-            teamLaunch: true,
-            oneShot: true,
-          },
-          connection: {
-            supportsOAuth: true,
-            supportsApiKey: true,
-            configurableAuthModes: ['auto', 'oauth', 'api_key'],
-            configuredAuthMode: 'oauth',
-            apiKeyConfigured: false,
-            apiKeySource: null,
-            apiKeySourceLabel: null,
-          },
-        },
-        createCodexNativeRolloutProvider({
-          connection: {
-            supportsOAuth: false,
-            supportsApiKey: true,
-            configurableAuthModes: ['auto', 'chatgpt', 'api_key'],
-            configuredAuthMode: 'chatgpt',
-            apiKeyConfigured: false,
-            apiKeySource: null,
-            apiKeySourceLabel: null,
-            codex: null,
-          },
-        }),
-      ],
-    });
-
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner, { isDashboardActive: false }));
-      await Promise.resolve();
-    });
-
-    expect(storeState.fetchCliProviderStatus).not.toHaveBeenCalled();
-    expect(codexAccountHookState.refresh).not.toHaveBeenCalled();
-
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner, { isDashboardActive: true }));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(storeState.fetchCliProviderStatus).toHaveBeenCalledWith('anthropic', { silent: true });
-    expect(codexAccountHookState.refresh).toHaveBeenCalledWith({
-      includeRateLimits: true,
-      silent: true,
-    });
-
-    storeState.fetchCliProviderStatus.mockClear();
-    codexAccountHookState.refresh.mockClear();
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner, { isDashboardActive: false }));
-      await Promise.resolve();
-    });
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner, { isDashboardActive: true }));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(storeState.fetchCliProviderStatus).toHaveBeenCalledWith('anthropic', { silent: true });
-    expect(codexAccountHookState.refresh).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      root.unmount();
-      await Promise.resolve();
-    });
-  });
-
   it('uses the live Codex account snapshot in the settings runtime section too', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliInstallerState = 'idle';
@@ -3478,7 +2354,7 @@ describe('CLI status visibility during completed install state', () => {
       updatedAt: new Date().toISOString(),
     };
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'agent_teams_orchestrator',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -3539,79 +2415,6 @@ describe('CLI status visibility during completed install state', () => {
     expect(host.textContent).not.toContain(
       'Connect a ChatGPT account to use your Codex subscription.'
     );
-
-    await act(async () => {
-      root.unmount();
-      await Promise.resolve();
-    });
-  });
-
-  it('applies the live Codex snapshot even while the dashboard is still on multimodel loading placeholder state', async () => {
-    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    storeState.cliInstallerState = 'idle';
-    storeState.cliStatus = null;
-    storeState.cliStatusLoading = true;
-    codexAccountHookState.snapshot = {
-      preferredAuthMode: 'auto',
-      effectiveAuthMode: 'chatgpt',
-      launchAllowed: true,
-      launchIssueMessage: null,
-      launchReadinessState: 'ready_chatgpt',
-      appServerState: 'healthy',
-      appServerStatusMessage: null,
-      managedAccount: {
-        type: 'chatgpt',
-        email: 'user@example.com',
-        planType: 'pro',
-      },
-      apiKey: {
-        available: true,
-        source: 'environment',
-        sourceLabel: 'Detected from OPENAI_API_KEY',
-      },
-      requiresOpenaiAuth: false,
-      login: {
-        status: 'idle',
-        error: null,
-        startedAt: null,
-      },
-      rateLimits: {
-        limitId: 'plan-pro',
-        limitName: 'Pro',
-        primary: {
-          usedPercent: 5,
-          windowDurationMins: 300,
-          resetsAt: 1_762_547_200,
-        },
-        secondary: {
-          usedPercent: 41,
-          windowDurationMins: 10_080,
-          resetsAt: 1_762_891_200,
-        },
-        credits: {
-          hasCredits: false,
-          unlimited: false,
-          balance: null,
-        },
-        planType: 'pro',
-      },
-      updatedAt: new Date().toISOString(),
-    };
-
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(React.createElement(CliStatusBanner));
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).toContain('Providers: 1 connected');
-    expect(host.textContent).toContain('5h left');
-    expect(host.textContent).toContain('Weekly left');
-    expect(host.textContent).toContain('resets');
-    expect(host.textContent).not.toContain('status will be checked in the background');
 
     await act(async () => {
       root.unmount();
@@ -3702,7 +2505,7 @@ describe('CLI status visibility during completed install state', () => {
       updatedAt: new Date().toISOString(),
     };
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'agent_teams_orchestrator',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -3775,7 +2578,7 @@ describe('CLI status visibility during completed install state', () => {
       updatedAt: new Date().toISOString(),
     };
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'agent_teams_orchestrator',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -3877,7 +2680,7 @@ describe('CLI status visibility during completed install state', () => {
       updatedAt: new Date().toISOString(),
     };
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'agent_teams_orchestrator',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -3989,7 +2792,7 @@ describe('CLI status visibility during completed install state', () => {
       updatedAt: new Date().toISOString(),
     };
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'agent_teams_orchestrator',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -4065,7 +2868,7 @@ describe('CLI status visibility during completed install state', () => {
     storeState.cliInstallerState = 'idle';
     storeState.cliStatusLoading = true;
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'agent_teams_orchestrator',
       supportsSelfUpdate: false,
       showVersionDetails: false,
@@ -4135,7 +2938,7 @@ describe('CLI status visibility during completed install state', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliInstallerState = 'idle';
     storeState.cliStatus = createInstalledCliStatus({
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       displayName: 'agent_teams_orchestrator',
       supportsSelfUpdate: false,
       showVersionDetails: false,

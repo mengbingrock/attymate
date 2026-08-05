@@ -174,7 +174,7 @@ export const CliStatusSection = (): React.JSX.Element | null => {
     enabled:
       isElectron &&
       multimodelEnabled &&
-      loadingCliStatus?.flavor === 'agent_teams_orchestrator' &&
+      false &&
       Boolean(loadingCliStatus?.providers.some((provider) => provider.providerId === 'codex')),
     includeRateLimits: true,
   });
@@ -350,14 +350,13 @@ export const CliStatusSection = (): React.JSX.Element | null => {
   if (!isElectron) return null;
 
   const runtimeDisplayName = getRuntimeDisplayName(effectiveCliStatus, multimodelEnabled);
-  const runtimeLabel =
-    effectiveCliStatus?.flavor === 'agent_teams_orchestrator'
-      ? null
-      : effectiveCliStatus &&
-          effectiveCliStatus.showVersionDetails &&
-          effectiveCliStatus.installedVersion
-        ? `${runtimeDisplayName} v${effectiveCliStatus.installedVersion ?? 'unknown'}`
-        : runtimeDisplayName;
+  const runtimeLabel = false
+    ? null
+    : effectiveCliStatus &&
+        effectiveCliStatus.showVersionDetails &&
+        effectiveCliStatus.installedVersion
+      ? `${runtimeDisplayName} v${effectiveCliStatus.installedVersion ?? 'unknown'}`
+      : runtimeDisplayName;
 
   const activeTerminalProvider = providerTerminal
     ? (effectiveCliStatus?.providers.find(

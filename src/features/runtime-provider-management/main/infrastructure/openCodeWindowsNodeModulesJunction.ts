@@ -8,29 +8,21 @@ const OPENCODE_SHARED_CACHE_NODE_MODULES_RELATIVE = path.join(
   'shared-cache',
   'config-node_modules'
 );
-const OPENCODE_PROFILES_BASE_RELATIVE = path.join(
-  'Data',
-  'opencode',
-  'profiles'
-);
+const OPENCODE_PROFILES_BASE_RELATIVE = path.join('Data', 'opencode', 'profiles');
 const OPENCODE_SHARED_CACHE_SUFFIX_PARTS = [
   'Cache',
   'opencode',
   'shared-cache',
   'config-node_modules',
 ];
-const OPENCODE_PROFILE_NODE_MODULES_SUFFIX_TAIL = [
-  'config',
-  'opencode',
-  'node_modules',
-];
+const OPENCODE_PROFILE_NODE_MODULES_SUFFIX_TAIL = ['config', 'opencode', 'node_modules'];
 
 function getLocalAppDataPath(): string {
   return process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local');
 }
 
 function getBaseDir(): string {
-  return path.join(getLocalAppDataPath(), 'claude-multimodel-nodejs');
+  return path.join(getLocalAppDataPath(), 'legacy-agent-runtime');
 }
 
 export function getSharedCacheNodeModulesPath(): string {
@@ -63,7 +55,9 @@ function normalizeErrorPathSeparators(value: string): string {
 }
 
 function normalizePathForComparison(value: string): string {
-  return normalizeErrorPathSeparators(value).replace(/[\\/]+/g, '/').toLowerCase();
+  return normalizeErrorPathSeparators(value)
+    .replace(/[\\/]+/g, '/')
+    .toLowerCase();
 }
 
 function isAbsolutePath(candidate: string): boolean {
@@ -87,31 +81,26 @@ function getPathBaseBeforeSuffix(candidate: string, suffixParts: readonly string
 function isExpectedProfileNodeModulesPath(candidate: string, profileId: string): boolean {
   return Boolean(
     profileId &&
-      isAbsolutePath(candidate) &&
-      getPathBaseBeforeSuffix(candidate, getExpectedProfileSuffixParts(profileId))
+    isAbsolutePath(candidate) &&
+    getPathBaseBeforeSuffix(candidate, getExpectedProfileSuffixParts(profileId))
   );
 }
 
 function isExpectedSharedCacheNodeModulesPath(candidate: string): boolean {
   return Boolean(
     isAbsolutePath(candidate) &&
-      getPathBaseBeforeSuffix(candidate, OPENCODE_SHARED_CACHE_SUFFIX_PARTS)
+    getPathBaseBeforeSuffix(candidate, OPENCODE_SHARED_CACHE_SUFFIX_PARTS)
   );
 }
 
-function extractedPathsShareBase(
-  source: string,
-  target: string,
-  profileId: string
-): boolean {
+function extractedPathsShareBase(source: string, target: string, profileId: string): boolean {
   const sourceBase = getPathBaseBeforeSuffix(source, OPENCODE_SHARED_CACHE_SUFFIX_PARTS);
   const targetBase = getPathBaseBeforeSuffix(target, getExpectedProfileSuffixParts(profileId));
   return Boolean(sourceBase && targetBase && sourceBase === targetBase);
 }
 
 export function extractProfileIdFromSymlinkError(message: string): string | null {
-  const profilePathPattern =
-    /profiles[\\/]([0-9a-f]+)[\\/]config[\\/]opencode[\\/]node_modules/i;
+  const profilePathPattern = /profiles[\\/]([0-9a-f]+)[\\/]config[\\/]opencode[\\/]node_modules/i;
   const match = profilePathPattern.exec(normalizeErrorPathSeparators(message));
   return match ? match[1] : null;
 }

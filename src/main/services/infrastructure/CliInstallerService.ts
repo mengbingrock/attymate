@@ -39,7 +39,6 @@ import https from 'https';
 import { tmpdir } from 'os';
 import { join, posix as pathPosix, win32 as pathWin32 } from 'path';
 
-import { ClaudeMultimodelBridgeService } from '../runtime/ClaudeMultimodelBridgeService';
 import {
   CliProviderModelAvailabilityService,
   type ProviderModelAvailabilityContext,
@@ -73,46 +72,15 @@ const GCS_BASE =
   'https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases';
 
 const CLI_INSTALLER_PROGRESS_CHANNEL = 'cliInstaller:progress';
-const FRONTEND_MULTIMODEL_PROVIDER_IDS: CliProviderId[] = ['anthropic', 'codex', 'opencode'];
-const FRONTEND_MULTIMODEL_PROVIDER_ID_SET = new Set<CliProviderId>(
-  FRONTEND_MULTIMODEL_PROVIDER_IDS
-);
-
 function getProviderDisplayName(providerId: CliProviderId): string {
   switch (providerId) {
     case 'anthropic':
       return 'Anthropic';
     case 'codex':
       return 'Codex';
-    case 'gemini':
-      return 'Gemini';
-    case 'opencode':
-      return 'OpenCode (200+ models)';
+    default:
+      return providerId;
   }
-}
-
-function isFrontendMultimodelProviderId(providerId: CliProviderId): boolean {
-  return FRONTEND_MULTIMODEL_PROVIDER_ID_SET.has(providerId);
-}
-
-function getFrontendAuthenticatedProvider(
-  providers: CliProviderStatus[]
-): CliProviderStatus | null {
-  return (
-    providers.find(
-      (provider) => isFrontendMultimodelProviderId(provider.providerId) && provider.authenticated
-    ) ?? null
-  );
-}
-
-function hasFrontendAuthenticatedProvider(providers: CliProviderStatus[]): boolean {
-  return providers.some(
-    (provider) => isFrontendMultimodelProviderId(provider.providerId) && provider.authenticated
-  );
-}
-
-function filterFrontendMultimodelProviders(providers: CliProviderStatus[]): CliProviderStatus[] {
-  return providers.filter((provider) => isFrontendMultimodelProviderId(provider.providerId));
 }
 
 /** Timeout for `claude --version` (ms) */
@@ -455,7 +423,6 @@ function cloneCliInstallerRunDiag(diag: CliInstallerStatusRunDiag): CliInstaller
 export class CliInstallerService {
   private mainWindow: BrowserWindow | null = null;
   private installing = false;
-  private readonly multimodelBridgeService = new ClaudeMultimodelBridgeService();
   private readonly modelAvailabilityService = new CliProviderModelAvailabilityService(
     (providerId, signature, snapshot) => {
       this.handleProviderModelAvailabilityUpdate(providerId, signature, snapshot);
@@ -612,7 +579,6 @@ export class CliInstallerService {
     this.latestStatusSnapshot = null;
     this.latestProviderSignatures.clear();
     this.modelAvailabilityService.invalidate();
-    this.multimodelBridgeService.invalidateProviderStatusHydrations();
   }
 
   /**
@@ -625,28 +591,7 @@ export class CliInstallerService {
   private createInitialStatus(): CliInstallationStatus {
     const flavor = getConfiguredCliFlavor();
     const ui = getCliFlavorUiOptions(flavor);
-    const providers =
-      flavor === 'agent_teams_orchestrator'
-        ? FRONTEND_MULTIMODEL_PROVIDER_IDS.map((providerId) => ({
-            providerId,
-            displayName: getProviderDisplayName(providerId),
-            supported: false,
-            authenticated: false,
-            authMethod: null,
-            verificationState: 'unknown' as const,
-            modelVerificationState: 'idle' as const,
-            statusMessage: 'Checking...',
-            models: [],
-            modelAvailability: [],
-            canLoginFromUi: providerId !== 'opencode',
-            capabilities: {
-              teamLaunch: false,
-              oneShot: false,
-              extensions: createDefaultCliExtensionCapabilities(),
-            },
-            backend: null,
-          }))
-        : [];
+    const providers: CliProviderStatus[] = [];
     return {
       flavor,
       displayName: ui.displayName,
@@ -785,13 +730,6 @@ export class CliInstallerService {
 
   private updateLatestProviderStatus(providerStatus: CliProviderStatus): void {
     if (
-      this.latestStatusSnapshot?.flavor === 'agent_teams_orchestrator' &&
-      !isFrontendMultimodelProviderId(providerStatus.providerId)
-    ) {
-      return;
-    }
-
-    if (
       providerStatus.modelVerificationState !== 'verifying' &&
       (providerStatus.modelAvailability?.length ?? 0) <= 0
     ) {
@@ -812,12 +750,12 @@ export class CliInstallerService {
             : provider
         )
       : [...this.latestStatusSnapshot.providers, providerStatus];
-    const authenticatedProvider = getFrontendAuthenticatedProvider(nextProviders);
+    const authenticatedProvider = nextProviders.find((provider) => provider.authenticated) ?? null;
 
     this.latestStatusSnapshot = {
       ...this.latestStatusSnapshot,
       providers: nextProviders,
-      authLoggedIn: hasFrontendAuthenticatedProvider(nextProviders),
+      authLoggedIn: nextProviders.some((provider) => provider.authenticated),
       authMethod: authenticatedProvider?.authMethod ?? null,
     };
   }
@@ -839,36 +777,11 @@ export class CliInstallerService {
     binaryPath: string,
     installedVersion: string | null
   ): CliProviderStatus | null {
-    const snapshot = this.latestStatusSnapshot;
-    if (
-      !snapshot ||
-      snapshot.flavor !== 'agent_teams_orchestrator' ||
-      snapshot.binaryPath !== binaryPath ||
-      snapshot.installedVersion !== installedVersion
-    ) {
-      return null;
-    }
-
-    const provider =
-      cloneCliInstallationStatus(snapshot).providers.find(
-        (candidate) => candidate.providerId === providerId
-      ) ?? null;
-    if (
-      !provider ||
-      provider.models.length <= 0 ||
-      provider.supported !== true ||
-      provider.authenticated !== true ||
-      provider.capabilities.oneShot !== true
-    ) {
-      return null;
-    }
-
-    return provider;
+    void providerId;
+    void binaryPath;
+    void installedVersion;
+    return null;
   }
-
-  // ---------------------------------------------------------------------------
-  // Public: getStatus
-  // ---------------------------------------------------------------------------
 
   async getStatus(options: CliInstallerGetStatusOptions = {}): Promise<CliInstallationStatus> {
     const statusStartedAt = Date.now();
@@ -914,6 +827,7 @@ export class CliInstallerService {
     providerId: CliProviderId,
     options: CliProviderStatusRequestOptions = {}
   ): Promise<CliProviderStatus | null> {
+    void options;
     await resolveInteractiveShellEnvBestEffort({
       timeoutMs: 1_500,
       fallbackEnv: process.env,
@@ -925,37 +839,8 @@ export class CliInstallerService {
       return null;
     }
 
-    const flavor = getConfiguredCliFlavor();
-    if (flavor !== 'agent_teams_orchestrator') {
-      const fullStatus = await this.getStatus();
-      return fullStatus.providers.find((provider) => provider.providerId === providerId) ?? null;
-    }
-
-    const generation = this.statusGatherGeneration;
-    const handleCatalogUpdate = (hydratedProviderStatus: CliProviderStatus): void => {
-      if (!this.updateLatestProviderStatusIfCurrent(hydratedProviderStatus, generation)) {
-        return;
-      }
-      if (this.latestStatusSnapshot) {
-        this.publishStatusSnapshot(this.latestStatusSnapshot);
-      }
-    };
-    const providerStatus = options.projectPath
-      ? await this.multimodelBridgeService.getProviderStatus(
-          binaryPath,
-          providerId,
-          undefined,
-          options
-        )
-      : await this.multimodelBridgeService.getProviderStatus(
-          binaryPath,
-          providerId,
-          handleCatalogUpdate
-        );
-    if (!options.projectPath) {
-      this.updateLatestProviderStatusIfCurrent(providerStatus, generation);
-    }
-    return providerStatus;
+    const fullStatus = await this.getStatus();
+    return fullStatus.providers.find((provider) => provider.providerId === providerId) ?? null;
   }
 
   async verifyProviderModels(providerId: CliProviderId): Promise<CliProviderStatus | null> {
@@ -970,58 +855,7 @@ export class CliInstallerService {
       return null;
     }
 
-    const flavor = getConfiguredCliFlavor();
-    if (flavor !== 'agent_teams_orchestrator') {
-      return this.getProviderStatus(providerId);
-    }
-
-    const generation = this.statusGatherGeneration;
-    const versionProbe = await this.probeCliVersion(binaryPath);
-    if (!versionProbe.ok) {
-      return null;
-    }
-
-    if (providerId === 'opencode') {
-      const providerStatus = await this.multimodelBridgeService.verifyProviderStatus(
-        binaryPath,
-        providerId
-      );
-      const nextProviderStatus = {
-        ...providerStatus,
-        modelVerificationState: 'idle' as const,
-        modelAvailability: [],
-      };
-      if (
-        this.updateLatestProviderStatusIfCurrent(nextProviderStatus, generation) &&
-        this.latestStatusSnapshot
-      ) {
-        this.publishStatusSnapshot(this.latestStatusSnapshot);
-      }
-      return nextProviderStatus;
-    }
-
-    const providerStatus =
-      this.getLatestProviderStatusForModelVerification(
-        providerId,
-        binaryPath,
-        versionProbe.version
-      ) ?? (await this.multimodelBridgeService.getProviderStatus(binaryPath, providerId));
-    if (generation !== this.statusGatherGeneration) {
-      return providerStatus;
-    }
-
-    const nextProviderStatus = this.applyProviderModelAvailabilityToProvider(
-      binaryPath,
-      versionProbe.version,
-      providerStatus
-    );
-    if (
-      this.updateLatestProviderStatusIfCurrent(nextProviderStatus, generation) &&
-      this.latestStatusSnapshot
-    ) {
-      this.publishStatusSnapshot(this.latestStatusSnapshot);
-    }
-    return nextProviderStatus;
+    return this.getProviderStatus(providerId);
   }
 
   /**
@@ -1057,18 +891,6 @@ export class CliInstallerService {
     diag.binaryResolveMs = Date.now() - binaryResolveStartedAt;
     if (binaryPath) {
       r.binaryPath = binaryPath;
-      if (r.flavor === 'agent_teams_orchestrator' && providerStatusMode === 'defer') {
-        const recoveredHealthyStatus = this.getRecoverableHealthyStatus(binaryPath);
-        diag.versionProbeMs = 0;
-        r.installed = true;
-        r.installedVersion = recoveredHealthyStatus?.installedVersion ?? null;
-        r.launchError = null;
-        r.authStatusChecking = false;
-        this.markProvidersDeferred(r);
-        this.publishStatusSnapshotIfCurrent(r, generation);
-        return;
-      }
-
       const versionProbeStartedAt = Date.now();
       const versionProbe = await this.probeCliVersion(binaryPath);
       diag.versionProbeMs = Date.now() - versionProbeStartedAt;
@@ -1195,47 +1017,14 @@ export class CliInstallerService {
   }
 
   private markProvidersUnavailable(result: CliInstallationStatus, message: string): void {
-    if (result.flavor !== 'agent_teams_orchestrator') {
-      return;
-    }
-
-    result.providers = result.providers.map((provider) => ({
-      ...provider,
-      authenticated: false,
-      authMethod: null,
-      verificationState: 'error',
-      modelVerificationState: 'idle',
-      modelCatalogRefreshState: 'error',
-      statusMessage: message,
-      models: [],
-      modelAvailability: [],
-      canLoginFromUi: false,
-      backend: null,
-    }));
-    result.authLoggedIn = false;
-    result.authMethod = null;
+    // Stock flavor: provider rows manage their own availability messaging.
+    void result;
+    void message;
   }
 
   private markProvidersDeferred(result: CliInstallationStatus): void {
-    if (result.flavor !== 'agent_teams_orchestrator') {
-      return;
-    }
-
-    result.providers = result.providers.map((provider) => ({
-      ...provider,
-      authenticated: false,
-      authMethod: null,
-      verificationState: 'unknown',
-      modelVerificationState: 'idle',
-      modelCatalogRefreshState: 'idle',
-      statusMessage: CLI_PROVIDER_STATUS_DEFERRED_MESSAGE,
-      detailMessage: null,
-      models: [],
-      modelAvailability: [],
-      backend: null,
-    }));
-    result.authLoggedIn = false;
-    result.authMethod = null;
+    // Stock flavor: no deferred multimodel provider hydration.
+    void result;
   }
 
   /**
@@ -1250,71 +1039,6 @@ export class CliInstallerService {
     diag: CliInstallerStatusRunDiag,
     generation: number
   ): Promise<void> {
-    if (result.flavor === 'agent_teams_orchestrator') {
-      result.authStatusChecking = true;
-      let statusTarget = result;
-      const applyProviders = (providersSnapshot: CliProviderStatus[], final: boolean): void => {
-        if (generation !== this.statusGatherGeneration) {
-          return;
-        }
-
-        const target = statusTarget;
-        const frontendProviders = filterFrontendMultimodelProviders(providersSnapshot);
-        target.providers = frontendProviders;
-        target.authLoggedIn = hasFrontendAuthenticatedProvider(frontendProviders);
-        target.authMethod = getFrontendAuthenticatedProvider(frontendProviders)?.authMethod ?? null;
-        if (final) {
-          target.authStatusChecking = false;
-          this.rememberHealthyStatus(target);
-        }
-        this.publishStatusSnapshot(target);
-      };
-
-      const completion = this.multimodelBridgeService
-        .getProviderStatuses(binaryPath, (providersSnapshot) => {
-          applyProviders(providersSnapshot, false);
-        })
-        .then((providers) => {
-          applyProviders(providers, true);
-        })
-        .catch((error) => {
-          if (generation !== this.statusGatherGeneration) {
-            return;
-          }
-
-          const msg = getErrorMessage(error);
-          diag.authLastError = msg;
-          result.authStatusChecking = false;
-          logger.warn(`Provider status check failed for claude-multimodel: ${msg}`);
-          this.publishStatusSnapshot(result);
-        });
-
-      let timer: ReturnType<typeof setTimeout> | null = null;
-      const timeout = new Promise<'timeout'>((resolve) => {
-        timer = setTimeout(() => {
-          statusTarget = cloneCliInstallationStatus(result);
-          resolve('timeout');
-        }, MULTIMODEL_PROVIDER_STATUS_INITIAL_TIMEOUT_MS);
-        timer.unref?.();
-      });
-
-      const providerInitialWaitStartedAt = Date.now();
-      const outcome = await Promise.race([completion.then(() => 'completed' as const), timeout]);
-      diag.providerInitialWaitMs = Date.now() - providerInitialWaitStartedAt;
-      if (timer) {
-        clearTimeout(timer);
-      }
-
-      if (outcome === 'timeout') {
-        diag.authTimedOut = true;
-        logger.warn(
-          `Provider status check still running after ${MULTIMODEL_PROVIDER_STATUS_INITIAL_TIMEOUT_MS}ms; returning partial CLI status`
-        );
-        this.publishStatusSnapshotIfCurrent(result, generation);
-      }
-      return;
-    }
-
     // Stock flavor: the claude binary has no multimodel control plane, but
     // Codex teams run as stock codex lanes — surface a codex provider status
     // (auth via codex-account, model catalog via the codex app-server) so the
@@ -1468,7 +1192,7 @@ export class CliInstallerService {
 
   async install(): Promise<void> {
     if (!getCliFlavorUiOptions(getConfiguredCliFlavor()).supportsSelfUpdate) {
-      const error = 'Updates are disabled for the configured agent_teams_orchestrator runtime.';
+      const error = 'Updates are disabled for the configured CLI runtime.';
       logger.warn(error);
       this.sendProgress({ type: 'error', error });
       return;

@@ -68,7 +68,7 @@ export const ApiKeysPanel = ({
   const codexAccount = useCodexAccountSnapshot({
     enabled:
       isElectron &&
-      loadingCliStatus?.flavor === 'agent_teams_orchestrator' &&
+      false &&
       Boolean(loadingCliStatus?.providers.some((provider) => provider.providerId === 'codex')),
   });
   const effectiveCliStatus = useMemo(

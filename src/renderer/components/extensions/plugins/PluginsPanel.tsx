@@ -204,23 +204,6 @@ export const PluginsPanel = ({
 
   return (
     <div className="flex flex-col gap-4">
-      {cliStatus?.flavor === 'agent_teams_orchestrator' &&
-        (() => {
-          const codexProvider = cliStatus.providers.find(
-            (provider) => provider.providerId === 'codex'
-          );
-          if (!codexProvider) return null;
-          const capability = getCliProviderExtensionCapability(codexProvider, 'plugins');
-          if (capability.status === 'supported') {
-            return null;
-          }
-
-          return (
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-300">
-              {t('pluginsPanel.providerSupportNotice')}
-            </div>
-          );
-        })()}
       {/* Search + Sort + Installed only row */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="flex-1">
