@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
+import { isClaudeComposerSubmitted } from '../core/domain/claudePaneState';
 import {
   buildInteractiveTmuxSessionName,
   buildViewerSessionName,
@@ -26,8 +27,6 @@ import type {
   InteractiveRuntimeStatusDto,
   OpenConsoleResultDto,
 } from '../contracts';
-import { isClaudeComposerSubmitted } from '../core/domain/claudePaneState';
-
 import type { InteractiveRuntimeBinding } from '../core/domain/runtimeBinding';
 
 export type { InteractiveRuntimeBinding } from '../core/domain/runtimeBinding';
