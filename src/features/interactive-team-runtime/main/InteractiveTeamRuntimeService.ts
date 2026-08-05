@@ -368,15 +368,24 @@ export class InteractiveTeamRuntimeService {
                 const paneId = member.tmuxPaneId?.trim();
                 if (!name || seenMembers.has(name) || member.agentType === 'team-lead') continue;
                 if (!paneId?.startsWith('%')) continue;
-                if (!ourPaneIds.has(paneId)) continue;
+                // Stock teammates detach from their spawn pane within seconds
+                // and keep running, so on an anchored session team a missing
+                // pane must not block registration — requiring it left healthy
+                // teammates permanently "stale runtime" in the UI. The pane
+                // check stays authoritative for scan-discovered candidates,
+                // where it is the only proof the entry belongs to this run.
+                const paneAlive = ourPaneIds.has(paneId);
+                if (!paneAlive && !anchoredToDetectedLead) continue;
                 seenMembers.add(name);
-                await tmux
-                  .breakPaneToWindow(paneId, name, binding.tmuxSessionName)
-                  .catch((error: unknown) =>
-                    logger.warn(
-                      `[${input.teamName}] break-pane for "${name}" failed: ${String(error)}`
-                    )
-                  );
+                if (paneAlive) {
+                  await tmux
+                    .breakPaneToWindow(paneId, name, binding.tmuxSessionName)
+                    .catch((error: unknown) =>
+                      logger.warn(
+                        `[${input.teamName}] break-pane for "${name}" failed: ${String(error)}`
+                      )
+                    );
+                }
                 await this.#mirrorMemberIntoAppConfig(input.teamName, name, paneId, input.cwd);
                 input.callbacks.onMemberRegistered(name, paneId);
               }
