@@ -212,6 +212,22 @@ Install Claude Code or OpenAI Codex, sign in with the CLI, and the app will dete
 </tr>
 </table>
 
+### First launch on macOS
+
+The macOS build is code-signed but not notarized, so the first launch is blocked with
+_"Apple could not verify 'Agent Teams AI' is free of malware…"_. Open it either way:
+
+- **System Settings** — try to open the app, then go to **System Settings → Privacy &
+  Security**, scroll to the bottom, and click **Open Anyway**.
+- **Terminal** — clear the download quarantine flag:
+
+  ```sh
+  xattr -dr com.apple.quarantine "/Applications/Agent Teams AI.app"
+  ```
+
+Either step is needed once per download. Right-click → Open no longer works: Apple removed
+that bypass in macOS 15.
+
 ## Table of contents
 
 - [What's new in this fork](#whats-new-in-this-fork)
