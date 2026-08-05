@@ -31,7 +31,7 @@ export type CliPlatform =
   | 'win32-x64'
   | 'win32-arm64';
 
-export type CliFlavor = 'claude' | 'agent_teams_orchestrator';
+export type CliFlavor = 'claude';
 
 export type CliProviderId = 'anthropic' | 'codex' | 'gemini' | 'opencode';
 export type CliProviderAuthMode = 'auto' | 'oauth' | 'chatgpt' | 'api_key';

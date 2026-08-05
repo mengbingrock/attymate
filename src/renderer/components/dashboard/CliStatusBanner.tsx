@@ -593,7 +593,7 @@ function getApiKeyActionRequiredProviders(
 function formatRuntimeLabel(
   cliStatus: NonNullable<ReturnType<typeof useCliInstaller>['cliStatus']>
 ): string | null {
-  if (cliStatus.flavor === 'agent_teams_orchestrator') {
+  if (false) {
     return null;
   }
 
@@ -1131,7 +1131,7 @@ const InstalledBanner = ({
           {t('cliStatus.errors.refreshFailed')}
         </p>
       )}
-      {cliStatus.flavor === 'agent_teams_orchestrator' ? (
+      {false ? (
         <div className={showExpandedContent ? undefined : 'hidden'}>
           <RuntimeProviderQuickConnect
             enabled
@@ -1638,7 +1638,7 @@ export const CliStatusBanner = ({
     enabled:
       isElectron &&
       multimodelEnabled &&
-      loadingCliStatus?.flavor === 'agent_teams_orchestrator' &&
+      false &&
       Boolean(loadingCliStatus?.providers.some((provider) => provider.providerId === 'codex')),
     includeRateLimits: true,
     initialRefreshDelayMs: CODEX_ACCOUNT_STARTUP_IDLE_MIN_DELAY_MS,
@@ -1709,46 +1709,10 @@ export const CliStatusBanner = ({
   ]);
 
   const shouldPollAnthropicSubscriptionLimits = useMemo(() => {
-    if (
-      !renderCliStatus?.installed ||
-      renderCliStatus.flavor !== 'agent_teams_orchestrator' ||
-      !multimodelEnabled
-    ) {
-      return false;
-    }
-
-    const provider =
-      renderCliStatus.providers.find((candidate) => candidate.providerId === 'anthropic') ?? null;
-    if (!provider) {
-      return false;
-    }
-
-    return isDashboardRateLimitSubscriptionMode({
-      provider,
-      sourceProvider: loadingCliProviderMap.get('anthropic') ?? null,
-      configuredAuthModes: providerConnectionAuthModes,
-    });
+    return false;
   }, [loadingCliProviderMap, multimodelEnabled, providerConnectionAuthModes, renderCliStatus]);
   const shouldRefreshCodexSubscriptionLimits = useMemo(() => {
-    if (
-      !renderCliStatus?.installed ||
-      renderCliStatus.flavor !== 'agent_teams_orchestrator' ||
-      !multimodelEnabled
-    ) {
-      return false;
-    }
-
-    const provider =
-      renderCliStatus.providers.find((candidate) => candidate.providerId === 'codex') ?? null;
-    if (!provider) {
-      return false;
-    }
-
-    return isDashboardRateLimitSubscriptionMode({
-      provider,
-      sourceProvider: loadingCliProviderMap.get('codex') ?? null,
-      configuredAuthModes: providerConnectionAuthModes,
-    });
+    return false;
   }, [loadingCliProviderMap, multimodelEnabled, providerConnectionAuthModes, renderCliStatus]);
   const runtimeDisplayName = getHumanRuntimeDisplayName(renderCliStatus, multimodelEnabled);
 
@@ -2495,7 +2459,7 @@ export const CliStatusBanner = ({
   // Installed but not logged in — yellow warning banner
   if (
     renderCliStatus.installed &&
-    renderCliStatus.flavor !== 'agent_teams_orchestrator' &&
+    true &&
     (renderCliStatus.authStatusChecking || isVerifyingAuth)
   ) {
     if (renderCliStatus.authStatusChecking || isVerifyingAuth) {
@@ -2548,7 +2512,7 @@ export const CliStatusBanner = ({
 
   if (
     renderCliStatus.installed &&
-    renderCliStatus.flavor !== 'agent_teams_orchestrator' &&
+    true &&
     !renderCliStatus.authStatusChecking &&
     !renderCliStatus.authLoggedIn
   ) {

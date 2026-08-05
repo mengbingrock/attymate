@@ -175,7 +175,7 @@ export const ExtensionStoreView = (): React.JSX.Element => {
     enabled:
       isElectron &&
       multimodelEnabled &&
-      loadingCliStatus?.flavor === 'agent_teams_orchestrator' &&
+      false &&
       Boolean(
         loadingCliStatus?.providers.some(
           (provider: CliProviderStatus) => provider.providerId === 'codex'
@@ -263,11 +263,7 @@ export const ExtensionStoreView = (): React.JSX.Element => {
   }, [fetchPluginCatalog, projectPath]);
 
   useEffect(() => {
-    const cliStatusMatchesCurrentMode =
-      cliStatus &&
-      (multimodelEnabled
-        ? cliStatus.flavor === 'agent_teams_orchestrator'
-        : cliStatus.flavor !== 'agent_teams_orchestrator');
+    const cliStatusMatchesCurrentMode = cliStatus && (multimodelEnabled ? false : true);
     if (cliStatusLoading || cliStatusMatchesCurrentMode) {
       return;
     }

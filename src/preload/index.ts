@@ -7,7 +7,6 @@ import { createMemberLogStreamBridge } from '@features/member-log-stream/preload
 import { createMemberWorkSyncBridge } from '@features/member-work-sync/preload';
 import { createOrganizationsBridge } from '@features/organizations/preload';
 import { createRecentProjectsBridge } from '@features/recent-projects/preload';
-import { createRuntimeProviderManagementBridge } from '@features/runtime-provider-management/preload';
 import { createTeamExportBridge } from '@features/team-export/preload';
 import { createTeamImportBridge } from '@features/team-import/preload';
 import { createTerminalWorkspaceBridge } from '@features/terminal-workspace/preload';
@@ -69,10 +68,6 @@ import {
   MCP_REGISTRY_INSTALL_CUSTOM,
   MCP_REGISTRY_SEARCH,
   MCP_REGISTRY_UNINSTALL,
-  OPENCODE_RUNTIME_GET_STATUS,
-  OPENCODE_RUNTIME_INSTALL,
-  OPENCODE_RUNTIME_INVALIDATE_STATUS,
-  OPENCODE_RUNTIME_PROGRESS,
   PLUGIN_GET_ALL,
   PLUGIN_GET_README,
   PLUGIN_INSTALL,
@@ -330,7 +325,6 @@ import type {
   MessagesPage,
   NotificationTrigger,
   OpenCodeRuntimeDeliveryStatus,
-  OpenCodeRuntimeStatus,
   ProjectBranchChangeEvent,
   RejectResult,
   ReplaceMembersRequest,
@@ -596,7 +590,6 @@ const electronAPI: ElectronAPI = {
   ...createRecentProjectsBridge(),
   teamImport: createTeamImportBridge(ipcRenderer),
   teamExport: createTeamExportBridge(ipcRenderer),
-  runtimeProviderManagement: createRuntimeProviderManagementBridge(ipcRenderer),
   memberWorkSync: createMemberWorkSyncBridge(ipcRenderer),
   memberLogStream: createMemberLogStreamBridge(),
   organizations: createOrganizationsBridge(ipcRenderer),
@@ -1872,31 +1865,6 @@ const electronAPI: ElectronAPI = {
       return (): void => {
         ipcRenderer.removeListener(
           CLI_INSTALLER_PROGRESS,
-          callback as (event: Electron.IpcRendererEvent, ...args: unknown[]) => void
-        );
-      };
-    },
-  },
-
-  // ===== OpenCode Runtime Installer API =====
-  openCodeRuntime: {
-    getStatus: async (): Promise<OpenCodeRuntimeStatus> => {
-      return invokeIpcWithResult<OpenCodeRuntimeStatus>(OPENCODE_RUNTIME_GET_STATUS);
-    },
-    install: async (): Promise<OpenCodeRuntimeStatus> => {
-      return invokeIpcWithResult<OpenCodeRuntimeStatus>(OPENCODE_RUNTIME_INSTALL);
-    },
-    invalidateStatus: async (): Promise<void> => {
-      return invokeIpcWithResult<void>(OPENCODE_RUNTIME_INVALIDATE_STATUS);
-    },
-    onProgress: (callback: (event: unknown, data: OpenCodeRuntimeStatus) => void): (() => void) => {
-      ipcRenderer.on(
-        OPENCODE_RUNTIME_PROGRESS,
-        callback as (event: Electron.IpcRendererEvent, ...args: unknown[]) => void
-      );
-      return (): void => {
-        ipcRenderer.removeListener(
-          OPENCODE_RUNTIME_PROGRESS,
           callback as (event: Electron.IpcRendererEvent, ...args: unknown[]) => void
         );
       };

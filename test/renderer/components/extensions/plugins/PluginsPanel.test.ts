@@ -108,7 +108,7 @@ vi.mock('lucide-react', () => {
 import { PluginsPanel } from '@renderer/components/extensions/plugins/PluginsPanel';
 
 const staleCodexStatus: PluginsPanelCliStatus = {
-  flavor: 'agent_teams_orchestrator',
+  flavor: 'claude',
   installed: true,
   authLoggedIn: false,
   binaryPath: '/usr/local/bin/agent-teams',
@@ -217,50 +217,6 @@ describe('PluginsPanel effective runtime status', () => {
     expect(host.textContent).not.toContain(
       'Plugin support is currently guaranteed for Anthropic (Claude) sessions only.'
     );
-    expect(host.textContent).not.toContain('Codex bootstrap placeholder');
-
-    await act(async () => {
-      root.unmount();
-      await Promise.resolve();
-    });
-  });
-
-  it('explains that plugin support is guaranteed only for Anthropic sessions when Codex plugins are not supported yet', async () => {
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(
-        React.createElement(PluginsPanel, {
-          projectPath: null,
-          pluginFilters: {
-            search: '',
-            categories: [],
-            capabilities: [],
-            installedOnly: false,
-          },
-          pluginSort: { field: 'popularity', order: 'desc' },
-          selectedPluginId: null,
-          updatePluginSearch: vi.fn(),
-          toggleCategory: vi.fn(),
-          toggleCapability: vi.fn(),
-          toggleInstalledOnly: vi.fn(),
-          setSelectedPluginId: vi.fn(),
-          clearFilters: vi.fn(),
-          hasActiveFilters: false,
-          setPluginSort: vi.fn(),
-          cliStatus: staleCodexStatus,
-          cliStatusLoading: false,
-        })
-      );
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).toContain(
-      "Plugin support is currently guaranteed for Anthropic (Claude) sessions only. We're working to support plugins across all agents."
-    );
-    expect(host.textContent).not.toContain('multimodel runtime');
     expect(host.textContent).not.toContain('Codex bootstrap placeholder');
 
     await act(async () => {

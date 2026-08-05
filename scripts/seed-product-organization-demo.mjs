@@ -137,7 +137,7 @@ const teams = [
     project: 'platform',
     parentId: 'atlas-ai:runtime-systems',
     color: '#60a5fa',
-    inProgress: ['Complete OpenCode runtime health checks', 'Add provider failover telemetry'],
+    inProgress: ['Complete stock CLI health checks', 'Add provider failover telemetry'],
     pending: ['Review OAuth recovery flows', 'Publish provider capability matrix'],
     review: ['Validate managed binary repair flow'],
     completed: [
@@ -418,7 +418,7 @@ function buildRuntimeMessages(tasks) {
       member: 'liam',
       task: activeTasks[0],
       user: 'Please keep checkpoint recovery scoped to interrupted provider sessions and share the benchmark before review.',
-      reply: 'Recovery now resumes from the last durable checkpoint on Anthropic, Codex, and OpenCode. The 50-run benchmark is green with no duplicate task transitions.',
+      reply: 'Recovery now resumes from the last durable checkpoint on Claude and Codex. The 50-run benchmark is green with no duplicate task transitions.',
     },
     {
       member: 'sophia',

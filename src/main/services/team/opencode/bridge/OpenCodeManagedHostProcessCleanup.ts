@@ -52,7 +52,7 @@ const MANAGED_ENV_IDENTITY_MARKERS = [
 ] as const;
 const MANAGED_INLINE_OPENCODE_CONFIG_PATTERNS = [
   /OPENCODE_CONFIG_CONTENT=[\s\S]*"mcp"\s*:\s*\{[\s\S]*"agent-teams(?:-runtime-\d+)?"/i,
-  /OPENCODE_CONFIG_CONTENT=[\s\S]*"claude-multimodel runtime orchestration"/i,
+  /OPENCODE_CONFIG_CONTENT=[\s\S]*"legacy runtime orchestration"/i,
   /OPENCODE_CONFIG_CONTENT=[\s\S]*"(?:agent-teams|agent_teams|mcp__agent-teams|mcp__agent_teams)_\*"/i,
 ] as const;
 

@@ -1,18 +1,7 @@
 import { resolveVerifiedAppManagedCodexRuntimeBinaryPath } from '@features/codex-runtime-installer/main';
 import { getCachedShellEnv } from '@main/utils/shellEnv';
 
-import {
-  isSupportedOpenCodeRuntimeBinaryPath,
-  resolveVerifiedOpenCodeRuntimeBinaryPath,
-} from '../infrastructure/OpenCodeRuntimeInstallerService';
-
-import { ensureAgentTeamsMcpLocalLaunchEnv } from './agentTeamsMcpLaunchEnv';
 import { buildRuntimeBaseEnv } from './buildRuntimeBaseEnv';
-import {
-  applyOpenCodeRuntimeBinaryEnv,
-  OPENCODE_LEGACY_BINARY_PATH_ENV,
-  OPENCODE_RUNTIME_BINARY_PATH_ENV,
-} from './openCodeRuntimeBinaryEnv';
 import { providerConnectionService } from './ProviderConnectionService';
 
 import type { CliProviderId, TeamProviderId } from '@shared/types';
@@ -89,31 +78,6 @@ export async function buildProviderAwareCliEnv(
     env: options.env,
     mergePathFallbacks: true,
   });
-  if (!resolvedProviderId || resolvedProviderId === 'opencode') {
-    const explicitOpenCodeBinary = [
-      options.env?.[OPENCODE_RUNTIME_BINARY_PATH_ENV],
-      options.env?.[OPENCODE_LEGACY_BINARY_PATH_ENV],
-      process.env[OPENCODE_RUNTIME_BINARY_PATH_ENV],
-      process.env[OPENCODE_LEGACY_BINARY_PATH_ENV],
-    ]
-      .find((candidate): candidate is string => Boolean(candidate?.trim()))
-      ?.trim();
-    const supportedExplicitOpenCodeBinary =
-      explicitOpenCodeBinary &&
-      (await isSupportedOpenCodeRuntimeBinaryPath(explicitOpenCodeBinary).catch(() => false))
-        ? explicitOpenCodeBinary
-        : null;
-    const openCodeBinary =
-      supportedExplicitOpenCodeBinary ?? (await resolveVerifiedOpenCodeRuntimeBinaryPath());
-    if (openCodeBinary) {
-      // Login-shell snapshots can contain an older OpenCode override than the
-      // app-managed runtime shown in the UI. Keep deliberate process/call
-      // overrides, otherwise make the verified runtime authoritative.
-      delete env[OPENCODE_RUNTIME_BINARY_PATH_ENV];
-      delete env[OPENCODE_LEGACY_BINARY_PATH_ENV];
-    }
-    applyOpenCodeRuntimeBinaryEnv(env, openCodeBinary);
-  }
   const appManagedCodexBinary = await resolveVerifiedAppManagedCodexRuntimeBinaryPath();
   if (
     appManagedCodexBinary &&
@@ -122,10 +86,6 @@ export async function buildProviderAwareCliEnv(
   ) {
     env.CODEX_CLI_PATH = appManagedCodexBinary;
   }
-  if (!resolvedProviderId || resolvedProviderId === 'opencode') {
-    await ensureAgentTeamsMcpLocalLaunchEnv(env);
-  }
-
   if (options.providerId) {
     if (!resolvedProviderId) {
       throw new Error('Resolved provider id is required when providerId is set');

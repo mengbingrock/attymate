@@ -21,7 +21,7 @@ export function isAuthFailureWarning(text: string, source: AuthWarningSource): b
     lower.includes('codex provider is not authenticated') ||
     lower.includes('run `claude auth login`') ||
     lower.includes('claude auth login') ||
-    lower.includes('claude-multimodel auth login');
+    lower.includes('claude auth login');
 
   if (hasExplicitCliAuthSignal) {
     return true;

@@ -317,49 +317,6 @@ describe('getExtensionActionDisableReason', () => {
     ).toContain('failed to start');
   });
 
-  it('disables multimodel plugin installs when the runtime declares plugins unsupported', () => {
-    expect(
-      getExtensionActionDisableReason({
-        isInstalled: false,
-        section: 'plugins',
-        cliStatus: {
-          installed: true,
-          authLoggedIn: true,
-          binaryPath: '/usr/local/bin/claude-multimodel',
-          launchError: null,
-          flavor: 'agent_teams_orchestrator',
-          providers: [
-            {
-              providerId: 'anthropic',
-              displayName: 'Anthropic',
-              supported: true,
-              authenticated: false,
-              authMethod: null,
-              verificationState: 'unknown',
-              models: [],
-              canLoginFromUi: true,
-              capabilities: {
-                teamLaunch: true,
-                oneShot: true,
-                extensions: {
-                  plugins: {
-                    status: 'unsupported',
-                    ownership: 'shared',
-                    reason: 'Anthropic plugins unavailable',
-                  },
-                  mcp: { status: 'supported', ownership: 'shared', reason: null },
-                  skills: { status: 'supported', ownership: 'shared', reason: null },
-                  apiKeys: { status: 'supported', ownership: 'shared', reason: null },
-                },
-              },
-            },
-          ],
-        },
-        cliStatusLoading: false,
-      })
-    ).toContain('Anthropic plugins unavailable');
-  });
-
   it('allows multimodel MCP actions without aggregate auth when MCP support is declared', () => {
     expect(
       getExtensionActionDisableReason({
@@ -370,7 +327,7 @@ describe('getExtensionActionDisableReason', () => {
           authLoggedIn: false,
           binaryPath: '/usr/local/bin/claude-multimodel',
           launchError: null,
-          flavor: 'agent_teams_orchestrator',
+          flavor: 'claude',
           providers: [
             {
               providerId: 'codex',
@@ -397,40 +354,6 @@ describe('getExtensionActionDisableReason', () => {
         cliStatusLoading: false,
       })
     ).toBeNull();
-  });
-
-  it('uses conservative multimodel fallback when provider metadata is not available yet', () => {
-    expect(
-      getExtensionActionDisableReason({
-        isInstalled: false,
-        section: 'plugins',
-        cliStatus: {
-          installed: true,
-          authLoggedIn: false,
-          binaryPath: '/usr/local/bin/claude-multimodel',
-          launchError: null,
-          flavor: 'agent_teams_orchestrator',
-          providers: [],
-        },
-        cliStatusLoading: false,
-      })
-    ).toContain('not supported by the current runtime');
-
-    expect(
-      getExtensionActionDisableReason({
-        isInstalled: false,
-        section: 'mcp',
-        cliStatus: {
-          installed: true,
-          authLoggedIn: false,
-          binaryPath: '/usr/local/bin/claude-multimodel',
-          launchError: null,
-          flavor: 'agent_teams_orchestrator',
-          providers: [],
-        },
-        cliStatusLoading: false,
-      })
-    ).toContain('not supported by the current runtime');
   });
 });
 

@@ -83,11 +83,11 @@ export function createLoadingMultimodelCliStatus(): CliInstallationStatus {
   }));
 
   return {
-    flavor: 'agent_teams_orchestrator',
-    displayName: 'Multimodel runtime',
-    supportsSelfUpdate: false,
-    showVersionDetails: false,
-    showBinaryPath: false,
+    flavor: 'claude',
+    displayName: 'Claude CLI',
+    supportsSelfUpdate: true,
+    showVersionDetails: true,
+    showBinaryPath: true,
     installed: true,
     installedVersion: null,
     binaryPath: null,
@@ -318,59 +318,24 @@ function mergePreservedHydratedProviderStatus(
 export function getIncompleteMultimodelProviderIds(
   status: CliInstallationStatus | null
 ): CliProviderId[] {
-  if (status?.flavor !== 'agent_teams_orchestrator' || !status.installed) {
-    return [];
-  }
-
-  return status.providers
-    .filter(
-      (provider) =>
-        isActiveMultimodelProviderId(provider.providerId) &&
-        !isHydratedMultimodelProviderStatus(provider)
-    )
-    .map((provider) => provider.providerId);
+  void status;
+  return [];
 }
 
 export function getModelOnlyFallbackProviderIds(
   status: CliInstallationStatus | null
 ): CliProviderId[] {
-  if (status?.flavor !== 'agent_teams_orchestrator' || !status.installed) {
-    return [];
-  }
-
-  return status.providers
-    .filter(
-      (provider) =>
-        isActiveMultimodelProviderId(provider.providerId) &&
-        isModelOnlyFallbackProviderStatus(provider)
-    )
-    .map((provider) => provider.providerId);
+  void status;
+  return [];
 }
 
 export function reconcileMultimodelProviderLoading(
   status: CliInstallationStatus | null,
   currentLoading: Partial<Record<CliProviderId, boolean>>
 ): Partial<Record<CliProviderId, boolean>> {
-  if (status?.flavor !== 'agent_teams_orchestrator' || !status.installed) {
-    return {};
-  }
-
-  const incompleteProviderIds = new Set(getIncompleteMultimodelProviderIds(status));
-  const providersById = new Map(
-    status.providers.map((provider) => [provider.providerId, provider])
-  );
-  return MULTIMODEL_PROVIDER_IDS.reduce<Partial<Record<CliProviderId, boolean>>>(
-    (nextLoading, providerId) => {
-      const provider = providersById.get(providerId);
-      return {
-        ...nextLoading,
-        [providerId]: provider
-          ? incompleteProviderIds.has(providerId)
-          : currentLoading[providerId] === true,
-      };
-    },
-    {}
-  );
+  void status;
+  void currentLoading;
+  return {};
 }
 
 function areArraysEqual<T>(
@@ -506,7 +471,7 @@ function isCliInstallationStatusContentEqual(
     a.authLoggedIn === b.authLoggedIn &&
     a.authStatusChecking === b.authStatusChecking &&
     a.authMethod === b.authMethod &&
-    areArraysEqual(a.providers, b.providers, Object.is)
+    areArraysEqual(a.providers, b.providers, areProviderStatusContentEqual)
   );
 }
 
@@ -514,66 +479,10 @@ export function mergeCliStatusPreservingHydratedProviders(
   current: CliInstallationStatus | null,
   incoming: CliInstallationStatus
 ): CliInstallationStatus {
-  if (
-    current?.flavor !== 'agent_teams_orchestrator' ||
-    incoming.flavor !== 'agent_teams_orchestrator'
-  ) {
-    if (current && isCliInstallationStatusContentEqual(current, incoming)) {
-      return current;
-    }
-    return incoming;
-  }
-
-  const currentProvidersById = new Map(
-    current.providers.map((provider) => [provider.providerId, provider])
-  );
-  const incomingProviderIds = new Set(incoming.providers.map((provider) => provider.providerId));
-  const providers = incoming.providers.map((incomingProvider) => {
-    const currentProvider = currentProvidersById.get(incomingProvider.providerId);
-    if (!currentProvider) {
-      return incomingProvider;
-    }
-    if (shouldPreserveCurrentProviderStatus(currentProvider, incomingProvider)) {
-      return mergePreservedHydratedProviderStatus(incomingProvider, currentProvider);
-    }
-    // Preserve the current reference when content is identical so the
-    // providers array stays reference-stable across steady-state IPC polls.
-    if (areProviderStatusContentEqual(currentProvider, incomingProvider)) {
-      return currentProvider;
-    }
-    return incomingProvider;
-  });
-
-  for (const currentProvider of current.providers) {
-    if (
-      !incomingProviderIds.has(currentProvider.providerId) &&
-      isActiveMultimodelProviderId(currentProvider.providerId) &&
-      isHydratedMultimodelProviderStatus(currentProvider)
-    ) {
-      providers.push(currentProvider);
-    }
-  }
-
-  const authenticatedProvider = getAuthenticatedProvider(providers);
-
-  const mergedProviders = areArraysEqual(providers, current.providers, Object.is)
-    ? current.providers
-    : providers;
-
-  const merged: CliInstallationStatus = {
-    ...incoming,
-    providers: mergedProviders,
-    authLoggedIn: mergedProviders.some(
-      (provider) => isActiveMultimodelProviderId(provider.providerId) && provider.authenticated
-    ),
-    authMethod: authenticatedProvider?.authMethod ?? null,
-  };
-
-  if (isCliInstallationStatusContentEqual(current, merged)) {
+  if (current && isCliInstallationStatusContentEqual(current, incoming)) {
     return current;
   }
-
-  return merged;
+  return incoming;
 }
 
 interface ProviderReadinessSnapshot {
@@ -773,10 +682,9 @@ export async function refreshCodexProviderStatusAfterRuntimeInstall(
   }
 }
 
-function isMultimodelCliStatus(
-  status: CliInstallationStatus | null | undefined
-): status is CliInstallationStatus & { flavor: 'agent_teams_orchestrator' } {
-  return status?.flavor === 'agent_teams_orchestrator';
+function isMultimodelCliStatus(status: CliInstallationStatus | null | undefined): boolean {
+  void status;
+  return false;
 }
 
 function hasActiveProviderStatusLoading(
@@ -1067,10 +975,8 @@ export const createCliInstallerSlice: StateCreator<AppState, [], [], CliInstalle
 
     const epoch = ++cliStatusEpoch;
     const currentStatus = get().cliStatus;
-    const initialStatus =
-      providerStatusMode === 'defer' && currentStatus?.flavor === 'agent_teams_orchestrator'
-        ? currentStatus
-        : createLoadingMultimodelCliStatus();
+    void currentStatus;
+    const initialStatus = createLoadingMultimodelCliStatus();
     const shouldMarkIncompleteProvidersLoading = hydrateProviders || providerStatusMode === 'defer';
     const providerLoading = Object.fromEntries(
       MULTIMODEL_PROVIDER_IDS.map((providerId) => [
@@ -1094,7 +1000,7 @@ export const createCliInstallerSlice: StateCreator<AppState, [], [], CliInstalle
       const metadata = await api.cliInstaller.getStatus(
         providerStatusMode === 'defer' ? { providerStatusMode } : undefined
       );
-      if (metadata.flavor !== 'agent_teams_orchestrator') {
+      if (true) {
         set((state) => {
           if (epoch !== cliStatusEpoch) {
             return {};

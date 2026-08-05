@@ -56,7 +56,7 @@ export interface RuntimeBootstrapSpec {
   mode: 'create' | 'launch';
   initiator: {
     kind: 'app';
-    source: 'claude_team_agent_teams_orchestrator';
+    source: 'claude_team_stock_runtime';
   };
   team: {
     name: string;
@@ -119,7 +119,7 @@ export function buildDeterministicCreateBootstrapSpec(
     mode: 'create',
     initiator: {
       kind: 'app',
-      source: 'claude_team_agent_teams_orchestrator',
+      source: 'claude_team_stock_runtime',
     },
     team: {
       name: request.teamName,
@@ -182,7 +182,7 @@ export function buildDeterministicLaunchBootstrapSpec(
     mode: 'launch',
     initiator: {
       kind: 'app',
-      source: 'claude_team_agent_teams_orchestrator',
+      source: 'claude_team_stock_runtime',
     },
     team: {
       name: request.teamName,

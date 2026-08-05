@@ -13,12 +13,12 @@
 </p>
 
 <p align="center">
-  <sub>Free desktop app for AI agent teams. Start with a free model with no auth - no signup, API key, or card - or connect Claude Code, Codex, OpenCode, Cursor, SuperGrok, GitHub Copilot, Z.AI, MiniMax, Kiro, and many more. For coding and broader project work.</sub>
+  <sub>Free desktop app for AI agent teams powered by the stock Claude Code and OpenAI Codex CLIs you already use.</sub>
 </p>
 
 ## What's new in this fork
 
-This fork replaces the bundled multimodel runtime with the **genuine CLIs you already have installed** — teams run on stock Claude Code and stock OpenAI Codex, using your existing logins and subscriptions, with live consoles into every agent.
+This fork removes the upstream closed-source multimodel runtime entirely: teams run on the **genuine CLIs you already have installed** — stock Claude Code and stock OpenAI Codex — using your existing logins and subscriptions, with live consoles into every agent. No proprietary binary is ever downloaded or bundled.
 
 ### Stock OpenAI Codex teams (new)
 
@@ -32,7 +32,7 @@ Pick the Codex provider and the team runs entirely on the **stock `codex` CLI** 
 
 ### Stock Claude Code teams, interactive by default
 
-- **Claude teams launch on your installed `claude` CLI** with the login and subscription you already have; the bundled multimodel orchestrator is opt-in via `CLAUDE_TEAM_CLI_FLAVOR=agent_teams_orchestrator`
+- **Claude teams launch on your installed `claude` CLI** with the login and subscription you already have
 - **Interactive tmux runtime** — the lead is a real interactive Claude session, teammates get their own panes broken out into named windows, and member cards gain an "Open console" action (headless remains the automatic fallback without tmux)
 - **Direct teammate messaging** — DMs are delivered into the runtime's own session mailboxes instead of being relayed through the lead
 
@@ -172,7 +172,7 @@ https://github.com/user-attachments/assets/35e27989-726d-4059-8662-bae610e46b42
 
 ## Installation
 
-No prerequisites - the app can detect installed Claude Code, Codex, and OpenCode runtimes. You can also connect Cursor, SuperGrok, GitHub Copilot, Z.AI, MiniMax, and Kiro from the UI.
+Install Claude Code or OpenAI Codex, sign in with the CLI, and the app will detect it. No proprietary agent runtime is downloaded or bundled.
 
 <table align="center">
 <tr>
@@ -192,7 +192,7 @@ No prerequisites - the app can detect installed Claude Code, Codex, and OpenCode
   <br />
   <sub>May trigger SmartScreen - click "More info" -> "Run anyway"</sub>
   <br />
-  <sub>Run normally. Administrator mode may be needed only if the app reports a specific OpenCode symlink or permission error.</sub>
+  <sub>Run normally. Administrator mode is not required.</sub>
 </td>
 <td align="center">
   <a href="https://github.com/777genius/agent-teams-ai/releases/download/v2.7.0/Agent.Teams.AI-2.7.0.AppImage">
@@ -237,7 +237,7 @@ No prerequisites - the app can detect installed Claude Code, Codex, and OpenCode
 
 ## What is this
 
-An orchestration layer for AI agent teams across Claude Code, Codex, OpenCode, Cursor, SuperGrok, GitHub Copilot, Z.AI, MiniMax, and Kiro.
+An orchestration layer for AI agent teams running on stock Claude Code and OpenAI Codex.
 
 - **Assemble your team** — create agent teams with different roles that work autonomously in parallel
 - **Sit back and watch** — tasks change status on the kanban board while agents handle everything on their own
@@ -254,7 +254,7 @@ An orchestration layer for AI agent teams across Claude Code, Codex, OpenCode, C
 - **Interactive agent consoles (tmux)** — Claude Code teams run the lead as a real interactive session inside an app-managed tmux session, with every teammate in its own pane. Click "Open console" on a member card to watch an agent live and type to it directly — or attach from any terminal with `tmux`. Headless mode remains the automatic fallback when tmux isn't available
 - **Workflow view on the kanban** — a third board view that renders tasks as complete workflows on a vertical timeline: stage rail, each task's full journey (created → status moves → review → approved) built from its history, and board insights (completed, in review, average cycle time)
 - **Solo mode** — one-member team: a single agent that creates its own tasks and shows live progress. Saves tokens; can expand to a full team anytime
-- **Multi-provider orchestration** — start with a free model with no auth, auto-detect available Claude Code, Codex, and OpenCode runtimes, or connect Cursor, SuperGrok, GitHub Copilot, Z.AI, MiniMax, and Kiro using the subscriptions or API keys you already have
+- **Stock CLI orchestration** — auto-detect installed Claude Code and OpenAI Codex CLIs and use their existing subscriptions or API-key configuration
 
 <details>
 <summary><strong>More features</strong></summary>
@@ -289,7 +289,7 @@ An orchestration layer for AI agent teams across Claude Code, Codex, OpenCode, C
 
 - **Notification system** — configurable alerts when tasks complete, agents need your response, new comments arrive, or errors occur
 
-- **Genuine Claude Code runtime by default** — Claude teams run on your installed `claude` CLI with the login and subscription you already have. The bundled multimodel orchestrator remains available per session via `CLAUDE_TEAM_CLI_FLAVOR=agent_teams_orchestrator`, and the interactive tmux mode can be disabled with `AGENT_TEAMS_DISABLE_INTERACTIVE_RUNTIME=1` (Windows and tmux-less systems fall back to headless automatically)
+- **Genuine Claude Code runtime** — Claude teams run on your installed `claude` CLI with the login and subscription you already have. The interactive tmux mode can be disabled with `AGENT_TEAMS_DISABLE_INTERACTIVE_RUNTIME=1` (Windows and tmux-less systems fall back to headless automatically)
 
 - **MCP integration** — supports the built-in `mcp-server` (see [mcp-server folder](./mcp-server)) for integrating external tools and extensible agent plugins out of the box
 
@@ -317,7 +317,7 @@ An orchestration layer for AI agent teams across Claude Code, Codex, OpenCode, C
 | **Linked tasks** | ✅ Tasks can link to and block each other | ✅ Task deps + grouped work | ✅ Goals, parent tasks, blockers | ❌ | ✅ Shared task list |
 | **Agent activity and history** | ✅ Messages, tool calls, timeline, token use, and cost | ⚠️ Session recall, feed, metrics | ⚠️ Run transcripts + cost audit | ⚠️ Agent chat + terminal | ⚠️ CLI transcripts + background logs |
 | **Organizations & global overview** | ✅ Nested groups, live team/task status, relations, cross-team activity | ⚠️ Coordination hierarchy, no editable org map | ✅ Org chart + board governance | ⚠️ Team admin, no live org map | ❌ |
-| **Mixed AI teammates** | ✅ Claude Code, Codex, OpenCode, Cursor, SuperGrok, GitHub Copilot, Z.AI, MiniMax, and Kiro in one team | ✅ Many providers, terminal-first | ✅ Bring your own agents/runtimes | ⚠️ Multi-model agents, no shared team | ⚠️ Claude-only experimental teams |
+| **AI runtimes** | ✅ Stock Claude Code or stock OpenAI Codex teams | ✅ Many providers, terminal-first | ✅ Bring your own agents/runtimes | ⚠️ Multi-model agents, no shared team | ⚠️ Claude-only experimental teams |
 | **Budget controls** | ✅ Budget alerts + hard caps for scheduled runs | ⚠️ Cost tiers + digest, no hard caps | ✅ Per-agent budgets + hard stops | ⚠️ Usage + cloud spend limits | ⚠️ `/usage` + workspace limits |
 | **Separate agent workspaces** | ✅ Optional workspace per teammate | ✅ Core primitive | ✅ Worktrees / branches | ✅ Agents Window worktrees | ✅ Built-in for sessions and subagents |
 | **Terminal** | ✅ Built-in visual terminal for team and local commands | ⚠️ Terminal-based workflow, no built-in terminal | ⚠️ Runs commands, no interactive terminal | ✅ Built-in IDE terminal | ⚠️ Runs in your terminal |
@@ -367,7 +367,7 @@ Yes. Agents send direct messages, create shared tasks, and leave comments - all 
 <details>
 <summary><strong>Is it free?</strong></summary>
 <br />
-Yes. The app is free and open source, and you can start with a free model with no auth - no registration, API keys, or credit card. If you want more models, connect the provider access you already have, including Claude Code, Codex, OpenCode/OpenRouter, Cursor, SuperGrok, GitHub Copilot, Z.AI, MiniMax, and Kiro.
+Yes. The app is free and open source. Model access follows the Claude Code or OpenAI Codex account/API configuration already present in the corresponding stock CLI.
 </details>
 
 <details>
@@ -443,20 +443,11 @@ pnpm dev
 
 `pnpm dev` starts the desktop Electron app. Do not start a browser/web dev server for normal development; that path is limited and is not the supported way to run agent teams locally.
 
-By default, Claude teams launch on the genuine Claude Code CLI found on your PATH (interactive
-tmux mode when tmux is available, headless otherwise). Set `CLAUDE_TEAM_CLI_FLAVOR=agent_teams_orchestrator`
-to use the bundled multimodel runtime instead, or `AGENT_TEAMS_DISABLE_INTERACTIVE_RUNTIME=1` to
-force headless stock launches.
+Claude teams launch on the genuine Claude Code CLI found on your PATH (interactive tmux mode
+when tmux is available, headless otherwise). Set `AGENT_TEAMS_DISABLE_INTERACTIVE_RUNTIME=1` to
+force headless stock launches. Point `CLAUDE_CLI_PATH` at a specific `claude` binary if you need
+to override PATH resolution.
 
-To run the desktop app against a local orchestrator checkout during development, point it at the
-source launcher:
-
-```bash
-CLAUDE_AGENT_TEAMS_ORCHESTRATOR_CLI_PATH=/absolute/path/to/agent_teams_orchestrator/cli-source \
-  pnpm dev
-```
-
-This runs the current orchestrator sources directly through Bun and avoids rebuilding the complete
 runtime bundle on every app start. Do not use `CLAUDE_DEV_RUNTIME_ROOT` for the normal source
 development loop: that override runs `bun run build:dev` before Electron starts and can make the app
 appear stuck at `bun run ./scripts/build.ts --dev`. Use it only when intentionally validating the
@@ -523,9 +514,9 @@ pnpm dist:linux      # Linux (AppImage/.deb/.rpm/.pacman)
 pnpm dist            # Current platform
 ```
 
-Distribution scripts run the production build and stage the bundled multimodel runtime from
-`runtime.lock.json` before packaging. Use `pnpm clean:runtime` to remove staged runtime files after
-local packaging.
+Distribution scripts run the production build and stage the terminal-platform runtime before
+packaging. No proprietary agent runtime is downloaded or bundled — teams always run on the
+CLIs installed on the user's machine.
 
 ### Scripts
 
@@ -559,7 +550,7 @@ local packaging.
 - [x] Limited standalone dashboard for local or trusted-network use. It does not provide the full desktop runtime and should not be exposed directly to the internet without authentication and a reverse proxy.
 - [ ] 2 modes: current (agent teams), and a new mode: regular subagents (no communication between them)
 - [ ] Curate what context each agent sees (files, docs, MCP servers, skills)
-- [ ] User-managed runtime profiles and built-in presets: choose a profile per team launch or schedule, isolate provider credentials and config roots (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, OpenCode XDG roots), optionally isolate the child-process `HOME`, and pin running teams to an immutable profile snapshot
+- [ ] User-managed runtime profiles and built-in presets: choose a profile per team launch or schedule, isolate provider credentials and config roots (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`), optionally isolate the child-process `HOME`, and pin running teams to an immutable profile snapshot
 - [x] Slash commands
 - [ ] Outgoing message queue — queue user messages while the lead (or agent) is busy; clear agent-busy status in the UI; flush to stdin or relay from inbox when idle (durable queue on disk for the lead inbox path)
 - [ ] `createTasksBatch` — IPC/service API to create many team tasks in one call (playbooks, markdown checklist import, scripts); complements single `createTask`

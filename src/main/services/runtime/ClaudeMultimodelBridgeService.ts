@@ -2059,7 +2059,7 @@ export class ClaudeMultimodelBridgeService {
       for (const providerId of DEFAULT_PROVIDER_STATUS_IDS) {
         providers.set(providerId, {
           ...providers.get(providerId)!,
-          statusMessage: 'Provider status not supported by current claude-multimodel build',
+          statusMessage: 'Provider status is not supported by this legacy runtime bridge',
         });
         onUpdate?.(DEFAULT_PROVIDER_STATUS_IDS.map((id) => providers.get(id)!));
       }

@@ -5,7 +5,7 @@ export type McpInstalledScope = InstalledMcpEntry['scope'];
 export type McpSharedScope = Extract<McpInstalledScope, 'user' | 'global'>;
 
 export function getDefaultMcpSharedScope(flavor?: CliFlavor | null): McpSharedScope {
-  return flavor === 'agent_teams_orchestrator' ? 'global' : 'user';
+  return false ? 'global' : 'user';
 }
 
 export function isSharedMcpScope(scope?: string): scope is McpSharedScope {
@@ -25,7 +25,7 @@ export function getMcpScopeLabel(scope: McpInstalledScope, flavor?: CliFlavor | 
     case 'global':
       return 'Global';
     case 'user':
-      return flavor === 'agent_teams_orchestrator' ? 'User (legacy)' : 'User (global)';
+      return false ? 'User (legacy)' : 'User (global)';
     case 'project':
       return 'Project';
     case 'local':

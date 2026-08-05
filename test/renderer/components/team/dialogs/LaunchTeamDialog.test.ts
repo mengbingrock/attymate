@@ -651,6 +651,7 @@ describe('LaunchTeamDialog', () => {
     createTeamDraftMock.state.members[0].model = 'opencode/big-pickle';
     createTeamDraftMock.state.cwdMode = 'project';
     createTeamDraftMock.state.selectedProjectPath = '/tmp/project';
+    createTeamDraftMock.state.customCwd = '';
     vi.mocked(isTeamModelAvailableForUi).mockImplementation(() => true);
     teamRosterEditorSectionMock.lastProps = null;
   });
@@ -745,7 +746,7 @@ describe('LaunchTeamDialog', () => {
       (_providerId, model, providerStatus) => providerStatus?.models?.includes(model ?? '') ?? false
     );
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -849,7 +850,7 @@ describe('LaunchTeamDialog', () => {
       (_providerId, model, providerStatus) => providerStatus?.models?.includes(model ?? '') ?? false
     );
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -947,6 +948,97 @@ describe('LaunchTeamDialog', () => {
       root.unmount();
       await flush();
     });
+  });
+
+  it('uses one custom cwd for the scoped OpenCode catalog and Create preflight', async () => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+    vi.useFakeTimers();
+    const customCwd = '/tmp/custom-catalog-project';
+    const localModel = 'ollama/qwen2.5-coder:0.5b';
+    createTeamDraftMock.state.cwdMode = 'custom';
+    createTeamDraftMock.state.customCwd = customCwd;
+    createTeamDraftMock.state.members[0].model = localModel;
+    vi.mocked(isTeamModelAvailableForUi).mockImplementation(
+      (_providerId, model, providerStatus) => providerStatus?.models?.includes(model ?? '') ?? false
+    );
+    const globalProvider = {
+      providerId: 'opencode',
+      supported: true,
+      authenticated: true,
+      authMethod: 'opencode_managed',
+      verificationState: 'verified',
+      modelVerificationState: 'idle',
+      modelCatalogRefreshState: 'ready',
+      statusMessage: null,
+      models: ['opencode/big-pickle'],
+      modelAvailability: [],
+      capabilities: { teamLaunch: true, oneShot: false },
+      backend: { kind: 'opencode-cli', label: 'OpenCode CLI' },
+    };
+    storeState.cliStatus = {
+      flavor: 'claude',
+      providers: [globalProvider],
+    } as any;
+    storeState.cliProviderStatusByScope = {
+      [getCliProviderStatusScopeKey('opencode', customCwd)]: {
+        ...globalProvider,
+        models: [localModel],
+        modelCatalog: {
+          schemaVersion: 1,
+          providerId: 'opencode',
+          source: 'app-server',
+          status: 'ready',
+          fetchedAt: '2026-07-20T00:00:00.000Z',
+          staleAt: '2099-07-20T00:10:00.000Z',
+          defaultModelId: localModel,
+          defaultLaunchModel: localModel,
+          models: [],
+          diagnostics: { configReadState: 'ready', appServerState: 'healthy' },
+        },
+      },
+    } as any;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(
+        React.createElement(CreateTeamDialog, {
+          open: true,
+          canCreate: true,
+          provisioningErrorsByTeam: {},
+          clearProvisioningError: vi.fn(),
+          existingTeamNames: [],
+          provisioningTeamNames: [],
+          activeTeams: [],
+          defaultProjectPath: '/tmp/project',
+          onClose: vi.fn(),
+          onCreate: vi.fn(async () => {}),
+          onOpenTeam: vi.fn(),
+        })
+      );
+      await flush();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+      await flush();
+    });
+
+    expect(teamRosterEditorSectionMock.lastProps?.members).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ providerId: 'opencode', model: localModel }),
+      ])
+    );
+    expect(
+      vi
+        .mocked(runProviderPrepareDiagnostics)
+        .mock.calls.find((call) => call[0]?.providerId === 'opencode')?.[0]
+    ).toMatchObject({
+      cwd: customCwd,
+      selectedModelChecks: [expect.objectContaining({ model: localModel })],
+    });
+
+    await act(async () => root.unmount());
   });
 
   it('forces navigation project mode once and then allows a custom path', async () => {
@@ -1133,7 +1225,7 @@ describe('LaunchTeamDialog', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     vi.mocked(isTeamModelAvailableForUi).mockImplementation(() => true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'codex',
@@ -1241,7 +1333,7 @@ describe('LaunchTeamDialog', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     vi.mocked(isTeamModelAvailableForUi).mockImplementation(() => true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'codex',
@@ -1322,7 +1414,7 @@ describe('LaunchTeamDialog', () => {
     localStorage.setItem('team:lastSelectedProvider', 'anthropic');
     localStorage.setItem('team:lastSelectedEffort', 'medium');
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'anthropic',
@@ -1486,7 +1578,7 @@ describe('LaunchTeamDialog', () => {
       (_providerId, model, providerStatus) => providerStatus?.models?.includes(model ?? '') ?? false
     );
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -1596,7 +1688,7 @@ describe('LaunchTeamDialog', () => {
   it('allows OpenCode lead launch with the runtime default model', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -1666,7 +1758,7 @@ describe('LaunchTeamDialog', () => {
   it('allows OpenCode lead launch without teammates for solo runtime teams', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -1746,7 +1838,7 @@ describe('LaunchTeamDialog', () => {
   it('keeps OpenCode lead mixed-provider launches blocked', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -1831,7 +1923,7 @@ describe('LaunchTeamDialog', () => {
   it('prefills and saves Anthropic schedule runtime contract including max effort and fast mode', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'anthropic',
@@ -1951,7 +2043,7 @@ describe('LaunchTeamDialog', () => {
   it('preserves Codex schedule backend lane and effort in edit saves', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'codex',
@@ -2038,7 +2130,7 @@ describe('LaunchTeamDialog', () => {
       () => new Promise(() => undefined)
     );
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'codex',
@@ -2129,7 +2221,7 @@ describe('LaunchTeamDialog', () => {
   it('saves Codex schedule Fast mode when GPT-5.4 ChatGPT eligibility is available', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'codex',
@@ -2251,7 +2343,7 @@ describe('LaunchTeamDialog', () => {
   it('does not restart provider preflight when cli status refresh keeps the same semantic inputs', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'codex',
@@ -2308,7 +2400,7 @@ describe('LaunchTeamDialog', () => {
     expect(vi.mocked(runProviderPrepareDiagnostics)).toHaveBeenCalledTimes(1);
 
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'codex',
@@ -2350,7 +2442,7 @@ describe('LaunchTeamDialog', () => {
   it('keeps the in-flight OpenCode preflight result when live catalog expands during rerender', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -2430,7 +2522,7 @@ describe('LaunchTeamDialog', () => {
     expect(launchButtonWhileChecking?.hasAttribute('disabled')).toBe(false);
 
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -2493,7 +2585,7 @@ describe('LaunchTeamDialog', () => {
   it('keeps launch disabled when selected model preflight fails', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'opencode',
@@ -2651,7 +2743,7 @@ describe('LaunchTeamDialog', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     vi.useFakeTimers();
     storeState.cliStatus = {
-      flavor: 'agent_teams_orchestrator',
+      flavor: 'claude',
       providers: [
         {
           providerId: 'anthropic',

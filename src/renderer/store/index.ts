@@ -26,7 +26,6 @@ import {
   mergeCliStatusPreservingHydratedProviders,
   reconcileMultimodelProviderLoading,
   refreshCodexProviderStatusAfterRuntimeInstall,
-  refreshOpenCodeProviderStatusAfterRuntimeInstall,
 } from './slices/cliInstallerSlice';
 import { createConfigSlice } from './slices/configSlice';
 import { createConnectionSlice } from './slices/connectionSlice';
@@ -74,7 +73,6 @@ import type {
   CliInstallerProgress,
   CliProviderId,
   LeadContextUsage,
-  OpenCodeRuntimeStatus,
   ScheduleChangeEvent,
   TeamChangeEvent,
   TeamProvisioningProgress,
@@ -245,12 +243,6 @@ export function initializeNotificationListeners(): () => void {
 
     if (api.cliInstaller) {
       const multimodelEnabled = loadedConfig?.general?.multimodelEnabled ?? true;
-      if (multimodelEnabled && api.openCodeRuntime) {
-        // The dashboard provider gate only needs the lightweight runtime
-        // installer status. Start it immediately; the slower generic OpenCode
-        // provider hydration belongs to the idle provider batch below.
-        void useStore.getState().fetchOpenCodeRuntimeStatus();
-      }
       // Resolve the configured CLI flavor after config has loaded to avoid
       // bootstrapping multimodel placeholder state in Claude-only mode.
       type NavigatorWithUserAgentData = Navigator & { userAgentData?: { platform?: string } };
@@ -2479,28 +2471,6 @@ export function initializeNotificationListeners(): () => void {
           cliCompletedRevertTimer = null;
         }
       });
-    }
-  }
-
-  if (api.openCodeRuntime?.onProgress) {
-    const cleanup = api.openCodeRuntime.onProgress((_event: unknown, data: unknown) => {
-      const status = data as OpenCodeRuntimeStatus;
-      useStore.setState({
-        openCodeRuntimeStatus: status,
-        openCodeRuntimeError: status.error ?? null,
-        openCodeRuntimeStatusLoading:
-          status.state === 'checking' ||
-          status.state === 'downloading' ||
-          status.state === 'installing',
-      });
-      if (status.installed && status.state === 'ready') {
-        void (async () => {
-          await refreshOpenCodeProviderStatusAfterRuntimeInstall(() => useStore.getState());
-        })();
-      }
-    });
-    if (typeof cleanup === 'function') {
-      cleanupFns.push(cleanup);
     }
   }
 
