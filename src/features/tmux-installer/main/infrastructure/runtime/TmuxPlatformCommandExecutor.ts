@@ -361,8 +361,10 @@ export class TmuxPlatformCommandExecutor {
     if (input.breakoutNewPanes) {
       // In hook context the freshly split pane is the active one; -d keeps the
       // previous window (the lead) current so the next split targets it again.
+      // NOTE: set-hook does not accept the "=" exact-match prefix other
+      // commands take — "=name" fails with "no such session".
       const hook = await this.execTmux(
-        ['set-hook', '-t', `=${input.sessionName}`, 'after-split-window', 'break-pane -d'],
+        ['set-hook', '-t', input.sessionName, 'after-split-window', 'break-pane -d'],
         3_000
       );
       if (hook.exitCode !== 0) {
