@@ -336,43 +336,72 @@ export class TmuxPlatformCommandExecutor {
      */
     breakoutNewPanes?: boolean;
   }): Promise<void> {
-    const result = await this.execTmux(
-      [
-        'new-session',
-        '-d',
-        '-s',
-        input.sessionName,
-        '-c',
-        input.cwd,
-        // The stock CLI snapshots its terminal geometry at startup and budgets
-        // teammate panes from that snapshot: launches at 220 cols capped out
-        // at 7 teammates with "no room for another tmux split" regardless of
-        // height, live window size, or later resizing. Detached windows never
-        // resize to a client, so a large virtual size costs nothing — start
-        // wide and tall enough that a full roster fits the CLI's math.
-        '-x',
-        String(input.cols ?? 800),
-        '-y',
-        String(input.rows ?? 400),
-        input.command,
-      ],
-      10_000
-    );
+    const newSessionArgs = [
+      'new-session',
+      '-d',
+      '-s',
+      input.sessionName,
+      '-c',
+      input.cwd,
+      // The stock CLI snapshots its terminal geometry at startup and budgets
+      // teammate panes from that snapshot: launches at 220 cols capped out
+      // at 7 teammates with "no room for another tmux split" regardless of
+      // height, live window size, or later resizing. Detached windows never
+      // resize to a client, so a large virtual size costs nothing — start
+      // wide and tall enough that a full roster fits the CLI's math.
+      '-x',
+      String(input.cols ?? 800),
+      '-y',
+      String(input.rows ?? 400),
+    ];
+    if (input.breakoutNewPanes) {
+      // Start only the default shell and ask tmux for its pane id. Keeping the
+      // lead dormant makes hook installation a launch precondition instead of
+      // a best-effort follow-up to a running Claude process.
+      newSessionArgs.push('-P', '-F', '#{pane_id}');
+    } else {
+      newSessionArgs.push(input.command);
+    }
+
+    const result = await this.execTmux(newSessionArgs, 10_000);
     if (result.exitCode !== 0) {
       throw new Error(result.stderr || `Failed to create tmux session ${input.sessionName}`);
     }
     await this.execTmux(['set-option', '-t', input.sessionName, 'aggressive-resize', 'on'], 3_000);
     if (input.breakoutNewPanes) {
+      const leadPaneId = result.stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .find((line) => line.startsWith('%'));
+      if (!leadPaneId) {
+        await this.execTmux(['kill-session', '-t', `=${input.sessionName}`], 5_000);
+        throw new Error(`Failed to resolve the lead pane for ${input.sessionName}`);
+      }
+
       // In hook context the freshly split pane is the active one; -d keeps the
       // previous window (the lead) current so the next split targets it again.
-      // NOTE: set-hook does not accept the "=" exact-match prefix other
-      // commands take — "=name" fails with "no such session".
+      // Target the exact lead pane so tmux unambiguously stores this as a hook
+      // for the session that owns it. set-hook does not accept the "="
+      // exact-match session prefix used by commands such as kill-session.
       const hook = await this.execTmux(
-        ['set-hook', '-t', input.sessionName, 'after-split-window', 'break-pane -d'],
+        ['set-hook', '-t', leadPaneId, 'after-split-window', 'break-pane -d'],
         3_000
       );
       if (hook.exitCode !== 0) {
+        await this.execTmux(['kill-session', '-t', `=${input.sessionName}`], 5_000);
         throw new Error(hook.stderr || `Failed to arm pane break-out for ${input.sessionName}`);
+      }
+
+      // The hook is now guaranteed to exist before Claude can execute its
+      // first split-window command. Starting via respawn preserves the pane id
+      // returned above, which remains the binding's lead pane id.
+      const startLead = await this.execTmux(
+        ['respawn-pane', '-k', '-t', leadPaneId, input.command],
+        10_000
+      );
+      if (startLead.exitCode !== 0) {
+        await this.execTmux(['kill-session', '-t', `=${input.sessionName}`], 5_000);
+        throw new Error(startLead.stderr || `Failed to start lead in ${input.sessionName}`);
       }
     }
   }
