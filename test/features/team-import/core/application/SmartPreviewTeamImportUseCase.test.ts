@@ -2,6 +2,7 @@ import { SmartPreviewTeamImportUseCase } from '@features/team-import/core/applic
 import { InMemoryTeamImportReviewStore } from '@features/team-import/main/infrastructure/InMemoryTeamImportReviewStore';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { TeamImportFolderSnapshot } from '@features/team-import/core/application/models/TeamImportFolderSnapshot';
 import type { TeamImportBundleParserPort } from '@features/team-import/core/application/ports/TeamImportBundleParserPort';
 import type { TeamImportFolderSourcePort } from '@features/team-import/core/application/ports/TeamImportFolderSourcePort';
 import type {
@@ -9,7 +10,6 @@ import type {
   TeamImportWebSourcePort,
 } from '@features/team-import/core/application/ports/TeamImportRawSourcePort';
 import type { TeamImportSkillsInstallerPort } from '@features/team-import/core/application/ports/TeamImportSkillsInstallerPort';
-import type { TeamImportFolderSnapshot } from '@features/team-import/core/application/models/TeamImportFolderSnapshot';
 
 const NO_PROGRESS = { report: () => undefined };
 
@@ -171,7 +171,12 @@ describe('SmartPreviewTeamImportUseCase', () => {
       if (prompt.includes('team-import-plan/v1')) {
         return JSON.stringify({
           schema: 'team-import-plan/v1',
-          team: { name: 'planned', description: 'planned team', leadPromptPaths: ['COMPANY.md'] },
+          team: {
+            name: 'planned',
+            description: 'planned team',
+            suggestedLeadName: 'writer',
+            leadPromptPaths: ['COMPANY.md'],
+          },
           members: [
             { name: 'writer', role: 'writes', sourcePaths: ['COMPANY.md'] },
             { name: 'editor', role: 'edits', sourcePaths: ['COMPANY.md'] },
@@ -200,6 +205,7 @@ describe('SmartPreviewTeamImportUseCase', () => {
     // 1 plan + 2 members + 1 skill.
     expect(parser.parse).toHaveBeenCalledTimes(4);
     expect(preview?.suggestedTeamName).toBe('planned');
+    expect(preview?.suggestedLeadName).toBe('writer');
     const record = reviewStore.consume(preview!.reviewId);
     expect(record?.bundle?.members.map((member) => member.name).sort()).toEqual([
       'editor',

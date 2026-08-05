@@ -82,6 +82,13 @@ export function useTeamImportDialog(input: UseTeamImportDialogInput) {
         if (requestId !== requestIdRef.current) return;
         setPreview(nextPreview);
         setTeamName(nextPreview?.suggestedTeamName ?? '');
+        const suggestedLeadName = nextPreview?.suggestedLeadName;
+        setLeadName(
+          suggestedLeadName &&
+            nextPreview?.members.some((member) => member.name === suggestedLeadName)
+            ? suggestedLeadName
+            : ''
+        );
       } catch (nextError) {
         if (requestId !== requestIdRef.current) return;
         setError(

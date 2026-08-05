@@ -9,6 +9,7 @@ import {
   parseMemberJobOutput,
   parseSkillJobOutput,
   parseTeamImportPlan,
+  reconcileTeamImportPlanWithStructuredAgents,
   selectDumpFiles,
 } from '../../domain/teamImportParallelParse';
 import { buildTeamImportPreview } from '../../domain/teamImportPolicy';
@@ -220,8 +221,9 @@ export class SmartPreviewTeamImportUseCase {
     } catch {
       return null;
     }
-    const plan = parseTeamImportPlan(planRaw);
-    if (!plan) return null;
+    const parsedPlan = parseTeamImportPlan(planRaw);
+    if (!parsedPlan) return null;
+    const plan = reconcileTeamImportPlanWithStructuredAgents(parsedPlan, dump);
 
     const skillSlugs = plan.skills.map((skill) => skill.slug);
     const jobs: (() => Promise<void>)[] = [];

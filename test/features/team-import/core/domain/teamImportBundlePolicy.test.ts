@@ -73,6 +73,26 @@ describe('parseTeamImportBundle', () => {
     expect(bundle?.skills[0].slug).toBe('legal-research');
   });
 
+  it('keeps a suggested lead only when it resolves to a validated member', () => {
+    const { bundle } = parseTeamImportBundle(
+      validBundleJson({
+        team: {
+          name: 'Legal Team',
+          suggestedLeadName: 'RESEARCHER',
+          leadPrompt: 'Coordinate.',
+        },
+      })
+    );
+    expect(bundle?.team.suggestedLeadName).toBe('researcher');
+
+    const { bundle: invalidBundle } = parseTeamImportBundle(
+      validBundleJson({
+        team: { name: 'Legal Team', suggestedLeadName: 'missing-agent' },
+      })
+    );
+    expect(invalidBundle?.team.suggestedLeadName).toBeUndefined();
+  });
+
   it('keeps a member reference to a skill the target already has installed', () => {
     // Pruning against the bundle alone used to sever a member from a skill the
     // user already owned — the association was silently deleted at import.

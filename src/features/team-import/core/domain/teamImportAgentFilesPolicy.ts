@@ -160,6 +160,7 @@ export function bundleToPreview(
   return {
     importKind: 'smart',
     suggestedTeamName: suggestTeamImportName(bundle.team.name),
+    ...(bundle.team.suggestedLeadName ? { suggestedLeadName: bundle.team.suggestedLeadName } : {}),
     projectPath: input.projectPath,
     sourceLabel: input.sourceLabel,
     teamDescription: bundle.team.description,

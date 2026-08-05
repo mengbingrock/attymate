@@ -255,7 +255,7 @@ export const ImportTeamDialog = ({
                       {t('teamImport.teamLead')}
                     </label>
                     <Select
-                      value={state.leadName || undefined}
+                      value={state.leadName}
                       onValueChange={state.setLeadName}
                       disabled={state.importing || state.preview.members.length === 0}
                     >
