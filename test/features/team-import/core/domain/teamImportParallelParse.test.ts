@@ -123,6 +123,53 @@ describe('assembleBundleJson', () => {
   });
 });
 
+describe('selectDumpFiles', () => {
+  // The planner echoes paths it read, but not always byte for byte. Every
+  // near-miss here used to resolve to nothing, leaving the member prompt
+  // announcing source files it did not carry — which is what sent the model
+  // looking for them with a tool and killed the job.
+  it.each([
+    ['exact', 'agents/scout/AGENTS.md'],
+    ['a ./ prefix', './agents/scout/AGENTS.md'],
+    ['a leading slash', '/agents/scout/AGENTS.md'],
+    ['backslashes', 'agents\\scout\\AGENTS.md'],
+    ['doubled slashes', 'agents//scout/AGENTS.md'],
+    ['different case', 'Agents/Scout/agents.md'],
+    ['a repository-rooted path', 'companies/demo-package/agents/scout/AGENTS.md'],
+  ])('resolves %s', (_case, sourcePath: string) => {
+    expect(selectDumpFiles(DUMP, [sourcePath]).map((file) => file.path)).toEqual([
+      'agents/scout/AGENTS.md',
+    ]);
+  });
+
+  it('never resolves a path that matches nothing', () => {
+    expect(selectDumpFiles(DUMP, ['agents/ghost/AGENTS.md'])).toEqual([]);
+    expect(selectDumpFiles(DUMP, [''])).toEqual([]);
+  });
+
+  it('never resolves a bare filename to some other member', () => {
+    const ambiguous = {
+      ...DUMP,
+      files: [
+        { path: 'agents/one/AGENTS.md', content: 'one' },
+        { path: 'agents/two/AGENTS.md', content: 'two' },
+      ],
+    };
+    // Attributing one member's instructions to another is worse than dropping
+    // the entry, so a filename alone is never enough.
+    expect(selectDumpFiles(ambiguous, ['AGENTS.md'])).toEqual([]);
+    expect(selectDumpFiles(ambiguous, ['./agents/two/AGENTS.md']).map((f) => f.path)).toEqual([
+      'agents/two/AGENTS.md',
+    ]);
+  });
+
+  it('does not return the same file twice for duplicate references', () => {
+    expect(
+      selectDumpFiles(DUMP, ['agents/scout/AGENTS.md', './agents/scout/AGENTS.md'])
+    ).toHaveLength(1);
+  });
+});
+
 describe('prompt builders', () => {
   it('scopes member prompts to the selected files only', () => {
     const files = selectDumpFiles(DUMP, ['agents/scout/AGENTS.md']);

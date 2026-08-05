@@ -1,5 +1,7 @@
 import { net } from 'electron';
 
+import { GitHubFolderSource, parseGitHubFolderUrl } from './GitHubFolderSource';
+
 import type { TeamImportWebSourcePort } from '../../core/application/ports/TeamImportRawSourcePort';
 import type { TeamImportRawSourceDump } from '../../core/domain/teamImportLlmPrompt';
 
@@ -32,7 +34,17 @@ export function stripHtmlToText(html: string): string {
 }
 
 export class ElectronWebPageSource implements TeamImportWebSourcePort {
+  constructor(private readonly gitHubSource = new GitHubFolderSource()) {}
+
   async fetchPage(url: string): Promise<TeamImportRawSourceDump> {
+    // A GitHub folder URL renders a listing, not content. Reading the repo's
+    // files instead is the difference between a team of names with no
+    // instructions and a real import.
+    const gitHubRef = parseGitHubFolderUrl(url);
+    if (gitHubRef) {
+      return this.gitHubSource.readFolder(gitHubRef);
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     let response: Response;

@@ -297,15 +297,86 @@ function fileBaseName(sourcePath: string): string {
 }
 
 /** Select the dump files a plan entry references (exact path match). */
+function normalizeDumpPath(path: string): string {
+  return path
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/^\/+/, '')
+    .replace(/\/{2,}/g, '/')
+    .trim();
+}
+
+/**
+ * Resolves a path the planner wrote back to a file in the dump.
+ *
+ * The planner echoes paths it read from the dump, but not always byte for byte:
+ * it may add a `./`, root the path at the repository rather than the imported
+ * folder, or vary the case. An exact-only lookup turns any of those into "no
+ * source files" — and a member prompt that promises source files while carrying
+ * none is what makes the model reach for a tool and burn its only turn. Match
+ * generously, but never ambiguously: a suffix or basename match is used only
+ * when exactly one file can satisfy it.
+ */
+export function createDumpFileResolver(
+  dump: TeamImportRawSourceDump
+): (sourcePath: string) => TeamImportRawSourceFile | null {
+  const exact = new Map<string, TeamImportRawSourceFile>();
+  const normalized = new Map<string, TeamImportRawSourceFile>();
+  const lowercased = new Map<string, TeamImportRawSourceFile | null>();
+
+  for (const file of dump.files) {
+    exact.set(file.path, file);
+    const norm = normalizeDumpPath(file.path);
+    if (!normalized.has(norm)) normalized.set(norm, file);
+    const lower = norm.toLowerCase();
+    // null marks an ambiguous key: two files would answer to it.
+    lowercased.set(lower, lowercased.has(lower) ? null : file);
+  }
+
+  const uniqueSuffixMatch = (candidate: string): TeamImportRawSourceFile | null => {
+    const matches: TeamImportRawSourceFile[] = [];
+    for (const [path, file] of normalized) {
+      const lowerPath = path.toLowerCase();
+      if (lowerPath.endsWith(`/${candidate}`) || candidate.endsWith(`/${lowerPath}`)) {
+        matches.push(file);
+        if (matches.length > 1) return null;
+      }
+    }
+    return matches[0] ?? null;
+  };
+
+  return (sourcePath: string): TeamImportRawSourceFile | null => {
+    if (!sourcePath?.trim()) return null;
+    const direct = exact.get(sourcePath);
+    if (direct) return direct;
+
+    const norm = normalizeDumpPath(sourcePath);
+    const byNorm = normalized.get(norm);
+    if (byNorm) return byNorm;
+
+    const lower = norm.toLowerCase();
+    const byLower = lowercased.get(lower);
+    if (byLower) return byLower;
+
+    // Only a genuine path suffix, never a bare filename: "agents/ghost/AGENTS.md"
+    // must not silently resolve to another member's AGENTS.md.
+    return uniqueSuffixMatch(lower);
+  };
+}
+
 export function selectDumpFiles(
   dump: TeamImportRawSourceDump,
   sourcePaths: readonly string[]
 ): TeamImportRawSourceFile[] {
-  const byPath = new Map(dump.files.map((file) => [file.path, file]));
+  const resolve = createDumpFileResolver(dump);
   const selected: TeamImportRawSourceFile[] = [];
+  const seen = new Set<string>();
   for (const sourcePath of sourcePaths) {
-    const file = byPath.get(sourcePath);
-    if (file) selected.push(file);
+    const file = resolve(sourcePath);
+    if (file && !seen.has(file.path)) {
+      seen.add(file.path);
+      selected.push(file);
+    }
   }
   return selected;
 }
@@ -322,9 +393,11 @@ export function assembleBundleJson(
   skillJobs: readonly ParsedSkillJob[],
   dump: TeamImportRawSourceDump
 ): string {
-  const byPath = new Map(dump.files.map((file) => [file.path, file]));
+  // Same resolver as the extraction jobs: a path the planner rounded off must
+  // not silently drop the lead prompt or a member's memory files either.
+  const resolveDumpFile = createDumpFileResolver(dump);
   const leadPromptSections = plan.team.leadPromptPaths
-    .map((path) => byPath.get(path))
+    .map((path) => resolveDumpFile(path))
     .filter((file): file is TeamImportRawSourceFile => Boolean(file))
     .map((file) => `<!-- from ${file.path} -->\n${file.content}`);
   const bundle = {
@@ -341,7 +414,7 @@ export function assembleBundleJson(
       skills: member.skills,
       ...(member.agentDefinition ? { agentDefinition: member.agentDefinition } : {}),
       memoryFiles: member.memoryFilePaths
-        .map((path) => byPath.get(path))
+        .map((path) => resolveDumpFile(path))
         .filter((file): file is TeamImportRawSourceFile => Boolean(file))
         .map((file) => ({
           relativePath: `memory/${fileBaseName(file.path)}`,
@@ -356,7 +429,7 @@ export function assembleBundleJson(
           if (file.content) {
             return { relativePath: file.relativePath, content: file.content };
           }
-          const source = file.sourcePath ? byPath.get(file.sourcePath) : undefined;
+          const source = file.sourcePath ? resolveDumpFile(file.sourcePath) : undefined;
           if (!source) return null;
           return { relativePath: file.relativePath, content: source.content };
         })
