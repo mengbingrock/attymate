@@ -5,9 +5,9 @@ import {
 import {
   buildCodexLaneArgs,
   buildInteractiveCliArgs,
+  type CodexLaneSpec,
   codexTeamLanesService,
   interactiveTeamRuntimeService,
-  type CodexLaneSpec,
 } from '@features/interactive-team-runtime/main';
 import { isMatterEffectivelyEmpty } from '@features/matter-dashboard/main';
 import { type RuntimeTurnSettledProvider } from '@features/member-work-sync/main';
@@ -81,7 +81,12 @@ import {
   type ParsedPermissionRequest,
   parsePermissionRequest,
 } from '@shared/utils/inboxNoise';
-import { isLeadMember } from '@shared/utils/leadDetection';
+import {
+  isLeadMember,
+  isResolvedTeamLead,
+  type ResolvedTeamLeadIdentity,
+  resolveTeamLeadIdentity,
+} from '@shared/utils/leadDetection';
 import { createLogger } from '@shared/utils/logger';
 import { migrateProviderBackendId } from '@shared/utils/providerBackend';
 import {
@@ -1185,6 +1190,8 @@ interface ProvisioningRun {
   fsMonitorHandle: NodeJS.Timeout | null;
   onProgress: (progress: TeamProvisioningProgress) => void;
   expectedMembers: string[];
+  /** Resolved once from structured team identity; never inferred from role wording. */
+  leadIdentity: ResolvedTeamLeadIdentity;
   request: TeamCreateRequest;
   allEffectiveMembers: TeamCreateRequest['members'];
   effectiveMembers: TeamCreateRequest['members'];
@@ -6654,16 +6661,7 @@ export class TeamProvisioningService {
   }
 
   private getRunLeadName(run: ProvisioningRun): string {
-    const members = Array.isArray(run.request?.members) ? run.request.members : [];
-    // Match "lead" on word boundaries only. A substring test elects the wrong
-    // member for roles that merely contain the letters — "Pleading Review
-    // Specialist" is a teammate, not the team lead — and the elected name
-    // decides which runtime lane becomes the lead, so a teammate that wins here
-    // never gets a lane of its own.
-    return (
-      (members.find((m) => isLeadMember(m)) ?? members.find((m) => /\blead\b/i.test(m.role ?? '')))
-        ?.name || 'team-lead'
-    );
+    return run.leadIdentity.name;
   }
 
   private rememberRecentCrossTeamLeadDeliveryMessageIds(
@@ -12089,6 +12087,7 @@ export class TeamProvisioningService {
         fsMonitorHandle: null,
         onProgress,
         expectedMembers: effectiveMemberSpecs.map((member) => member.name),
+        leadIdentity: resolveTeamLeadIdentity(null),
         request,
         allEffectiveMembers: allEffectiveMemberSpecs,
         effectiveMembers: effectiveMemberSpecs,
@@ -12828,11 +12827,15 @@ export class TeamProvisioningService {
         `[${request.teamName}] Failed to read tasks for OpenCode launch prompt: ${String(error)}`
       );
     }
+    const leadIdentity = resolveTeamLeadIdentity(
+      JSON.parse(configRaw) as Parameters<typeof resolveTeamLeadIdentity>[0]
+    );
     const prompt = buildDeterministicLaunchHydrationPrompt(
       launchRequest,
       effectiveMembers,
       existingTasks,
-      false
+      false,
+      leadIdentity.name
     );
     if (isPureOpenCodeMemberLanePlan(lanePlan)) {
       return this.runOpenCodeMemberLaneAggregateLaunch({
@@ -12888,6 +12891,7 @@ export class TeamProvisioningService {
       fsMonitorHandle: null,
       onProgress: params.onProgress,
       expectedMembers: params.members.map((member) => member.name),
+      leadIdentity: resolveTeamLeadIdentity({ members: params.members }),
       request: {
         ...params.request,
         members: params.members,
@@ -13799,13 +13803,17 @@ export class TeamProvisioningService {
     members: TeamCreateRequest['members']
   ): Promise<void> {
     const configPath = path.join(getTeamsBasePath(), request.teamName, 'config.json');
+    const leadAgentId = `team-lead@${request.teamName}`;
     const config: TeamConfig = {
       name: request.displayName?.trim() || request.teamName,
       description: request.description,
       color: request.color,
       projectPath: request.cwd,
+      lead: { name: 'team-lead', agentId: leadAgentId },
+      leadAgentId,
       members: [
         {
+          agentId: leadAgentId,
           name: 'team-lead',
           role: 'Team Lead',
           agentType: 'team-lead',
@@ -14338,6 +14346,9 @@ export class TeamProvisioningService {
         fsMonitorHandle: null,
         onProgress,
         expectedMembers,
+        leadIdentity: resolveTeamLeadIdentity(
+          JSON.parse(configRaw) as Parameters<typeof resolveTeamLeadIdentity>[0]
+        ),
         request: syntheticRequest,
         allEffectiveMembers: allEffectiveMemberSpecs,
         effectiveMembers: effectiveMemberSpecs,
@@ -14468,7 +14479,8 @@ export class TeamProvisioningService {
         request,
         effectiveMemberSpecs,
         existingTasks,
-        false
+        false,
+        run.leadIdentity.name
       );
       const promptSize = getPromptSizeSummary(prompt);
       let child: ReturnType<typeof spawn> | undefined;
@@ -16393,7 +16405,7 @@ export class TeamProvisioningService {
       }
       if (isStaleRelayRun()) return 0;
       if (config) {
-        const leadName = config.members?.find((m) => isLeadMember(m))?.name?.trim() || 'team-lead';
+        const leadName = resolveTeamLeadIdentity(config).name;
         try {
           const leadInboxMessages = await this.inboxReader.getMessagesFor(teamName, leadName);
           if (isStaleRelayRun()) return 0;
@@ -16444,7 +16456,7 @@ export class TeamProvisioningService {
       if (isStaleRelayRun()) return 0;
       if (!config) return 0;
 
-      const leadName = config.members?.find((m) => isLeadMember(m))?.name?.trim() || 'team-lead';
+      const leadName = resolveTeamLeadIdentity(config).name;
       let leadInboxMessages: Awaited<ReturnType<TeamInboxReader['getMessagesFor']>> = [];
       try {
         leadInboxMessages = await this.inboxReader.getMessagesFor(teamName, leadName);
@@ -20787,9 +20799,7 @@ export class TeamProvisioningService {
       if (msgContent.trim().length === 0) continue;
 
       const summary = typeof inp.summary === 'string' ? inp.summary : '';
-      const leadName =
-        run.request.members.find((m) => m.role?.toLowerCase().includes('lead'))?.name ||
-        'team-lead';
+      const leadName = this.getRunLeadName(run);
 
       const cleanContent = stripAgentBlocks(msgContent);
       if (cleanContent.trim().length === 0) continue;
@@ -21906,15 +21916,13 @@ export class TeamProvisioningService {
 
     // Read current team config for up-to-date members (may have changed since launch).
     let currentMembers: TeamCreateRequest['members'] = run.request.members;
-    let leadName = 'team-lead';
+    const leadName = this.getRunLeadName(run);
     try {
       const config = await this.readConfigForObservation(run.teamName);
       if (config?.members) {
-        const configLead = config.members.find((m) => isLeadMember(m));
-        leadName = configLead?.name?.trim() || 'team-lead';
         // Convert config members (excluding lead) to TeamCreateRequest member format.
         const configTeammates = config.members
-          .filter((m) => !isLeadMember(m) && m?.name)
+          .filter((member) => !isResolvedTeamLead(member, run.leadIdentity) && member?.name)
           .map((m) => ({
             name: m.name,
             role: m.role ?? undefined,
@@ -21924,16 +21932,9 @@ export class TeamProvisioningService {
         if (configTeammates.length > 0) {
           currentMembers = configTeammates;
         }
-      } else {
-        leadName =
-          run.request.members.find((m) => m.role?.toLowerCase().includes('lead'))?.name ||
-          'team-lead';
       }
     } catch {
       // Fallback to launch-time members if config is unavailable.
-      leadName =
-        run.request.members.find((m) => m.role?.toLowerCase().includes('lead'))?.name ||
-        'team-lead';
       logger.warn(
         `[${run.teamName}] post-compact reminder: config unavailable, using launch-time members`
       );
@@ -22065,15 +22066,12 @@ export class TeamProvisioningService {
     }
 
     let currentMembers: TeamCreateRequest['members'] = run.effectiveMembers;
-    let leadName =
-      run.effectiveMembers.find((m) => m.role?.toLowerCase().includes('lead'))?.name || 'team-lead';
+    const leadName = this.getRunLeadName(run);
     try {
       const config = await this.readConfigForObservation(run.teamName);
       if (config?.members) {
-        const configLead = config.members.find((m) => isLeadMember(m));
-        leadName = configLead?.name?.trim() || leadName;
         const configTeammates = config.members
-          .filter((m) => !isLeadMember(m) && m?.name)
+          .filter((member) => !isResolvedTeamLead(member, run.leadIdentity) && member?.name)
           .map((m) => ({
             name: m.name,
             role: m.role ?? undefined,
@@ -23042,9 +23040,7 @@ export class TeamProvisioningService {
         };
 
     this.persistInboxMessage(run.teamName, agentId, {
-      from:
-        run.request?.members.find((member) => member.role?.toLowerCase().includes('lead'))?.name ??
-        'team-lead',
+      from: this.getRunLeadName(run),
       to: agentId,
       text: JSON.stringify(payload),
       timestamp: nowIso(),

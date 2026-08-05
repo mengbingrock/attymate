@@ -22,6 +22,12 @@ export interface TeamMember {
   removedAt?: number;
 }
 
+/** Canonical, structured identity for the process that leads a team. */
+export interface TeamLeadIdentity {
+  name: string;
+  agentId?: string;
+}
+
 export type TeamMemberMcpScope = 'user' | 'project' | 'local';
 
 export type TeamMemberMcpMode = 'inheritLead' | 'inheritScopes' | 'strictAllowlist' | 'appOnly';
@@ -38,6 +44,10 @@ export interface TeamConfig {
   color?: string;
   language?: string;
   members?: TeamMember[];
+  /** Preferred lead identity. Never derive this from role or prompt wording. */
+  lead?: TeamLeadIdentity;
+  /** Legacy/runtime lead identifier retained for existing CLI-created configs. */
+  leadAgentId?: string;
   projectPath?: string;
   projectPathHistory?: string[];
   leadSessionId?: string;

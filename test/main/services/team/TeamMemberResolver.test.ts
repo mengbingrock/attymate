@@ -37,6 +37,34 @@ describe('TeamMemberResolver', () => {
     expect(lead?.agentType).toBe('team-lead');
   });
 
+  it('does not project a stale lead type onto a teammate when leadAgentId is explicit', () => {
+    const resolver = new TeamMemberResolver();
+    const config: TeamConfig = {
+      name: 'Matter Team',
+      leadAgentId: 'team-lead@matter-team',
+      members: [
+        {
+          name: 'team-lead',
+          agentId: 'team-lead@matter-team',
+          agentType: 'team-lead',
+        },
+        {
+          name: 'source-intake-agent',
+          agentId: 'source-intake-agent@matter-team',
+          agentType: 'team-lead',
+          role: 'Legal Document Intake and Pleading Review Specialist',
+        },
+      ],
+    };
+
+    const members = resolver.resolveMembers(config, [], [], []);
+
+    expect(members.find((member) => member.name === 'team-lead')?.agentType).toBe('team-lead');
+    expect(members.find((member) => member.name === 'source-intake-agent')?.agentType).toBe(
+      'general-purpose'
+    );
+  });
+
   it('does not expose completed, deleted, or approved tasks as current work', () => {
     const resolver = new TeamMemberResolver();
     const config: TeamConfig = {

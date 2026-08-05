@@ -1119,10 +1119,9 @@ export function buildDeterministicLaunchHydrationPrompt(
   request: TeamLaunchRequest,
   members: TeamCreateRequest['members'],
   tasks: TeamTask[],
-  isResume: boolean
+  isResume: boolean,
+  leadName = 'team-lead'
 ): string {
-  const leadName =
-    members.find((member) => member.role?.toLowerCase().includes('lead'))?.name || 'team-lead';
   const isSolo = members.length === 0;
   const projectName = path.basename(request.cwd);
   const startLabel = isResume ? 'Team Start (resume)' : 'Team Start';
