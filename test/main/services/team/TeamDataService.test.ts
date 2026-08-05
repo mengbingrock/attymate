@@ -581,6 +581,12 @@ describe('TeamDataService draft metadata', () => {
       skipPermissions: false,
       worktree: 'feature-x',
       extraCliArgs: '--max-turns 5',
+      lead: {
+        name: 'legal-ops-supervisor',
+        role: 'Operations supervisor',
+        workflow: 'Coordinate the legal team',
+        skills: ['legal-ops'],
+      },
       members: [
         {
           name: 'builder',
@@ -594,6 +600,21 @@ describe('TeamDataService draft metadata', () => {
       ],
     });
     expect(listCacheInvalidateSpy).toHaveBeenCalled();
+
+    const persistedTeamMeta = JSON.parse(
+      await fs.readFile(
+        path.join(claudeRoot, 'teams', 'draft-team', 'team.meta.json'),
+        'utf8'
+      )
+    ) as { lead?: { name?: string } };
+    const persistedMembersMeta = JSON.parse(
+      await fs.readFile(
+        path.join(claudeRoot, 'teams', 'draft-team', 'members.meta.json'),
+        'utf8'
+      )
+    ) as { members: { name: string }[] };
+    expect(persistedTeamMeta.lead?.name).toBe('legal-ops-supervisor');
+    expect(persistedMembersMeta.members.map((member) => member.name)).toEqual(['builder']);
 
     await expect(service.getSavedRequest('missing-team')).resolves.toBeNull();
     await expect(service.getSavedRequest('draft-team')).resolves.toMatchObject({
@@ -612,6 +633,12 @@ describe('TeamDataService draft metadata', () => {
       skipPermissions: false,
       worktree: 'feature-x',
       extraCliArgs: '--max-turns 5',
+      lead: {
+        name: 'legal-ops-supervisor',
+        role: 'Operations supervisor',
+        workflow: 'Coordinate the legal team',
+        skills: ['legal-ops'],
+      },
       members: [
         {
           name: 'builder',
@@ -6494,6 +6521,41 @@ describe('TeamDataService', () => {
       name: 'alice',
     });
     expect(harness.teamMetaStore.getMeta).toHaveBeenCalledWith('my-team');
+  });
+
+  it('synthesizes the explicitly promoted imported profile instead of a new lead', async () => {
+    const harness = createGetTeamDataHarness({
+      config: {
+        name: 'Legal team',
+        projectPath: '/repo',
+        members: [{ name: 'calendar-agent', role: 'Calendaring' }],
+      },
+      getTeamMeta: async () => ({
+        version: 1,
+        cwd: '/repo',
+        providerId: 'anthropic',
+        lead: {
+          name: 'legal-ops-supervisor',
+          role: 'Legal operations supervisor',
+          workflow: 'Coordinate the matter.',
+          model: 'claude-opus-5',
+        },
+        createdAt: Date.now(),
+      }),
+      resolveMembers: () => [buildResolvedMember('calendar-agent')],
+    });
+
+    const data = await harness.service.getTeamData('legal-team');
+
+    expect(data.members[0]).toMatchObject({
+      name: 'legal-ops-supervisor',
+      agentId: 'legal-ops-supervisor@legal-team',
+      agentType: 'team-lead',
+      role: 'Legal operations supervisor',
+      workflow: 'Coordinate the matter.',
+      model: 'claude-opus-5',
+    });
+    expect(data.members.filter((member) => member.name === 'team-lead')).toHaveLength(0);
   });
 
   it('surfaces lane-aware member runtime truth alongside the synthesized lead snapshot', async () => {

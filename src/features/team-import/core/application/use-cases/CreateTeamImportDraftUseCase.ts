@@ -28,6 +28,9 @@ export class CreateTeamImportDraftUseCase {
     const teamNameError = validateTeamImportName(teamName);
     if (teamNameError) throw new Error(`TEAM_IMPORT_VALIDATION:${teamNameError}`);
 
+    const leadName = request.leadName.trim();
+    if (!leadName) throw new Error('TEAM_IMPORT_VALIDATION:leadRequired');
+
     const record = this.reviewStore.consume(reviewId);
     if (!record) throw new Error('This import preview expired. Choose the source again.');
     const { preview, bundle } = record;
@@ -35,10 +38,21 @@ export class CreateTeamImportDraftUseCase {
       throw new Error(preview.blockingErrors[0]);
     }
 
+    const lead = preview.members.find((member) => member.name === leadName);
+    if (!lead) {
+      this.reviewStore.restore(record);
+      throw new Error('TEAM_IMPORT_VALIDATION:leadNotFound');
+    }
+
     const draftPreview = bundle ? this.withPointerWorkflows(preview, bundle, teamName) : preview;
+    const draftLead = draftPreview.members.find((member) => member.name === leadName);
+    if (!draftLead) {
+      this.reviewStore.restore(record);
+      throw new Error('TEAM_IMPORT_VALIDATION:leadNotFound');
+    }
 
     try {
-      await this.draftRepository.createDraft(teamName, draftPreview);
+      await this.draftRepository.createDraft(teamName, draftPreview, draftLead);
     } catch (error) {
       this.reviewStore.restore(record);
       throw error;

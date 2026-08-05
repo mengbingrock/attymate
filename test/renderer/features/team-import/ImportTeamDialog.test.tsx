@@ -17,6 +17,8 @@ const hookState = vi.hoisted(() => ({
   },
   teamName: 'demo-team',
   setTeamName: vi.fn(),
+  leadName: 'writer',
+  setLeadName: vi.fn(),
   sourceKind: 'folder',
   setSourceKind: vi.fn(),
   url: '',
@@ -56,6 +58,10 @@ vi.mock('@renderer/components/ui/dialog', () => ({
   DialogTitle: ({ children }: React.PropsWithChildren) => <h2>{children}</h2>,
 }));
 vi.mock('lucide-react', () => ({
+  Check: () => <svg />,
+  ChevronDown: () => <svg />,
+  ChevronUp: () => <svg />,
+  Crown: () => <svg />,
   FolderOpen: () => <svg />,
   Globe: () => <svg />,
   Loader2: () => <svg />,
@@ -86,6 +92,7 @@ describe('ImportTeamDialog', () => {
     expect(host.textContent).toContain('PROMPT_VISIBLE_MARKER');
     expect(host.textContent).toContain('/tmp/demo-team');
     expect(host.textContent).toContain('teamImport.warningMemberReserved');
+    expect(host.textContent).toContain('teamImport.leadBadge');
     act(() => root.unmount());
   });
 });

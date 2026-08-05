@@ -1,13 +1,20 @@
 import { FileReadTimeoutError, readFileUtf8WithTimeout } from '@main/utils/fsRead';
 import { getTeamsBasePath } from '@main/utils/pathDecoder';
+import { isTeamEffortLevel } from '@shared/utils/effortLevels';
 import { migrateProviderBackendId } from '@shared/utils/providerBackend';
 import { normalizeProviderBillingMode } from '@shared/utils/providerBillingMode';
+import { normalizeTeamMemberMcpPolicy } from '@shared/utils/teamMemberMcpPolicy';
 import * as fs from 'fs';
 import * as path from 'path';
 
 import { atomicWriteAsync } from './atomicWrite';
 
-import type { ProviderModelLaunchIdentity, TeamFastMode, TeamProviderId } from '@shared/types';
+import type {
+  ProviderModelLaunchIdentity,
+  TeamFastMode,
+  TeamProviderId,
+  TeamProvisioningMemberInput,
+} from '@shared/types';
 
 /**
  * Persisted team-level metadata saved by the UI before CLI provisioning.
@@ -20,6 +27,8 @@ export interface TeamMetaFile {
   displayName?: string;
   description?: string;
   color?: string;
+  /** Imported profile promoted into the primary runtime; never a teammate. */
+  lead?: TeamProvisioningMemberInput;
   cwd: string;
   prompt?: string;
   providerId?: TeamProviderId;
@@ -57,6 +66,44 @@ function normalizeOptionalString(value: unknown): string | null {
 
 function normalizeFastMode(value: unknown): TeamFastMode | null {
   return value === 'inherit' || value === 'on' || value === 'off' ? value : null;
+}
+
+function normalizeLeadProfile(value: unknown): TeamProvisioningMemberInput | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Partial<TeamProvisioningMemberInput>;
+  const name = normalizeOptionalString(raw.name);
+  if (!name) return undefined;
+  const providerId = normalizeProviderId(raw.providerId);
+  const role = normalizeOptionalString(raw.role);
+  const workflow = normalizeOptionalString(raw.workflow);
+  const cwd = normalizeOptionalString(raw.cwd);
+  const model = normalizeOptionalString(raw.model);
+  const providerBackendId = migrateProviderBackendId(
+    providerId,
+    normalizeOptionalBackendId(raw.providerBackendId)
+  );
+  const fastMode = normalizeFastMode(raw.fastMode);
+  const mcpPolicy = normalizeTeamMemberMcpPolicy(raw.mcpPolicy);
+  const skills = Array.isArray(raw.skills)
+    ? raw.skills
+        .filter((skill): skill is string => typeof skill === 'string')
+        .map((skill) => skill.trim())
+        .filter(Boolean)
+    : [];
+  return {
+    name,
+    ...(role ? { role } : {}),
+    ...(workflow ? { workflow } : {}),
+    ...(skills.length > 0 ? { skills } : {}),
+    ...(raw.isolation === 'worktree' ? { isolation: 'worktree' as const } : {}),
+    ...(cwd ? { cwd } : {}),
+    ...(providerId ? { providerId } : {}),
+    ...(providerBackendId ? { providerBackendId } : {}),
+    ...(model ? { model } : {}),
+    ...(isTeamEffortLevel(raw.effort) ? { effort: raw.effort } : {}),
+    ...(fastMode ? { fastMode } : {}),
+    ...(mcpPolicy ? { mcpPolicy } : {}),
+  };
 }
 
 function normalizeLaunchIdentity(value: unknown): ProviderModelLaunchIdentity | undefined {
@@ -176,6 +223,7 @@ export class TeamMetaStore {
       description:
         typeof file.description === 'string' ? file.description.trim() || undefined : undefined,
       color: typeof file.color === 'string' ? file.color.trim() || undefined : undefined,
+      lead: normalizeLeadProfile(file.lead),
       cwd: file.cwd.trim(),
       prompt: typeof file.prompt === 'string' ? file.prompt.trim() || undefined : undefined,
       providerId,
@@ -202,6 +250,7 @@ export class TeamMetaStore {
       displayName: data.displayName?.trim() || undefined,
       description: data.description?.trim() || undefined,
       color: data.color?.trim() || undefined,
+      lead: normalizeLeadProfile(data.lead),
       cwd: data.cwd.trim(),
       prompt: data.prompt?.trim() || undefined,
       providerId: data.providerId,

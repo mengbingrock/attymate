@@ -12,6 +12,8 @@ export interface SynthesizeStockClaudeTeamStateOptions {
   teamName: string;
   cwd: string;
   description?: string;
+  /** Existing imported profile occupying the primary lead runtime. */
+  lead?: TeamCreateRequest['lead'];
   members: TeamCreateRequest['members'];
   providerId?: TeamProviderId;
   leadSessionId?: string | null;
@@ -42,11 +44,13 @@ function buildSynthesizedConfig(options: SynthesizeStockClaudeTeamStateOptions):
 } {
   const now = Date.now();
   const providerId = options.providerId ?? 'anthropic';
-  const leadAgentId = `team-lead@${options.teamName}`;
+  const leadName = options.lead?.name.trim() || 'team-lead';
+  const leadAgentId = `${leadName}@${options.teamName}`;
   const lead: SynthesizedConfigMember = {
     agentId: leadAgentId,
-    name: 'team-lead',
+    name: leadName,
     agentType: 'team-lead',
+    ...(options.lead?.model?.trim() ? { model: options.lead.model.trim() } : {}),
     joinedAt: now,
     cwd: options.cwd,
     subscriptions: [],

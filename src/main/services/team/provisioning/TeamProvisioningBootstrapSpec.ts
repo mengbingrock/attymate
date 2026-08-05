@@ -269,6 +269,10 @@ export function describeStockBootstrapMember(member: RuntimeBootstrapMemberSpec)
 export interface StockClaudeBootstrapPromptOptions {
   /** The team's matter dashboard has no content yet: instruct an initial folder scan. */
   matterNeedsInitialScan?: boolean;
+  /** Structured identity of the primary runtime. */
+  leadName?: string;
+  /** Imported profile instructions applied to the primary runtime. */
+  leadWorkflow?: string;
 }
 
 export function buildStockClaudeBootstrapPrompt(
@@ -277,10 +281,11 @@ export function buildStockClaudeBootstrapPrompt(
   options: StockClaudeBootstrapPromptOptions = {}
 ): string {
   const teamLabel = spec.team.displayName?.trim() || spec.team.name;
+  const leadName = options.leadName?.trim() || 'team-lead';
   const lines: string[] = [];
   if (spec.mode === 'create') {
     lines.push(
-      `You are the lead of a new agent team. Create the team named exactly "${spec.team.name}"` +
+      `You are "${leadName}", the lead of a new agent team. Create the team named exactly "${spec.team.name}"` +
         (teamLabel !== spec.team.name ? ` (display name: "${teamLabel}")` : '') +
         '.'
     );
@@ -289,8 +294,11 @@ export function buildStockClaudeBootstrapPrompt(
     }
   } else {
     lines.push(
-      `You are the lead of the existing agent team "${spec.team.name}". Its state is persisted on disk; bring the team back up.`
+      `You are "${leadName}", the lead of the existing agent team "${spec.team.name}". Its state is persisted on disk; bring the team back up.`
     );
+  }
+  if (options.leadWorkflow?.trim()) {
+    lines.push('', 'Your imported lead profile instructions:', '', options.leadWorkflow.trim());
   }
   if (spec.members.length > 0) {
     lines.push(
@@ -320,7 +328,7 @@ export function buildStockClaudeBootstrapPrompt(
     '"agent-teams-mcp" MCP tools. Follow this protocol:',
     `- Record every distinct work item with the task_create tool (teamName: "${spec.team.name}") before working on it.`,
     '- Keep task status current with task_start, task_set_status, task_set_owner, and task_complete.',
-    '- Report progress and results to the human user with the message_send tool (to: "user", from: "team-lead").',
+    `- Report progress and results to the human user with the message_send tool (to: "user", from: "${leadName}").`,
     '- Check lead_briefing periodically for the operational queue and newly assigned work.',
     '- Do not stop your session while teammates are still working; wait for them and keep coordinating.',
     '',

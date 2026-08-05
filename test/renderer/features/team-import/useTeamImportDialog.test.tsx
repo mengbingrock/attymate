@@ -114,6 +114,7 @@ describe('useTeamImportDialog', () => {
 
     expect(state.preview?.reviewId).toBe('second');
     expect(state.teamName).toBe('second-team');
+    expect(state.leadName).toBe('');
     act(() => root.unmount());
   });
 
@@ -143,6 +144,7 @@ describe('useTeamImportDialog', () => {
     await act(async () => {
       await state.chooseFolder();
     });
+    act(() => state.setLeadName('writer'));
     await act(async () => {
       void state.createDraft();
       void state.createDraft();
@@ -150,6 +152,11 @@ describe('useTeamImportDialog', () => {
     });
 
     expect(apiMock.teamImport.createDraft).toHaveBeenCalledTimes(1);
+    expect(apiMock.teamImport.createDraft).toHaveBeenCalledWith({
+      reviewId: 'review-1',
+      teamName: 'demo',
+      leadName: 'writer',
+    });
     expect(onClose).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -188,6 +195,7 @@ describe('useTeamImportDialog', () => {
     await act(async () => {
       await state.chooseFolder();
     });
+    act(() => state.setLeadName('writer'));
     await act(async () => {
       await state.createDraft();
     });

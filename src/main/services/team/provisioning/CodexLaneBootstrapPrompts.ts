@@ -10,6 +10,10 @@ export interface CodexLeadBootstrapOptions {
   existingTasksSummary?: string;
   /** The team's matter dashboard has no content yet: instruct an initial folder scan. */
   matterNeedsInitialScan?: boolean;
+  /** Structured identity of the primary runtime. */
+  leadName?: string;
+  /** Imported profile instructions applied to the primary runtime. */
+  leadWorkflow?: string;
 }
 
 /**
@@ -23,10 +27,11 @@ export function buildCodexLeadBootstrapPrompt(
   options: CodexLeadBootstrapOptions = {}
 ): string {
   const teamLabel = spec.team.displayName?.trim() || spec.team.name;
+  const leadName = options.leadName?.trim() || 'team-lead';
   const lines: string[] = [];
   if (spec.mode === 'create') {
     lines.push(
-      `You are the lead of the new agent team "${spec.team.name}"` +
+      `You are "${leadName}", the lead of the new agent team "${spec.team.name}"` +
         (teamLabel !== spec.team.name ? ` (display name: "${teamLabel}")` : '') +
         '.'
     );
@@ -35,8 +40,11 @@ export function buildCodexLeadBootstrapPrompt(
     }
   } else {
     lines.push(
-      `You are the lead of the existing agent team "${spec.team.name}". Its state is persisted on disk; resume coordinating it.`
+      `You are "${leadName}", the lead of the existing agent team "${spec.team.name}". Its state is persisted on disk; resume coordinating it.`
     );
+  }
+  if (options.leadWorkflow?.trim()) {
+    lines.push('', 'Your imported lead profile instructions:', '', options.leadWorkflow.trim());
   }
   if (spec.members.length > 0) {
     lines.push('', 'Your teammates:');
@@ -57,13 +65,13 @@ export function buildCodexLeadBootstrapPrompt(
     '"agent_teams" MCP tools. Follow this protocol:',
     `- Record every distinct work item with the task_create tool (teamName: "${spec.team.name}") before working on it.`,
     '- Keep task status current with task_start, task_set_status, task_set_owner, and task_complete.',
-    '- Report progress and results to the human user with the message_send tool (to: "user", from: "team-lead").',
+    `- Report progress and results to the human user with the message_send tool (to: "user", from: "${leadName}").`,
     '- Check lead_briefing periodically for the operational queue and newly assigned work.',
     '- Do not stop your session while teammates are still working; keep coordinating.',
     '',
     'CRITICAL — teammates do NOT auto-pick-up work. Assigning a task (task_create /',
     'task_set_owner) does NOT start it. To make a teammate work you MUST call the',
-    'message_send tool (to: "<teammate>", from: "team-lead") with the task id and clear',
+    `message_send tool (to: "<teammate>", from: "${leadName}") with the task id and clear`,
     'instructions. Their replies arrive in your session as messages prefixed',
     '"[Agent Teams message from <name>]". After a teammate reports back, update the task',
     'status yourself.',

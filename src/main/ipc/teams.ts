@@ -2358,6 +2358,7 @@ async function handleLaunchTeam(
         typeof payload.extraCliArgs === 'string'
           ? payload.extraCliArgs.trim() || undefined
           : savedRequest.extraCliArgs,
+      lead: savedRequest.lead,
       members: savedRequest.members,
     };
 

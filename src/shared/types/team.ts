@@ -1071,6 +1071,8 @@ export interface ProviderModelLaunchIdentity {
 export interface TeamLaunchRequest {
   teamName: string;
   cwd: string;
+  /** App-materialized lead profile; renderer callers normally omit this. */
+  lead?: TeamProvisioningMemberInput;
   prompt?: string;
   providerId?: TeamProviderId;
   providerBackendId?: TeamProviderBackendId;
@@ -1512,6 +1514,11 @@ export interface TeamCreateRequest {
   displayName?: string;
   description?: string;
   color?: string;
+  /**
+   * Explicit profile promoted into the primary lead runtime. This profile is
+   * not part of `members` and must never be spawned as a teammate.
+   */
+  lead?: TeamProvisioningMemberInput;
   members: TeamProvisioningMemberInput[];
   cwd: string;
   prompt?: string;
@@ -1535,6 +1542,11 @@ export interface TeamCreateConfigRequest {
   displayName?: string;
   description?: string;
   color?: string;
+  /**
+   * Explicit profile promoted into the primary lead runtime. This profile is
+   * persisted separately from the teammate roster.
+   */
+  lead?: TeamProvisioningMemberInput;
   members: TeamProvisioningMemberInput[];
   cwd?: string;
   prompt?: string;

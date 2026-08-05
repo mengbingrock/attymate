@@ -18,6 +18,14 @@ The bundle is what [team-export](../team-export/README.md) writes, so exporting 
 importing it back reproduces the roster exactly. A bundle that fails validation falls back to the
 markdown scan with a `bundleFileDropped` warning rather than failing the import.
 
+## An imported profile can occupy the lead runtime
+
+The review step requires the user to select one imported profile as the team lead. That profile is
+persisted separately from `members.meta.json`, launched as the existing primary lead session, and
+excluded from every teammate spawn list. Its imported workflow and agent files are preserved; the
+app does not create an additional `team-lead` agent. Teams created outside this flow keep the
+legacy synthesized `team-lead` identity when no explicit profile is configured.
+
 ## A team's skills live in its project folder
 
 Imported skills are installed into `<projectPath>/.claude/skills/<slug>/` — and

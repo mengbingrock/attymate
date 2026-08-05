@@ -759,27 +759,32 @@ export class TeamDataService {
           launchIdentity.providerBackendId ?? teamMeta?.providerBackendId
         ) ?? undefined)
       : (migrateProviderBackendId(teamMeta?.providerId, teamMeta?.providerBackendId) ?? undefined);
-    const leadName = 'team-lead';
+    const leadProfile = teamMeta?.lead;
+    const leadName = leadProfile?.name.trim() || 'team-lead';
     const ownedTasks = tasks.filter((task) => task.owner === leadName);
     const currentTask = selectCurrentActiveTeamTask(ownedTasks);
 
     members.unshift({
       name: leadName,
-      agentId: undefined,
+      agentId: leadProfile ? `${leadName}@${teamName}` : undefined,
       currentTaskId: currentTask?.id ?? null,
       taskCount: ownedTasks.length,
       color: getMemberColorByName(leadName),
       agentType: 'team-lead',
-      role: 'Team Lead',
-      workflow: undefined,
-      isolation: undefined,
-      providerId: launchIdentity?.providerId ?? teamMeta?.providerId,
+      role: leadProfile?.role?.trim() || 'Team Lead',
+      workflow: leadProfile?.workflow?.trim() || undefined,
+      isolation: leadProfile?.isolation,
+      providerId: launchIdentity?.providerId ?? leadProfile?.providerId ?? teamMeta?.providerId,
       providerBackendId,
       model:
-        launchIdentity?.resolvedLaunchModel ?? launchIdentity?.selectedModel ?? teamMeta?.model,
+        launchIdentity?.resolvedLaunchModel ??
+        launchIdentity?.selectedModel ??
+        leadProfile?.model ??
+        teamMeta?.model,
       effort:
         launchIdentity?.resolvedEffort ??
         launchIdentity?.selectedEffort ??
+        leadProfile?.effort ??
         (isTeamEffortLevel(teamMeta?.effort) ? teamMeta?.effort : undefined),
       selectedFastMode: launchIdentity?.selectedFastMode ?? teamMeta?.fastMode ?? undefined,
       resolvedFastMode:
@@ -1183,23 +1188,24 @@ export class TeamDataService {
 
     const membersMeta = await this.membersMetaStore.getMeta(teamName);
     const members = membersMeta?.members ?? [];
-    const resolvedProviderId = meta.providerId ?? 'anthropic';
+    const resolvedProviderId = meta.providerId ?? meta.lead?.providerId ?? 'anthropic';
 
     return {
       teamName,
       displayName: meta.displayName,
       description: meta.description,
       color: meta.color,
+      lead: meta.lead,
       cwd: meta.cwd,
       prompt: meta.prompt,
       providerId: resolvedProviderId,
       providerBackendId: migrateProviderBackendId(
         resolvedProviderId,
-        meta.providerBackendId ?? membersMeta?.providerBackendId
+        meta.providerBackendId ?? meta.lead?.providerBackendId ?? membersMeta?.providerBackendId
       ),
-      model: meta.model,
-      effort: meta.effort as TeamCreateRequest['effort'],
-      fastMode: meta.fastMode,
+      model: meta.model ?? meta.lead?.model,
+      effort: (meta.effort as TeamCreateRequest['effort']) ?? meta.lead?.effort,
+      fastMode: meta.fastMode ?? meta.lead?.fastMode,
       skipPermissions: meta.skipPermissions,
       worktree: meta.worktree,
       extraCliArgs: meta.extraCliArgs,
@@ -3395,6 +3401,9 @@ export class TeamDataService {
         if (lead?.name) return lead.name;
       }
 
+      const teamMeta = await this.teamMetaStore.getMeta(teamName);
+      if (teamMeta?.lead?.name) return teamMeta.lead.name;
+
       // Fallback: check members.meta.json (UI-created teams)
       const metaMembers = await this.membersMetaStore.getMembers(teamName);
       if (metaMembers.length > 0) {
@@ -3530,6 +3539,24 @@ export class TeamDataService {
   }
 
   async createTeamConfig(request: TeamCreateConfigRequest): Promise<void> {
+    const leadName = request.lead?.name.trim();
+    if (request.lead && !leadName) {
+      throw new Error('Lead name cannot be empty');
+    }
+    if (leadName) {
+      const formatError = validateTeamMemberNameFormat(leadName);
+      if (formatError) {
+        throw new Error(`Lead name "${leadName}" is invalid: ${formatError}`);
+      }
+      const leadNameKey = leadName.toLowerCase();
+      if (leadNameKey === 'user' || leadNameKey === 'team-lead') {
+        throw new Error(`Lead name "${leadName}" is reserved`);
+      }
+      if (request.members.some((member) => member.name.trim().toLowerCase() === leadNameKey)) {
+        throw new Error(`Lead "${leadName}" must not also be present in the teammate roster`);
+      }
+    }
+
     const teamDir = path.join(getTeamsBasePath(), request.teamName);
     const tasksDir = path.join(getTasksBasePath(), request.teamName);
     await Promise.all([
@@ -3577,6 +3604,7 @@ export class TeamDataService {
         displayName: request.displayName,
         description: request.description,
         color: request.color,
+        lead: request.lead,
         cwd: request.cwd?.trim() || '',
         prompt: request.prompt,
         providerId: request.providerId,

@@ -21,10 +21,18 @@ function parseCreateDraftRequest(value: unknown): CreateTeamImportDraftRequest {
     throw new Error('Invalid team import request.');
   }
   const request = value as Record<string, unknown>;
-  if (typeof request.reviewId !== 'string' || typeof request.teamName !== 'string') {
-    throw new Error('Import review and team name are required.');
+  if (
+    typeof request.reviewId !== 'string' ||
+    typeof request.teamName !== 'string' ||
+    typeof request.leadName !== 'string'
+  ) {
+    throw new Error('Import review, team name, and lead are required.');
   }
-  return { reviewId: request.reviewId, teamName: request.teamName };
+  return {
+    reviewId: request.reviewId,
+    teamName: request.teamName,
+    leadName: request.leadName,
+  };
 }
 
 function parseSourceRequest(value: unknown): TeamImportSourceRequest {

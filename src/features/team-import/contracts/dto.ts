@@ -107,6 +107,8 @@ export interface TeamImportPreview {
 export interface CreateTeamImportDraftRequest {
   reviewId: string;
   teamName: string;
+  /** Exact imported member name to promote into the existing lead runtime. */
+  leadName: string;
 }
 
 export interface CreateTeamImportDraftResult {

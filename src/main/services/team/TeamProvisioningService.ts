@@ -10808,10 +10808,12 @@ export class TeamProvisioningService {
       return runtimeMembers;
     }
 
+    const lead = request.lead;
     return [
       {
-        name: 'team-lead',
-        role: 'Team Lead',
+        name: lead?.name.trim() || 'team-lead',
+        role: lead?.role?.trim() || 'Team Lead',
+        workflow: lead?.workflow?.trim() || undefined,
         providerId: 'opencode',
         model: request.model,
         effort: request.effort,
@@ -12101,7 +12103,16 @@ export class TeamProvisioningService {
         fsMonitorHandle: null,
         onProgress,
         expectedMembers: effectiveMemberSpecs.map((member) => member.name),
-        leadIdentity: resolveTeamLeadIdentity(null),
+        leadIdentity: resolveTeamLeadIdentity(
+          request.lead
+            ? {
+                lead: {
+                  name: request.lead.name,
+                  agentId: `${request.lead.name}@${request.teamName}`,
+                },
+              }
+            : null
+        ),
         request,
         allEffectiveMembers: allEffectiveMemberSpecs,
         effectiveMembers: effectiveMemberSpecs,
@@ -12253,6 +12264,7 @@ export class TeamProvisioningService {
           displayName: request.displayName,
           description: request.description,
           color: request.color,
+          lead: request.lead,
           cwd: request.cwd,
           prompt: request.prompt,
           providerId: request.providerId,
@@ -12321,9 +12333,13 @@ export class TeamProvisioningService {
           stockBootstrapPrompt = useStockClaudeBootstrap
             ? buildStockClaudeBootstrapPrompt(bootstrapSpec, initialUserPrompt, {
                 matterNeedsInitialScan,
+                leadName: run.leadIdentity.name,
+                leadWorkflow: request.lead?.workflow,
               })
             : buildCodexLeadBootstrapPrompt(bootstrapSpec, initialUserPrompt, {
                 matterNeedsInitialScan,
+                leadName: run.leadIdentity.name,
+                leadWorkflow: request.lead?.workflow,
               });
         } else if (initialUserPrompt) {
           emitProvisioningCheckpoint(
@@ -12496,6 +12512,7 @@ export class TeamProvisioningService {
           );
           await interactiveTeamRuntimeService.launchInteractiveLead({
             teamName: request.teamName,
+            leadName: run.leadIdentity.name,
             runId,
             cwd: request.cwd,
             claudePath,
@@ -12639,6 +12656,7 @@ export class TeamProvisioningService {
             teamName: request.teamName,
             cwd: request.cwd,
             description: request.description,
+            lead: request.lead,
             members: effectiveMemberSpecs,
             providerId: resolvedProviderId,
           });
@@ -12759,6 +12777,7 @@ export class TeamProvisioningService {
       displayName: launchRequest.displayName,
       description: launchRequest.description,
       color: launchRequest.color,
+      lead: launchRequest.lead,
       cwd: launchRequest.cwd,
       prompt: launchRequest.prompt,
       providerId: launchRequest.providerId,
@@ -12819,6 +12838,20 @@ export class TeamProvisioningService {
       members,
     });
     const launchRequest = materialized.request;
+    const leadIdentity = resolveTeamLeadIdentity(
+      JSON.parse(configRaw) as Parameters<typeof resolveTeamLeadIdentity>[0]
+    );
+    const persistedLeadProfile = (
+      await this.teamMetaStore.getMeta(request.teamName).catch(() => null)
+    )?.lead;
+    const runtimeLaunchRequest: TeamLaunchRequest = {
+      ...launchRequest,
+      ...(persistedLeadProfile?.name === leadIdentity.name
+        ? { lead: persistedLeadProfile }
+        : leadIdentity.name !== 'team-lead'
+          ? { lead: { name: leadIdentity.name } }
+          : {}),
+    };
     const effectiveMembers = await this.resolveOpenCodeMemberWorkspacesForRuntime({
       teamName: launchRequest.teamName,
       baseCwd: launchRequest.cwd,
@@ -12832,7 +12865,7 @@ export class TeamProvisioningService {
       launchRequest.cwd
     );
     const runtimeLaunchMembers = this.buildOpenCodeRuntimeAdapterLaunchMembers(
-      launchRequest,
+      runtimeLaunchRequest,
       effectiveMembers,
       configuredLanePlan
     );
@@ -12852,11 +12885,8 @@ export class TeamProvisioningService {
         `[${request.teamName}] Failed to read tasks for OpenCode launch prompt: ${String(error)}`
       );
     }
-    const leadIdentity = resolveTeamLeadIdentity(
-      JSON.parse(configRaw) as Parameters<typeof resolveTeamLeadIdentity>[0]
-    );
     const prompt = buildDeterministicLaunchHydrationPrompt(
-      launchRequest,
+      runtimeLaunchRequest,
       effectiveMembers,
       existingTasks,
       false,
@@ -12864,7 +12894,7 @@ export class TeamProvisioningService {
     );
     if (isPureOpenCodeMemberLanePlan(lanePlan)) {
       return this.runOpenCodeMemberLaneAggregateLaunch({
-        request: launchRequest,
+        request: runtimeLaunchRequest,
         members: runtimeLaunchMembers,
         lanePlan,
         prompt,
@@ -12874,7 +12904,7 @@ export class TeamProvisioningService {
     }
 
     return this.runOpenCodeTeamRuntimeAdapterLaunch({
-      request: launchRequest,
+      request: runtimeLaunchRequest,
       members: runtimeLaunchMembers,
       prompt,
       sourceWarning: warning,
@@ -12916,7 +12946,16 @@ export class TeamProvisioningService {
       fsMonitorHandle: null,
       onProgress: params.onProgress,
       expectedMembers: params.members.map((member) => member.name),
-      leadIdentity: resolveTeamLeadIdentity({ members: params.members }),
+      leadIdentity: resolveTeamLeadIdentity(
+        params.request.lead
+          ? {
+              lead: {
+                name: params.request.lead.name,
+                agentId: `${params.request.lead.name}@${params.request.teamName}`,
+              },
+            }
+          : { members: params.members }
+      ),
       request: {
         ...params.request,
         members: params.members,
@@ -13828,19 +13867,22 @@ export class TeamProvisioningService {
     members: TeamCreateRequest['members']
   ): Promise<void> {
     const configPath = path.join(getTeamsBasePath(), request.teamName, 'config.json');
-    const leadAgentId = `team-lead@${request.teamName}`;
+    const leadName = request.lead?.name.trim() || 'team-lead';
+    const leadAgentId = `${leadName}@${request.teamName}`;
     const config: TeamConfig = {
       name: request.displayName?.trim() || request.teamName,
       description: request.description,
       color: request.color,
       projectPath: request.cwd,
-      lead: { name: 'team-lead', agentId: leadAgentId },
+      lead: { name: leadName, agentId: leadAgentId },
       leadAgentId,
       members: [
         {
           agentId: leadAgentId,
-          name: 'team-lead',
-          role: 'Team Lead',
+          name: leadName,
+          role: request.lead?.role?.trim() || 'Team Lead',
+          workflow: request.lead?.workflow?.trim() || undefined,
+          skills: request.lead?.skills,
           agentType: 'team-lead',
           providerId: normalizeOptionalTeamProviderId(request.providerId),
           model: request.model,
@@ -14317,9 +14359,23 @@ export class TeamProvisioningService {
         providerArgsByProvider,
       });
 
+      const launchLeadIdentity = resolveTeamLeadIdentity(
+        JSON.parse(configRaw) as Parameters<typeof resolveTeamLeadIdentity>[0]
+      );
+      const persistedLeadProfile = (
+        await this.teamMetaStore.getMeta(request.teamName).catch(() => null)
+      )?.lead;
+      const launchLeadProfile =
+        persistedLeadProfile?.name === launchLeadIdentity.name
+          ? persistedLeadProfile
+          : launchLeadIdentity.name !== 'team-lead'
+            ? { name: launchLeadIdentity.name }
+            : undefined;
+
       // Build a synthetic TeamCreateRequest for reuse by shared infrastructure
       const syntheticRequest: TeamCreateRequest = {
         teamName: request.teamName,
+        lead: launchLeadProfile,
         members: allEffectiveMemberSpecs,
         cwd: request.cwd,
         providerId: request.providerId,
@@ -14371,9 +14427,7 @@ export class TeamProvisioningService {
         fsMonitorHandle: null,
         onProgress,
         expectedMembers,
-        leadIdentity: resolveTeamLeadIdentity(
-          JSON.parse(configRaw) as Parameters<typeof resolveTeamLeadIdentity>[0]
-        ),
+        leadIdentity: launchLeadIdentity,
         request: syntheticRequest,
         allEffectiveMembers: allEffectiveMemberSpecs,
         effectiveMembers: effectiveMemberSpecs,
@@ -14593,13 +14647,19 @@ export class TeamProvisioningService {
             stockBootstrapPrompt = buildStockClaudeBootstrapPrompt(
               bootstrapSpec,
               useInteractiveRuntime ? '' : prompt,
-              { matterNeedsInitialScan }
+              {
+                matterNeedsInitialScan,
+                leadName: run.leadIdentity.name,
+                leadWorkflow: run.request.lead?.workflow,
+              }
             );
           } else {
             // Lanes are relaunched by the app; the lead only resumes
             // coordination and rediscovers tasks through the task tools.
             stockBootstrapPrompt = buildCodexLeadBootstrapPrompt(bootstrapSpec, '', {
               matterNeedsInitialScan,
+              leadName: run.leadIdentity.name,
+              leadWorkflow: run.request.lead?.workflow,
             });
           }
         } else {
@@ -14756,6 +14816,7 @@ export class TeamProvisioningService {
         displayName: syntheticRequest.displayName,
         description: syntheticRequest.description,
         color: syntheticRequest.color,
+        lead: syntheticRequest.lead,
         cwd: request.cwd,
         prompt: request.prompt,
         providerId: request.providerId,
@@ -14829,6 +14890,7 @@ export class TeamProvisioningService {
           );
           await interactiveTeamRuntimeService.launchInteractiveLead({
             teamName: request.teamName,
+            leadName: run.leadIdentity.name,
             runId,
             cwd: request.cwd,
             claudePath,
@@ -14965,6 +15027,7 @@ export class TeamProvisioningService {
           await synthesizeStockClaudeTeamRuntimeState({
             teamName: request.teamName,
             cwd: request.cwd,
+            lead: run.request.lead,
             members: effectiveMemberSpecs,
             providerId: resolvedProviderId,
           });

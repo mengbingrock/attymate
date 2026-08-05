@@ -6129,6 +6129,7 @@ export default interface Resources {
       inspectFailed: 'Failed to inspect the selected folder';
       invalidTeamName: 'Use kebab-case letters, numbers, and dashes, up to 64 characters.';
       invalidUrl: 'Enter a valid http(s) URL.';
+      leadBadge: 'Team lead';
       leadPrompt: 'Lead prompt';
       members: 'Members ({{count}})';
       memoryFiles: '{{count}} memory file(s) will be imported.';
@@ -6151,7 +6152,10 @@ export default interface Resources {
       stageReading: 'Reading files...';
       stageReceivedChars: '{{chars}} characters received';
       stageValidating: 'Validating the result...';
-      summary: 'Create {{teamName}} with {{count}} members.';
+      summary: 'Create {{teamName}} with 1 lead and {{count}} teammates.';
+      teamLead: 'Team lead';
+      teamLeadHint: 'The selected imported profile becomes the primary lead session and will not be spawned again as a teammate.';
+      teamLeadPlaceholder: 'Select an imported member';
       teamName: 'Team name';
       teamNameRequired: 'Team name is required.';
       teamNameReserved: 'This team name is reserved by the operating system.';
