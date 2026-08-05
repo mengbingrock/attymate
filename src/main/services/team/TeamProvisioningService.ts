@@ -237,7 +237,6 @@ import {
   removeDeterministicBootstrapSpecFile,
   removeDeterministicBootstrapUserPromptFile,
   type RuntimeBootstrapMemberMcpLaunchConfig,
-  type RuntimeBootstrapSpec,
   writeDeterministicBootstrapSpecFile,
   writeDeterministicBootstrapUserPromptFile,
 } from './provisioning/TeamProvisioningBootstrapSpec';
@@ -712,7 +711,11 @@ import {
   snapshotToMemberSpawnStatuses,
 } from './TeamLaunchStateEvaluator';
 import { TeamLaunchStateStore } from './TeamLaunchStateStore';
-import { buildAgentTeamsMcpServerSpec, TeamMcpConfigBuilder } from './TeamMcpConfigBuilder';
+import {
+  buildAgentTeamsMcpServerSpec,
+  type StockClaudeUniformMcpLease,
+  TeamMcpConfigBuilder,
+} from './TeamMcpConfigBuilder';
 import { TeamMemberLogsFinder } from './TeamMemberLogsFinder';
 import { TeamMembersMetaStore } from './TeamMembersMetaStore';
 import { TeamMemberWorktreeManager } from './TeamMemberWorktreeManager';
@@ -1244,6 +1247,8 @@ interface ProvisioningRun {
   mcpConfigPath: string | null;
   /** Paths to per-member generated MCP config files consumed by deterministic bootstrap. */
   memberMcpConfigPaths: string[];
+  /** Uniform local-project MCP registration inherited by native stock-Claude teammates. */
+  stockClaudeUniformMcpLease?: StockClaudeUniformMcpLease | null;
   /** Path to the deterministic bootstrap spec file for later cleanup. */
   bootstrapSpecPath: string | null;
   /** Path to the deferred first-user-task file consumed by runtime after bootstrap. */
@@ -6220,6 +6225,20 @@ export class TeamProvisioningService {
     for (const configPath of run.memberMcpConfigPaths?.splice(0) ?? []) {
       void this.mcpConfigBuilder.removeConfigFile(configPath);
     }
+  }
+
+  private async releaseStockClaudeUniformMcpLease(run: ProvisioningRun): Promise<void> {
+    const lease = run.stockClaudeUniformMcpLease;
+    run.stockClaudeUniformMcpLease = null;
+    await lease?.release();
+  }
+
+  private releaseStockClaudeUniformMcpLeaseLater(run: ProvisioningRun): void {
+    void this.releaseStockClaudeUniformMcpLease(run).catch((error: unknown) =>
+      logger.warn(
+        `[${run.teamName}] Failed to release uniform stock-Claude MCP registration: ${String(error)}`
+      )
+    );
   }
 
   private enrichRuntimeAdapterProgressTrace(
@@ -12262,12 +12281,14 @@ export class TeamProvisioningService {
           cwd: request.cwd,
           members: effectiveMemberSpecs,
         });
-        const memberMcpLaunchConfigs = await this.buildRuntimeBootstrapMemberMcpLaunchConfigs({
-          controlApiBaseUrl: provisioningEnv.env.CLAUDE_TEAM_CONTROL_URL,
-          cwd: request.cwd,
-          members: effectiveMemberSpecs,
-          run,
-        });
+        const memberMcpLaunchConfigs = useStockClaudeBootstrap
+          ? new Map<string, RuntimeBootstrapMemberMcpLaunchConfig>()
+          : await this.buildRuntimeBootstrapMemberMcpLaunchConfigs({
+              controlApiBaseUrl: provisioningEnv.env.CLAUDE_TEAM_CONTROL_URL,
+              cwd: request.cwd,
+              members: effectiveMemberSpecs,
+              run,
+            });
         if (nativeBootstrapBuild.diagnostics.warning) {
           run.progress = {
             ...run.progress,
@@ -12336,6 +12357,14 @@ export class TeamProvisioningService {
                 this.stopAllTeamsGeneration !== stopAllGenerationAtStart,
             }
           );
+          if (useStockClaudeBootstrap) {
+            emitProvisioningCheckpoint(run, 'Registering uniform local-project MCP for teammates');
+            run.stockClaudeUniformMcpLease =
+              await this.mcpConfigBuilder.acquireStockClaudeUniformMcpLease(
+                request.cwd,
+                provisioningEnv.env.CLAUDE_TEAM_CONTROL_URL
+              );
+          }
         }
       } catch (error) {
         this.runs.delete(runId);
@@ -12361,6 +12390,7 @@ export class TeamProvisioningService {
           run.mcpConfigPath = null;
         }
         await this.removeRunMemberMcpConfigFiles(run).catch(() => {});
+        await this.releaseStockClaudeUniformMcpLease(run).catch(() => {});
         throw error;
       }
       const launchModelArg = getLaunchModelArg(
@@ -12529,6 +12559,7 @@ export class TeamProvisioningService {
           run.mcpConfigPath = null;
         }
         await this.removeRunMemberMcpConfigFiles(run).catch(() => {});
+        await this.releaseStockClaudeUniformMcpLease(run).catch(() => {});
         if (run.anthropicApiKeyHelper) {
           await cleanupAnthropicTeamApiKeyHelperMaterial({
             directory: run.anthropicApiKeyHelper.directory,
@@ -14519,12 +14550,14 @@ export class TeamProvisioningService {
           cwd: request.cwd,
           members: effectiveMemberSpecs,
         });
-        const memberMcpLaunchConfigs = await this.buildRuntimeBootstrapMemberMcpLaunchConfigs({
-          controlApiBaseUrl: provisioningEnv.env.CLAUDE_TEAM_CONTROL_URL,
-          cwd: request.cwd,
-          members: effectiveMemberSpecs,
-          run,
-        });
+        const memberMcpLaunchConfigs = useStockClaudeBootstrap
+          ? new Map<string, RuntimeBootstrapMemberMcpLaunchConfig>()
+          : await this.buildRuntimeBootstrapMemberMcpLaunchConfigs({
+              controlApiBaseUrl: provisioningEnv.env.CLAUDE_TEAM_CONTROL_URL,
+              cwd: request.cwd,
+              members: effectiveMemberSpecs,
+              run,
+            });
         if (nativeBootstrapBuild.diagnostics.warning) {
           run.progress = {
             ...run.progress,
@@ -14600,6 +14633,14 @@ export class TeamProvisioningService {
                 this.stopAllTeamsGeneration !== stopAllGenerationAtStart,
             }
           );
+          if (useStockClaudeBootstrap) {
+            emitProvisioningCheckpoint(run, 'Registering uniform local-project MCP for teammates');
+            run.stockClaudeUniformMcpLease =
+              await this.mcpConfigBuilder.acquireStockClaudeUniformMcpLease(
+                request.cwd,
+                provisioningEnv.env.CLAUDE_TEAM_CONTROL_URL
+              );
+          }
         }
       } catch (error) {
         this.runs.delete(runId);
@@ -14620,6 +14661,7 @@ export class TeamProvisioningService {
           run.mcpConfigPath = null;
         }
         await this.removeRunMemberMcpConfigFiles(run).catch(() => {});
+        await this.releaseStockClaudeUniformMcpLease(run).catch(() => {});
         await this.restorePrelaunchConfig(request.teamName);
         throw error;
       }
@@ -14857,6 +14899,7 @@ export class TeamProvisioningService {
         );
         run.bootstrapUserPromptPath = null;
         await this.removeRunMemberMcpConfigFiles(run).catch(() => {});
+        await this.releaseStockClaudeUniformMcpLease(run).catch(() => {});
         if (run.anthropicApiKeyHelper) {
           await cleanupAnthropicTeamApiKeyHelperMaterial({
             directory: run.anthropicApiKeyHelper.directory,
@@ -23563,6 +23606,8 @@ export class TeamProvisioningService {
       emitToolApprovalEvent: (event) => this.emitToolApprovalEvent(event),
       mcpConfigBuilder: this.mcpConfigBuilder,
       removeRunMemberMcpConfigFilesLater: (run) => this.removeRunMemberMcpConfigFilesLater(run),
+      releaseStockClaudeUniformMcpLeaseLater: (run) =>
+        this.releaseStockClaudeUniformMcpLeaseLater(run),
       retainedClaudeLogsByTeam: this.retainedClaudeLogsByTeam,
       retainProvisioningProgress: (runId, progress) =>
         this.retainProvisioningProgress(runId, progress),

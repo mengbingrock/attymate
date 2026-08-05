@@ -3,6 +3,7 @@ import { buildMergedCliPath } from '@main/utils/cliPathMerge';
 import { ensureMinimumNodeOldSpaceOptions } from '@main/utils/nodeOptions';
 import {
   getClaudeBasePath,
+  getHomeDir,
   getMcpConfigsBasePath,
   getMcpServerBasePath,
 } from '@main/utils/pathDecoder';
@@ -16,6 +17,7 @@ import * as path from 'path';
 import { McpConfigStateReader } from '../extensions/runtime/McpConfigStateReader';
 
 import { atomicWriteAsync, renamePathWithRetry } from './atomicWrite';
+import { withFileLock } from './fileLock';
 
 import type { TeamMemberMcpPolicy, TeamMemberMcpScope } from '@shared/types';
 
@@ -32,6 +34,12 @@ export interface McpLaunchSpecResolveProgress {
 
 export interface McpLaunchSpecResolveOptions {
   onProgress?: (progress: McpLaunchSpecResolveProgress) => void;
+}
+
+export interface StockClaudeUniformMcpLease {
+  readonly projectPath: string;
+  readonly scope: 'local';
+  release(): Promise<void>;
 }
 
 interface WriteMcpConfigOptions {
@@ -63,6 +71,14 @@ const NODE_RUNTIME_PROBE_SCRIPT =
 const MCP_CONFIG_STALE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 type McpServerConfig = Record<string, unknown>;
+
+interface StockClaudeUniformMcpLeaseState {
+  projectPath: string;
+  configPath: string;
+  installedConfig: McpServerConfig;
+  refCount: number;
+  removeOnRelease: boolean;
+}
 
 interface NodeRuntimeProbeMetadata {
   path: string;
@@ -703,6 +719,179 @@ export async function buildAgentTeamsMcpServerSpec(
 }
 
 export class TeamMcpConfigBuilder {
+  private readonly stockClaudeUniformMcpLeases = new Map<string, StockClaudeUniformMcpLeaseState>();
+  private readonly stockClaudeUniformMcpLeaseAcquireInFlight = new Map<
+    string,
+    Promise<StockClaudeUniformMcpLease>
+  >();
+
+  /**
+   * Make the app MCP server available through Claude's local project scope.
+   * Native stock-Claude teammates do not inherit the lead's --mcp-config file,
+   * but they do load local and project MCP scopes for their shared cwd.
+   *
+   * This only touches projects[projectPath].mcpServers in ~/.claude.json. It
+   * never adds a user-scope mcpServers entry and it leaves the project's
+   * .mcp.json untouched so the user's project-scope servers continue to load
+   * normally alongside the app server.
+   */
+  async acquireStockClaudeUniformMcpLease(
+    projectPath: string,
+    controlApiBaseUrl?: string | null
+  ): Promise<StockClaudeUniformMcpLease> {
+    const normalizedProjectPath = path.resolve(projectPath);
+    const active = this.stockClaudeUniformMcpLeases.get(normalizedProjectPath);
+    if (active) {
+      active.refCount += 1;
+      return this.createStockClaudeUniformMcpLeaseHandle(active);
+    }
+
+    const inFlight = this.stockClaudeUniformMcpLeaseAcquireInFlight.get(normalizedProjectPath);
+    if (inFlight) {
+      await inFlight;
+      return this.acquireStockClaudeUniformMcpLease(normalizedProjectPath, controlApiBaseUrl);
+    }
+
+    const acquire = this.installStockClaudeUniformMcpLease(
+      normalizedProjectPath,
+      controlApiBaseUrl
+    );
+    this.stockClaudeUniformMcpLeaseAcquireInFlight.set(normalizedProjectPath, acquire);
+    try {
+      return await acquire;
+    } finally {
+      this.stockClaudeUniformMcpLeaseAcquireInFlight.delete(normalizedProjectPath);
+    }
+  }
+
+  private async installStockClaudeUniformMcpLease(
+    normalizedProjectPath: string,
+    controlApiBaseUrl?: string | null
+  ): Promise<StockClaudeUniformMcpLease> {
+    const configPath = path.join(getHomeDir(), '.claude.json');
+    const serverSpec = await buildAgentTeamsMcpServerSpec(controlApiBaseUrl ?? undefined);
+    const installedConfig: McpServerConfig = { ...serverSpec };
+    let removeOnRelease = false;
+
+    await withFileLock(configPath, async () => {
+      const root = await this.readClaudeRootConfig(configPath);
+      const projects = this.getOrCreateObject(root, 'projects');
+      const project = this.getOrCreateObject(projects, normalizedProjectPath);
+      const mcpServers = this.getOrCreateObject(project, 'mcpServers');
+      const existing = mcpServers[MCP_SERVER_NAME];
+
+      if (existing !== undefined) {
+        if (!this.mcpConfigsEqual(existing, installedConfig)) {
+          throw new Error(
+            `Local MCP server "${MCP_SERVER_NAME}" already exists for ${normalizedProjectPath} with a different configuration`
+          );
+        }
+        return;
+      }
+
+      mcpServers[MCP_SERVER_NAME] = installedConfig;
+      await atomicWriteAsync(configPath, `${JSON.stringify(root, null, 2)}\n`, { mode: 0o600 });
+      removeOnRelease = true;
+    });
+
+    const state: StockClaudeUniformMcpLeaseState = {
+      projectPath: normalizedProjectPath,
+      configPath,
+      installedConfig,
+      refCount: 1,
+      removeOnRelease,
+    };
+    this.stockClaudeUniformMcpLeases.set(normalizedProjectPath, state);
+    return this.createStockClaudeUniformMcpLeaseHandle(state);
+  }
+
+  private createStockClaudeUniformMcpLeaseHandle(
+    state: StockClaudeUniformMcpLeaseState
+  ): StockClaudeUniformMcpLease {
+    let released = false;
+    return {
+      projectPath: state.projectPath,
+      scope: 'local',
+      release: async () => {
+        if (released) return;
+        released = true;
+        await this.releaseStockClaudeUniformMcpLease(state);
+      },
+    };
+  }
+
+  private async releaseStockClaudeUniformMcpLease(
+    state: StockClaudeUniformMcpLeaseState
+  ): Promise<void> {
+    const current = this.stockClaudeUniformMcpLeases.get(state.projectPath);
+    if (current !== state) return;
+    state.refCount -= 1;
+    if (state.refCount > 0) return;
+    this.stockClaudeUniformMcpLeases.delete(state.projectPath);
+    if (!state.removeOnRelease) return;
+
+    await withFileLock(state.configPath, async () => {
+      const root = await this.readClaudeRootConfig(state.configPath);
+      const projects = this.getObject(root.projects);
+      const project = this.getObject(projects?.[state.projectPath]);
+      const mcpServers = this.getObject(project?.mcpServers);
+      if (
+        !mcpServers ||
+        !this.mcpConfigsEqual(mcpServers[MCP_SERVER_NAME], state.installedConfig)
+      ) {
+        logger.warn(
+          `Local MCP server "${MCP_SERVER_NAME}" changed while the team was running; preserving the current configuration`
+        );
+        return;
+      }
+
+      delete mcpServers[MCP_SERVER_NAME];
+      if (Object.keys(mcpServers).length === 0 && project) {
+        delete project.mcpServers;
+      }
+      await atomicWriteAsync(state.configPath, `${JSON.stringify(root, null, 2)}\n`, {
+        mode: 0o600,
+      });
+    });
+  }
+
+  private async readClaudeRootConfig(configPath: string): Promise<Record<string, unknown>> {
+    try {
+      const raw = await fs.promises.readFile(configPath, 'utf8');
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error(`${configPath} must contain a JSON object`);
+      }
+      return parsed as Record<string, unknown>;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return {};
+      }
+      throw error;
+    }
+  }
+
+  private getObject(value: unknown): Record<string, unknown> | null {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  }
+
+  private getOrCreateObject(parent: Record<string, unknown>, key: string): Record<string, unknown> {
+    const existing = this.getObject(parent[key]);
+    if (existing) return existing;
+    if (parent[key] !== undefined) {
+      throw new Error(`Claude configuration field "${key}" must be an object`);
+    }
+    const created: Record<string, unknown> = {};
+    parent[key] = created;
+    return created;
+  }
+
+  private mcpConfigsEqual(left: unknown, right: unknown): boolean {
+    return JSON.stringify(left) === JSON.stringify(right);
+  }
+
   async writeConfigFile(projectPath?: string, options?: WriteMcpConfigOptions): Promise<string>;
   async writeConfigFile(projectPath?: string, mcpPolicy?: TeamMemberMcpPolicy): Promise<string>;
   async writeConfigFile(
