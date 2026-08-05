@@ -231,25 +231,54 @@ export class SmartPreviewTeamImportUseCase {
     const skillResults: (ReturnType<typeof parseSkillJobOutput> | null)[] = plan.skills.map(
       () => null
     );
+    // Why an entry was dropped is the difference between "retry" and "your
+    // source had no content for it" — keep each failure's own reason.
+    const memberFailures = new Map<number, string>();
+    const skillFailures = new Map<number, string>();
+    const describeJobFailure = (error: unknown, sourceFileCount: number): string => {
+      if (sourceFileCount === 0) {
+        return 'none of its source files were found in the fetched source';
+      }
+      return error instanceof Error ? error.message : String(error);
+    };
+
     plan.members.forEach((member, index) => {
       jobs.push(async () => {
+        const files = selectDumpFiles(dump, member.sourcePaths);
+        // A prompt that announces source files and then carries none invites
+        // the model to go looking for them. Skip the doomed call and say why.
+        if (files.length === 0) {
+          memberFailures.set(index, describeJobFailure(null, 0));
+          return;
+        }
         try {
-          const files = selectDumpFiles(dump, member.sourcePaths);
           const raw = await trackedParse(buildMemberExtractionPrompt(member, files, skillSlugs));
           memberResults[index] = parseMemberJobOutput(raw, member);
-        } catch {
+          if (memberResults[index] === null) {
+            memberFailures.set(index, 'the parser returned no usable definition');
+          }
+        } catch (error) {
           memberResults[index] = null;
+          memberFailures.set(index, describeJobFailure(error, files.length));
         }
       });
     });
     plan.skills.forEach((skill, index) => {
       jobs.push(async () => {
+        const files = selectDumpFiles(dump, skill.sourcePaths);
+        if (files.length === 0) {
+          skillFailures.set(index, describeJobFailure(null, 0));
+          return;
+        }
         try {
-          const files = selectDumpFiles(dump, skill.sourcePaths);
           const raw = await trackedParse(buildSkillExtractionPrompt(skill, files));
           skillResults[index] = parseSkillJobOutput(raw, skill);
-        } catch {
+          if (skillResults[index] === null) {
+            skillFailures.set(index, 'the parser returned no usable definition');
+          }
+        } catch (error) {
           skillResults[index] = null;
+          skillFailures.set(index, describeJobFailure(error, files.length));
         }
       });
     });
@@ -267,7 +296,7 @@ export class SmartPreviewTeamImportUseCase {
         warnings.push({
           code: 'bundleMemberDropped',
           name: member.name,
-          reason: 'sub-agent parse job failed',
+          reason: memberFailures.get(index) ?? 'sub-agent parse job failed',
         });
       }
     });
@@ -276,7 +305,7 @@ export class SmartPreviewTeamImportUseCase {
         warnings.push({
           code: 'bundleSkillDropped',
           slug: skill.slug,
-          reason: 'sub-agent parse job failed',
+          reason: skillFailures.get(index) ?? 'sub-agent parse job failed',
         });
       }
     });

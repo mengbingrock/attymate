@@ -23,14 +23,22 @@ const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
  */
 const PARSE_MODEL_ARGS = ['--model', 'sonnet'];
 
+/**
+ * A tool call costs a turn, so with a single turn any tool use ends the run as
+ * `error_max_turns`: exit 1, no text on stdout, nothing on stderr, and no way
+ * to tell it from a crash. Tools are worth having — a webpage import may
+ * genuinely want to fetch something the dump did not capture — so give the
+ * model room to use one and still answer, rather than taking them away.
+ */
+const PARSE_SAFETY_ARGS = ['--max-turns', '3'];
+
 const STREAM_ARGS = [
   '-p',
   '--output-format',
   'stream-json',
   '--include-partial-messages',
   '--verbose',
-  '--max-turns',
-  '1',
+  ...PARSE_SAFETY_ARGS,
   '--no-session-persistence',
   ...PARSE_MODEL_ARGS,
 ];
@@ -38,8 +46,7 @@ const LEGACY_JSON_ARGS = [
   '-p',
   '--output-format',
   'json',
-  '--max-turns',
-  '1',
+  ...PARSE_SAFETY_ARGS,
   '--no-session-persistence',
   ...PARSE_MODEL_ARGS,
 ];
@@ -47,6 +54,23 @@ const LEGACY_JSON_ARGS = [
 export interface ParsedStreamJsonLine {
   textDelta?: string;
   result?: string;
+  /** Result-envelope subtype, e.g. `success` or `error_max_turns`. */
+  subtype?: string;
+}
+
+/**
+ * A failed run often carries its reason only in the result envelope's subtype —
+ * stdout has no text and stderr is empty — so the raw exit code alone tells the
+ * user nothing about what to change.
+ */
+export function describeParseFailure(subtype: string | null, code: number | null): string {
+  if (subtype === 'error_max_turns') {
+    return 'The AI parser tried to use a tool instead of answering from the provided source. This usually means the source text for that entry was empty.';
+  }
+  if (subtype === 'error_during_execution') {
+    return 'The AI parser failed while running. Try again.';
+  }
+  return `Claude CLI exited with code ${code}.`;
 }
 
 /**
@@ -75,8 +99,11 @@ export function parseStreamJsonLine(line: string): ParsedStreamJsonLine {
     }
     return {};
   }
-  if (message.type === 'result' && typeof message.result === 'string' && message.result.trim()) {
-    return { result: message.result };
+  if (message.type === 'result') {
+    const subtype = typeof message.subtype === 'string' ? message.subtype : undefined;
+    const result =
+      typeof message.result === 'string' && message.result.trim() ? message.result : undefined;
+    return { ...(result ? { result } : {}), ...(subtype ? { subtype } : {}) };
   }
   return {};
 }
@@ -124,6 +151,7 @@ export class ClaudeCliBundleParser implements TeamImportBundleParserPort {
       let lineRemainder = '';
       let streamedText = '';
       let envelopeResult: string | null = null;
+      let envelopeSubtype: string | null = null;
       let legacyStdout = '';
       let stderr = '';
       let settled = false;
@@ -172,6 +200,7 @@ export class ClaudeCliBundleParser implements TeamImportBundleParserPort {
             onProgress?.(streamedText.length);
           }
           if (parsed.result) envelopeResult = parsed.result;
+          if (parsed.subtype) envelopeSubtype = parsed.subtype;
         }
       };
 
@@ -214,9 +243,9 @@ export class ClaudeCliBundleParser implements TeamImportBundleParserPort {
         const reason =
           stderr.trim().split('\n').pop() ||
           outputTail.split('\n').pop() ||
-          `Claude CLI exited with code ${code}.`;
+          describeParseFailure(envelopeSubtype, code);
         logger.error(
-          `Claude CLI parse job failed (exit ${code}); stderr: ${stderr.slice(0, 2000)}; output tail: ${outputTail}`
+          `Claude CLI parse job failed (exit ${code}, subtype ${envelopeSubtype ?? 'none'}); stderr: ${stderr.slice(0, 2000)}; output tail: ${outputTail}`
         );
         finish(new Error(reason));
       });
