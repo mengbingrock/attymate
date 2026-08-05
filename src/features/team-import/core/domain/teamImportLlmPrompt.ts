@@ -18,6 +18,7 @@ Respond with ONLY a single JSON object — no prose, no markdown fence — match
   "team": {
     "name": "<kebab-case team name>",
     "description": "<one-paragraph team purpose>",
+    "suggestedLeadName": "<name of the source-declared root/coordinator agent, which must also appear in members>",
     "leadPrompt": "<orchestration instructions for the team lead, markdown>"
   },
   "members": [
@@ -50,6 +51,10 @@ Respond with ONLY a single JSON object — no prose, no markdown fence — match
 
 Rules:
 - At most 20 members and 20 skills. Prefer fewer, well-grounded entries.
+- Include EVERY source-defined agent in "members", including a root agent, supervisor, coordinator,
+  manager, intended lead, or an agent whose reportsTo value is null. A lead remains a full member
+  profile; never replace it with only "team.leadPrompt".
+- Set "team.suggestedLeadName" to that root/coordinator agent's member name when one is identified.
 - Preserve the source wording for member workflows. When a source keeps one agent across several files (for example AGENTS.md, SOUL.md, TOOLS.md, HEARTBEAT.md in one agent folder), merge them into that member's single "workflow" field in a sensible order.
 - Map per-agent memory/ and notes files into that member's "memoryFiles" verbatim.
 - Team-level documents (company constitution, operations manual, orchestration config) become "team.leadPrompt".

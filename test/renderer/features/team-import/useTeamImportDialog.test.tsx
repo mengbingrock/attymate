@@ -25,11 +25,16 @@ function createDeferred<T>() {
   return { promise, resolve };
 }
 
-function preview(reviewId: string, teamName: string): TeamImportPreview {
+function preview(
+  reviewId: string,
+  teamName: string,
+  suggestedLeadName?: string
+): TeamImportPreview {
   return {
     reviewId,
     importKind: 'deterministic',
     suggestedTeamName: teamName,
+    ...(suggestedLeadName ? { suggestedLeadName } : {}),
     projectPath: `/tmp/${teamName}`,
     members: [{ name: 'writer', workflow: `workflow-${teamName}` }],
     prompt: `prompt-${teamName}`,
@@ -119,7 +124,7 @@ describe('useTeamImportDialog', () => {
   });
 
   it('guards create against double submission and closes only after success', async () => {
-    apiMock.teamImport.smartPreview.mockResolvedValue(preview('review-1', 'demo'));
+    apiMock.teamImport.smartPreview.mockResolvedValue(preview('review-1', 'demo', 'writer'));
     const create = createDeferred<{ teamName: string }>();
     apiMock.teamImport.createDraft.mockReturnValue(create.promise);
     const onClose = vi.fn();
@@ -144,7 +149,7 @@ describe('useTeamImportDialog', () => {
     await act(async () => {
       await state.chooseFolder();
     });
-    act(() => state.setLeadName('writer'));
+    expect(state.leadName).toBe('writer');
     await act(async () => {
       void state.createDraft();
       void state.createDraft();
