@@ -302,6 +302,37 @@ export function buildTodoPath(claudeBasePath: string, sessionId: string): string
 // =============================================================================
 
 /**
+ * Electron's module exists only in the main and renderer processes — never in a
+ * worker thread, and never under plain Node. A literal `require('electron')`,
+ * even inside a try/catch, gets hoisted to module scope by the bundler, which
+ * turns that absence into a load-time crash: it is what killed the packaged
+ * team-data worker with `Cannot find module 'electron'`.
+ *
+ * Looking the module up through a variable keeps the reference invisible to
+ * static analysis, so it stays a runtime lookup that the guard below controls.
+ */
+const ELECTRON_MODULE_ID = 'electron';
+
+interface ElectronAppLike {
+  getPath: (name: string) => string;
+}
+
+function loadElectronApp(): ElectronAppLike | null {
+  // 'browser' is the Electron main process. Worker threads and plain Node
+  // report undefined, and renderers report 'renderer'.
+  if ((process as NodeJS.Process & { type?: string }).type !== 'browser') return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- runtime lookup; see ELECTRON_MODULE_ID
+    const electron = require(ELECTRON_MODULE_ID) as { app?: Partial<ElectronAppLike> };
+    const app = electron.app;
+    return app && typeof app.getPath === 'function' ? (app as ElectronAppLike) : null;
+  } catch {
+    // Not an Electron context after all (tests, standalone builds).
+    return null;
+  }
+}
+
+/**
  * Try Electron's app.getPath('home') which correctly handles Unicode paths
  * on Windows (Cyrillic, CJK, etc.) unlike Node's os.homedir() / env vars
  * that can suffer from UTF-8 vs system codepage mismatches.
@@ -309,20 +340,13 @@ export function buildTodoPath(claudeBasePath: string, sessionId: string): string
  * Returns null when Electron app is unavailable (e.g. in tests).
  */
 function getElectronHome(): string | null {
+  const app = loadElectronApp();
+  if (!app) return null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Lazy require to avoid hard dependency on electron in test environments
-    const electron = require('electron') as {
-      app?: { getPath: (name: string) => string };
-    };
-    const app = electron.app;
-    if (app && typeof app.getPath === 'function') {
-      const home = app.getPath('home');
-      if (home) return home;
-    }
+    return app.getPath('home') || null;
   } catch {
-    // Not in Electron context (tests, standalone builds, etc.)
+    return null;
   }
-  return null;
 }
 
 /**
@@ -558,14 +582,17 @@ export function setAppDataBasePath(p: string | null | undefined): void {
 function getAppDataBasePath(): string {
   if (appDataBasePathOverride) return appDataBasePathOverride;
   // Fallback: resolve lazily from Electron app (safe after app.whenReady)
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { app } = require('electron') as typeof import('electron');
-    return app.getPath('userData');
-  } catch {
-    // Outside Electron (tests, CLI): use the new fallback path and migrate legacy data once.
-    return getFallbackAppDataBasePath();
+  const app = loadElectronApp();
+  if (app) {
+    try {
+      return app.getPath('userData');
+    } catch {
+      // app exists but is not ready yet — fall through.
+    }
   }
+  // Outside the Electron main process (worker threads, tests, CLI): use the
+  // fallback path and migrate legacy data once.
+  return getFallbackAppDataBasePath();
 }
 
 function getFallbackAppDataBasePath(): string {

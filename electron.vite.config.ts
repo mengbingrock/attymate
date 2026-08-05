@@ -209,6 +209,17 @@ export default defineConfig({
       sourcemap: sourceMapSetting,
       outDir: 'dist-electron/main',
       rollupOptions: {
+        // The main entry and the workers share chunks. Rollup preserves an
+        // external module's import for its side effects even after tree-shaking
+        // every binding away, which left a bare `require("electron")` in chunks
+        // the workers load — and worker threads have no electron module, so the
+        // packaged app died with `Cannot find module 'electron'`. Importing
+        // electron has no side effect we depend on, so dropping the unused
+        // import is safe; anywhere a binding is actually referenced the import
+        // stays.
+        treeshake: {
+          moduleSideEffects: (id: string) => id !== 'electron'
+        },
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
           'team-fs-worker': resolve(__dirname, 'src/main/workers/team-fs-worker.ts'),
