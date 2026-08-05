@@ -148,6 +148,7 @@ function makeCleanupPorts(
     emitToolApprovalEvent: vi.fn(),
     mcpConfigBuilder: { removeConfigFile: vi.fn() },
     removeRunMemberMcpConfigFilesLater: vi.fn(),
+    releaseStockClaudeUniformMcpLeaseLater: vi.fn(),
     retainedClaudeLogsByTeam: new Map(),
     retainProvisioningProgress: vi.fn(),
     runs: new Map(),

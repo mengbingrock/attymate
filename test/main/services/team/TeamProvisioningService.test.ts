@@ -1075,6 +1075,7 @@ describe('TeamProvisioningService', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     for (const [, command] of vi.mocked(sendKeysToTmuxPaneForCurrentPlatform).mock.calls) {
       const scriptPath = parseDirectTmuxRestartLauncherPath(command);
       if (scriptPath) {
@@ -19382,6 +19383,7 @@ describe('TeamProvisioningService', () => {
   });
 
   it('removes generated MCP config when createTeam spawn fails synchronously', async () => {
+    vi.stubEnv('AGENT_TEAMS_DISABLE_INTERACTIVE_RUNTIME', '1');
     allowConsoleLogs();
     vi.mocked(ClaudeBinaryResolver.resolve).mockResolvedValue('/mock/claude');
     vi.mocked(spawnCli).mockImplementation(() => {
@@ -19391,6 +19393,11 @@ describe('TeamProvisioningService', () => {
     const mcpConfigBuilder = {
       writeConfigFile: vi.fn(async () => '/mock/mcp-config-create.json'),
       removeConfigFile: vi.fn(async () => {}),
+      acquireStockClaudeUniformMcpLease: vi.fn(async () => ({
+        projectPath: tempClaudeRoot,
+        scope: 'local' as const,
+        release: vi.fn(async () => {}),
+      })),
     };
     const membersMetaStore = {
       writeMembers: vi.fn(async () => {}),
@@ -19431,6 +19438,13 @@ describe('TeamProvisioningService', () => {
       expect.objectContaining({ controlApiBaseUrl: undefined })
     );
     expect(mcpConfigBuilder.removeConfigFile).toHaveBeenCalledWith('/mock/mcp-config-create.json');
+    expect(mcpConfigBuilder.acquireStockClaudeUniformMcpLease).toHaveBeenCalledWith(
+      tempClaudeRoot,
+      undefined
+    );
+    const uniformLease =
+      await mcpConfigBuilder.acquireStockClaudeUniformMcpLease.mock.results[0]?.value;
+    expect(uniformLease?.release).toHaveBeenCalledOnce();
     expect(teamMetaStore.deleteMeta).toHaveBeenCalledWith('cleanup-team');
   });
 
@@ -22170,6 +22184,7 @@ describe('TeamProvisioningService', () => {
   });
 
   it('removes generated MCP config when launchTeam spawn fails synchronously', async () => {
+    vi.stubEnv('AGENT_TEAMS_DISABLE_INTERACTIVE_RUNTIME', '1');
     allowConsoleLogs();
     const teamName = 'launch-cleanup-team';
     const teamDir = path.join(tempTeamsBase, teamName);
@@ -22192,6 +22207,11 @@ describe('TeamProvisioningService', () => {
     const mcpConfigBuilder = {
       writeConfigFile: vi.fn(async () => '/mock/mcp-config-launch.json'),
       removeConfigFile: vi.fn(async () => {}),
+      acquireStockClaudeUniformMcpLease: vi.fn(async () => ({
+        projectPath: tempClaudeRoot,
+        scope: 'local' as const,
+        release: vi.fn(async () => {}),
+      })),
     };
     const restorePrelaunchConfig = vi.fn(async () => {});
 
@@ -22227,6 +22247,13 @@ describe('TeamProvisioningService', () => {
       expect.objectContaining({ controlApiBaseUrl: undefined })
     );
     expect(mcpConfigBuilder.removeConfigFile).toHaveBeenCalledWith('/mock/mcp-config-launch.json');
+    expect(mcpConfigBuilder.acquireStockClaudeUniformMcpLease).toHaveBeenCalledWith(
+      tempClaudeRoot,
+      undefined
+    );
+    const uniformLease =
+      await mcpConfigBuilder.acquireStockClaudeUniformMcpLease.mock.results[0]?.value;
+    expect(uniformLease?.release).toHaveBeenCalledOnce();
     expect(restorePrelaunchConfig).toHaveBeenCalledWith(teamName);
   });
 

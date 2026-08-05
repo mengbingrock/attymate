@@ -58,6 +58,7 @@ export interface TeamProvisioningCleanupRun
     clear(): void;
   };
   mcpConfigPath: string | null;
+  stockClaudeUniformMcpLease?: unknown;
   bootstrapSpecPath: string | null;
   bootstrapUserPromptPath: string | null;
 }
@@ -133,6 +134,7 @@ export interface TeamProvisioningCleanupPorts<TRun extends TeamProvisioningClean
   emitToolApprovalEvent(event: { dismissed: true; teamName: string; runId: string }): void;
   mcpConfigBuilder: { removeConfigFile(filePath: string): Promise<void> | void };
   removeRunMemberMcpConfigFilesLater(run: TRun): void;
+  releaseStockClaudeUniformMcpLeaseLater(run: TRun): void;
   retainedClaudeLogsByTeam: {
     set(teamName: string, snapshot: RetainedClaudeLogsSnapshotLike): unknown;
     delete(teamName: string): boolean;
@@ -295,6 +297,7 @@ export function cleanupProvisioningRun<TRun extends TeamProvisioningCleanupRun>(
     run.mcpConfigPath = null;
   }
   ports.removeRunMemberMcpConfigFilesLater(run);
+  ports.releaseStockClaudeUniformMcpLeaseLater(run);
   if (run.bootstrapSpecPath) {
     void Promise.resolve(removeDeterministicBootstrapSpecFile(run.bootstrapSpecPath)).catch(
       () => undefined

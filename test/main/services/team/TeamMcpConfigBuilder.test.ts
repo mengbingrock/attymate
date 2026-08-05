@@ -266,6 +266,96 @@ describe('TeamMcpConfigBuilder', () => {
     expect(configPath).not.toContain('claude-team-mcp');
   });
 
+  it('leases the app server in local project scope without changing user or project MCP scopes', async () => {
+    mockSourceWorkspaceEntryAvailable();
+    mockHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'team-mcp-home-'));
+    createdDirs.push(mockHomeDir);
+    const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'team-mcp-project-'));
+    createdDirs.push(projectDir);
+    const claudeConfigPath = path.join(mockHomeDir, '.claude.json');
+    const projectConfigPath = path.join(projectDir, '.mcp.json');
+    const projectConfigRaw = `${JSON.stringify({ mcpServers: { projectDocs: { url: 'https://example.test/mcp' } } }, null, 2)}\n`;
+    fs.writeFileSync(
+      claudeConfigPath,
+      `${JSON.stringify({ mcpServers: { userDocs: { command: 'user-docs' } }, projects: { [projectDir]: { allowedTools: ['Read'] } } }, null, 2)}\n`
+    );
+    fs.writeFileSync(projectConfigPath, projectConfigRaw);
+    const builder = new TeamMcpConfigBuilder();
+
+    const lease = await builder.acquireStockClaudeUniformMcpLease(
+      projectDir,
+      'http://127.0.0.1:4567'
+    );
+
+    const installed = JSON.parse(fs.readFileSync(claudeConfigPath, 'utf8')) as {
+      mcpServers: Record<string, unknown>;
+      projects: Record<
+        string,
+        { allowedTools?: string[]; mcpServers?: Record<string, { env?: Record<string, string> }> }
+      >;
+    };
+    expect(lease.scope).toBe('local');
+    expect(installed.mcpServers).toEqual({ userDocs: { command: 'user-docs' } });
+    expect(installed.projects[projectDir]?.allowedTools).toEqual(['Read']);
+    expect(installed.projects[projectDir]?.mcpServers?.['agent-teams']?.env).toMatchObject({
+      CLAUDE_TEAM_CONTROL_URL: 'http://127.0.0.1:4567',
+    });
+    expect(fs.readFileSync(projectConfigPath, 'utf8')).toBe(projectConfigRaw);
+
+    await lease.release();
+
+    const released = JSON.parse(fs.readFileSync(claudeConfigPath, 'utf8')) as {
+      mcpServers: Record<string, unknown>;
+      projects: Record<string, { allowedTools?: string[]; mcpServers?: Record<string, unknown> }>;
+    };
+    expect(released.mcpServers).toEqual({ userDocs: { command: 'user-docs' } });
+    expect(released.projects[projectDir]).toEqual({ allowedTools: ['Read'] });
+    expect(fs.readFileSync(projectConfigPath, 'utf8')).toBe(projectConfigRaw);
+  });
+
+  it('keeps a uniform local MCP registration until the final project lease releases', async () => {
+    mockSourceWorkspaceEntryAvailable();
+    mockHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'team-mcp-home-'));
+    createdDirs.push(mockHomeDir);
+    const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'team-mcp-project-'));
+    createdDirs.push(projectDir);
+    const builder = new TeamMcpConfigBuilder();
+
+    const [first, second] = await Promise.all([
+      builder.acquireStockClaudeUniformMcpLease(projectDir),
+      builder.acquireStockClaudeUniformMcpLease(projectDir),
+    ]);
+    await first.release();
+    let parsed = JSON.parse(fs.readFileSync(path.join(mockHomeDir, '.claude.json'), 'utf8')) as {
+      projects: Record<string, { mcpServers?: Record<string, unknown> }>;
+    };
+    expect(parsed.projects[projectDir]?.mcpServers?.['agent-teams']).toBeDefined();
+
+    await second.release();
+    parsed = JSON.parse(fs.readFileSync(path.join(mockHomeDir, '.claude.json'), 'utf8')) as {
+      projects: Record<string, { mcpServers?: Record<string, unknown> }>;
+    };
+    expect(parsed.projects[projectDir]?.mcpServers?.['agent-teams']).toBeUndefined();
+  });
+
+  it('refuses to overwrite a conflicting local project Agent Teams MCP entry', async () => {
+    mockSourceWorkspaceEntryAvailable();
+    mockHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'team-mcp-home-'));
+    createdDirs.push(mockHomeDir);
+    const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'team-mcp-project-'));
+    createdDirs.push(projectDir);
+    const claudeConfigPath = path.join(mockHomeDir, '.claude.json');
+    const original = {
+      projects: { [projectDir]: { mcpServers: { 'agent-teams': { command: 'custom' } } } },
+    };
+    fs.writeFileSync(claudeConfigPath, JSON.stringify(original, null, 2));
+
+    await expect(
+      new TeamMcpConfigBuilder().acquireStockClaudeUniformMcpLease(projectDir)
+    ).rejects.toThrow('already exists');
+    expect(JSON.parse(fs.readFileSync(claudeConfigPath, 'utf8'))).toEqual(original);
+  });
+
   it('config filename contains pid, timestamp, and uuid', async () => {
     const builder = new TeamMcpConfigBuilder();
     const configPath = await builder.writeConfigFile();
