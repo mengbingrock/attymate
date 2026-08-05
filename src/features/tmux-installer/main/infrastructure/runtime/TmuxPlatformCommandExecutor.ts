@@ -320,6 +320,21 @@ export class TmuxPlatformCommandExecutor {
     command: string;
     cols?: number;
     rows?: number;
+    /**
+     * Break every pane created by a split into its own window, inside tmux
+     * itself, the instant it appears.
+     *
+     * The stock CLI spawns each teammate by splitting the lead's pane, and a
+     * split halves the pane it targets — so however tall the window is, spawn
+     * capacity is log2(height) (~7 at 400 rows) and the rest die with "no room
+     * for another split". Any app-side break-out is a polling race the
+     * teammates usually win by detaching first. A session-scoped
+     * after-split-window hook removes the ceiling deterministically: each new
+     * pane leaves the window immediately, so every spawn splits a full-height
+     * lead pane. Callers that manage their own pane layout (codex lanes) must
+     * leave this off.
+     */
+    breakoutNewPanes?: boolean;
   }): Promise<void> {
     const result = await this.execTmux(
       [
@@ -331,11 +346,8 @@ export class TmuxPlatformCommandExecutor {
         input.cwd,
         '-x',
         String(input.cols ?? 220),
-        // Detached windows never resize to a client, and the stock CLI spawns
-        // every teammate as a split of the lead's window before the app breaks
-        // them out. At 50 rows, seven splits exhausted the window and the rest
-        // failed with "no room for another split" — give the virtual window
-        // enough height that a full roster fits even before break-out.
+        // Detached windows never resize to a client; the height is slack for
+        // the moment between a split and its hook-driven break-out.
         '-y',
         String(input.rows ?? 400),
         input.command,
@@ -346,6 +358,17 @@ export class TmuxPlatformCommandExecutor {
       throw new Error(result.stderr || `Failed to create tmux session ${input.sessionName}`);
     }
     await this.execTmux(['set-option', '-t', input.sessionName, 'aggressive-resize', 'on'], 3_000);
+    if (input.breakoutNewPanes) {
+      // In hook context the freshly split pane is the active one; -d keeps the
+      // previous window (the lead) current so the next split targets it again.
+      const hook = await this.execTmux(
+        ['set-hook', '-t', `=${input.sessionName}`, 'after-split-window', 'break-pane -d'],
+        3_000
+      );
+      if (hook.exitCode !== 0) {
+        throw new Error(hook.stderr || `Failed to arm pane break-out for ${input.sessionName}`);
+      }
+    }
   }
 
   /**
@@ -539,6 +562,19 @@ export class TmuxPlatformCommandExecutor {
     );
     if (result.exitCode !== 0) {
       throw new Error(result.stderr || `Failed to break tmux pane ${paneId} into a window`);
+    }
+  }
+
+  /**
+   * Name the window a pane lives in. Panes broken out by the
+   * after-split-window hook land in windows with default names; registration
+   * gives them their member name here (a pane id is a valid window target —
+   * tmux resolves it to the containing window).
+   */
+  async renameWindowForPane(paneId: string, windowName: string): Promise<void> {
+    const result = await this.execTmux(['rename-window', '-t', paneId, windowName], 3_000);
+    if (result.exitCode !== 0) {
+      throw new Error(result.stderr || `Failed to rename the window of tmux pane ${paneId}`);
     }
   }
 

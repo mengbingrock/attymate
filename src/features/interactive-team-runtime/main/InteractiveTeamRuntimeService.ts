@@ -141,6 +141,9 @@ export class InteractiveTeamRuntimeService {
         sessionName: tmuxSessionName,
         cwd: input.cwd,
         command: launcherPath,
+        // The stock CLI spawns teammates as splits of the lead's pane; the
+        // hook-driven break-out removes the log2(height) spawn ceiling.
+        breakoutNewPanes: true,
       });
     } catch (error) {
       await fs.promises.rm(launcherDir, { recursive: true, force: true }).catch(() => {});
@@ -378,13 +381,16 @@ export class InteractiveTeamRuntimeService {
                 if (!paneAlive && !anchoredToDetectedLead) continue;
                 seenMembers.add(name);
                 if (paneAlive) {
-                  await tmux
-                    .breakPaneToWindow(paneId, name, binding.tmuxSessionName)
-                    .catch((error: unknown) =>
-                      logger.warn(
-                        `[${input.teamName}] break-pane for "${name}" failed: ${String(error)}`
-                      )
-                    );
+                  // Break first: it both detaches and names the window, and it
+                  // fails harmlessly when the after-split-window hook already
+                  // broke the pane out — then the pane IS its own window and
+                  // renaming it is safe. Renaming before breaking would hit
+                  // the lead's window while the pane still lived in it.
+                  try {
+                    await tmux.breakPaneToWindow(paneId, name, binding.tmuxSessionName);
+                  } catch {
+                    await tmux.renameWindowForPane(paneId, name).catch(() => undefined);
+                  }
                 }
                 await this.#mirrorMemberIntoAppConfig(input.teamName, name, paneId, input.cwd);
                 input.callbacks.onMemberRegistered(name, paneId);
