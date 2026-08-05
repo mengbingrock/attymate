@@ -226,7 +226,6 @@ const OPENCODE_LOCAL_MODELS_TAB_ID = 'opencode-local-models';
 const PROVIDERS: ProviderDef[] = [
   { id: 'anthropic', label: 'Anthropic', comingSoon: false },
   { id: 'codex', label: 'Codex', comingSoon: false },
-  { id: 'opencode', label: 'OpenCode', comingSoon: false },
 ];
 
 const CURATED_OPENCODE_PROVIDER_TABS = [
@@ -1471,9 +1470,8 @@ export const TeamModelSelector: React.FC<TeamModelSelectorProps> = ({
   const fetchCodexRuntimeStatus = useStore((s) => s.fetchCodexRuntimeStatus);
   const installCodexRuntime = useStore((s) => s.installCodexRuntime);
   const [codexRuntimeDialogOpen, setCodexRuntimeDialogOpen] = useState(false);
-  const multimodelAvailable =
-    multimodelEnabled || effectiveCliStatus?.flavor === 'agent_teams_orchestrator';
-  const openCodeLocalProvidersEnabled = multimodelAvailable;
+  const multimodelAvailable = multimodelEnabled || false;
+  const openCodeLocalProvidersEnabled = false;
   const {
     providers: openCodeLocalProviders,
     loading: openCodeLocalProvidersLoading,
@@ -1848,7 +1846,7 @@ export const TeamModelSelector: React.FC<TeamModelSelectorProps> = ({
     if (
       effectiveProviderId !== 'opencode' ||
       !multimodelAvailable ||
-      effectiveCliStatus?.flavor !== 'agent_teams_orchestrator' ||
+      true ||
       hasReadyOpenCodeCatalog ||
       loadedOpenCodeCatalogScopeKey === openCodeCatalogScopeKey ||
       settledOpenCodeCatalogScopeKey === openCodeCatalogScopeKey
@@ -1908,7 +1906,7 @@ export const TeamModelSelector: React.FC<TeamModelSelectorProps> = ({
     if (
       effectiveProviderId === 'opencode' ||
       !multimodelAvailable ||
-      effectiveCliStatus?.flavor !== 'agent_teams_orchestrator' ||
+      true ||
       providerModelCatalogLoading ||
       !shouldHydrateRuntimeModelCatalog ||
       catalogHydrationAlreadyRequested

@@ -814,7 +814,7 @@ function buildOpenCodeForceSessionRefreshUnsupportedData(
   error: unknown
 ): OpenCodeSendMessageCommandData {
   const detail = error instanceof Error ? error.message : String(error);
-  const reason = `OpenCode forced session refresh requires delivery acceptance contract version ${OPEN_CODE_DELIVERY_ACCEPTANCE_CONTRACT_VERSION}. Update agent_teams_orchestrator and restart the app.`;
+  const reason = `OpenCode forced session refresh requires the removed legacy runtime bridge contract version ${OPEN_CODE_DELIVERY_ACCEPTANCE_CONTRACT_VERSION}.`;
   return {
     accepted: false,
     memberName: body.memberName,

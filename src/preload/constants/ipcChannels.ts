@@ -511,15 +511,6 @@ export const CLI_INSTALLER_PROGRESS = 'cliInstaller:progress';
 /** Invalidate cached CLI status (forces fresh check on next getStatus) */
 export const CLI_INSTALLER_INVALIDATE_STATUS = 'cliInstaller:invalidateStatus';
 
-// =============================================================================
-// OpenCode Runtime Installer API Channels
-// =============================================================================
-
-export const OPENCODE_RUNTIME_GET_STATUS = 'openCodeRuntime:getStatus';
-export const OPENCODE_RUNTIME_INSTALL = 'openCodeRuntime:install';
-export const OPENCODE_RUNTIME_PROGRESS = 'openCodeRuntime:progress';
-export const OPENCODE_RUNTIME_INVALIDATE_STATUS = 'openCodeRuntime:invalidateStatus';
-
 export {
   TMUX_CANCEL_INSTALL,
   TMUX_GET_INSTALLER_SNAPSHOT,

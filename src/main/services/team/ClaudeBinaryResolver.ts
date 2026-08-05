@@ -207,23 +207,8 @@ async function resolveFromDoctorFallback(commandName: string): Promise<string | 
   return null;
 }
 
-async function resolveBundledOrchestratorBinary(): Promise<string | null> {
-  const resourcesPath = process.resourcesPath?.trim();
-  if (!resourcesPath) {
-    return null;
-  }
-
-  const binaryName = process.platform === 'win32' ? 'claude-multimodel.exe' : 'claude-multimodel';
-  return resolveFromCandidateList([path.join(resourcesPath, 'runtime', binaryName)]);
-}
-
-function getConfiguredRuntimeOverrideRaw(flavor: 'claude' | 'agent_teams_orchestrator'): string {
-  return (
-    (flavor === 'agent_teams_orchestrator'
-      ? (process.env.CLAUDE_AGENT_TEAMS_ORCHESTRATOR_CLI_PATH?.trim() ??
-        process.env.CLAUDE_CLI_PATH?.trim())
-      : process.env.CLAUDE_CLI_PATH?.trim()) ?? ''
-  );
+function getConfiguredRuntimeOverrideRaw(): string {
+  return process.env.CLAUDE_CLI_PATH?.trim() ?? '';
 }
 
 function looksLikeExplicitPath(value: string): boolean {
@@ -285,10 +270,7 @@ export class ClaudeBinaryResolver {
   }
 
   private static async runResolve(options: ClaudeBinaryResolveOptions): Promise<string | null> {
-    const flavor = getConfiguredCliFlavor();
-    emitProgress(options, 'flavor', `Using ${flavor} runtime mode...`);
-
-    const overrideRaw = getConfiguredRuntimeOverrideRaw(flavor);
+    const overrideRaw = getConfiguredRuntimeOverrideRaw();
     const overrideIsExplicitPath = overrideRaw ? looksLikeExplicitPath(overrideRaw) : false;
     if (overrideRaw && overrideIsExplicitPath) {
       emitProgress(options, 'configured-path', 'Checking configured runtime path...');
@@ -298,19 +280,6 @@ export class ClaudeBinaryResolver {
         cachedPath = resolvedOverride;
         cacheVerifiedAt = Date.now();
         emitProgress(options, 'configured-path-found', 'Using configured runtime path...');
-        return cachedPath;
-      }
-    }
-
-    const shouldTryBundledOrchestratorBeforeShell =
-      flavor === 'agent_teams_orchestrator' && (!overrideRaw || overrideIsExplicitPath);
-    if (shouldTryBundledOrchestratorBeforeShell) {
-      emitProgress(options, 'bundled-runtime', 'Checking bundled Agent Teams runtime...');
-      const bundledBinary = await resolveBundledOrchestratorBinary();
-      if (bundledBinary) {
-        cachedPath = bundledBinary;
-        cacheVerifiedAt = Date.now();
-        emitProgress(options, 'bundled-runtime-found', 'Using bundled Agent Teams runtime...');
         return cachedPath;
       }
     }
@@ -333,47 +302,6 @@ export class ClaudeBinaryResolver {
         emitProgress(options, 'configured-path-found', 'Using configured runtime path...');
         return cachedPath;
       }
-    }
-
-    if (flavor === 'agent_teams_orchestrator') {
-      if (!shouldTryBundledOrchestratorBeforeShell) {
-        emitProgress(options, 'bundled-runtime', 'Checking bundled Agent Teams runtime...');
-        const bundledBinary = await resolveBundledOrchestratorBinary();
-        if (bundledBinary) {
-          cachedPath = bundledBinary;
-          cacheVerifiedAt = Date.now();
-          emitProgress(options, 'bundled-runtime-found', 'Using bundled Agent Teams runtime...');
-          return cachedPath;
-        }
-      }
-
-      // Keep agent_teams_orchestrator resolution generic. Dev flows should
-      // inject an explicit CLI path, while non-dev setups can expose
-      // claude-multimodel on PATH without making this resolver guess a sibling
-      // repo name or folder.
-      const orchestratorBinaryName = 'claude-multimodel';
-      emitProgress(options, 'path-runtime', 'Searching PATH for Agent Teams runtime...');
-      const fromPath = await resolveFromPathEnv(orchestratorBinaryName, enrichedPath);
-      if (fromPath) {
-        cachedPath = fromPath;
-        cacheVerifiedAt = Date.now();
-        emitProgress(options, 'path-runtime-found', 'Using Agent Teams runtime from PATH...');
-        return cachedPath;
-      }
-
-      emitProgress(options, 'doctor-runtime', 'Checking runtime diagnostics fallback...');
-      const fromDoctor = await resolveFromDoctorFallback(orchestratorBinaryName);
-      if (fromDoctor) {
-        cachedPath = fromDoctor;
-        cacheVerifiedAt = Date.now();
-        emitProgress(options, 'doctor-runtime-found', 'Using runtime from diagnostics fallback...');
-        return cachedPath;
-      }
-
-      // agent_teams_orchestrator mode is explicit. If the configured local
-      // runtime is missing, fail closed instead of silently falling back to a
-      // different CLI.
-      return null;
     }
 
     const baseBinaryName = 'claude';

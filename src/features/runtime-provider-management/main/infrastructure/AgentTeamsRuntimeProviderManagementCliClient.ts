@@ -590,7 +590,7 @@ function formatNonJsonCliOutputError(input: {
     outputLooksLikeOpenCodeCliHelp(input.stdout ?? null) ||
     outputLooksLikeOpenCodeCliHelp(input.stderr ?? null);
   const likelyCause = likelyWrongBinary
-    ? 'The app is launching the OpenCode CLI itself instead of the Agent Teams runtime (claude-multimodel).'
+    ? 'The app is launching the OpenCode CLI through a removed legacy runtime path.'
     : 'The runtime command printed logs, help text, or a crash message instead of JSON.';
   const hints = likelyWrongBinary
     ? [

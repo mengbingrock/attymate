@@ -102,7 +102,7 @@ describe('matter dashboard lead instructions', () => {
     version: 1,
     runId: 'run-1',
     mode: 'create',
-    initiator: { kind: 'app', source: 'claude_team_agent_teams_orchestrator' },
+    initiator: { kind: 'app', source: 'claude_team_stock_runtime' },
     team: { name: 'signal-ops', cwd: '/workspace/project' },
     lead: {},
     members: [],

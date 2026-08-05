@@ -46,7 +46,6 @@ import {
   removeMemberLogStreamIpc,
 } from '@features/member-log-stream/main';
 import {
-  buildMemberWorkSyncRuntimeTurnSettledEnvironment,
   createMemberWorkSyncFeature,
   hasUncertainWorkSyncRuntimeActivity,
   hasWorkSyncReachableRuntime,
@@ -68,17 +67,6 @@ import {
   registerRecentProjectsIpc,
   removeRecentProjectsIpc,
 } from '@features/recent-projects/main';
-import {
-  createRuntimeProviderManagementFeature,
-  inspectOpenCodeLocalModelRuntimeReadiness,
-  registerRuntimeProviderManagementIpc,
-  removeRuntimeProviderManagementIpc,
-  type RuntimeProviderManagementFeatureFacade,
-} from '@features/runtime-provider-management/main';
-import {
-  RUNTIME_PROVIDER_COMPANION_PROGRESS,
-  RUNTIME_PROVIDER_MANAGEMENT_OAUTH_PROGRESS,
-} from '@features/runtime-provider-management/contracts';
 import {
   interactiveTeamRuntimeService,
   registerInteractiveTeamRuntimeIpc,
@@ -115,14 +103,10 @@ import {
   createTokenUsageFeature,
   registerTokenUsageIpc,
   removeTokenUsageIpc,
-  resolveClaudeMultimodelDataHomePath,
   TeamTaskUsageAttributionSource,
   type TokenUsageFeatureFacade,
 } from '@features/token-usage/main';
 import { createWorkspaceTrustCoordinator } from '@features/workspace-trust/main';
-import { ensureOpenCodeBridgeRuntimeBinaryEnv } from '@main/services/runtime/openCodeBridgeRuntimeEnv';
-import { ClaudeMultimodelBridgeService } from '@main/services/runtime/ClaudeMultimodelBridgeService';
-import { applyOpenCodeAutoUpdatePolicy } from '@main/services/runtime/openCodeAutoUpdatePolicy';
 import { providerConnectionService } from '@main/services/runtime/ProviderConnectionService';
 import {
   computeLiveTeamWatchScope,
@@ -138,17 +122,6 @@ import { ChangeExtractorService } from '@main/services/team/ChangeExtractorServi
 import { CrossTeamService } from '@main/services/team/CrossTeamService';
 import { FileContentResolver } from '@main/services/team/FileContentResolver';
 import { GitDiffFallback } from '@main/services/team/GitDiffFallback';
-import { isInformationalOpenCodeRuntimeDeliveryDiagnostic } from '@main/services/team/opencode/delivery/OpenCodeRuntimeDeliveryDiagnostics';
-import {
-  buildOpenCodeAppScopedMcpOwnershipMarker,
-  buildOpenCodeAppScopedMcpUrl,
-  copyOpenCodeLocalMcpLaunchEnv,
-  hasOpenCodeLocalMcpLaunchEnv,
-  isOpenCodeMcpHttpBridgeEnabled,
-  mergeOpenCodeLocalMcpChildEnvironment,
-  shouldEnsureOpenCodeLocalMcpLaunchEnv,
-  snapshotOpenCodeLocalMcpLaunchEnv,
-} from '@main/services/team/opencode/bridge/OpenCodeMcpBridgeEnv';
 import { ReviewApplierService } from '@main/services/team/ReviewApplierService';
 import { TeamBackupService } from '@main/services/team/TeamBackupService';
 import {
@@ -156,13 +129,9 @@ import {
   TeamConfigReader,
 } from '@main/services/team/TeamConfigReader';
 import { TeamInboxWriter } from '@main/services/team/TeamInboxWriter';
-import {
-  resolveAgentTeamsMcpLaunchSpec,
-  TeamMcpConfigBuilder,
-} from '@main/services/team/TeamMcpConfigBuilder';
+import { TeamMcpConfigBuilder } from '@main/services/team/TeamMcpConfigBuilder';
 import { TeamTranscriptProjectResolver } from '@main/services/team/TeamTranscriptProjectResolver';
 import { killTrackedCliProcesses } from '@main/utils/childProcess';
-import { buildMergedCliPath } from '@main/utils/cliPathMerge';
 import { getWindowsElevationStatus } from '@main/utils/windowsElevation';
 import {
   APP_GET_WINDOWS_ELEVATION_STATUS,
@@ -191,7 +160,7 @@ import { createLogger } from '@shared/utils/logger';
 import { isReviewPickupEscalationMessage } from '@shared/utils/teamAutomationMessages';
 import { isTeamInternalControlMessageEnvelope } from '@shared/utils/teamInternalControlMessages';
 import { createHash } from 'crypto';
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import { existsSync } from 'fs';
 import { join } from 'path';
 
@@ -218,24 +187,10 @@ import {
   SkillsMutationService,
   SkillsWatcherService,
 } from './services/extensions';
-import { applyAgentTeamsIdentityEnv } from './services/identity/AgentTeamsIdentityStore';
 import { startEventLoopLagMonitor } from './services/infrastructure/EventLoopLagMonitor';
 import { HttpServer } from './services/infrastructure/HttpServer';
 import { agentTeamsMcpHttpServer } from './services/team/AgentTeamsMcpHttpServer';
 import { LaunchIoGovernor } from './services/team/LaunchIoGovernor';
-import { OpenCodeBridgeCommandClient } from './services/team/opencode/bridge/OpenCodeBridgeCommandClient';
-import { OpenCodeBridgeDiagnosticsStore } from './services/team/opencode/bridge/OpenCodeBridgeDiagnosticsStore';
-import {
-  createOpenCodeBridgeCommandLeaseStore,
-  createOpenCodeBridgeCommandLedgerStore,
-} from './services/team/opencode/bridge/OpenCodeBridgeCommandLedgerStore';
-import {
-  createOpenCodeBridgeClientIdentity,
-  OpenCodeBridgeCommandHandshakePort,
-} from './services/team/opencode/bridge/OpenCodeBridgeHandshakeClient';
-import { cleanupManagedOpenCodeServeProcesses } from './services/team/opencode/bridge/OpenCodeManagedHostProcessCleanup';
-import { OpenCodeStateChangingBridgeCommandService } from './services/team/opencode/bridge/OpenCodeStateChangingBridgeCommandService';
-import { OpenCodeRuntimeManifestEvidenceReader } from './services/team/opencode/store/OpenCodeRuntimeManifestEvidenceReader';
 import {
   buildTeamControlApiBaseUrl,
   clearTeamControlApiState,
@@ -284,16 +239,11 @@ import {
   BoardTaskExactLogsService,
   BoardTaskLogStreamService,
   BranchStatusService,
-  ClaudeBinaryResolver,
   CliInstallerService,
   configManager,
   LocalFileSystemProvider,
   MemberStatsComputer,
   NotificationManager,
-  isSupportedOpenCodeRuntimeBinaryPath,
-  OpenCodeRuntimeInstallerService,
-  OpenCodeReadinessBridge,
-  OpenCodeTeamRuntimeAdapter,
   PtyTerminalService,
   ServiceContext,
   ServiceContextRegistry,
@@ -306,7 +256,6 @@ import {
   TeamMemberLogsFinder,
   TeamMembersMetaStore,
   TeamProvisioningService,
-  TeamRuntimeAdapterRegistry,
   TeamTaskReader,
   TeamTaskStallJournal,
   TeamTaskStallMonitor,
@@ -315,7 +264,6 @@ import {
   TeamTaskStallSnapshotSource,
   TeamTranscriptSourceLocator,
   UpdaterService,
-  resolveVerifiedOpenCodeRuntimeBinaryPath,
 } from './services';
 
 import type { FileChangeEvent } from '@main/types';
@@ -328,9 +276,6 @@ import type {
 
 const logger = createLogger('App');
 let persistentAppLog: ReturnType<typeof installPersistentAppLog> | null = null;
-const appStartedAtMs = Date.now();
-const openCodeManagedHostInstanceId = `${process.pid}-${appStartedAtMs}`;
-let openCodeLifecycleBridge: OpenCodeReadinessBridge | null = null;
 
 if (process.env.AGENT_TEAMS_DISABLE_GPU?.trim() === '1') {
   app.disableHardwareAcceleration();
@@ -351,9 +296,7 @@ for (const warning of earlyElectronDevPathOverrideResult.warnings) {
 }
 
 function hasWarningRelayDiagnostics(diagnostics: readonly string[]): boolean {
-  return diagnostics.some(
-    (diagnostic) => !isInformationalOpenCodeRuntimeDeliveryDiagnostic(diagnostic)
-  );
+  return diagnostics.length > 0;
 }
 
 /**
@@ -533,320 +476,6 @@ function describeMemberWorkSyncReviewPickupEscalationReason(reason: string): str
     return 'No reliable review-pickup delivery path is available for this member runtime.';
   }
   return 'The current review request is still waiting for explicit review pickup.';
-}
-
-async function resolveOpenCodeRuntimeBinaryForBridgeEnv(options?: {
-  includeShellEnv?: boolean;
-}): Promise<string | null> {
-  const resolvedBinaryPath = await resolveVerifiedOpenCodeRuntimeBinaryPath({
-    includeShellEnv: options?.includeShellEnv,
-  });
-  if (resolvedBinaryPath) return resolvedBinaryPath;
-
-  if (options?.includeShellEnv === false) {
-    return null;
-  }
-
-  try {
-    const status = await openCodeRuntimeInstallerService?.getStatus();
-    return status?.installed === true && status.binaryPath ? status.binaryPath : null;
-  } catch (error) {
-    logger.warn(
-      `[OpenCode] Runtime installer status unavailable while resolving bridge binary: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
-    return null;
-  }
-}
-
-async function createOpenCodeRuntimeAdapterRegistry(
-  reportProgress: (phase: string, message: string) => void = () => undefined
-): Promise<TeamRuntimeAdapterRegistry> {
-  const binaryPath = await ClaudeBinaryResolver.resolve({
-    onProgress: ({ phase, message }) => reportProgress(`runtime-${phase}`, message),
-  });
-  if (!binaryPath) {
-    logger.warn('[OpenCode] Runtime adapter bridge disabled: orchestrator CLI binary not resolved');
-    reportProgress(
-      'runtime-unavailable',
-      'Runtime not found. Continuing with limited launch support...'
-    );
-    openCodeLifecycleBridge = null;
-    return new TeamRuntimeAdapterRegistry();
-  }
-
-  reportProgress('runtime-environment', 'Preparing runtime environment...');
-  const bridgeEnv = applyOpenCodeAutoUpdatePolicy({
-    ...process.env,
-    PATH: buildMergedCliPath(binaryPath),
-  });
-  applyAgentTeamsIdentityEnv(bridgeEnv);
-  bridgeEnv.CLAUDE_TEAM_APP_INSTANCE_ID = openCodeManagedHostInstanceId;
-  mergeOpenCodeLocalMcpChildEnvironment(bridgeEnv, {
-    CLAUDE_TEAM_APP_INSTANCE_ID: openCodeManagedHostInstanceId,
-  });
-  bridgeEnv.AGENT_TEAMS_MCP_CLAUDE_DIR = getClaudeBasePath();
-  const useHttpMcpBridge = isOpenCodeMcpHttpBridgeEnabled(bridgeEnv);
-  const explicitLocalMcpLaunchEnv = snapshotOpenCodeLocalMcpLaunchEnv(bridgeEnv);
-  delete bridgeEnv.ELECTRON_RUN_AS_NODE;
-  if (explicitLocalMcpLaunchEnv) {
-    copyOpenCodeLocalMcpLaunchEnv(explicitLocalMcpLaunchEnv, bridgeEnv);
-  }
-  delete bridgeEnv.CLAUDE_MULTIMODEL_AGENT_TEAMS_MCP_URL;
-  const applyMcpLaunchSpecEnv = async (
-    targetEnv: NodeJS.ProcessEnv,
-    options: { emitProgress?: boolean } = {}
-  ): Promise<void> => {
-    try {
-      if (options.emitProgress) {
-        reportProgress('runtime-mcp', 'Resolving Agent Teams MCP server...');
-      }
-      const mcpLaunchSpec = await resolveAgentTeamsMcpLaunchSpec({
-        onProgress: options.emitProgress
-          ? ({ phase, message }) => reportProgress(`mcp-${phase}`, message)
-          : undefined,
-      });
-      const mcpEntry = mcpLaunchSpec.args[0];
-      if (mcpEntry) {
-        targetEnv.CLAUDE_MULTIMODEL_AGENT_TEAMS_MCP_COMMAND = mcpLaunchSpec.command;
-        targetEnv.CLAUDE_MULTIMODEL_AGENT_TEAMS_MCP_ENTRY = mcpEntry;
-        targetEnv.CLAUDE_MULTIMODEL_AGENT_TEAMS_MCP_ARGS_JSON = JSON.stringify(mcpLaunchSpec.args);
-        targetEnv.CLAUDE_MULTIMODEL_AGENT_TEAMS_MCP_ENV_JSON = JSON.stringify(
-          mcpLaunchSpec.env ?? {}
-        );
-        mergeOpenCodeLocalMcpChildEnvironment(targetEnv, {
-          CLAUDE_TEAM_APP_INSTANCE_ID: openCodeManagedHostInstanceId,
-        });
-      }
-    } catch (error) {
-      logger.warn(
-        `[OpenCode] Runtime adapter bridge MCP entrypoint unresolved: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
-  };
-  const ensureOpenCodeLocalMcpLaunchEnv = async (
-    targetEnv: NodeJS.ProcessEnv,
-    options: { emitProgress?: boolean } = {}
-  ): Promise<void> => {
-    if (hasOpenCodeLocalMcpLaunchEnv(bridgeEnv)) {
-      copyOpenCodeLocalMcpLaunchEnv(bridgeEnv, targetEnv);
-      return;
-    }
-    if (explicitLocalMcpLaunchEnv) {
-      copyOpenCodeLocalMcpLaunchEnv(explicitLocalMcpLaunchEnv, targetEnv);
-      copyOpenCodeLocalMcpLaunchEnv(explicitLocalMcpLaunchEnv, bridgeEnv);
-      return;
-    }
-
-    await applyMcpLaunchSpecEnv(targetEnv, options);
-    if (hasOpenCodeLocalMcpLaunchEnv(targetEnv)) {
-      copyOpenCodeLocalMcpLaunchEnv(targetEnv, bridgeEnv);
-    }
-  };
-  const ensureOpenCodeRuntimeBinaryEnv = async (
-    targetEnv: NodeJS.ProcessEnv,
-    options: { includeShellEnv?: boolean } = {}
-  ): Promise<void> => {
-    await ensureOpenCodeBridgeRuntimeBinaryEnv({
-      targetEnv,
-      bridgeEnv,
-      resolveVerifiedOpenCodeRuntimeBinaryPath: () =>
-        resolveOpenCodeRuntimeBinaryForBridgeEnv({ includeShellEnv: options.includeShellEnv }),
-      isSupportedOpenCodeRuntimeBinaryPath,
-      onWarning: (message) => logger.warn(message),
-    });
-  };
-  try {
-    reportProgress('runtime-work-sync', 'Preparing runtime work sync hooks...');
-    const turnSettledEnv = await buildMemberWorkSyncRuntimeTurnSettledEnvironment({
-      teamsBasePath: getTeamsBasePath(),
-      provider: 'opencode',
-    });
-    if (turnSettledEnv) {
-      Object.assign(bridgeEnv, turnSettledEnv);
-    }
-  } catch (error) {
-    logger.warn(
-      `[OpenCode] Runtime adapter bridge turn-settled spool unavailable: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
-  }
-  if (useHttpMcpBridge) {
-    try {
-      reportProgress('runtime-mcp-http', 'Starting Agent Teams MCP server...');
-      const mcpHttpServer = await agentTeamsMcpHttpServer.ensureStarted();
-      bridgeEnv.CLAUDE_MULTIMODEL_AGENT_TEAMS_MCP_URL = buildOpenCodeAppScopedMcpUrl(
-        mcpHttpServer.url,
-        openCodeManagedHostInstanceId
-      );
-      bridgeEnv.CLAUDE_MULTIMODEL_AGENT_TEAMS_MCP_URL_HASH = mcpHttpServer.urlHash;
-      reportProgress('runtime-mcp-http-ready', 'Agent Teams MCP server is ready...');
-    } catch (error) {
-      logger.warn(
-        `[OpenCode] Runtime adapter bridge MCP HTTP server unavailable: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
-  }
-  if (
-    shouldEnsureOpenCodeLocalMcpLaunchEnv({
-      httpBridgeEnabled: useHttpMcpBridge,
-      mcpUrl: bridgeEnv.CLAUDE_MULTIMODEL_AGENT_TEAMS_MCP_URL,
-    })
-  ) {
-    await ensureOpenCodeLocalMcpLaunchEnv(bridgeEnv, { emitProgress: true });
-  }
-
-  reportProgress('runtime-bridge', 'Preparing OpenCode bridge...');
-  const resolveBridgeCommandEnv = async (): Promise<NodeJS.ProcessEnv> => {
-    const nextEnv = { ...bridgeEnv };
-    await ensureOpenCodeRuntimeBinaryEnv(nextEnv, { includeShellEnv: true });
-    if (!useHttpMcpBridge) {
-      return nextEnv;
-    }
-    try {
-      const mcpHttpServer = await agentTeamsMcpHttpServer.ensureStarted();
-      const appScopedMcpUrl = buildOpenCodeAppScopedMcpUrl(
-        mcpHttpServer.url,
-        openCodeManagedHostInstanceId
-      );
-      bridgeEnv.CLAUDE_MULTIMODEL_AGENT_TEAMS_MCP_URL = appScopedMcpUrl;
-      bridgeEnv.CLAUDE_MULTIMODEL_AGENT_TEAMS_MCP_URL_HASH = mcpHttpServer.urlHash;
-      nextEnv.CLAUDE_MULTIMODEL_AGENT_TEAMS_MCP_URL = appScopedMcpUrl;
-      nextEnv.CLAUDE_MULTIMODEL_AGENT_TEAMS_MCP_URL_HASH = mcpHttpServer.urlHash;
-      await ensureOpenCodeLocalMcpLaunchEnv(nextEnv);
-    } catch (error) {
-      delete bridgeEnv.CLAUDE_MULTIMODEL_AGENT_TEAMS_MCP_URL;
-      delete bridgeEnv.CLAUDE_MULTIMODEL_AGENT_TEAMS_MCP_URL_HASH;
-      delete nextEnv.CLAUDE_MULTIMODEL_AGENT_TEAMS_MCP_URL;
-      delete nextEnv.CLAUDE_MULTIMODEL_AGENT_TEAMS_MCP_URL_HASH;
-      await ensureOpenCodeLocalMcpLaunchEnv(nextEnv);
-      logger.warn(
-        `[OpenCode] Runtime adapter bridge MCP HTTP server refresh failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
-    return nextEnv;
-  };
-  const bridgeControlDir = join(app.getPath('userData'), 'opencode-bridge');
-  const bridgeClient = new OpenCodeBridgeCommandClient({
-    binaryPath,
-    tempDirectory: join(app.getPath('temp'), 'claude-team-opencode-bridge'),
-    env: bridgeEnv,
-    envProvider: resolveBridgeCommandEnv,
-    diagnostics: new OpenCodeBridgeDiagnosticsStore({
-      directory: join(bridgeControlDir, 'diagnostics'),
-    }),
-  });
-  const clientIdentity = createOpenCodeBridgeClientIdentity({
-    appVersion: typeof app.getVersion === 'function' ? app.getVersion() : '1.3.0',
-    gitSha: process.env.VITE_GIT_SHA ?? process.env.GIT_SHA ?? null,
-    buildId: process.env.VITE_BUILD_ID ?? process.env.BUILD_ID ?? null,
-  });
-  const stateChangingCommands = new OpenCodeStateChangingBridgeCommandService({
-    expectedClientIdentity: clientIdentity,
-    handshakePort: new OpenCodeBridgeCommandHandshakePort({
-      bridge: bridgeClient,
-      clientIdentity,
-    }),
-    leaseStore: createOpenCodeBridgeCommandLeaseStore({
-      filePath: join(bridgeControlDir, 'command-leases.json'),
-    }),
-    ledger: createOpenCodeBridgeCommandLedgerStore({
-      filePath: join(bridgeControlDir, 'command-ledger.json'),
-    }),
-    bridge: bridgeClient,
-    manifestReader: new OpenCodeRuntimeManifestEvidenceReader({
-      teamsBasePath: getTeamsBasePath(),
-    }),
-  });
-  const readinessBridge = new OpenCodeReadinessBridge(bridgeClient, {
-    stateChangingCommands,
-    appVersion: clientIdentity.appVersion,
-  });
-  openCodeLifecycleBridge = readinessBridge;
-  return new TeamRuntimeAdapterRegistry([
-    new OpenCodeTeamRuntimeAdapter(readinessBridge, {
-      inspectLocalModelRuntime: inspectOpenCodeLocalModelRuntimeReadiness,
-    }),
-  ]);
-}
-
-async function cleanupOpenCodeHostsForLifecycle(reason: 'startup' | 'shutdown'): Promise<void> {
-  let registryHostPids = new Set<number>();
-  let registryCleanupAvailable = false;
-  if (openCodeLifecycleBridge) {
-    const result = await openCodeLifecycleBridge.cleanupOpenCodeHosts({
-      reason,
-      mode: reason === 'shutdown' ? 'force' : 'stale',
-      staleAgeMs: reason === 'startup' ? 5 * 60_000 : null,
-      leaseStaleAgeMs: reason === 'startup' ? 24 * 60 * 60_000 : null,
-      preflightLeaseStaleAgeMs: reason === 'startup' ? 6 * 60_000 : null,
-    });
-    registryHostPids = new Set(
-      result.hosts
-        .filter((host) => host.action.startsWith('kept_'))
-        .map((host) => host.pid)
-        .filter((pid) => Number.isFinite(pid) && pid > 0)
-    );
-    if (result.cleaned > 0) {
-      logger.info(
-        `[OpenCode] ${reason} host cleanup removed ${result.cleaned} registry host(s), ${result.remaining} remaining`
-      );
-    }
-    for (const diagnostic of result.diagnostics) {
-      logger.warn(`[OpenCode] ${reason} host cleanup: ${diagnostic}`);
-    }
-    registryCleanupAvailable = !result.diagnostics.some((diagnostic) =>
-      diagnostic.startsWith('OpenCode host cleanup bridge failed:')
-    );
-  }
-
-  if (reason === 'startup' && !registryCleanupAvailable) {
-    logger.warn(
-      '[OpenCode] Startup fallback cleanup skipped because host registry cleanup is unavailable'
-    );
-    return;
-  }
-
-  await cleanupOpenCodeHostProcessFallback(`${reason} fallback`, {
-    mode: reason === 'shutdown' ? 'force' : 'orphaned',
-    excludePids: reason === 'startup' ? registryHostPids : undefined,
-    ...(reason === 'shutdown' ? getOpenCodeShutdownProcessOwnershipMarkers() : {}),
-    startedBeforeMs: reason === 'startup' ? appStartedAtMs : null,
-  });
-}
-
-function getOpenCodeShutdownProcessOwnershipMarkers(): Pick<
-  Parameters<typeof cleanupManagedOpenCodeServeProcesses>[0],
-  'requiredDetailsMarkers' | 'requiredServeConfigMarkersAny'
-> {
-  return process.platform === 'win32'
-    ? {
-        requiredServeConfigMarkersAny: [
-          buildOpenCodeAppScopedMcpOwnershipMarker(openCodeManagedHostInstanceId),
-        ],
-      }
-    : { requiredDetailsMarkers: [`CLAUDE_TEAM_APP_INSTANCE_ID=${openCodeManagedHostInstanceId}`] };
-}
-
-async function cleanupOpenCodeHostProcessFallback(
-  label: string,
-  options: Parameters<typeof cleanupManagedOpenCodeServeProcesses>[0]
-): Promise<void> {
-  const fallback = await cleanupManagedOpenCodeServeProcesses(options);
-  if (fallback.killed > 0) {
-    logger.info(`[OpenCode] ${label} cleanup killed ${fallback.killed} managed host(s)`);
-  }
-  for (const diagnostic of fallback.diagnostics) {
-    logger.warn(`[OpenCode] ${label} cleanup: ${diagnostic}`);
-  }
 }
 
 // --- Team display name cache (avoid listTeams() on every notification) ---
@@ -1115,7 +744,6 @@ let recentProjectsFeature: RecentProjectsFeatureFacade;
 let teamImportFeature: TeamImportFeatureFacade;
 let teamExportFeature: TeamExportFeatureFacade;
 let organizationsFeature: OrganizationsFeatureFacade;
-let runtimeProviderManagementFeature: RuntimeProviderManagementFeatureFacade;
 let terminalWorkspaceFeature: TerminalWorkspaceFeatureFacade | null = null;
 let tokenUsageFeature: TokenUsageFeatureFacade | null = null;
 let matterFeature: MatterFeatureFacade | null = null;
@@ -1125,7 +753,6 @@ let teamDataService: TeamDataService;
 let teamProvisioningService: TeamProvisioningService;
 let launchIoGovernor: LaunchIoGovernor | null = null;
 let cliInstallerService: CliInstallerService;
-let openCodeRuntimeInstallerService: OpenCodeRuntimeInstallerService;
 let ptyTerminalService: PtyTerminalService;
 let httpServer: HttpServer;
 let schedulerService: SchedulerService;
@@ -1154,7 +781,6 @@ const STARTUP_RECOVERY_DELAY_MS = 10_000;
 const STARTUP_CLI_WARMUP_DELAY_MS = 90_000;
 const STARTUP_BACKGROUND_SERVICE_DELAY_MS = 5_000;
 const TOKEN_USAGE_STARTUP_REFRESH_DELAY_MS = 15_000;
-const STARTUP_RECOVERY_CONCURRENCY = 1;
 const MEMBER_WORK_SYNC_LIFECYCLE_ACTIVE_TEAM_CHECK_CONCURRENCY = 2;
 const MEMBER_WORK_SYNC_RUNTIME_SNAPSHOT_TIMEOUT_MS = 15_000;
 const MEMBER_WORK_SYNC_RUNTIME_SNAPSHOT_TIMEOUT_COOLDOWN_MS = 30_000;
@@ -1991,7 +1617,6 @@ async function initializeServices(): Promise<void> {
     }
   });
   cliInstallerService = new CliInstallerService();
-  openCodeRuntimeInstallerService = new OpenCodeRuntimeInstallerService();
   ptyTerminalService = new PtyTerminalService();
   const teamMemberLogsFinder = new TeamMemberLogsFinder();
   const teamLogSourceTracker = new TeamLogSourceTracker(teamMemberLogsFinder);
@@ -2027,7 +1652,6 @@ async function initializeServices(): Promise<void> {
   const memberLogStreamFeature = createMemberLogStreamFeature({
     logsFinder: teamMemberLogsFinder,
     logSourceTracker: teamLogSourceTracker,
-    runtimeBridge: new ClaudeMultimodelBridgeService(),
     configReader: taskLogConfigReader,
     logger: createLogger('Feature:MemberLogStream'),
   });
@@ -2078,21 +1702,7 @@ async function initializeServices(): Promise<void> {
     teamDataService?.invalidateMemberRuntimeAdvisory(teamName, memberName);
     getTeamDataWorkerClient().invalidateMemberRuntimeAdvisory(teamName, memberName);
   });
-  publishStartupStatus({
-    phase: 'runtime',
-    message: 'Resolving local runtime...',
-  });
-  teamProvisioningService.setRuntimeAdapterRegistry(
-    await createOpenCodeRuntimeAdapterRegistry((phase, message) =>
-      publishStartupStatus({ phase, message })
-    )
-  );
   teamRuntimeRecoveryFeature.start();
-  scheduleStartupTask(() => {
-    void cleanupOpenCodeHostsForLifecycle('startup').catch((error: unknown) =>
-      logger.warn(`[OpenCode] Startup host cleanup failed: ${String(error)}`)
-    );
-  }, STARTUP_RECOVERY_DELAY_MS);
   // Startup GC: remove stale MCP config files from previous sessions (best-effort)
   void new TeamMcpConfigBuilder().gcStaleConfigs();
   void teamDataService
@@ -2135,14 +1745,7 @@ async function initializeServices(): Promise<void> {
   });
   const memberStatsComputer = new MemberStatsComputer(teamMemberLogsFinder);
   const taskBoundaryParser = new TaskBoundaryParser();
-  const changeExtractor = new ChangeExtractorService(
-    teamMemberLogsFinder,
-    taskBoundaryParser,
-    undefined,
-    undefined,
-    undefined,
-    openCodeLifecycleBridge
-  );
+  const changeExtractor = new ChangeExtractorService(teamMemberLogsFinder, taskBoundaryParser);
   teamDataService.setTaskChangePresenceServices(taskChangePresenceRepository, teamLogSourceTracker);
   changeExtractor.setTaskChangePresenceServices(taskChangePresenceRepository, teamLogSourceTracker);
   const gitDiffFallback = new GitDiffFallback();
@@ -2181,7 +1784,7 @@ async function initializeServices(): Promise<void> {
     mcpStateService
   );
 
-  // Install services — resolve binary dynamically via ClaudeBinaryResolver
+  // Install services.
   const pluginInstallService = new PluginInstallService(
     pluginCatalogService,
     extensionsRuntimeAdapter
@@ -2275,25 +1878,6 @@ async function initializeServices(): Promise<void> {
   teamLogSourceTracker.onLogSourceChange((teamName) => {
     teammateToolTracker?.handleLogSourceChange(teamName);
   });
-  scheduleStartupTask(() => {
-    void teamDataService
-      .listTeams()
-      .then(async (teams) => {
-        const activeTeamNames = teams
-          .filter((team) => !team.deletedAt)
-          .map((team) => team.teamName);
-        await runStartupJobsBounded(
-          activeTeamNames,
-          STARTUP_RECOVERY_CONCURRENCY,
-          async (teamName) => {
-            await teamProvisioningService.scanOpenCodePromptDeliveryWatchdog(teamName);
-          }
-        );
-      })
-      .catch((error: unknown) =>
-        logger.warn(`[Init] OpenCode prompt delivery watchdog recovery failed: ${String(error)}`)
-      );
-  }, STARTUP_RECOVERY_DELAY_MS);
   teamTaskStallMonitor.start();
 
   // Allow SchedulerService to push schedule events to renderer
@@ -2321,17 +1905,6 @@ async function initializeServices(): Promise<void> {
     teamDataService,
     crossTeamService,
     logger: createLogger('Feature:Organizations'),
-  });
-  runtimeProviderManagementFeature = createRuntimeProviderManagementFeature({
-    openExternal: async (url) => {
-      await shell.openExternal(url);
-    },
-    emitOAuthProgress: (event) => {
-      safeSendToRenderer(mainWindow, RUNTIME_PROVIDER_MANAGEMENT_OAUTH_PROGRESS, event);
-    },
-    emitProgress: (event) => {
-      safeSendToRenderer(mainWindow, RUNTIME_PROVIDER_COMPANION_PROGRESS, event);
-    },
   });
   terminalWorkspaceFeature = createTerminalWorkspaceFeature({
     teamsBasePath: getTeamsBasePath(),
@@ -2370,7 +1943,6 @@ async function initializeServices(): Promise<void> {
     ),
     teamsBasePath: getTeamsBasePath(),
     claudeProjectsBasePath: getProjectsBasePath(),
-    openCodeDataHomePath: resolveClaudeMultimodelDataHomePath(),
     ccusageJsonPath: process.env.AGENT_TEAMS_TOKEN_USAGE_CCUSAGE_JSON,
     tokscaleJsonPath: process.env.AGENT_TEAMS_TOKEN_USAGE_TOKSCALE_JSON,
     ccusageCommand: readOptionalEnv('AGENT_TEAMS_TOKEN_USAGE_CCUSAGE_COMMAND'),
@@ -2896,7 +2468,6 @@ async function initializeServices(): Promise<void> {
     reviewApplier,
     gitDiffFallback,
     cliInstallerService,
-    openCodeRuntimeInstallerService,
     ptyTerminalService,
     schedulerService,
     extensionFacadeService,
@@ -2916,7 +2487,6 @@ async function initializeServices(): Promise<void> {
   registerTeamImportIpc(ipcMain, teamImportFeature);
   registerTeamExportIpc(ipcMain, teamExportFeature);
   registerOrganizationsIpc(ipcMain, organizationsFeature);
-  registerRuntimeProviderManagementIpc(ipcMain, runtimeProviderManagementFeature);
   registerTerminalWorkspaceIpc(ipcMain, terminalWorkspaceFeature);
   registerInteractiveTeamRuntimeIpc(ipcMain, interactiveTeamRuntimeService);
   if (tokenUsageFeature) {
@@ -3036,25 +2606,11 @@ async function shutdownServices(): Promise<void> {
     if (teamProvisioningService) {
       await runShutdownStep('stop all teams', () => teamProvisioningService.stopAllTeams(), 10_000);
     }
-    await runShutdownStep(
-      'OpenCode host registry cleanup',
-      () => cleanupOpenCodeHostsForLifecycle('shutdown'),
-      10_000
-    );
     await runShutdownStep('Agent Teams MCP HTTP server cleanup', () =>
       agentTeamsMcpHttpServer.stop({ preventRestart: true })
     );
     await runShutdownStep('tracked CLI subprocess cleanup', () =>
       killTrackedCliProcesses('SIGKILL')
-    );
-    await runShutdownStep(
-      'OpenCode post-subprocess fallback cleanup',
-      () =>
-        cleanupOpenCodeHostProcessFallback('post-subprocess shutdown fallback', {
-          mode: 'force',
-          ...getOpenCodeShutdownProcessOwnershipMarkers(),
-        }),
-      5_000
     );
 
     await runShutdownStep('MCP config GC', () => new TeamMcpConfigBuilder().gcOwnConfigs());
@@ -3141,7 +2697,6 @@ async function shutdownServices(): Promise<void> {
       removeTeamImportIpc(ipcMain);
       removeTeamExportIpc(ipcMain);
       removeOrganizationsIpc(ipcMain);
-      removeRuntimeProviderManagementIpc(ipcMain);
       removeTerminalWorkspaceIpc(ipcMain);
       removeTokenUsageIpc(ipcMain);
       removeMemberWorkSyncIpc(ipcMain);
@@ -3178,7 +2733,6 @@ function attachMainWindowToServices(): void {
   notificationManager?.setMainWindow(win);
   updaterService?.setMainWindow(win);
   cliInstallerService?.setMainWindow(win);
-  openCodeRuntimeInstallerService?.setMainWindow(win);
   setCodexRuntimeMainWindow(win);
   setTmuxMainWindow(win);
   ptyTerminalService?.setMainWindow(win);
@@ -3489,9 +3043,6 @@ function createWindow(): void {
     }
     if (cliInstallerService) {
       cliInstallerService.setMainWindow(null);
-    }
-    if (openCodeRuntimeInstallerService) {
-      openCodeRuntimeInstallerService.setMainWindow(null);
     }
     setCodexRuntimeMainWindow(null);
     setTmuxMainWindow(null);

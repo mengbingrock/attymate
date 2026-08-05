@@ -1107,11 +1107,6 @@ function getRunRuntimeFailureLabel(run: ProvisioningRun): string {
 }
 
 function buildMissingCliError(): Error {
-  if (getConfiguredCliFlavor() === 'agent_teams_orchestrator') {
-    return new Error(
-      'Multimodel runtime not found. The packaged app must include resources/runtime/claude-multimodel, or development must provide CLAUDE_AGENT_TEAMS_ORCHESTRATOR_CLI_PATH.'
-    );
-  }
   return new Error('Claude CLI not found; install it or provide a valid path');
 }
 
@@ -10616,7 +10611,7 @@ export class TeamProvisioningService {
         effectiveMembers.push(effectiveMember);
         continue;
       }
-      if (providerId === 'codex' && getConfiguredCliFlavor() !== 'agent_teams_orchestrator') {
+      if (providerId === 'codex') {
         // Stock codex lanes launch without -m and inherit the user's own codex
         // default model; the fork's `model list` control-plane CLI does not
         // exist on the stock runtime, so default-model resolution must not run.
@@ -12197,7 +12192,6 @@ export class TeamProvisioningService {
       const promptSize = getPromptSizeSummary(initialUserPrompt);
       let child: ReturnType<typeof spawn> | undefined;
       const runtimeMode = resolveTeamRuntimeMode({
-        cliFlavor: getConfiguredCliFlavor(),
         leadProviderId: request.providerId,
       });
       const useStockClaudeBootstrap = runtimeMode === 'stock-claude';
@@ -14485,7 +14479,6 @@ export class TeamProvisioningService {
       const promptSize = getPromptSizeSummary(prompt);
       let child: ReturnType<typeof spawn> | undefined;
       const runtimeMode = resolveTeamRuntimeMode({
-        cliFlavor: getConfiguredCliFlavor(),
         leadProviderId: request.providerId,
       });
       const useStockClaudeBootstrap = runtimeMode === 'stock-claude';
@@ -23778,10 +23771,7 @@ export class TeamProvisioningService {
   ): Promise<{ warning?: string }> {
     const ports = this.getProviderDiagnosticsPorts();
     let probeOverride: { binaryPath: string; args: string[] } | undefined;
-    if (
-      resolveTeamProviderId(providerId) === 'codex' &&
-      getConfiguredCliFlavor() !== 'agent_teams_orchestrator'
-    ) {
+    if (resolveTeamProviderId(providerId) === 'codex') {
       // Stock flavor has no codex control plane in the claude binary; ping the
       // codex CLI itself (fork-style --settings args do not apply to it).
       const codexPath = await CodexBinaryResolver.resolve();

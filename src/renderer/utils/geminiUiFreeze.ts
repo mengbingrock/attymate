@@ -20,11 +20,9 @@ export function isGeminiProviderId(
 export function filterMainScreenCliProviders<T extends { providerId: CliProviderId }>(
   providers: readonly T[]
 ): T[] {
-  if (!GEMINI_UI_FROZEN) {
-    return [...providers];
-  }
-
-  return providers.filter((provider) => provider.providerId !== 'gemini');
+  return providers.filter(
+    (provider) => provider.providerId === 'anthropic' || provider.providerId === 'codex'
+  );
 }
 
 export function normalizeCreateLaunchProviderForUi(
@@ -36,7 +34,7 @@ export function normalizeCreateLaunchProviderForUi(
   }
 
   const normalizedProviderId = normalizeOptionalTeamProviderId(providerId);
-  if (normalizedProviderId === 'gemini' && GEMINI_UI_FROZEN) {
+  if (normalizedProviderId === 'opencode' || normalizedProviderId === 'gemini') {
     return 'anthropic';
   }
   return normalizedProviderId ?? 'anthropic';
@@ -46,7 +44,7 @@ export function isCreateLaunchProviderDisabled(
   providerId: TeamProviderId,
   multimodelEnabled: boolean
 ): boolean {
-  if (providerId === 'gemini' && GEMINI_UI_FROZEN) {
+  if (providerId === 'opencode' || (providerId === 'gemini' && GEMINI_UI_FROZEN)) {
     return true;
   }
   if (!multimodelEnabled && providerId !== 'anthropic') {

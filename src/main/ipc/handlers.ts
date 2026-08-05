@@ -47,11 +47,6 @@ import {
 } from './httpServer';
 import { registerNotificationHandlers, removeNotificationHandlers } from './notifications';
 import {
-  initializeOpenCodeRuntimeHandlers,
-  registerOpenCodeRuntimeHandlers,
-  removeOpenCodeRuntimeHandlers,
-} from './openCodeRuntime';
-import {
   initializeProjectHandlers,
   registerProjectHandlers,
   removeProjectHandlers,
@@ -105,7 +100,6 @@ import type {
   FileContentResolver,
   GitDiffFallback,
   MemberStatsComputer,
-  OpenCodeRuntimeInstallerService,
   PtyTerminalService,
   ReviewApplierService,
   ServiceContext,
@@ -167,7 +161,6 @@ export function initializeIpcHandlers(
   reviewApplier?: ReviewApplierService,
   gitDiffFallback?: GitDiffFallback,
   cliInstaller?: CliInstallerService,
-  openCodeRuntimeInstaller?: OpenCodeRuntimeInstallerService,
   ptyTerminal?: PtyTerminalService,
   schedulerService?: SchedulerService,
   extensionFacade?: ExtensionFacadeService,
@@ -217,9 +210,6 @@ export function initializeIpcHandlers(
   }
   if (cliInstaller) {
     initializeCliInstallerHandlers(cliInstaller);
-  }
-  if (openCodeRuntimeInstaller) {
-    initializeOpenCodeRuntimeHandlers(openCodeRuntimeInstaller);
   }
   if (ptyTerminal) {
     initializeTerminalHandlers(ptyTerminal);
@@ -273,9 +263,6 @@ export function initializeIpcHandlers(
   if (cliInstaller) {
     registerCliInstallerHandlers(ipcMain);
   }
-  if (openCodeRuntimeInstaller) {
-    registerOpenCodeRuntimeHandlers(ipcMain);
-  }
   registerCodexRuntimeHandlers(ipcMain);
   if (ptyTerminal) {
     registerTerminalHandlers(ipcMain);
@@ -319,7 +306,6 @@ export function removeIpcHandlers(): void {
   removeScheduleHandlers(ipcMain);
   removeTelemetryHandlers(ipcMain);
   removeCliInstallerHandlers(ipcMain);
-  removeOpenCodeRuntimeHandlers(ipcMain);
   removeCodexRuntimeHandlers(ipcMain);
   removeTerminalHandlers(ipcMain);
   removeTmuxHandlers(ipcMain);
