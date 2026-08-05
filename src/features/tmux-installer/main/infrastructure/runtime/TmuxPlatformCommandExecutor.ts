@@ -344,10 +344,14 @@ export class TmuxPlatformCommandExecutor {
         input.sessionName,
         '-c',
         input.cwd,
+        // The stock CLI snapshots its terminal geometry at startup and budgets
+        // teammate panes from that snapshot: launches at 220 cols capped out
+        // at 7 teammates with "no room for another tmux split" regardless of
+        // height, live window size, or later resizing. Detached windows never
+        // resize to a client, so a large virtual size costs nothing — start
+        // wide and tall enough that a full roster fits the CLI's math.
         '-x',
-        String(input.cols ?? 220),
-        // Detached windows never resize to a client; the height is slack for
-        // the moment between a split and its hook-driven break-out.
+        String(input.cols ?? 800),
         '-y',
         String(input.rows ?? 400),
         input.command,
