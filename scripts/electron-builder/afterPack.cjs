@@ -515,6 +515,51 @@ async function validateNativeBinaries(appOutDir, targetPlatform, targetArch) {
   return mismatches;
 }
 
+/**
+ * Give the macOS bundle a valid ad-hoc signature.
+ *
+ * Without a Developer ID certificate electron-builder leaves the app unsigned,
+ * and all it carries is the linker's ad-hoc stub on the main binary. macOS then
+ * finds a signature that claims sealed resources the bundle does not have:
+ *
+ *     code has no resources but signature indicates they must be present
+ *
+ * A downloaded copy of that (quarantined by the browser) is reported as
+ * "'Agent Teams AI' is damaged and can't be opened. You should move it to the
+ * Trash." — a dead end, because there is no Open-anyway path out of "damaged".
+ *
+ * Signing the bundle ad-hoc produces a signature that actually verifies. The app
+ * is still unnotarized, so Gatekeeper still refuses a double-click, but it now
+ * says the developer cannot be verified, which right-click → Open resolves.
+ * Proper Developer ID signing plus notarization is the real fix; this keeps the
+ * artifacts openable until those credentials exist.
+ */
+async function adHocSignMacBundle(context) {
+  if (context.electronPlatformName !== 'darwin' || process.platform !== 'darwin') return;
+  // A real identity means electron-builder signed it properly; do not interfere.
+  if (process.env.CSC_LINK || process.env.CSC_NAME) return;
+
+  const appPath = path.join(
+    context.appOutDir,
+    `${context.packager.appInfo.productFilename}.app`
+  );
+  if (!fs.existsSync(appPath)) return;
+
+  const { execFileSync } = require('node:child_process');
+  try {
+    execFileSync('codesign', ['--force', '--deep', '--sign', '-', appPath], {
+      stdio: 'pipe',
+    });
+    execFileSync('codesign', ['--verify', '--deep', '--strict', appPath], { stdio: 'pipe' });
+    console.log(`[afterPack] ad-hoc signed ${path.basename(appPath)} (unnotarized)`);
+  } catch (error) {
+    const detail = error?.stderr?.toString().trim() || error?.message || String(error);
+    throw new Error(
+      `Ad-hoc signing failed for ${appPath}; the bundle would be reported as damaged on download.\n${detail}`
+    );
+  }
+}
+
 async function afterPack(context) {
   const targetPlatform = context.electronPlatformName;
   const targetArch = getArchLabel(context.arch);
@@ -534,6 +579,9 @@ async function afterPack(context) {
       `Found incompatible native binaries in ${targetPlatform}-${targetArch} bundle after pruning.\n${details}`
     );
   }
+
+  // Last, so the signature seals the bundle as it will actually ship.
+  await adHocSignMacBundle(context);
 
   if (removedPaths.length > 0) {
     console.log(
