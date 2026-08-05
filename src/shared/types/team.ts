@@ -8,6 +8,8 @@ export interface TeamMember {
   role?: string;
   /** Per-agent workflow/instructions injected into spawn prompt. */
   workflow?: string;
+  /** Slugs of the skills assigned to this member, from the team's skill roots. */
+  skills?: string[];
   /** Opt-in runtime isolation for persistent teammates. Omitted means shared workspace. */
   isolation?: 'worktree';
   providerId?: TeamProviderId;
@@ -1473,6 +1475,8 @@ export interface TeamProvisioningMemberInput {
   role?: string;
   /** Per-agent workflow/instructions injected into spawn prompt. */
   workflow?: string;
+  /** Skill slugs this member uses, persisted so the assignment survives import. */
+  skills?: string[];
   /** Opt-in: run this teammate in its own git worktree. */
   isolation?: 'worktree';
   /** Resolved runtime working directory. Usually app-managed for isolated teammates. */

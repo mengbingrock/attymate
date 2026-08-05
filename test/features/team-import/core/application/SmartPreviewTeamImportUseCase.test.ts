@@ -72,7 +72,7 @@ function buildUseCase(overrides: Partial<Fakes> = {}) {
     parse: vi.fn().mockResolvedValue(fakes.parserOutput),
   };
   const skillsInstaller: TeamImportSkillsInstallerPort = {
-    listExistingSlugs: async () => new Set(),
+    listExistingSlugs: () => Promise.resolve(new Set<string>()),
     install: vi.fn(),
   };
   const useCase = new SmartPreviewTeamImportUseCase(
@@ -100,6 +100,40 @@ describe('SmartPreviewTeamImportUseCase', () => {
     expect(preview?.importKind).toBe('deterministic');
     expect(preview?.members[0]?.name).toBe('writer');
     expect(parser.parse).not.toHaveBeenCalled();
+  });
+
+  it('imports an exported bundle deterministically, with no model parse', async () => {
+    const { useCase, reviewStore, parser } = buildUseCase({
+      deterministicSnapshot: { ...claudeStyleSnapshot(), bundleJson: VALID_BUNDLE_JSON },
+    });
+
+    const preview = await useCase.execute({ kind: 'folder', smart: false }, NO_PROGRESS);
+
+    expect(parser.parse).not.toHaveBeenCalled();
+    expect(preview?.sourceLabel).toBe('picked (team bundle)');
+    expect(preview?.members[0]?.name).toBe('writer');
+    // A bundle-backed preview carries the bundle, so the draft step writes the
+    // agent files and installs the skills.
+    const record = reviewStore.consume(preview!.reviewId);
+    expect(record?.bundle?.members[0]?.name).toBe('writer');
+  });
+
+  it('falls back to scanning the folder when the bundle file is unusable', async () => {
+    const { useCase, reviewStore, parser } = buildUseCase({
+      deterministicSnapshot: { ...claudeStyleSnapshot(), bundleJson: 'not json at all' },
+    });
+
+    const preview = await useCase.execute({ kind: 'folder', smart: false }, NO_PROGRESS);
+
+    expect(parser.parse).not.toHaveBeenCalled();
+    expect(preview?.importKind).toBe('deterministic');
+    expect(preview?.members[0]?.name).toBe('writer');
+    expect(preview?.warnings).toContainEqual({
+      code: 'bundleFileDropped',
+      path: 'team-import-bundle.json',
+      reason: 'unreadable bundle — fell back to scanning the folder',
+    });
+    expect(reviewStore.consume(preview!.reviewId)?.bundle).toBeUndefined();
   });
 
   it('returns the empty deterministic preview without invoking the LLM when smart is off', async () => {

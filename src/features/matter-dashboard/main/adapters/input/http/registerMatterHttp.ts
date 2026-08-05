@@ -5,6 +5,7 @@ import {
   type MatterEvidenceStatusDto,
   type MatterLinkOperation,
   type MatterLinkOperationResultDto,
+  type MatterRefreshResultDto,
   type MatterSnapshotDto,
 } from '../../../../contracts';
 
@@ -121,6 +122,34 @@ export function registerMatterHttp(app: FastifyInstance, feature: MatterFeatureF
         logger.error('Failed to load Link matter evidence status via HTTP', error);
         void reply.status(500);
         return linkStatusError('Link matter evidence status could not be loaded.');
+      }
+    }
+  );
+
+  app.post<{ Body: { teamName?: string } }>(
+    `${MATTER_ROUTE}/request-refresh`,
+    async (request, reply): Promise<MatterRefreshResultDto> => {
+      const teamName = readTeamName(request.body?.teamName);
+      if (!teamName) {
+        void reply.status(400);
+        return {
+          accepted: false,
+          mode: 'update',
+          message: 'teamName is required',
+          usedInstalledSkill: false,
+        };
+      }
+      try {
+        return await feature.requestDashboardRefresh(teamName);
+      } catch (error) {
+        logger.error('Failed to request a matter dashboard refresh via HTTP', error);
+        void reply.status(500);
+        return {
+          accepted: false,
+          mode: 'update',
+          message: 'The dashboard refresh request could not be delivered.',
+          usedInstalledSkill: false,
+        };
       }
     }
   );

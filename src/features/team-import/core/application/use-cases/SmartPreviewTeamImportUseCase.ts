@@ -87,7 +87,27 @@ export class SmartPreviewTeamImportUseCase {
         // (with this folder path) when nothing recognizable is found.
         progress.report({ stage: 'reading' });
         const snapshot = await this.deterministicSource.inspect(selectedFolder);
-        return this.reviewStore.save(buildTeamImportPreview(snapshot));
+        const fromBundle = snapshot.bundleJson
+          ? await this.previewFromBundleFile(snapshot.bundleJson, snapshot)
+          : null;
+        if (fromBundle) return fromBundle;
+        return this.reviewStore.save(
+          buildTeamImportPreview(
+            snapshot.bundleJson
+              ? {
+                  ...snapshot,
+                  warnings: [
+                    ...snapshot.warnings,
+                    {
+                      code: 'bundleFileDropped',
+                      path: 'team-import-bundle.json',
+                      reason: 'unreadable bundle — fell back to scanning the folder',
+                    },
+                  ],
+                }
+              : snapshot
+          )
+        );
       }
       progress.report({ stage: 'reading' });
       const dump = await this.rawFolderSource.readFolder(selectedFolder);
@@ -98,6 +118,48 @@ export class SmartPreviewTeamImportUseCase {
     progress.report({ stage: 'fetching' });
     const dump = await this.webSource.fetchPage(url.toString());
     return this.parseAndStore(dump, '', progress);
+  }
+
+  /**
+   * Slugs the target already has, across the team's own project skill roots and
+   * the user-wide ones. Used both to badge "already exists" in the preview and
+   * to keep a member's reference to a skill the user already owns from being
+   * pruned as unknown.
+   */
+  private async readExistingSkillSlugs(projectPath: string): Promise<ReadonlySet<string>> {
+    const trimmed = projectPath.trim();
+    const [projectSlugs, userSlugs] = await Promise.all([
+      trimmed
+        ? this.skillsInstaller.listExistingSlugs({ projectPath: trimmed })
+        : Promise.resolve(new Set<string>()),
+      this.skillsInstaller.listExistingSlugs(),
+    ]);
+    return new Set([...projectSlugs, ...userSlugs]);
+  }
+
+  /**
+   * A folder exported by this app carries `team-import-bundle.json`, which is
+   * already in the shape the smart parse works so hard to reconstruct. Reading
+   * it restores members with their roles, models, agent files, and skills with
+   * no model call at all. Returns null when the file cannot be used, so the
+   * caller can fall back to scanning the markdown.
+   */
+  private async previewFromBundleFile(
+    bundleJson: string,
+    snapshot: { projectPath: string; folderName: string }
+  ): Promise<TeamImportPreview | null> {
+    const existingSkillSlugs = await this.readExistingSkillSlugs(snapshot.projectPath);
+    const { bundle, warnings } = parseTeamImportBundle(bundleJson, { existingSkillSlugs });
+    if (!bundle) return null;
+    const preview = bundleToPreview(bundle, {
+      projectPath: snapshot.projectPath,
+      sourceLabel: `${snapshot.folderName} (team bundle)`,
+      existingSkillSlugs,
+    });
+    return this.reviewStore.save(
+      { ...preview, warnings: [...warnings, ...preview.warnings] },
+      bundle
+    );
   }
 
   /**
@@ -240,11 +302,12 @@ export class SmartPreviewTeamImportUseCase {
     });
 
     progress.report({ stage: 'validating' });
+    const existingSkillSlugs = await this.readExistingSkillSlugs(projectPath);
     const {
       bundle,
       warnings: parseWarnings,
       blockingErrors,
-    } = parseTeamImportBundle(rawModelOutput);
+    } = parseTeamImportBundle(rawModelOutput, { existingSkillSlugs });
     const warnings = [...parallelWarnings, ...parseWarnings];
     const truncationWarnings: TeamImportWarning[] = dump.truncated
       ? [{ code: 'bundleSourceTruncated' }]
@@ -263,7 +326,6 @@ export class SmartPreviewTeamImportUseCase {
       });
     }
 
-    const existingSkillSlugs = await this.skillsInstaller.listExistingSlugs();
     const preview = bundleToPreview(bundle, {
       projectPath,
       sourceLabel: dump.label,

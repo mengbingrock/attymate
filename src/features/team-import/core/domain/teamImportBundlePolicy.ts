@@ -308,7 +308,15 @@ function parseSkills(rawSkills: unknown, context: BudgetContext): TeamImportBund
   return skills;
 }
 
-export function parseTeamImportBundle(rawModelOutput: string): ParsedTeamImportBundle {
+export interface ParseTeamImportBundleOptions {
+  /** Slugs already installed for the target, kept as valid member references. */
+  existingSkillSlugs?: ReadonlySet<string>;
+}
+
+export function parseTeamImportBundle(
+  rawModelOutput: string,
+  options?: ParseTeamImportBundleOptions
+): ParsedTeamImportBundle {
   const warnings: TeamImportWarning[] = [];
   const jsonText = extractJsonObjectText(rawModelOutput);
   if (!jsonText) {
@@ -349,7 +357,14 @@ export function parseTeamImportBundle(rawModelOutput: string): ParsedTeamImportB
     blockingErrors.push('No usable team members could be extracted from the source.');
   }
 
-  const knownSlugs = new Set(skills.map((skill) => skill.slug));
+  // Drop references the parser invented, but keep references to skills that
+  // exist — either shipped in this bundle or already installed for the target.
+  // Pruning against the bundle alone silently severed a member from a skill the
+  // user already owned.
+  const knownSlugs = new Set([
+    ...skills.map((skill) => skill.slug),
+    ...(options?.existingSkillSlugs ?? []),
+  ]);
   for (const member of members) {
     member.skills = member.skills.filter((slug) => knownSlugs.has(slug));
   }

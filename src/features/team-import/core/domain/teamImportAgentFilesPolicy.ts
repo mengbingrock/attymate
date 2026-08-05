@@ -26,6 +26,17 @@ function yamlList(values: readonly string[]): string {
  * `agentDefinition` frontmatter (tools, model, permissionMode, …) is included
  * verbatim when the source grounded it.
  */
+/**
+ * A member's skills, from whichever source the bundle grounded. Both the agent
+ * instructions and the Claude definition must read this same list — when they
+ * disagreed, an agent could be told "(none assigned)" while its own definition
+ * listed skills.
+ */
+export function resolveMemberSkills(member: TeamImportBundleMember): string[] {
+  const definitionSkills = member.agentDefinition?.skills;
+  return definitionSkills?.length ? definitionSkills : member.skills;
+}
+
 export function buildClaudeAgentDefinitionMarkdown(member: TeamImportBundleMember): string {
   const definition = member.agentDefinition;
   const frontmatter: string[] = [
@@ -42,7 +53,7 @@ export function buildClaudeAgentDefinitionMarkdown(member: TeamImportBundleMembe
     frontmatter.push(`permissionMode: ${yamlScalar(definition.permissionMode)}`);
   }
   if (definition?.maxTurns) frontmatter.push(`maxTurns: ${definition.maxTurns}`);
-  const skills = definition?.skills?.length ? definition.skills : member.skills;
+  const skills = resolveMemberSkills(member);
   if (skills.length > 0) frontmatter.push(`skills: ${yamlList(skills)}`);
   if (definition?.mcpServers?.length) {
     frontmatter.push(`mcpServers: ${yamlList(definition.mcpServers)}`);
@@ -70,9 +81,10 @@ export function buildAgentFiles(
   member: TeamImportBundleMember,
   skillDescriptions: ReadonlyMap<string, string>
 ): TeamImportBundleFile[] {
+  const memberSkills = resolveMemberSkills(member);
   const skillLines =
-    member.skills.length > 0
-      ? member.skills.map((slug) => {
+    memberSkills.length > 0
+      ? memberSkills.map((slug) => {
           const description = skillDescriptions.get(slug);
           return description ? `- ${slug} — ${description}` : `- ${slug}`;
         })
@@ -155,11 +167,16 @@ export function bundleToPreview(
       name: member.name,
       role: member.role || 'member',
       workflow: member.workflow,
+      // Carry the source's model choice onto the new roster when the bundle
+      // grounded one; otherwise the team falls back to the app default.
+      ...(member.agentDefinition?.model ? { model: member.agentDefinition.model } : {}),
+      // Persisted on the roster so the assignment outlives the import.
+      ...(resolveMemberSkills(member).length > 0 ? { skills: resolveMemberSkills(member) } : {}),
     })),
     memberDetails: bundle.members.map((member) => ({
       name: member.name,
       role: member.role,
-      skills: member.skills,
+      skills: resolveMemberSkills(member),
       memoryFileCount: member.memoryFiles.length,
     })),
     prompt: bundle.team.leadPrompt

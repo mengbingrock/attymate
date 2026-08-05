@@ -55,7 +55,7 @@ function fakeSkillsInstaller(
     .fn()
     .mockResolvedValue({ status: 'installed' })
 ): TeamImportSkillsInstallerPort {
-  return { listExistingSlugs: async () => new Set(), install };
+  return { listExistingSlugs: () => Promise.resolve(new Set<string>()), install };
 }
 
 function deferred<T>() {
@@ -146,6 +146,30 @@ describe('CreateTeamImportDraftUseCase', () => {
       expect.arrayContaining([expect.objectContaining({ relativePath: 'AGENT.md' })])
     );
     expect(skillsInstaller.install).toHaveBeenCalledTimes(1);
+    // Skills belong to the team, so they install into its project folder.
+    expect(vi.mocked(skillsInstaller.install).mock.calls[0][1]).toEqual({
+      projectPath: '/project',
+    });
+  });
+
+  it('warns when a source has no project folder to scope its skills to', async () => {
+    const reviewStore = new InMemoryTeamImportReviewStore();
+    const preview = reviewStore.save(
+      { ...previewInput(), importKind: 'smart', projectPath: '' },
+      smartBundle()
+    );
+    const skillsInstaller = fakeSkillsInstaller();
+    const useCase = buildUseCase(
+      reviewStore,
+      { createDraft: vi.fn().mockResolvedValue(undefined) },
+      fakeAgentFilesWriter(),
+      skillsInstaller
+    );
+
+    const result = await useCase.execute({ reviewId: preview.reviewId, teamName: 'demo-team' });
+
+    expect(vi.mocked(skillsInstaller.install).mock.calls[0][1]).toBeUndefined();
+    expect(result.applyWarnings?.[0]).toContain('installed for all teams');
   });
 
   it('collects apply warnings instead of failing when skills or agent files fail', async () => {

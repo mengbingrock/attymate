@@ -85,6 +85,7 @@ import {
   Plus,
   Power,
   Scale,
+  Share,
   Square,
   Terminal,
   Trash2,
@@ -1499,6 +1500,40 @@ export const TeamDetailView = memo(function TeamDetailView({
       teamName,
     });
   }, [t, teamName]);
+  const [exporting, setExporting] = useState(false);
+  const handleExportTeam = useCallback(async () => {
+    setExporting(true);
+    try {
+      const result = await api.teamExport.run({ teamName });
+      // Null means the user dismissed the destination picker.
+      if (!result) return;
+      const details = [
+        result.message,
+        ...(result.skillSlugs.length ? [`Skills: ${result.skillSlugs.join(', ')}`] : []),
+        ...result.warnings.map((warning) => `Warning: ${JSON.stringify(warning)}`),
+        ...(result.folderPath ? ['', result.folderPath] : []),
+      ].join('\n');
+      const openFolder = await confirm({
+        title: result.exported ? 'Team exported' : 'Nothing exported',
+        message: details,
+        confirmLabel: result.folderPath ? 'Open folder' : 'OK',
+        cancelLabel: 'Close',
+      });
+      if (openFolder && result.folderPath) {
+        await api.openPath(result.folderPath, undefined, true);
+      }
+    } catch (error) {
+      await confirm({
+        title: 'Export failed',
+        message: error instanceof Error ? error.message : String(error),
+        confirmLabel: 'OK',
+        cancelLabel: 'Close',
+        variant: 'danger',
+      });
+    } finally {
+      setExporting(false);
+    }
+  }, [teamName]);
   const visualizeButtonStyle = useMemo<CSSProperties>(
     () =>
       isLight
@@ -3279,6 +3314,23 @@ export const TeamDetailView = memo(function TeamDetailView({
                       </TooltipTrigger>
                       <TooltipContent side="bottom">
                         {t('matterDashboard.openTooltip')}
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          disabled={exporting}
+                          onClick={() => void handleExportTeam()}
+                          className={TEAM_HEADER_NAV_ACTION_CLASS}
+                        >
+                          <Share size={11} className="shrink-0" />
+                          {exporting ? 'Exporting…' : 'Export'}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        Export this team&apos;s agents and their skills to a folder you can import
+                        elsewhere
                       </TooltipContent>
                     </Tooltip>
                     <div ref={visualizeButtonAnchorRef} className="flex h-8 shrink-0">

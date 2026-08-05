@@ -108,12 +108,14 @@ describe('matter dashboard lead instructions', () => {
     members: [],
   };
 
-  it('includes the batched propose-and-confirm instruction in the persistent lead context', () => {
+  it('points the lead at the matter skill instead of restating the workflow', () => {
     const prompt = buildLeadMatterDashboardInstructions('signal-ops');
-    expect(prompt).toContain('Do NOT update the matter dashboard after every task');
-    expect(prompt).toContain('matter_get');
+    expect(prompt).toContain('Do NOT update it per task');
+    expect(prompt).toContain('matter-dashboard');
     expect(prompt).toContain('matter_propose');
-    expect(prompt).toContain('approves or rejects');
+    // The workflow detail now lives in the skill, not in every lead prompt.
+    expect(prompt).not.toContain('Bates ranges');
+    expect(prompt.split('\n').length).toBeLessThanOrEqual(6);
 
     const context = buildPersistentLeadContext({
       teamName: 'signal-ops',
@@ -122,7 +124,7 @@ describe('matter dashboard lead instructions', () => {
       members: [],
     });
     expect(context).toContain('Matter dashboard (MANDATORY');
-    expect(context).toContain('matter_propose');
+    expect(context).toContain('matter-dashboard');
   });
 
   it('includes the matter instruction in the stock Claude bootstrap prompt', () => {
@@ -138,20 +140,12 @@ describe('matter dashboard lead instructions', () => {
     expect(prompt).toContain('matter_propose');
   });
 
-  it('carries the folder re-scan and conditional initial-scan clauses in the standing instruction', () => {
-    const prompt = buildLeadMatterDashboardInstructions('signal-ops');
-    expect(prompt).toContain('re-scan the project folder for new or changed case documents');
-    expect(prompt).toContain('If matter_get shows an empty dashboard');
-    expect(prompt).toContain('perform the initial matter scan');
-  });
-
-  it('adds specialist delegation with parallel checks only when the team has teammates', () => {
+  it('adds specialist delegation only when the team has teammates', () => {
     const solo = buildLeadMatterDashboardInstructions('signal-ops');
-    expect(solo).not.toContain('calendar/calendaring specialist');
+    expect(solo).not.toContain('calendaring');
 
     const teamed = buildLeadMatterDashboardInstructions('signal-ops', { hasTeammates: true });
-    expect(teamed).toContain('deadline computation and date verification to a calendar/calendaring specialist');
-    expect(teamed).toContain('docket confirmation to a docket specialist');
+    expect(teamed).toContain('calendaring');
     expect(teamed).toContain('IN PARALLEL');
     expect(teamed).toContain('only you call matter_get/matter_propose');
 
@@ -164,7 +158,7 @@ describe('matter dashboard lead instructions', () => {
         { name: 'calendar-agent', role: 'calendaring' },
       ] as TeamCreateRequest['members'],
     });
-    expect(context).toContain('calendar/calendaring specialist');
+    expect(context).toContain('IN PARALLEL');
 
     const soloContext = buildPersistentLeadContext({
       teamName: 'signal-ops',
@@ -172,7 +166,7 @@ describe('matter dashboard lead instructions', () => {
       isSolo: true,
       members: [] as TeamCreateRequest['members'],
     });
-    expect(soloContext).not.toContain('calendar/calendaring specialist');
+    expect(soloContext).not.toContain('IN PARALLEL');
   });
 
   it('phrases parallel folder fan-out per runtime spawning rules', () => {
@@ -194,9 +188,18 @@ describe('matter dashboard lead instructions', () => {
     expect(laneSafe).not.toContain('spawn additional instances of the same specialist type');
   });
 
+  it('sends the initial scan through the skill rather than restating its steps', () => {
+    const prompt = buildLeadInitialMatterScanInstructions('signal-ops');
+    expect(prompt).toContain('matter-dashboard');
+    expect(prompt).toContain('initial-scan');
+    // Document-type lists, grounding rules, and the propose contract are the
+    // skill's job now.
+    expect(prompt).not.toContain('pleadings, discovery, correspondence');
+  });
+
   it('appends the initial matter scan to bootstrap prompts only when the dashboard is empty', () => {
     const scanMarker = 'Initial matter scan (do this early, alongside team assembly)';
-    expect(buildLeadInitialMatterScanInstructions('signal-ops')).toContain('matter_propose');
+    expect(buildLeadInitialMatterScanInstructions('signal-ops')).toContain('matter-dashboard');
 
     expect(buildStockClaudeBootstrapPrompt(bootstrapSpec, '')).not.toContain(scanMarker);
     expect(
@@ -209,10 +212,15 @@ describe('matter dashboard lead instructions', () => {
     ).toContain(scanMarker);
   });
 
-  it('mentions the folder re-scan in the short bootstrap matter blocks', () => {
-    expect(buildStockClaudeBootstrapPrompt(bootstrapSpec, '')).toContain(
-      're-scan the project folder'
-    );
-    expect(buildCodexLeadBootstrapPrompt(bootstrapSpec, '')).toContain('re-scan the project folder');
+  it('names the skill in the short bootstrap matter blocks of both runtimes', () => {
+    for (const prompt of [
+      buildStockClaudeBootstrapPrompt(bootstrapSpec, ''),
+      buildCodexLeadBootstrapPrompt(bootstrapSpec, ''),
+    ]) {
+      expect(prompt).toContain('"matter-dashboard" skill');
+      expect(prompt).toContain('the user approves in the dashboard');
+      // The section schema and scan procedure stay in the skill file.
+      expect(prompt).not.toContain('nextDeadline');
+    }
   });
 });

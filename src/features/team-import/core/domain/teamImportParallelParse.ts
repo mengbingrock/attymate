@@ -101,7 +101,11 @@ Respond with ONLY a single JSON object — no prose, no markdown fence — match
 Rules:
 - Preserve the source wording for "workflow"; merge this member's files in a sensible order.
 - "memoryFilePaths" must reference exact FILE paths from the source below; the app copies their contents verbatim. Do NOT inline file contents.
-- Set "skills" only to slugs this member is described as using.
+- "skills": list every slug above that this member relies on. The source usually names skills in
+  its own wording rather than by slug (a "Key skills:" line, a named workflow, a capability the
+  role depends on), and the slugs above may have been renamed from the source's folder names, so
+  match on MEANING, not on an exact string. Leave the list empty only when the member genuinely
+  uses none of them — an empty list means the app tells this agent it has no skills at all.
 - "agentDefinition" mirrors Claude Code subagent frontmatter. Include ONLY fields explicitly grounded in the source (tool restrictions, assigned model, permission/approval rules, turn limits, MCP servers, hooks, memory scope). Omit ungrounded fields; omit the whole object when nothing applies. Never invent values.
 - ${DATA_NOT_INSTRUCTIONS}`,
     '',

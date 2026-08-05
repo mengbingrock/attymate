@@ -46,6 +46,31 @@ describe('buildAgentFiles', () => {
     expect(agentMd?.content).toContain('Research carefully.');
   });
 
+  it.each([
+    ['member skills only', member({ skills: ['legal-research'] })],
+    [
+      'agentDefinition skills only',
+      member({ skills: [], agentDefinition: { skills: ['legal-research'] } }),
+    ],
+    [
+      'both, definition wins',
+      member({ skills: ['stale'], agentDefinition: { skills: ['legal-research'] } }),
+    ],
+  ])(
+    'keeps AGENT.md and the Claude definition in agreement (%s)',
+    (_case, input: TeamImportBundleMember) => {
+      const files = buildAgentFiles(input, new Map([['legal-research', 'Research skill.']]));
+      const agentMd = files.find((file) => file.relativePath === AGENT_INSTRUCTIONS_FILE)!.content;
+      const definition = buildClaudeAgentDefinitionMarkdown(input);
+
+      // An agent told "(none assigned)" while its own definition lists skills
+      // is the bug this guards: the runtime only ever reads AGENT.md.
+      expect(agentMd).toContain('legal-research');
+      expect(agentMd).not.toContain('(none assigned');
+      expect(definition).toContain('skills: [legal-research]');
+    }
+  );
+
   it('seeds MEMORY.md when the member has none', () => {
     const files = buildAgentFiles(member(), new Map());
     expect(files.some((file) => file.relativePath === AGENT_MEMORY_FILE)).toBe(true);
@@ -78,6 +103,16 @@ describe('buildWorkflowPointer', () => {
 });
 
 describe('bundleToPreview', () => {
+  it('puts skills on the roster members so the assignment is persisted', () => {
+    const preview = bundleToPreview(bundle(), {
+      projectPath: '/project',
+      sourceLabel: 'folder',
+      existingSkillSlugs: new Set(),
+    });
+
+    expect(preview.members[0].skills).toEqual(['legal-research']);
+  });
+
   it('maps the bundle to a smart preview with skill plans and member details', () => {
     const preview = bundleToPreview(bundle(), {
       projectPath: '/source',

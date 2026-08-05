@@ -90,6 +90,12 @@ import {
   type TerminalWorkspaceFeatureFacade,
 } from '@features/terminal-workspace/main';
 import {
+  createTeamExportFeature,
+  registerTeamExportIpc,
+  removeTeamExportIpc,
+  type TeamExportFeatureFacade,
+} from '@features/team-export/main';
+import {
   createTeamImportFeature,
   registerTeamImportIpc,
   removeTeamImportIpc,
@@ -1107,6 +1113,7 @@ let codexAccountFeature: CodexAccountFeatureFacade | null = null;
 let codexModelCatalogFeature: CodexModelCatalogFeatureFacade | null = null;
 let recentProjectsFeature: RecentProjectsFeatureFacade;
 let teamImportFeature: TeamImportFeatureFacade;
+let teamExportFeature: TeamExportFeatureFacade;
 let organizationsFeature: OrganizationsFeatureFacade;
 let runtimeProviderManagementFeature: RuntimeProviderManagementFeatureFacade;
 let terminalWorkspaceFeature: TerminalWorkspaceFeatureFacade | null = null;
@@ -2309,6 +2316,7 @@ async function initializeServices(): Promise<void> {
     logger: createLogger('Feature:RecentProjects'),
   });
   teamImportFeature = createTeamImportFeature({ teamDataService, skillsMutationService });
+  teamExportFeature = createTeamExportFeature({ teamsBasePath: getTeamsBasePath() });
   organizationsFeature = createOrganizationsFeature({
     teamDataService,
     crossTeamService,
@@ -2346,6 +2354,11 @@ async function initializeServices(): Promise<void> {
       rejectProposal: (teamName, reason) => teamDataService.rejectMatterProposal(teamName, reason),
     },
   });
+  // Close the loop the other way: a quiet board asks the lead for the same
+  // skill-backed refresh the dashboard button sends.
+  teamDataService.setMatterRefreshRequester((teamName, completedTaskLabel) =>
+    matterFeature!.requestJobWrapUpRefresh(teamName, completedTaskLabel)
+  );
   const tokenUsageLogger = createLogger('Feature:TokenUsage');
   tokenUsageFeature = createTokenUsageFeature({
     ledgerPath: join(getAppDataPath(), 'token-usage', 'ledger.json'),
@@ -2901,6 +2914,7 @@ async function initializeServices(): Promise<void> {
   registerCodexAccountIpc(ipcMain, codexAccountFeature);
   registerRecentProjectsIpc(ipcMain, recentProjectsFeature);
   registerTeamImportIpc(ipcMain, teamImportFeature);
+  registerTeamExportIpc(ipcMain, teamExportFeature);
   registerOrganizationsIpc(ipcMain, organizationsFeature);
   registerRuntimeProviderManagementIpc(ipcMain, runtimeProviderManagementFeature);
   registerTerminalWorkspaceIpc(ipcMain, terminalWorkspaceFeature);
@@ -3125,6 +3139,7 @@ async function shutdownServices(): Promise<void> {
       removeCodexAccountIpc(ipcMain);
       removeRecentProjectsIpc(ipcMain);
       removeTeamImportIpc(ipcMain);
+      removeTeamExportIpc(ipcMain);
       removeOrganizationsIpc(ipcMain);
       removeRuntimeProviderManagementIpc(ipcMain);
       removeTerminalWorkspaceIpc(ipcMain);
