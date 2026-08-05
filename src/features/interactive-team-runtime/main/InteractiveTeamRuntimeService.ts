@@ -339,7 +339,17 @@ export class InteractiveTeamRuntimeService {
                 (member) =>
                   member.agentType !== 'team-lead' && member.tmuxPaneId?.trim().startsWith('%')
               );
+              // A candidate anchored to the lead session id we detected in
+              // THIS run is ours by construction — its teammate panes being
+              // gone means the teammates died (e.g. spawn failures), not that
+              // the dir belongs to a previous run. Rejecting it would erase
+              // the binding and orphan the whole launch. The pane check only
+              // disqualifies scan-discovered candidates.
+              const anchoredToDetectedLead =
+                binding.leadSessionId !== null &&
+                getSessionTeamName(binding.leadSessionId) === sessionTeamName;
               const staleCandidate =
+                !anchoredToDetectedLead &&
                 teammateEntries.length > 0 &&
                 teammateEntries.every((member) => !ourPaneIds.has(member.tmuxPaneId!.trim()));
               if (staleCandidate) {

@@ -331,8 +331,13 @@ export class TmuxPlatformCommandExecutor {
         input.cwd,
         '-x',
         String(input.cols ?? 220),
+        // Detached windows never resize to a client, and the stock CLI spawns
+        // every teammate as a split of the lead's window before the app breaks
+        // them out. At 50 rows, seven splits exhausted the window and the rest
+        // failed with "no room for another split" — give the virtual window
+        // enough height that a full roster fits even before break-out.
         '-y',
-        String(input.rows ?? 50),
+        String(input.rows ?? 400),
         input.command,
       ],
       10_000
