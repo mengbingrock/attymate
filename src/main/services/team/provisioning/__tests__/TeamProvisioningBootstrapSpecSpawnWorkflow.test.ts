@@ -72,4 +72,16 @@ describe('buildStockClaudeBootstrapPrompt', () => {
     );
     expect(prompt).not.toContain('Spawn prompt for');
   });
+
+  it('briefs the promoted imported profile as lead without adding it to the roster', () => {
+    const prompt = buildStockClaudeBootstrapPrompt(baseSpec([{ name: 'calendar-agent' }]), '', {
+      leadName: 'legal-ops-supervisor',
+      leadWorkflow: 'Coordinate the legal matter and delegate specialist work.',
+    });
+
+    expect(prompt).toContain('You are "legal-ops-supervisor", the lead');
+    expect(prompt).toContain('Coordinate the legal matter and delegate specialist work.');
+    expect(prompt).toContain('from: "legal-ops-supervisor"');
+    expect(prompt).not.toContain('- legal-ops-supervisor');
+  });
 });

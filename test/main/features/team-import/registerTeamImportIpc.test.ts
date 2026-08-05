@@ -65,9 +65,16 @@ describe('team import IPC', () => {
     registerTeamImportIpc(ipcMain, feature);
 
     await expect(
-      handlers.get(TEAM_IMPORT_CREATE_DRAFT)?.({}, { reviewId: 'review-1', teamName: 'demo' })
+      handlers.get(TEAM_IMPORT_CREATE_DRAFT)?.(
+        {},
+        { reviewId: 'review-1', teamName: 'demo', leadName: 'legal-ops-supervisor' }
+      )
     ).resolves.toEqual({ teamName: 'demo' });
-    expect(feature.createDraft).toHaveBeenCalledWith({ reviewId: 'review-1', teamName: 'demo' });
+    expect(feature.createDraft).toHaveBeenCalledWith({
+      reviewId: 'review-1',
+      teamName: 'demo',
+      leadName: 'legal-ops-supervisor',
+    });
 
     removeTeamImportIpc(ipcMain);
     expect(handlers.size).toBe(0);

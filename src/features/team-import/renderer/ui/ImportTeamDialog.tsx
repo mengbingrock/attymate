@@ -8,7 +8,14 @@ import {
   DialogTitle,
 } from '@renderer/components/ui/dialog';
 import { Input } from '@renderer/components/ui/input';
-import { FolderOpen, Globe, Loader2, Sparkles, X } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@renderer/components/ui/select';
+import { Crown, FolderOpen, Globe, Loader2, Sparkles, X } from 'lucide-react';
 
 import { validateTeamImportName } from '../../core/domain/teamImportPolicy';
 import { useTeamImportDialog } from '../hooks/useTeamImportDialog';
@@ -116,6 +123,7 @@ export const ImportTeamDialog = ({
   const canCreate =
     state.preview !== null &&
     state.preview.blockingErrors.length === 0 &&
+    state.preview.members.some((member) => member.name === state.leadName) &&
     teamNameError === null &&
     !state.importing;
   const offerSmartRetry =
@@ -242,6 +250,29 @@ export const ImportTeamDialog = ({
                     ) : null}
                   </div>
 
+                  <div className="space-y-2">
+                    <label htmlFor="team-import-lead" className="text-sm font-semibold text-text">
+                      {t('teamImport.teamLead')}
+                    </label>
+                    <Select
+                      value={state.leadName || undefined}
+                      onValueChange={state.setLeadName}
+                      disabled={state.importing || state.preview.members.length === 0}
+                    >
+                      <SelectTrigger id="team-import-lead">
+                        <SelectValue placeholder={t('teamImport.teamLeadPlaceholder')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {state.preview.members.map((member) => (
+                          <SelectItem key={member.name} value={member.name}>
+                            {member.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-text-muted">{t('teamImport.teamLeadHint')}</p>
+                  </div>
+
                   {state.preview.projectPath ? (
                     <div>
                       <p className="text-sm font-semibold text-text">
@@ -274,6 +305,12 @@ export const ImportTeamDialog = ({
                         <article key={member.name} className="rounded border border-border p-3">
                           <div className="flex flex-wrap items-center gap-2">
                             <h4 className="text-sm font-medium text-text">{member.name}</h4>
+                            {member.name === state.leadName ? (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/5 px-2 py-0.5 text-xs text-amber-400">
+                                <Crown className="size-3" />
+                                {t('teamImport.leadBadge')}
+                              </span>
+                            ) : null}
                             {detail?.role ? (
                               <span className="text-xs text-text-muted">{detail.role}</span>
                             ) : null}
@@ -398,7 +435,7 @@ export const ImportTeamDialog = ({
               {state.preview
                 ? t('teamImport.summary', {
                     teamName: state.teamName,
-                    count: state.preview.members.length,
+                    count: Math.max(0, state.preview.members.length - 1),
                   })
                 : t('teamImport.selectPrompt')}
             </p>

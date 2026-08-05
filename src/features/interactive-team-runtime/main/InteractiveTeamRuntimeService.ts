@@ -44,6 +44,7 @@ const CODEX_LANE_EXIT_WAIT_MS = 5_000;
 
 export interface InteractiveLaunchInput {
   teamName: string;
+  leadName: string;
   runId: string;
   cwd: string;
   claudePath: string;
@@ -154,6 +155,7 @@ export class InteractiveTeamRuntimeService {
       version: 2,
       runtime: 'claude-interactive',
       teamName: input.teamName,
+      leadName: input.leadName,
       runId: input.runId,
       tmuxSessionName,
       leadSessionId: null,
@@ -536,7 +538,7 @@ export class InteractiveTeamRuntimeService {
     for (const pane of panes) {
       if (pane.paneId === binding.leadPaneId) {
         targets.push({
-          memberName: 'team-lead',
+          memberName: binding.leadName?.trim() || 'team-lead',
           isLead: true,
           paneId: pane.paneId,
           windowIndex: pane.windowIndex,
@@ -561,7 +563,9 @@ export class InteractiveTeamRuntimeService {
     const targets = await this.listConsoleTargets(teamName);
     const target =
       targets.find((candidate) => candidate.memberName === memberName) ??
-      (memberName === 'team-lead' ? targets.find((candidate) => candidate.isLead) : undefined);
+      (memberName === 'team-lead' || memberName === binding.leadName
+        ? targets.find((candidate) => candidate.isLead)
+        : undefined);
     if (!target) {
       throw new Error(`No console target for "${memberName}" in team "${teamName}"`);
     }

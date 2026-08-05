@@ -37,6 +37,7 @@ function resolveRequestError(
 export function useTeamImportDialog(input: UseTeamImportDialogInput) {
   const [preview, setPreview] = useState<TeamImportPreview | null>(null);
   const [teamName, setTeamName] = useState('');
+  const [leadName, setLeadName] = useState('');
   const [sourceKind, setSourceKind] = useState<TeamImportSourceKind>('folder');
   const [url, setUrl] = useState('');
   const [smart, setSmart] = useState(false);
@@ -52,6 +53,7 @@ export function useTeamImportDialog(input: UseTeamImportDialogInput) {
     importingRef.current = false;
     setPreview(null);
     setTeamName('');
+    setLeadName('');
     setSourceKind('folder');
     setUrl('');
     setSmart(false);
@@ -71,6 +73,7 @@ export function useTeamImportDialog(input: UseTeamImportDialogInput) {
       const requestId = ++requestIdRef.current;
       setPreview(null);
       setTeamName('');
+      setLeadName('');
       setStage(null);
       setLoading(true);
       setError(null);
@@ -114,7 +117,13 @@ export function useTeamImportDialog(input: UseTeamImportDialogInput) {
   }, [preview?.projectPath, runPreview]);
 
   const createDraft = useCallback(async () => {
-    if (!preview || preview.blockingErrors.length > 0 || importingRef.current) return;
+    if (
+      !preview ||
+      preview.blockingErrors.length > 0 ||
+      !preview.members.some((member) => member.name === leadName) ||
+      importingRef.current
+    )
+      return;
     importingRef.current = true;
     setImporting(true);
     setError(null);
@@ -122,6 +131,7 @@ export function useTeamImportDialog(input: UseTeamImportDialogInput) {
       const result = await api.teamImport.createDraft({
         reviewId: preview.reviewId,
         teamName,
+        leadName,
       });
       input.onImported(result.teamName, result.applyWarnings);
       input.onClose();
@@ -133,12 +143,14 @@ export function useTeamImportDialog(input: UseTeamImportDialogInput) {
       importingRef.current = false;
       setImporting(false);
     }
-  }, [input, preview, teamName]);
+  }, [input, leadName, preview, teamName]);
 
   return {
     preview,
     teamName,
     setTeamName,
+    leadName,
+    setLeadName,
     sourceKind,
     setSourceKind,
     url,

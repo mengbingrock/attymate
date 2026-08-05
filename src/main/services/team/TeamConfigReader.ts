@@ -748,7 +748,14 @@ export class TeamConfigReader {
           : teamName;
 
       let memberCount = 0;
-      let leadName: string | undefined;
+      const persistedLead =
+        meta.lead && typeof meta.lead === 'object' && !Array.isArray(meta.lead)
+          ? (meta.lead as Record<string, unknown>)
+          : null;
+      let leadName =
+        typeof persistedLead?.name === 'string' && persistedLead.name.trim()
+          ? persistedLead.name.trim()
+          : undefined;
       let leadColor: string | undefined;
       try {
         const members = await this.membersMetaStore.getMembers(teamName);

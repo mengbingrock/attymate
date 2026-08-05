@@ -80,4 +80,39 @@ describe('StockClaudeTeamStateSynthesizer', () => {
     expect(await readFile(path.join(teamDir, 'config.json'), 'utf-8')).toBe(existingConfig);
     expect(await readFile(path.join(inboxesDir, 'carol.json'), 'utf-8')).toBe(existingInbox);
   });
+
+  it('uses an imported profile as the only lead and never registers it as a teammate', async () => {
+    await synthesizeStockClaudeTeamRuntimeState({
+      teamName: 'legal-team',
+      cwd: '/tmp/legal-project',
+      lead: {
+        name: 'legal-ops-supervisor',
+        role: 'Legal operations supervisor',
+        workflow: 'Coordinate the matter.',
+        model: 'claude-opus-5',
+      },
+      members: [{ name: 'calendar-agent' }, { name: 'docket-agent' }],
+      providerId: 'anthropic',
+    });
+
+    const config = JSON.parse(
+      await readFile(path.join(teamsBasePath, 'legal-team', 'config.json'), 'utf-8')
+    );
+    expect(config.lead).toEqual({
+      name: 'legal-ops-supervisor',
+      agentId: 'legal-ops-supervisor@legal-team',
+    });
+    expect(config.leadAgentId).toBe('legal-ops-supervisor@legal-team');
+    expect(config.members.map((member: { name: string }) => member.name)).toEqual([
+      'legal-ops-supervisor',
+      'calendar-agent',
+      'docket-agent',
+    ]);
+    expect(
+      config.members.filter((member: { agentType?: string }) => member.agentType === 'team-lead')
+    ).toHaveLength(1);
+    expect(
+      fs.existsSync(path.join(teamsBasePath, 'legal-team', 'inboxes', 'legal-ops-supervisor.json'))
+    ).toBe(false);
+  });
 });

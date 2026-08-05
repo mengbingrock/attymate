@@ -18,6 +18,8 @@ export interface InteractiveRuntimeBinding {
   teamName: string;
   runId: string;
   tmuxSessionName: string;
+  /** Structured lead identity for Claude interactive runtimes. */
+  leadName?: string;
   leadSessionId: string | null;
   sessionTeamName: string | null;
   leadPaneId: string | null;
@@ -63,6 +65,10 @@ export function parseRuntimeBinding(raw: string): InteractiveRuntimeBinding | nu
     teamName: candidate.teamName,
     runId: candidate.runId,
     tmuxSessionName: candidate.tmuxSessionName,
+    leadName:
+      typeof candidate.leadName === 'string' && candidate.leadName.trim()
+        ? candidate.leadName.trim()
+        : undefined,
     leadSessionId: typeof candidate.leadSessionId === 'string' ? candidate.leadSessionId : null,
     sessionTeamName:
       typeof candidate.sessionTeamName === 'string' ? candidate.sessionTeamName : null,

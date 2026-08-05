@@ -90,9 +90,17 @@ describe('CreateTeamImportDraftUseCase', () => {
     };
     const useCase = buildUseCase(reviewStore, draftRepository);
 
-    const first = useCase.execute({ reviewId: preview.reviewId, teamName: 'first-team' });
+    const first = useCase.execute({
+      reviewId: preview.reviewId,
+      teamName: 'first-team',
+      leadName: 'writer',
+    });
     await expect(
-      useCase.execute({ reviewId: preview.reviewId, teamName: 'second-team' })
+      useCase.execute({
+        reviewId: preview.reviewId,
+        teamName: 'second-team',
+        leadName: 'writer',
+      })
     ).rejects.toThrow('expired');
     expect(draftRepository.createDraft).toHaveBeenCalledTimes(1);
 
@@ -110,7 +118,7 @@ describe('CreateTeamImportDraftUseCase', () => {
         .mockResolvedValueOnce(undefined),
     };
     const useCase = buildUseCase(reviewStore, draftRepository);
-    const request = { reviewId: preview.reviewId, teamName: 'demo-team' };
+    const request = { reviewId: preview.reviewId, teamName: 'demo-team', leadName: 'writer' };
 
     await expect(useCase.execute(request)).rejects.toThrow('disk full');
     await expect(useCase.execute(request)).resolves.toEqual({ teamName: 'demo-team' });
@@ -121,25 +129,32 @@ describe('CreateTeamImportDraftUseCase', () => {
     const reviewStore = new InMemoryTeamImportReviewStore();
     const bundle = smartBundle();
     const preview = reviewStore.save(
-      { ...previewInput(), importKind: 'smart', members: [{ name: 'writer', role: 'member', workflow: bundle.members[0].workflow }] },
+      {
+        ...previewInput(),
+        importKind: 'smart',
+        members: [{ name: 'writer', role: 'member', workflow: bundle.members[0].workflow }],
+      },
       bundle
     );
     const createDraft = vi.fn().mockResolvedValue(undefined);
     const agentFilesWriter = fakeAgentFilesWriter();
     const skillsInstaller = fakeSkillsInstaller();
-    const useCase = buildUseCase(
-      reviewStore,
-      { createDraft },
-      agentFilesWriter,
-      skillsInstaller
-    );
+    const useCase = buildUseCase(reviewStore, { createDraft }, agentFilesWriter, skillsInstaller);
 
-    const result = await useCase.execute({ reviewId: preview.reviewId, teamName: 'demo-team' });
+    const result = await useCase.execute({
+      reviewId: preview.reviewId,
+      teamName: 'demo-team',
+      leadName: 'writer',
+    });
 
     expect(result).toEqual({ teamName: 'demo-team' });
     const persistedPreview = createDraft.mock.calls[0][1] as TeamImportPreview;
-    expect(persistedPreview.members[0].workflow).toContain('/teams/demo-team/agents/writer/AGENT.md');
+    const persistedLead = createDraft.mock.calls[0][2] as TeamImportPreview['members'][number];
+    expect(persistedPreview.members[0].workflow).toContain(
+      '/teams/demo-team/agents/writer/AGENT.md'
+    );
     expect(persistedPreview.members[0].workflow).not.toContain('Full imported workflow.');
+    expect(persistedLead).toEqual(persistedPreview.members[0]);
     expect(agentFilesWriter.writeAgentFiles).toHaveBeenCalledWith(
       'demo-team',
       'writer',
@@ -166,7 +181,11 @@ describe('CreateTeamImportDraftUseCase', () => {
       skillsInstaller
     );
 
-    const result = await useCase.execute({ reviewId: preview.reviewId, teamName: 'demo-team' });
+    const result = await useCase.execute({
+      reviewId: preview.reviewId,
+      teamName: 'demo-team',
+      leadName: 'writer',
+    });
 
     expect(vi.mocked(skillsInstaller.install).mock.calls[0][1]).toBeUndefined();
     expect(result.applyWarnings?.[0]).toContain('installed for all teams');
@@ -189,10 +208,30 @@ describe('CreateTeamImportDraftUseCase', () => {
       skillsInstaller
     );
 
-    const result = await useCase.execute({ reviewId: preview.reviewId, teamName: 'demo-team' });
+    const result = await useCase.execute({
+      reviewId: preview.reviewId,
+      teamName: 'demo-team',
+      leadName: 'writer',
+    });
     expect(result.teamName).toBe('demo-team');
     expect(result.applyWarnings).toHaveLength(2);
     expect(result.applyWarnings?.[0]).toContain('read-only fs');
     expect(result.applyWarnings?.[1]).toContain('already exists');
+  });
+
+  it('rejects a lead that is not one of the imported profiles', async () => {
+    const reviewStore = new InMemoryTeamImportReviewStore();
+    const preview = reviewStore.save(previewInput());
+    const createDraft = vi.fn().mockResolvedValue(undefined);
+    const useCase = buildUseCase(reviewStore, { createDraft });
+
+    await expect(
+      useCase.execute({
+        reviewId: preview.reviewId,
+        teamName: 'demo-team',
+        leadName: 'not-imported',
+      })
+    ).rejects.toThrow('leadNotFound');
+    expect(createDraft).not.toHaveBeenCalled();
   });
 });
