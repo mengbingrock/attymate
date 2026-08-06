@@ -40,7 +40,6 @@ const SOURCE: TeamExportSource = {
   members: [
     {
       name: 'calendar-agent',
-      model: 'gpt-5.6-sol',
       agentDefinitionMarkdown: definition(
         'calendar-agent',
         'Litigation Calendar Proposal Specialist',
@@ -130,9 +129,10 @@ describe('export → import round trip', () => {
     ]);
     expect(preview.skillsFound).toEqual(['legal-calendaring-workflow']);
     expect(preview.skillPlans?.map((plan) => plan.slug)).toEqual(['legal-calendaring-workflow']);
-    // The model each member ran under travels with it.
-    expect(preview.members.map((member) => member.model)).toEqual(['gpt-5.6-sol', undefined]);
-    // …and so does its skill assignment, onto the new team's roster.
+    // The format is model-agnostic: no member arrives pinned to a model, so
+    // the importing team's own provider choice decides what they run on.
+    expect(preview.members.every((member) => member.model === undefined)).toBe(true);
+    // The skill assignment travels onto the new team's roster.
     expect(preview.members.map((member) => member.skills)).toEqual([
       ['legal-calendaring-workflow'],
       undefined,
@@ -159,6 +159,36 @@ describe('export → import round trip', () => {
       'Court Docket Review Specialist',
     ]);
     expect(preview.skillsFound).toEqual(['legal-calendaring-workflow']);
+  });
+
+  it('ignores model pins in bundles from older exports', () => {
+    // Bundles written before the format went model-agnostic pin every member
+    // to the exporting machine's model. Importing one must not resurrect the
+    // pin — the user's provider choice decides.
+    const legacyBundle = JSON.stringify({
+      schema: 'team-import-bundle/v1',
+      team: { name: 'legacy-team' },
+      members: [
+        {
+          name: 'calendar-agent',
+          role: 'Calendar Specialist',
+          workflow: 'Derive deadlines.',
+          skills: [],
+          memoryFiles: [],
+          agentDefinition: { model: 'claude-sonnet-5' },
+        },
+      ],
+      skills: [],
+    });
+
+    const { bundle } = parseTeamImportBundle(legacyBundle);
+    const preview = bundleToPreview(bundle!, {
+      projectPath: EXPORT_FOLDER_PATH,
+      sourceLabel: 'legacy',
+      existingSkillSlugs: new Set<string>(),
+    });
+
+    expect(preview.members[0].model).toBeUndefined();
   });
 
   it('carries no memory, matter, or machine-specific paths in the exported files', () => {

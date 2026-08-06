@@ -47,6 +47,11 @@ wins.
 
 ## Fidelity rules
 
+- **The bundle is model- and provider-agnostic.** Roles, workflows, and skills are the portable
+  substance; a member's model is runtime configuration of the exporting machine and is never
+  written into the bundle. The importing team picks models from whatever provider it launches
+  with — a team exported from Claude imports cleanly as a Codex team and vice versa. The importer
+  also ignores model pins in bundles from older exports.
 - Each member's `claude-agent-definition.md` is reused when present; otherwise an equivalent is
   synthesized with the importer's own `buildClaudeAgentDefinitionMarkdown`, so teams created in
   the UI (which have no `agents/` directory) still export cleanly.

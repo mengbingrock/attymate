@@ -168,9 +168,13 @@ export function bundleToPreview(
       name: member.name,
       role: member.role || 'member',
       workflow: member.workflow,
-      // Carry the source's model choice onto the new roster when the bundle
-      // grounded one; otherwise the team falls back to the app default.
-      ...(member.agentDefinition?.model ? { model: member.agentDefinition.model } : {}),
+      // The roster deliberately takes NO model from the bundle — the format is
+      // model-agnostic. A pinned model is the exporting machine's runtime
+      // configuration, and honoring it silently overrode the provider chosen
+      // here: a bundle pinning claude-sonnet-5 forced a "codex" import onto
+      // Claude. Members inherit models from the team's own provider at launch;
+      // a source-grounded model stays documented in claude-agent-definition.md
+      // without steering the roster.
       // Persisted on the roster so the assignment outlives the import.
       ...(resolveMemberSkills(member).length > 0 ? { skills: resolveMemberSkills(member) } : {}),
     })),

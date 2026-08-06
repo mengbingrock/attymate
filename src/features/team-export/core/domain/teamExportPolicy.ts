@@ -34,7 +34,6 @@ export interface TeamExportMemberSource {
   workflow?: string;
   /** members.meta.json skill slugs: the durable record of the assignment. */
   skills?: string[];
-  model?: string;
   agentType?: string;
   /** agents/<name>/AGENT.md, when the team has one. */
   agentMarkdown?: string;
@@ -161,13 +160,18 @@ export function buildTeamExportMembers(source: TeamExportSource): TeamExportMemb
     for (const slug of memberSkills) {
       if (!referencedSlugs.includes(slug)) referencedSlugs.push(slug);
     }
+    // Deliberately NO model or provider: the bundle is model-agnostic. A
+    // member's model is runtime configuration of the machine that exported it
+    // (a codex team exported after a Claude relaunch was pinning every member
+    // to claude-sonnet-5, silently overriding the importer's provider choice).
+    // Roles, workflows, and skills are the portable substance; the importer's
+    // team picks models from whatever provider it launches with.
     members.push({
       name,
       role: readMemberRole(member, frontmatter.description),
       workflow,
       skills: memberSkills,
       memoryFiles: [],
-      ...(member.model ? { agentDefinition: { model: member.model } } : {}),
     });
   }
 

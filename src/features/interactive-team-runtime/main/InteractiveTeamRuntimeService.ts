@@ -33,7 +33,11 @@ export type { InteractiveRuntimeBinding } from '../core/domain/runtimeBinding';
 
 const logger = createLogger('Service:InteractiveTeamRuntime');
 
-const LEAD_SESSION_DETECT_TIMEOUT_MS = 90_000;
+// A lead facing a fresh case folder needs a trust dialog answered, MCP servers
+// connected, and a large bootstrap ingested before its first submit creates
+// the transcript — observed at ~80s, which blew a 90s window and flashed the
+// launch as failed even though the slower session-team scan later adopted it.
+const LEAD_SESSION_DETECT_TIMEOUT_MS = 240_000;
 const LEAD_SESSION_POLL_MS = 1_000;
 const PROMPT_READY_TIMEOUT_MS = 60_000;
 const PROMPT_READY_POLL_MS = 1_500;
