@@ -20,6 +20,14 @@ const LANE_READY_POLL_MS = 1_500;
 /** Consecutive stable `ready` polls required before pasting. */
 const LANE_READY_STABLE_POLLS = 2;
 
+/**
+ * How long member sync waits for config.json to be created by the lead's first
+ * MCP registration. Normally seconds behind lane readiness; the generous cap
+ * covers a lead that dawdles before its first tool call.
+ */
+const CONFIG_SYNC_WAIT_MS = 3 * 60_000;
+const CONFIG_SYNC_POLL_MS = 2_000;
+
 export interface CodexLaneSpec {
   memberName: string;
   isLead: boolean;
@@ -234,13 +242,27 @@ export class CodexTeamLanesService {
     }
   }
 
-  /** Mark every lane member active in the app team config. */
+  /**
+   * Mark every lane member active in the app team config.
+   *
+   * config.json is born when the lead's first MCP call registers the team —
+   * seconds AFTER every lane reports ready, which is when this sync fires. A
+   * single unretried attempt lost that race: it hit ENOENT, logged at debug,
+   * and the UI showed all ten healthy lanes as "stale runtime" for the life of
+   * the run. Wait for the file (bounded) instead of failing silently.
+   */
   async syncAppConfigMembers(teamName: string, cwd: string): Promise<void> {
     const binding = await readRuntimeBinding(teamName);
     if (!binding || binding.runtime !== 'codex-lanes') return;
     const configPath = path.join(getTeamsBasePath(), teamName, 'config.json');
     try {
-      const raw = await fs.promises.readFile(configPath, 'utf-8');
+      const raw = await this.readFileWhenItExists(configPath, CONFIG_SYNC_WAIT_MS);
+      if (raw === null) {
+        logger.warn(
+          `[${teamName}] codex lane config sync gave up: ${configPath} did not appear within ${CONFIG_SYNC_WAIT_MS}ms`
+        );
+        return;
+      }
       const config = JSON.parse(raw) as { members?: Record<string, unknown>[] };
       if (!Array.isArray(config.members)) return;
       for (const lane of binding.lanes) {
@@ -271,7 +293,22 @@ export class CodexTeamLanesService {
       }
       await atomicWriteAsync(configPath, JSON.stringify(config, null, 2));
     } catch (error) {
-      logger.debug(`[${teamName}] codex lane config sync failed: ${String(error)}`);
+      // A failure here leaves every healthy lane looking dead in the UI —
+      // that is worth a visible log line, not a debug whisper.
+      logger.warn(`[${teamName}] codex lane config sync failed: ${String(error)}`);
+    }
+  }
+
+  /** Resolves the file's content, or null when it never appears in time. */
+  private async readFileWhenItExists(filePath: string, timeoutMs: number): Promise<string | null> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      try {
+        return await fs.promises.readFile(filePath, 'utf-8');
+      } catch {
+        if (Date.now() >= deadline) return null;
+        await new Promise((resolve) => setTimeout(resolve, CONFIG_SYNC_POLL_MS));
+      }
     }
   }
 }

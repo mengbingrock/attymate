@@ -84,7 +84,6 @@ export class TeamExportSourceReader implements TeamExportSourceReaderPort {
         ...(Array.isArray(raw.skills) && raw.skills.length > 0
           ? { skills: raw.skills.filter((slug): slug is string => typeof slug === 'string') }
           : {}),
-        ...(readString(raw.model) ? { model: readString(raw.model)! } : {}),
         ...(readString(raw.agentType) ? { agentType: readString(raw.agentType)! } : {}),
         ...(agentMarkdown ? { agentMarkdown } : {}),
         ...(agentDefinitionMarkdown ? { agentDefinitionMarkdown } : {}),

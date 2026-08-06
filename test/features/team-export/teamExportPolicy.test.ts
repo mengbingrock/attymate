@@ -56,7 +56,6 @@ function source(overrides: Partial<TeamExportSource> = {}): TeamExportSource {
       {
         name: 'calendar-agent',
         role: 'from members.meta',
-        model: 'gpt-5.6-sol',
         agentMarkdown: CALENDAR_AGENT_MD,
         agentDefinitionMarkdown: CALENDAR_DEFINITION,
       },
@@ -82,9 +81,16 @@ describe('buildTeamExportMembers', () => {
       name: 'calendar-agent',
       role: 'Litigation Calendar Proposal Specialist',
       skills: ['legal-calendaring-workflow'],
-      agentDefinition: { model: 'gpt-5.6-sol' },
     });
     expect(members[0].workflow).toContain('Derive and verify litigation deadlines');
+  });
+
+  it('exports no model — the bundle is model-agnostic', () => {
+    // A member's model is the exporting machine's runtime configuration; a
+    // bundle pinning claude-sonnet-5 forced a "codex" import onto Claude.
+    const { members } = buildTeamExportMembers(source());
+
+    expect(members[0].agentDefinition).toBeUndefined();
   });
 
   it('never carries agent memory into a reusable package', () => {
