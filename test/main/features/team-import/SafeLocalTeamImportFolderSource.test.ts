@@ -50,6 +50,41 @@ describe('SafeLocalTeamImportFolderSource', () => {
     expect(snapshot.projectPath).toBe(await fs.realpath(root));
   });
 
+  it('reads skills from the visible skills/ root, preferring it over .claude/skills', async () => {
+    // Exports write the visible, provider-neutral layout; the dot-hidden root
+    // remains readable so older exports and in-place project folders still
+    // import. A slug present in both counts once, visible copy winning.
+    const root = await createFixture();
+    await fs.mkdir(path.join(root, 'skills', 'editing'), { recursive: true });
+    await fs.writeFile(
+      path.join(root, 'skills', 'editing', 'SKILL.md'),
+      '---\nname: editing\ndescription: visible copy\n---\n',
+      'utf8'
+    );
+    await fs.mkdir(path.join(root, '.claude', 'skills', 'editing'), { recursive: true });
+    await fs.writeFile(
+      path.join(root, '.claude', 'skills', 'editing', 'SKILL.md'),
+      '---\nname: editing\ndescription: hidden copy\n---\n',
+      'utf8'
+    );
+    await fs.mkdir(path.join(root, '.claude', 'skills', 'review'), { recursive: true });
+    await fs.writeFile(
+      path.join(root, '.claude', 'skills', 'review', 'SKILL.md'),
+      '---\nname: review\n---\n',
+      'utf8'
+    );
+
+    const snapshot = await new SafeLocalTeamImportFolderSource().inspect(root);
+
+    expect(snapshot.skills.map((skill) => skill.directoryName).sort()).toEqual([
+      'editing',
+      'review',
+    ]);
+    expect(
+      snapshot.skills.find((skill) => skill.directoryName === 'editing')?.content
+    ).toContain('visible copy');
+  });
+
   it('rejects a CLAUDE.md symlink that escapes the selected folder', async () => {
     if (process.platform === 'win32') return;
     const root = await createFixture();

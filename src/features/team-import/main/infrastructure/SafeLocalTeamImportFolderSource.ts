@@ -258,11 +258,25 @@ export class SafeLocalTeamImportFolderSource implements TeamImportFolderSourcePo
         optional: true,
       }));
 
-    const skills = await readSkillDefinitions({
+    // Visible `skills/` first (the layout exports write, and what Paperclip
+    // company packages use), then the dot-hidden `.claude/skills` layout —
+    // merged by directory name with the visible copy winning, so a folder
+    // carrying both (an old export imported in place) is not double-counted.
+    const visibleSkills = await readSkillDefinitions({
+      skillsDirectory: path.join(realRoot, 'skills'),
+      realRoot,
+      budget,
+    });
+    const dotSkills = await readSkillDefinitions({
       skillsDirectory: path.join(realRoot, '.claude', 'skills'),
       realRoot,
       budget,
     });
+    const seenSkillDirs = new Set(visibleSkills.map((skill) => skill.directoryName.toLowerCase()));
+    const skills = [
+      ...visibleSkills,
+      ...dotSkills.filter((skill) => !seenSkillDirs.has(skill.directoryName.toLowerCase())),
+    ];
 
     // Its own budget: the bundle restates the same team the markdown describes,
     // so charging it to the scan budget would halve the source ceiling.

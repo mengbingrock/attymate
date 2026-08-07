@@ -90,7 +90,7 @@ function snapshotOf(files: TeamExportFile[], includeBundle: boolean): TeamImport
     agentFiles: files
       .filter((file) => file.relativePath.startsWith('agents/'))
       .map((file) => ({ fileName: file.relativePath.slice('agents/'.length), content: file.content })),
-    claudeMd: files.find((file) => file.relativePath === '.claude/CLAUDE.md')?.content,
+    claudeMd: files.find((file) => file.relativePath === 'CLAUDE.md')?.content,
     skills: files
       .filter((file) => file.relativePath.endsWith('/SKILL.md'))
       .map((file) => ({

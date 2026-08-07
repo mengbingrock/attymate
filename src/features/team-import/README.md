@@ -11,7 +11,7 @@ stay inside the selected real path, and enforce file-count and byte budgets.
 | Source | Trigger | Fidelity |
 | --- | --- | --- |
 | `team-import-bundle.json` at the folder root | non-smart import, file present | full — members, roles, models, agent files, and skills, with no model call |
-| Markdown scan (`agents/*.md` or `.claude/agents/*.md`, `.claude/CLAUDE.md`, `.claude/skills/<slug>/SKILL.md`) | non-smart import, no bundle | names, roles (from `description:`), skills, and workflow text; no agent files written, no skills installed |
+| Markdown scan (`agents/*.md` or `.claude/agents/*.md`, `CLAUDE.md` or `.claude/CLAUDE.md`, `skills/<slug>/SKILL.md` or `.claude/skills/<slug>/SKILL.md`) | non-smart import, no bundle | names, roles (from `description:`), skills, and workflow text; no agent files written, no skills installed |
 | LLM parse of a whole-folder text dump | "Smart parse" checkbox, or a URL | full, but slow and non-deterministic |
 
 The bundle is what [team-export](../team-export/README.md) writes, so exporting a team and

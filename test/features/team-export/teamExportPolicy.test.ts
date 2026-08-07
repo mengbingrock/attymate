@@ -240,8 +240,8 @@ describe('buildTeamExportFiles', () => {
     expect(paths).toEqual([
       'team-import-bundle.json',
       'agents/calendar-agent.md',
-      '.claude/skills/legal-calendaring-workflow/SKILL.md',
-      '.claude/CLAUDE.md',
+      'skills/legal-calendaring-workflow/SKILL.md',
+      'CLAUDE.md',
       'README.md',
     ]);
   });
