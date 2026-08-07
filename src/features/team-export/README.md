@@ -12,7 +12,7 @@ deterministically.
   team-import-bundle.json        canonical; re-imports with full fidelity, no model call
   agents/<member>.md             Claude-standard subagent definitions (the flat layout the scanner reads)
   skills/<slug>/…                the team's skills (see below)
-  CLAUDE.md                      the lead prompt, when the team has one
+  TEAM.md                        the lead prompt, when the team has one
   README.md                      how to import the bundle
 <destination>/<team-name>-export.zip
 ```

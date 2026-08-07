@@ -50,6 +50,16 @@ describe('SafeLocalTeamImportFolderSource', () => {
     expect(snapshot.projectPath).toBe(await fs.realpath(root));
   });
 
+  it('prefers the provider-neutral TEAM.md over the CLAUDE.md names', async () => {
+    const root = await createFixture();
+    await fs.writeFile(path.join(root, 'TEAM.md'), '# Neutral lead prompt', 'utf8');
+    await fs.writeFile(path.join(root, 'CLAUDE.md'), '# Claude-named prompt', 'utf8');
+
+    const snapshot = await new SafeLocalTeamImportFolderSource().inspect(root);
+
+    expect(snapshot.claudeMd).toBe('# Neutral lead prompt');
+  });
+
   it('reads skills from the visible skills/ root, preferring it over .claude/skills', async () => {
     // Exports write the visible, provider-neutral layout; the dot-hidden root
     // remains readable so older exports and in-place project folders still

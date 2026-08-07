@@ -272,8 +272,11 @@ export function buildTeamExportFiles(bundle: TeamImportBundle): TeamExportFile[]
   }
 
   if (bundle.team.leadPrompt?.trim()) {
+    // TEAM.md, not CLAUDE.md: even the file name must not brand the package
+    // with one runtime. The scanner reads TEAM.md first and still accepts the
+    // CLAUDE.md names for folders that predate this layout.
     files.push({
-      relativePath: 'CLAUDE.md',
+      relativePath: 'TEAM.md',
       content: `${bundle.team.leadPrompt.trim()}\n`,
     });
   }

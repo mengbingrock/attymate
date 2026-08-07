@@ -241,7 +241,7 @@ describe('buildTeamExportFiles', () => {
       'team-import-bundle.json',
       'agents/calendar-agent.md',
       'skills/legal-calendaring-workflow/SKILL.md',
-      'CLAUDE.md',
+      'TEAM.md',
       'README.md',
     ]);
   });

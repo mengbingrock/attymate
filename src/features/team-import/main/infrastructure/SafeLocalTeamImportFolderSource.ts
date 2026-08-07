@@ -241,22 +241,24 @@ export class SafeLocalTeamImportFolderSource implements TeamImportFolderSourcePo
       });
     }
 
-    const nestedClaudeMd = await readBoundRegularUtf8File({
-      filePath: path.join(realRoot, '.claude', 'CLAUDE.md'),
-      realRoot,
-      maxBytes: TEAM_IMPORT_LIMITS.maxClaudeMdBytes,
-      budget,
-      optional: true,
-    });
-    const claudeMd =
-      nestedClaudeMd ??
-      (await readBoundRegularUtf8File({
-        filePath: path.join(realRoot, 'CLAUDE.md'),
+    // The lead prompt document, most-neutral name first: exports write the
+    // provider-neutral TEAM.md; the CLAUDE.md names remain readable for
+    // Claude-project folders and exports that predate the neutral layout.
+    let claudeMd: string | null = null;
+    for (const candidate of [
+      path.join(realRoot, 'TEAM.md'),
+      path.join(realRoot, '.claude', 'CLAUDE.md'),
+      path.join(realRoot, 'CLAUDE.md'),
+    ]) {
+      claudeMd = await readBoundRegularUtf8File({
+        filePath: candidate,
         realRoot,
         maxBytes: TEAM_IMPORT_LIMITS.maxClaudeMdBytes,
         budget,
         optional: true,
-      }));
+      });
+      if (claudeMd !== null) break;
+    }
 
     // Visible `skills/` first (the layout exports write, and what Paperclip
     // company packages use), then the dot-hidden `.claude/skills` layout —
