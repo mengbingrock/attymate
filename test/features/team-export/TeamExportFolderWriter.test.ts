@@ -11,7 +11,7 @@ let destination: string;
 const FILES = [
   { relativePath: 'team-import-bundle.json', content: '{"schema":"team-import-bundle/v1"}\n' },
   { relativePath: 'agents/calendar-agent.md', content: '---\nname: calendar-agent\n---\n\nWork.\n' },
-  { relativePath: '.claude/skills/legal-calendaring-workflow/SKILL.md', content: 'skill\n' },
+  { relativePath: 'skills/legal-calendaring-workflow/SKILL.md', content: 'skill\n' },
 ];
 
 async function listZipEntries(zipPath: string): Promise<string[]> {

@@ -11,8 +11,8 @@ deterministically.
 <destination>/<team-name>-export/
   team-import-bundle.json        canonical; re-imports with full fidelity, no model call
   agents/<member>.md             Claude-standard subagent definitions (the flat layout the scanner reads)
-  .claude/skills/<slug>/…        the team's skills (see below)
-  .claude/CLAUDE.md              the lead prompt, when the team has one
+  skills/<slug>/…                the team's skills (see below)
+  TEAM.md                        the lead prompt, when the team has one
   README.md                      how to import the bundle
 <destination>/<team-name>-export.zip
 ```

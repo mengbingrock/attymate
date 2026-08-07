@@ -237,8 +237,15 @@ export interface TeamExportFile {
 
 /**
  * The files an export writes. The bundle JSON is what re-imports with full
- * fidelity; the flat `agents/` + `.claude/skills/` layout is what the folder
- * scanner and other tools can still read if the bundle is removed.
+ * fidelity; the flat `agents/` + `skills/` layout is what the folder scanner
+ * and other tools can still read if the bundle is removed.
+ *
+ * Every path is visible and provider-neutral: skills live in `skills/`, not a
+ * dot-hidden `.claude/skills/`, and the lead prompt is a root `CLAUDE.md`. A
+ * package a user shares should be browsable in a file manager, and its layout
+ * should not brand a model-agnostic team with one runtime's folder names —
+ * runtime-specific roots (`.claude/`, `.codex/`) belong to the project folder
+ * the importer installs into, never to the package.
  */
 export function buildTeamExportFiles(bundle: TeamImportBundle): TeamExportFile[] {
   const files: TeamExportFile[] = [
@@ -258,15 +265,18 @@ export function buildTeamExportFiles(bundle: TeamImportBundle): TeamExportFile[]
   for (const skill of bundle.skills) {
     for (const file of skill.files) {
       files.push({
-        relativePath: `.claude/skills/${skill.slug}/${file.relativePath}`,
+        relativePath: `skills/${skill.slug}/${file.relativePath}`,
         content: file.content,
       });
     }
   }
 
   if (bundle.team.leadPrompt?.trim()) {
+    // TEAM.md, not CLAUDE.md: even the file name must not brand the package
+    // with one runtime. The scanner reads TEAM.md first and still accepts the
+    // CLAUDE.md names for folders that predate this layout.
     files.push({
-      relativePath: '.claude/CLAUDE.md',
+      relativePath: 'TEAM.md',
       content: `${bundle.team.leadPrompt.trim()}\n`,
     });
   }

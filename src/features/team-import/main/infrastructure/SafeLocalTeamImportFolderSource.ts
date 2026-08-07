@@ -241,28 +241,44 @@ export class SafeLocalTeamImportFolderSource implements TeamImportFolderSourcePo
       });
     }
 
-    const nestedClaudeMd = await readBoundRegularUtf8File({
-      filePath: path.join(realRoot, '.claude', 'CLAUDE.md'),
-      realRoot,
-      maxBytes: TEAM_IMPORT_LIMITS.maxClaudeMdBytes,
-      budget,
-      optional: true,
-    });
-    const claudeMd =
-      nestedClaudeMd ??
-      (await readBoundRegularUtf8File({
-        filePath: path.join(realRoot, 'CLAUDE.md'),
+    // The lead prompt document, most-neutral name first: exports write the
+    // provider-neutral TEAM.md; the CLAUDE.md names remain readable for
+    // Claude-project folders and exports that predate the neutral layout.
+    let claudeMd: string | null = null;
+    for (const candidate of [
+      path.join(realRoot, 'TEAM.md'),
+      path.join(realRoot, '.claude', 'CLAUDE.md'),
+      path.join(realRoot, 'CLAUDE.md'),
+    ]) {
+      claudeMd = await readBoundRegularUtf8File({
+        filePath: candidate,
         realRoot,
         maxBytes: TEAM_IMPORT_LIMITS.maxClaudeMdBytes,
         budget,
         optional: true,
-      }));
+      });
+      if (claudeMd !== null) break;
+    }
 
-    const skills = await readSkillDefinitions({
+    // Visible `skills/` first (the layout exports write, and what Paperclip
+    // company packages use), then the dot-hidden `.claude/skills` layout —
+    // merged by directory name with the visible copy winning, so a folder
+    // carrying both (an old export imported in place) is not double-counted.
+    const visibleSkills = await readSkillDefinitions({
+      skillsDirectory: path.join(realRoot, 'skills'),
+      realRoot,
+      budget,
+    });
+    const dotSkills = await readSkillDefinitions({
       skillsDirectory: path.join(realRoot, '.claude', 'skills'),
       realRoot,
       budget,
     });
+    const seenSkillDirs = new Set(visibleSkills.map((skill) => skill.directoryName.toLowerCase()));
+    const skills = [
+      ...visibleSkills,
+      ...dotSkills.filter((skill) => !seenSkillDirs.has(skill.directoryName.toLowerCase())),
+    ];
 
     // Its own budget: the bundle restates the same team the markdown describes,
     // so charging it to the scan budget would halve the source ceiling.
