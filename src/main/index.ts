@@ -128,6 +128,7 @@ import {
   resolveProjectPathFromConfig,
   TeamConfigReader,
 } from '@main/services/team/TeamConfigReader';
+import { resolveTeamProjectPath } from './services/team/resolveTeamProjectPath';
 import { TeamInboxWriter } from '@main/services/team/TeamInboxWriter';
 import { TeamMcpConfigBuilder } from '@main/services/team/TeamMcpConfigBuilder';
 import { TeamTranscriptProjectResolver } from '@main/services/team/TeamTranscriptProjectResolver';
@@ -1913,10 +1914,19 @@ async function initializeServices(): Promise<void> {
   const matterConfigReader = new TeamConfigReader();
   matterFeature = createMatterFeature({
     teamsBasePath: getTeamsBasePath(),
-    resolveProjectPath: async (teamName) => {
-      const config = await matterConfigReader.getConfig(teamName);
-      return config ? (resolveProjectPathFromConfig(config) ?? null) : null;
-    },
+    // The authorized project root for scans and lead prompts: what the live
+    // session actually works in, else the saved launch cwd, else config —
+    // never a config value that contradicts the running session.
+    resolveProjectPath: (teamName) =>
+      resolveTeamProjectPath(teamName, {
+        getLiveCwd: (name) => teamProvisioningService.getLiveTeamCwd(name),
+        getSavedCwd: async (name) =>
+          (await teamDataService.getSavedRequest(name))?.cwd?.trim() || null,
+        getConfigProjectPath: async (name) => {
+          const config = await matterConfigReader.getConfig(name);
+          return config ? (resolveProjectPathFromConfig(config) ?? null) : null;
+        },
+      }),
     leadNotifier: {
       notifyLead: async (teamName, summary, text) => {
         await teamDataService.sendUserInstructionToLead({ teamName, summary, text });
