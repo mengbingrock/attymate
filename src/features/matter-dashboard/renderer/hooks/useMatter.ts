@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@renderer/api';
 
 import type {
+  MatterChanges,
   MatterDto,
   MatterEvidenceStatusDto,
   MatterLinkOperation,
@@ -13,10 +14,13 @@ import type {
 
 const LIVE_RELOAD_DEBOUNCE_MS = 300;
 
-const EMPTY_SNAPSHOT: MatterSnapshotDto = { matter: null, proposal: null };
+const EMPTY_SNAPSHOT: MatterSnapshotDto = { matters: [], linkedMatterIds: [], proposal: null };
 
 export interface UseMatterResult {
-  matter: MatterDto | null;
+  /** Every matter in the app's store; the list view browses all of them. */
+  matters: MatterDto[];
+  /** Ids of matters linked to this team. */
+  linkedMatterIds: string[];
   proposal: MatterProposalDto | null;
   loading: boolean;
   /** True while a user approve/reject action is in flight. */
@@ -33,18 +37,23 @@ export interface UseMatterResult {
   checkLinkStatus: () => Promise<void>;
   initializeLink: () => Promise<void>;
   requestLinkRefresh: () => Promise<void>;
-  requestLinkProposal: () => Promise<void>;
+  requestLinkProposal: (matterId?: string) => Promise<void>;
   /** Ask the team lead to scan the case folder and propose an update. */
-  requestRefresh: () => Promise<void>;
+  requestRefresh: (matterId?: string) => Promise<void>;
+  /** Persist a user-authored edit; returns the fresh snapshot. */
+  updateMatter: (matterId: string, changes: MatterChanges) => Promise<MatterSnapshotDto | null>;
+  createMatter: (caption?: string) => Promise<MatterDto | null>;
+  linkTeam: (matterId: string) => Promise<void>;
+  unlinkTeam: (matterId: string) => Promise<void>;
   applyProposal: () => Promise<void>;
   rejectProposal: (reason?: string) => Promise<void>;
   reload: () => Promise<void>;
 }
 
 /**
- * Live matter dashboard state for a team: initial fetch plus refetch on
- * `team-change` events of type `matter` (matter.json / matter-proposal.json
- * writes). Without a team name it stays inert and the view renders its demo
+ * Live matters-store state for a team: initial fetch plus refetch on the
+ * `matters-changed` push (any store write) and legacy `team-change` matter
+ * events. Without a team name it stays inert and the view renders its demo
  * fixture.
  */
 export function useMatter(teamName?: string): UseMatterResult {
@@ -109,7 +118,7 @@ export function useMatter(teamName?: string): UseMatterResult {
   }, [teamName]);
 
   const runLinkOperation = useCallback(
-    async (operation: MatterLinkOperation): Promise<void> => {
+    async (operation: MatterLinkOperation, matterId?: string): Promise<void> => {
       if (!teamName) return;
       setLinkActing(true);
       setLinkMessage(null);
@@ -120,7 +129,7 @@ export function useMatter(teamName?: string): UseMatterResult {
         } else if (operation === 'refresh-request') {
           result = await api.matter.requestLinkRefresh(teamName);
         } else {
-          result = await api.matter.requestLinkProposal(teamName);
+          result = await api.matter.requestLinkProposal(teamName, matterId);
         }
         setLinkStatus(result.status);
         setLinkMessage(result.message);
@@ -134,21 +143,24 @@ export function useMatter(teamName?: string): UseMatterResult {
     [teamName]
   );
 
-  const requestRefresh = useCallback(async (): Promise<void> => {
-    if (!teamName) return;
-    setRefreshActing(true);
-    setRefreshMessage(null);
-    setRefreshError(null);
-    try {
-      const result = await api.matter.requestRefresh(teamName);
-      setRefreshMessage(result.message);
-      if (!result.accepted) setRefreshError(result.message);
-    } catch (refreshFailure) {
-      setRefreshError(String(refreshFailure));
-    } finally {
-      setRefreshActing(false);
-    }
-  }, [teamName]);
+  const requestRefresh = useCallback(
+    async (matterId?: string): Promise<void> => {
+      if (!teamName) return;
+      setRefreshActing(true);
+      setRefreshMessage(null);
+      setRefreshError(null);
+      try {
+        const result = await api.matter.requestRefresh(teamName, matterId);
+        setRefreshMessage(result.message);
+        if (!result.accepted) setRefreshError(result.message);
+      } catch (refreshFailure) {
+        setRefreshError(String(refreshFailure));
+      } finally {
+        setRefreshActing(false);
+      }
+    },
+    [teamName]
+  );
 
   useEffect(() => {
     if (!teamName) return;
@@ -162,7 +174,10 @@ export function useMatter(teamName?: string): UseMatterResult {
       }, LIVE_RELOAD_DEBOUNCE_MS);
     };
 
-    const unsubscribe = api.teams.onTeamChange?.((_event, event) => {
+    // Store writes broadcast matters-changed; legacy proposal/team events
+    // still arrive as team-change 'matter'.
+    const unsubscribeMatters = api.matter.onMattersChanged?.(scheduleReload);
+    const unsubscribeTeam = api.teams.onTeamChange?.((_event, event) => {
       if (event.type !== 'matter' || event.teamName !== teamName) return;
       scheduleReload();
     });
@@ -183,43 +198,97 @@ export function useMatter(teamName?: string): UseMatterResult {
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       }
-      if (typeof unsubscribe === 'function') unsubscribe();
+      if (typeof unsubscribeMatters === 'function') unsubscribeMatters();
+      if (typeof unsubscribeTeam === 'function') unsubscribeTeam();
     };
   }, [teamName, load]);
+
+  const adoptSnapshot = useCallback((next: MatterSnapshotDto | null): void => {
+    requestSeqRef.current += 1;
+    setSnapshot(next ?? EMPTY_SNAPSHOT);
+    setError(null);
+  }, []);
+
+  const updateMatter = useCallback(
+    async (matterId: string, changes: MatterChanges): Promise<MatterSnapshotDto | null> => {
+      if (!teamName) return null;
+      const next = await api.matter.update(teamName, matterId, changes);
+      adoptSnapshot(next);
+      return next;
+    },
+    [teamName, adoptSnapshot]
+  );
+
+  const createMatter = useCallback(
+    async (caption?: string): Promise<MatterDto | null> => {
+      if (!teamName) return null;
+      try {
+        const before = new Set(snapshot.matters.map((matter) => matter.id));
+        const next = await api.matter.create(teamName, caption ? { caption } : undefined);
+        adoptSnapshot(next);
+        return next?.matters.find((matter) => !before.has(matter.id)) ?? null;
+      } catch (createError) {
+        setError(String(createError));
+        return null;
+      }
+    },
+    [teamName, snapshot.matters, adoptSnapshot]
+  );
+
+  const linkTeam = useCallback(
+    async (matterId: string): Promise<void> => {
+      if (!teamName) return;
+      try {
+        adoptSnapshot(await api.matter.linkTeam(teamName, matterId));
+      } catch (linkFailure) {
+        setError(String(linkFailure));
+      }
+    },
+    [teamName, adoptSnapshot]
+  );
+
+  const unlinkTeam = useCallback(
+    async (matterId: string): Promise<void> => {
+      if (!teamName) return;
+      try {
+        adoptSnapshot(await api.matter.unlinkTeam(teamName, matterId));
+      } catch (unlinkFailure) {
+        setError(String(unlinkFailure));
+      }
+    },
+    [teamName, adoptSnapshot]
+  );
 
   const applyProposal = useCallback(async (): Promise<void> => {
     if (!teamName) return;
     setActing(true);
     try {
-      const next = await api.matter.applyProposal(teamName);
-      setSnapshot(next ?? EMPTY_SNAPSHOT);
-      setError(null);
+      adoptSnapshot(await api.matter.applyProposal(teamName));
     } catch (actionError) {
       setError(String(actionError));
     } finally {
       setActing(false);
     }
-  }, [teamName]);
+  }, [teamName, adoptSnapshot]);
 
   const rejectProposal = useCallback(
     async (reason?: string): Promise<void> => {
       if (!teamName) return;
       setActing(true);
       try {
-        const next = await api.matter.rejectProposal(teamName, reason);
-        setSnapshot(next ?? EMPTY_SNAPSHOT);
-        setError(null);
+        adoptSnapshot(await api.matter.rejectProposal(teamName, reason));
       } catch (actionError) {
         setError(String(actionError));
       } finally {
         setActing(false);
       }
     },
-    [teamName]
+    [teamName, adoptSnapshot]
   );
 
   return {
-    matter: snapshot.matter,
+    matters: snapshot.matters,
+    linkedMatterIds: snapshot.linkedMatterIds,
     proposal: snapshot.proposal,
     loading,
     acting,
@@ -234,8 +303,12 @@ export function useMatter(teamName?: string): UseMatterResult {
     checkLinkStatus,
     initializeLink: () => runLinkOperation('initialize'),
     requestLinkRefresh: () => runLinkOperation('refresh-request'),
-    requestLinkProposal: () => runLinkOperation('proposal-request'),
+    requestLinkProposal: (matterId?: string) => runLinkOperation('proposal-request', matterId),
     requestRefresh,
+    updateMatter,
+    createMatter,
+    linkTeam,
+    unlinkTeam,
     applyProposal,
     rejectProposal,
     reload: load,

@@ -31,6 +31,6 @@ export {
   type MatterStoreActions,
 } from './composition/createMatterFeature';
 export { isMatterSnapshotEffectivelyEmpty } from './infrastructure/matterScanState';
-export { normalizeMatterSnapshot } from './infrastructure/matterSnapshot';
 export { MatterSkillSeeder } from './infrastructure/MatterSkillSeeder';
+export { normalizeMatterSnapshot } from './infrastructure/matterSnapshot';
 export { readTeamRuntimeFacts } from './infrastructure/teamRuntimeFacts';

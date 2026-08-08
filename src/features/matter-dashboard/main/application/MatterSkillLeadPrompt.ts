@@ -1,4 +1,9 @@
-import { MATTER_SKILL_SLUG, stripSkillFrontmatter } from '../../core/domain/matterSkillDefinition';
+import {
+  extractSkillSchemaReference,
+  MATTER_SKILL_MARKDOWN,
+  MATTER_SKILL_SLUG,
+  stripSkillFrontmatter,
+} from '../../core/domain/matterSkillDefinition';
 
 export type MatterRefreshMode = 'initial-scan' | 'update';
 export type MatterRefreshTrigger = 'user-refresh' | 'job-wrap-up';
@@ -79,6 +84,18 @@ export function buildMatterSkillInvocationPrompt(input: MatterSkillInvocationInp
     stripSkillFrontmatter(input.skillMarkdown),
     `--- end ${MATTER_SKILL_SLUG} skill ---`
   );
+
+  // A user-edited (or older) installed copy keeps its own workflow text, but
+  // the section schema it teaches may predate this app version — append the
+  // authoritative one so proposals arrive in the current shape.
+  if (input.skillMarkdown !== MATTER_SKILL_MARKDOWN) {
+    lines.push(
+      '',
+      'Authoritative section schema for this app version (overrides the skill text above where they differ):',
+      '',
+      extractSkillSchemaReference()
+    );
+  }
 
   return lines.join('\n');
 }

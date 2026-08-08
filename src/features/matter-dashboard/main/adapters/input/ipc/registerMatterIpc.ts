@@ -13,11 +13,11 @@ import {
   MATTER_REQUEST_REFRESH,
   MATTER_UNLINK_TEAM,
   MATTER_UPDATE,
-  normalizeMatterChanges,
   type MatterEvidenceStatusDto,
   type MatterLinkOperationResultDto,
   type MatterRefreshResultDto,
   type MatterSnapshotDto,
+  normalizeMatterChanges,
 } from '../../../../contracts';
 
 import type { MatterFeatureFacade } from '../../../composition/createMatterFeature';

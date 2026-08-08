@@ -3,8 +3,8 @@ import { SkillsMutationService } from '@main/services/extensions/skills/SkillsMu
 import { LinkMatterEvidenceSourceAdapter } from '../adapters/output/link/LinkMatterEvidenceSourceAdapter';
 import { MatterLinkCoordinator } from '../application/MatterLinkCoordinator';
 import { MatterRefreshCoordinator } from '../application/MatterRefreshCoordinator';
-import { normalizeMatterSnapshot } from '../infrastructure/matterSnapshot';
 import { MatterSkillSeeder } from '../infrastructure/MatterSkillSeeder';
+import { normalizeMatterSnapshot } from '../infrastructure/matterSnapshot';
 import { readTeamRuntimeFacts } from '../infrastructure/teamRuntimeFacts';
 
 import type {

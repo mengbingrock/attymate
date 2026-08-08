@@ -11,9 +11,9 @@ import {
   MATTER_REQUEST_REFRESH,
   MATTER_UNLINK_TEAM,
   MATTER_UPDATE,
-  MATTERS_CHANGED_EVENT,
   type MatterChanges,
   type MatterElectronApi,
+  MATTERS_CHANGED_EVENT,
 } from '../contracts';
 
 import type { IpcRenderer } from 'electron';

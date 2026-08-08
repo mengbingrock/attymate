@@ -10,6 +10,12 @@ import type { SkillsMutationService } from '@main/services/extensions/skills/Ski
 
 let homeDir: string;
 
+/** The exact v1 bundled markdown, byte-for-byte (hash-gate fixture). */
+const V1_SKILL_MARKDOWN = await fs.readFile(
+  path.join(__dirname, 'fixtures', 'matter-skill-v1.md'),
+  'utf8'
+);
+
 /** Stands in for the real mutation service, writing the files it is given. */
 function createMutationService(): SkillsMutationService & {
   applyUpsert: ReturnType<typeof vi.fn>;
@@ -75,6 +81,31 @@ describe('MatterSkillSeeder', () => {
       'MY OWN VERSION\n'
     );
     await expect(seeder.readInstalledMarkdown()).resolves.toBe('MY OWN VERSION\n');
+  });
+
+  it('upgrades a pristine older seed in place (hash-gated)', async () => {
+    // Byte-identical to the v1 bundled markdown = LEGACY_SKILL_SHA256 member.
+    const skillDir = path.join(homeDir, '.claude', 'skills', MATTER_SKILL_SLUG);
+    await fs.mkdir(skillDir, { recursive: true });
+    await fs.writeFile(path.join(skillDir, 'SKILL.md'), V1_SKILL_MARKDOWN, 'utf8');
+    const mutationService = createMutationService();
+    const seeder = new MatterSkillSeeder(mutationService, homeDir);
+
+    await seeder.seed();
+
+    expect(mutationService.applyUpsert).toHaveBeenCalledTimes(1);
+    const upgraded = await fs.readFile(seeder.getPrimarySkillFilePath(), 'utf8');
+    expect(upgraded).toContain('## Multiple matters');
+    expect(upgraded).toContain('settlement');
+  });
+
+  it('falls back to the Codex copy when the Claude root has none', async () => {
+    const codexDir = path.join(homeDir, '.codex', 'skills', MATTER_SKILL_SLUG);
+    await fs.mkdir(codexDir, { recursive: true });
+    await fs.writeFile(path.join(codexDir, 'SKILL.md'), 'CODEX COPY\n', 'utf8');
+    const seeder = new MatterSkillSeeder(createMutationService(), homeDir);
+
+    await expect(seeder.readInstalledMarkdown()).resolves.toBe('CODEX COPY\n');
   });
 
   it('reports no installed markdown before seeding has run', async () => {

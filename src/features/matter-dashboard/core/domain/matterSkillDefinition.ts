@@ -41,12 +41,19 @@ parties, deadlines, or outcomes. Leave unknown fields absent rather than guessin
 
 ## Tools
 
-- \`matter_get { teamName }\` — current dashboard state, any pending proposal, and the section
-  schema. Always call this first: propose only what actually changed.
-- \`matter_propose { teamName, summary, changes, taskRefs?, sourceMode?, sourceRevision?, evidence? }\`
+- \`matter_get { teamName, matterId? }\` — the team's matters (with ids), any pending proposal,
+  and the section schema. Always call this first: propose only what actually changed.
+- \`matter_propose { teamName, matterId?, summary, changes, taskRefs?, sourceMode?, sourceRevision?, evidence? }\`
   — submit a proposal for user review. \`summary\` is a list of plain-language lines describing
   what changed; \`changes\` holds only the sections that changed. Re-proposing replaces your
   previous pending proposal.
+
+## Multiple matters
+
+Matters exist independently of teams; a team may work several. \`matter_get\` lists the
+matters linked to this team with their ids. Pass \`matterId\` to both tools; omit it only
+when the team has at most one matter. A team with no matter yet proposes without a
+\`matterId\` — approving the proposal creates the matter.
 
 ## When to update
 
@@ -99,16 +106,27 @@ that reason and propose again.
 ## Sections
 
 Send only changed sections in \`changes\`. Object sections merge shallowly on apply; arrays
-replace the previous list wholesale.
+replace the previous list wholesale — resend the FULL array when changing any record in it,
+and keep each record's \`id\` so it stays the same record.
 
-- \`caption\`, \`status\`, \`matterNumber\`, \`currentStage\` (\`pleading\` | \`discovery\` | \`trial\` | \`post\`)
+- \`caption\`, \`status\`, \`matterNumber\`, \`client\`, \`caseNumber\`, \`department\`,
+  \`currentStage\` (\`pleading\` | \`discovery\` | \`trial\` | \`settlement\` | \`post\`)
 - \`coreFields[]\` / \`systemFields[]\`: \`{ label, value }\`
 - \`stages[]\`: \`{ id, label?, dates?, summary? }\`
 - \`nextDeadline\`: \`{ date, label }\`
-- \`pleading\`: \`{ statusNote?, operativePleading?, pleadingType?, amendmentDeadline?, causesOfAction? }\`
-- \`discovery\`: \`{ statusNote?, requests[], meetConfer, pendingMotion, productions[], depositions[] }\`
-- \`trial\`: \`{ statusNote?, trialDate?, trialType?, estimatedDuration?, settingStatus?, pretrialDeadlines[], witnesses[], exhibits[], continuancesNote? }\`
-- \`postJudgment\`: \`{ statusNote?, judgmentStatus?, judgmentDate?, judgmentAmount?, enforcementStatus?, enforcementDeadline?, enforcementActions? }\`
+- \`parties[]\`: \`{ id?, name, role?, side?, kind?, contact?, phone?, email?, address?, notes? }\`
+- \`counsel[]\`: \`{ id?, partyId?, name, role?, firm?, bar?, phone?, email?, address?, notes? }\`
+  — \`partyId\` links counsel to the party they represent
+- \`pleading\`: \`{ statusNote?, records[] }\`; each record
+  \`{ id?, partyId?, type, status?, filed?, served?, responseDue?, responseFiled?, related?, amendmentDue?, claims?, dir? }\`
+  (\`partyId\` = filing party; \`dir\` = workspace folder or document path)
+- \`discovery\`: \`{ statusNote?, requests[], motions[], meetAndConfers[], productions[], depositions[] }\`
+- \`trial\`: \`{ statusNote?, settings[], continuances[], pretrialDeadlines[], pretrialFilings[], witnesses[], exhibits[], motionsInLimine[], sessions[], verdicts[], postTrialMotions[] }\`
+- \`settlement\`: \`{ statusNote?, records[] (demands/offers/counteroffers with parties, amount, outcome, terms), mediations[] }\`
+- \`postJudgment\`: \`{ statusNote?, judgmentStatus?, judgmentDate?, judgmentAmount?, interest?, satisfaction?, enforcementStatus?, enforcementDeadline?, enforcementActions[] }\`
+- \`events[]\`: \`{ id?, date, time?, type?, group?, description?, parties?, docs?, note? }\`
+  — MANUAL timeline entries only. The procedural history derives automatically from the
+  records above; add \`events\` only for docket facts that have no record home.
 
 When a proposal is backed by a Link evidence packet, pass \`sourceMode: "link"\` with the exact
 \`sourceRevision\` you were given, and attach only the \`evidence\` references that actually
@@ -121,4 +139,22 @@ export function stripSkillFrontmatter(markdown: string): string {
   const withoutBom = markdown.replace(/^\uFEFF/u, '');
   const match = /^---\r?\n[\s\S]*?\r?\n---\r?\n?([\s\S]*)$/u.exec(withoutBom);
   return (match ? match[1] : withoutBom).trim();
+}
+
+/**
+ * The bundled markdown's `## Sections` and `## Multiple matters` blocks \u2014 the
+ * authoritative schema appended at prompt time when the user's installed copy
+ * predates the current app version (their edits are never overwritten, but
+ * the lead must still learn the current section shapes).
+ */
+export function extractSkillSchemaReference(): string {
+  const blocks: string[] = [];
+  for (const heading of ['## Multiple matters', '## Sections']) {
+    const start = MATTER_SKILL_MARKDOWN.indexOf(heading);
+    if (start === -1) continue;
+    const rest = MATTER_SKILL_MARKDOWN.slice(start + heading.length);
+    const end = rest.search(/\n## /u);
+    blocks.push(`${heading}${end === -1 ? rest : rest.slice(0, end)}`.trim());
+  }
+  return blocks.join('\n\n');
 }

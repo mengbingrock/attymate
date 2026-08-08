@@ -2,12 +2,12 @@ import { createLogger } from '@shared/utils/logger';
 
 import {
   MATTER_ROUTE,
-  normalizeMatterChanges,
   type MatterEvidenceStatusDto,
   type MatterLinkOperation,
   type MatterLinkOperationResultDto,
   type MatterRefreshResultDto,
   type MatterSnapshotDto,
+  normalizeMatterChanges,
 } from '../../../../contracts';
 
 import type { MatterFeatureFacade } from '../../../composition/createMatterFeature';
