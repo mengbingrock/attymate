@@ -17090,6 +17090,21 @@ export class TeamProvisioningService {
   }
 
   /**
+   * The cwd the team's LIVE runtime is actually working in, or null when the
+   * team is not running. This — not any persisted file — is the authoritative
+   * project root while agents are active: sessions keep the cwd they were
+   * launched with regardless of later config edits.
+   */
+  getLiveTeamCwd(teamName: string): string | null {
+    if (!this.isTeamAlive(teamName)) return null;
+    const adapterCwd = this.runtimeAdapterRunByTeam.get(teamName)?.cwd?.trim();
+    if (adapterCwd) return adapterCwd;
+    const runId = this.getAliveRunId(teamName);
+    const run = runId ? this.runs.get(runId) : null;
+    return run?.request?.cwd?.trim() || null;
+  }
+
+  /**
    * True when the team's live run uses the stock Claude Code runtime, where
    * teammates are in-process subagents of the lead and cannot self-consume
    * their inbox files. Falls back to the configured flavor when no run is
