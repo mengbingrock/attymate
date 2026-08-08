@@ -19,6 +19,7 @@ import {
   deliverStockSessionTeamDm,
   getStockSessionTeamName,
   isStockSessionTeamActive,
+  resolveStockSessionTeamLeadName,
 } from '@main/services/team/provisioning/StockSessionTeamBridge';
 
 const LEAD_SESSION_ID = '24887392-4d4c-41f3-af85-dbeddf266c8b';
@@ -47,10 +48,29 @@ describe('StockSessionTeamBridge', () => {
     ).toBe(false);
   });
 
-  it('routes a custom-named lead DM to the session team lead mailbox', async () => {
-    // The app-side lead is "legal-ops-supervisor" (imported lead profile), but
-    // the stock runtime registers its lead as "team-lead" — the session team
-    // has no mailbox under the custom name.
+  it('resolves the session team lead name from its config identity', async () => {
+    // The stock runtime registers its lead under its OWN identity, never the
+    // app-side lead name — this resolver is what callers translate through.
+    const teamDir = path.join(teamsBasePath, TEAM_NAME);
+    await fs.promises.mkdir(teamDir, { recursive: true });
+    await fs.promises.writeFile(
+      path.join(teamDir, 'config.json'),
+      JSON.stringify({
+        name: TEAM_NAME,
+        leadAgentId: `team-lead@${TEAM_NAME}`,
+        members: [
+          { name: 'team-lead', agentId: `team-lead@${TEAM_NAME}`, agentType: 'team-lead' },
+          { name: 'source-intake-agent' },
+        ],
+      })
+    );
+
+    expect(await resolveStockSessionTeamLeadName(LEAD_SESSION_ID)).toBe('team-lead');
+    expect(await resolveStockSessionTeamLeadName('ffffffff-0000-0000-0000-000000000000')).toBeNull();
+    expect(await resolveStockSessionTeamLeadName(undefined)).toBeNull();
+  });
+
+  it('delivers verbatim: an unregistered name fails closed, the registered lead name lands', async () => {
     const teamDir = path.join(teamsBasePath, TEAM_NAME);
     await fs.promises.mkdir(path.join(teamDir, 'inboxes'), { recursive: true });
     await fs.promises.writeFile(
@@ -58,42 +78,33 @@ describe('StockSessionTeamBridge', () => {
       JSON.stringify({
         name: TEAM_NAME,
         leadAgentId: `team-lead@${TEAM_NAME}`,
-        members: [
-          { name: 'team-lead', agentType: 'team-lead' },
-          { name: 'source-intake-agent' },
-        ],
+        members: [{ name: 'team-lead', agentType: 'team-lead' }],
       })
     );
 
-    const delivered = await deliverStockSessionTeamDm(LEAD_SESSION_ID, {
-      memberName: 'legal-ops-supervisor',
-      deliverToLead: true,
-      text: 'hello lead',
-    });
+    // No translation inside the bridge: the app-side custom lead name is
+    // unknown here and must be translated by the CALLER before delivery.
+    expect(
+      await deliverStockSessionTeamDm(LEAD_SESSION_ID, {
+        memberName: 'legal-ops-supervisor',
+        text: 'hello lead',
+      })
+    ).toBe(false);
+    expect(fs.existsSync(path.join(teamDir, 'inboxes', 'legal-ops-supervisor.json'))).toBe(false);
 
+    const delivered = await deliverStockSessionTeamDm(LEAD_SESSION_ID, {
+      memberName: 'team-lead',
+      text: 'hello lead',
+      from: 'docket-agent',
+    });
     expect(delivered).toBe(true);
     const inbox = JSON.parse(
       await readFile(path.join(teamDir, 'inboxes', 'team-lead.json'), 'utf-8')
     ) as Record<string, unknown>[];
     expect(inbox).toHaveLength(1);
     expect(inbox[0].text).toBe('hello lead');
-    // The custom name got no stray mailbox of its own.
-    expect(fs.existsSync(path.join(teamDir, 'inboxes', 'legal-ops-supervisor.json'))).toBe(false);
-  });
-
-  it('still fails closed for a non-lead unknown member, even with the flag', async () => {
-    const teamDir = path.join(teamsBasePath, TEAM_NAME);
-    await fs.promises.mkdir(path.join(teamDir, 'inboxes'), { recursive: true });
-    await fs.promises.writeFile(
-      path.join(teamDir, 'config.json'),
-      JSON.stringify({ name: TEAM_NAME, members: [] })
-    );
-    expect(
-      await deliverStockSessionTeamDm(LEAD_SESSION_ID, {
-        memberName: 'ghost',
-        text: 'nope',
-      })
-    ).toBe(false);
+    // Sender attribution passes through for teammate-originated relays.
+    expect(inbox[0].from).toBe('docket-agent');
   });
 
   it('appends a well-formed mailbox entry for a registered member', async () => {
