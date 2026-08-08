@@ -8,12 +8,22 @@ function createCoordinator(overrides: {
   hasTeammates?: boolean;
   canSpawnTeammates?: boolean;
   deliveryError?: Error;
+  matters?: Array<{ id: string; caption?: string; status?: string }>;
+  linkedMatterIds?: string[];
 }) {
   const notifyLead = overrides.deliveryError
     ? vi.fn().mockRejectedValue(overrides.deliveryError)
     : vi.fn().mockResolvedValue(undefined);
+  // Default snapshot: one linked matter whose content matches `empty`.
+  const matters = (
+    overrides.matters ??
+    (overrides.empty
+      ? [{ id: 'm-1' }]
+      : [{ id: 'm-1', caption: 'Smith v. Jones', status: 'Active' }])
+  ).map((matter) => ({ schemaVersion: 2 as const, ...matter }));
+  const linkedMatterIds = overrides.linkedMatterIds ?? matters.map((matter) => matter.id);
   const coordinator = new MatterRefreshCoordinator({
-    isMatterEmpty: vi.fn().mockResolvedValue(overrides.empty ?? false),
+    readSnapshot: vi.fn().mockResolvedValue({ matters, linkedMatterIds, proposal: null }),
     resolveRuntimeFacts: vi.fn().mockResolvedValue({
       projectPath: '/cases/1234567',
       hasTeammates: overrides.hasTeammates ?? true,
@@ -57,6 +67,44 @@ describe('MatterRefreshCoordinator', () => {
 
     expect(result.mode).toBe('update');
     expect(notifyLead.mock.calls[0][2]).toContain('Task 4 "File the motion"');
+    // The sole linked matter is named so the lead targets it explicitly.
+    expect(notifyLead.mock.calls[0][2]).toContain('matterId: m-1');
+  });
+
+  it('tells a multi-matter team to pick the matter via matter_get', async () => {
+    const { coordinator, notifyLead } = createCoordinator({
+      matters: [
+        { id: 'm-1', caption: 'First v. Case', status: 'Active' },
+        { id: 'm-2', caption: 'Second v. Case', status: 'Active' },
+      ],
+    });
+
+    await coordinator.requestRefresh({ teamName: 'my-team', trigger: 'job-wrap-up' });
+    expect(notifyLead.mock.calls[0][2]).toContain('pick the matter this work belongs to');
+
+    // An explicit matterId from the dashboard pins the target instead.
+    await coordinator.requestRefresh({
+      teamName: 'my-team',
+      trigger: 'user-refresh',
+      matterId: 'm-2',
+    });
+    expect(notifyLead.mock.calls[1][2]).toContain('matterId: m-2');
+    expect(notifyLead.mock.calls[1][2]).toContain('"Second v. Case"');
+  });
+
+  it('tells a matterless team its proposal will create the matter', async () => {
+    const { coordinator, notifyLead } = createCoordinator({
+      matters: [],
+      linkedMatterIds: [],
+    });
+
+    const result = await coordinator.requestRefresh({
+      teamName: 'my-team',
+      trigger: 'user-refresh',
+    });
+
+    expect(result.mode).toBe('initial-scan');
+    expect(notifyLead.mock.calls[0][2]).toContain('your matter_propose will create one');
   });
 
   it('sends the user edited skill file when one is installed', async () => {

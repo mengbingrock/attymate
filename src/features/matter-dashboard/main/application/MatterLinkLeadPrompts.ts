@@ -21,7 +21,8 @@ export function buildMatterLinkRefreshPrompt(
 
 export function buildMatterLinkProposalPrompt(
   teamName: string,
-  bundle: MatterEvidenceQueryBundle
+  bundle: MatterEvidenceQueryBundle,
+  matterId?: string
 ): string {
   const packet = JSON.stringify(
     {
@@ -33,12 +34,18 @@ export function buildMatterLinkProposalPrompt(
     null,
     2
   );
+  const getArgs = matterId
+    ? `{ teamName: "${teamName}", matterId: "${matterId}" }`
+    : `{ teamName: "${teamName}" }`;
   return [
     `Build a Link-backed matter dashboard proposal for team "${teamName}".`,
+    ...(matterId
+      ? [`Target matter: ${matterId}. Pass this matterId to matter_get and matter_propose.`]
+      : []),
     `This bounded packet was produced by ${bundle.queryCount} section-specific Link queries using substantive context-packet extracts.`,
     '',
     'Required workflow:',
-    `1. Call matter_get with { teamName: "${teamName}" } and compare the current dashboard with the supplied evidence.`,
+    `1. Call matter_get with ${getArgs} and compare the current dashboard with the supplied evidence.`,
     '2. Do not broadly rescan the project folder. Use only the supplied Link evidence and grounded completed-task results. If critical evidence is missing, stop and ask for a Link refresh instead of guessing.',
     '3. Propose only fields that changed. Remember that arrays replace existing arrays wholesale.',
     '4. Call matter_propose with sourceMode: "link", the exact sourceRevision below, and only the evidence references actually supporting the proposal. Add fieldPaths to each reference to identify the supported dashboard fields.',

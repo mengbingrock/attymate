@@ -9,7 +9,10 @@ import {
   codexTeamLanesService,
   interactiveTeamRuntimeService,
 } from '@features/interactive-team-runtime/main';
-import { isMatterEffectivelyEmpty } from '@features/matter-dashboard/main';
+import {
+  isMatterSnapshotEffectivelyEmpty,
+  normalizeMatterSnapshot,
+} from '@features/matter-dashboard/main';
 import { type RuntimeTurnSettledProvider } from '@features/member-work-sync/main';
 import { inspectOpenCodeLocalModelRuntimeReadiness } from '@features/runtime-provider-management/main';
 import {
@@ -54,6 +57,7 @@ import { FileReadTimeoutError, readFileUtf8WithTimeout } from '@main/utils/fsRea
 import {
   getAutoDetectedClaudeBasePath,
   getClaudeBasePath,
+  getMattersBasePath,
   getProjectsBasePath,
   getTasksBasePath,
   getTeamsBasePath,
@@ -12326,10 +12330,7 @@ export class TeamProvisioningService {
         bootstrapSpecPath = await writeDeterministicBootstrapSpecFile(bootstrapSpec);
         run.bootstrapSpecPath = bootstrapSpecPath;
         if (useStockClaudeBootstrap || useCodexLaneRuntime) {
-          const matterNeedsInitialScan = await isMatterEffectivelyEmpty(
-            getTeamsBasePath(),
-            bootstrapSpec.team.name
-          );
+          const matterNeedsInitialScan = this.isTeamMatterEffectivelyEmpty(bootstrapSpec.team.name);
           stockBootstrapPrompt = useStockClaudeBootstrap
             ? buildStockClaudeBootstrapPrompt(bootstrapSpec, initialUserPrompt, {
                 matterNeedsInitialScan,
@@ -14637,10 +14638,7 @@ export class TeamProvisioningService {
         bootstrapSpecPath = await writeDeterministicBootstrapSpecFile(bootstrapSpec);
         run.bootstrapSpecPath = bootstrapSpecPath;
         if (useStockClaudeBootstrap || useCodexLaneRuntime) {
-          const matterNeedsInitialScan = await isMatterEffectivelyEmpty(
-            getTeamsBasePath(),
-            bootstrapSpec.team.name
-          );
+          const matterNeedsInitialScan = this.isTeamMatterEffectivelyEmpty(bootstrapSpec.team.name);
           if (useStockClaudeBootstrap) {
             // Interactive relaunches must not carry the refresh-only hydration
             // instruction — the lead has to actually re-spawn teammates first.
@@ -23245,6 +23243,25 @@ export class TeamProvisioningService {
 
     await atomicWriteAsync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
     return added;
+  }
+
+  /**
+   * Launch-time gate for the bootstrap's initial-scan wording. Reading the
+   * global matters store also imports any legacy per-team matter file.
+   */
+  private isTeamMatterEffectivelyEmpty(teamName: string): boolean {
+    try {
+      const controller = createController({
+        teamName,
+        claudeDir: getClaudeBasePath(),
+        mattersDir: getMattersBasePath(),
+      });
+      return isMatterSnapshotEffectivelyEmpty(
+        normalizeMatterSnapshot(controller.matter.getSnapshot())
+      );
+    } catch {
+      return true;
+    }
   }
 
   private async seedLeadBootstrapPermissionRules(

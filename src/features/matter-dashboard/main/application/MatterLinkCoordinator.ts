@@ -77,7 +77,10 @@ export class MatterLinkCoordinator {
     };
   }
 
-  async requestProposal(teamName: string): Promise<MatterLinkOperationResultDto> {
+  async requestProposal(
+    teamName: string,
+    matterId?: string
+  ): Promise<MatterLinkOperationResultDto> {
     const status = await this.getStatus(teamName);
     if (!status.queryReady) {
       return {
@@ -105,7 +108,7 @@ export class MatterLinkCoordinator {
       await this.deps.leadNotifier.notifyLead(
         teamName,
         'Build Link-backed matter proposal',
-        buildMatterLinkProposalPrompt(teamName, bundle)
+        buildMatterLinkProposalPrompt(teamName, bundle, matterId)
       );
       return {
         operation: 'proposal-request',

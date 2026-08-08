@@ -1,61 +1,60 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+import { isMatterSnapshotEffectivelyEmpty } from '@features/matter-dashboard/main';
+import { describe, expect, it } from 'vitest';
 
-import { isMatterEffectivelyEmpty } from '@features/matter-dashboard/main';
-import { afterEach, describe, expect, it } from 'vitest';
+import type { MatterDto, MatterSnapshotDto } from '@features/matter-dashboard/contracts';
 
-const temporaryDirectories: string[] = [];
-
-async function makeTeam(matterContents?: string): Promise<{ base: string; teamName: string }> {
-  const base = await mkdtemp(path.join(tmpdir(), 'matter-scan-'));
-  temporaryDirectories.push(base);
-  const teamName = 'scan-team';
-  await mkdir(path.join(base, teamName));
-  if (matterContents !== undefined) {
-    await writeFile(path.join(base, teamName, 'matter.json'), matterContents);
-  }
-  return { base, teamName };
+function snapshot(matters: MatterDto[], linkedMatterIds: string[]): MatterSnapshotDto {
+  return { matters, linkedMatterIds, proposal: null };
 }
 
-afterEach(async () => {
-  await Promise.all(
-    temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true }))
-  );
-});
+function matter(id: string, extra: Partial<MatterDto> = {}): MatterDto {
+  return { id, schemaVersion: 2, ...extra };
+}
 
-describe('isMatterEffectivelyEmpty', () => {
-  it('treats a missing matter file as empty', async () => {
-    const { base, teamName } = await makeTeam();
-    expect(await isMatterEffectivelyEmpty(base, teamName)).toBe(true);
+describe('isMatterSnapshotEffectivelyEmpty', () => {
+  it('treats no matters at all as empty', () => {
+    expect(isMatterSnapshotEffectivelyEmpty(snapshot([], []))).toBe(true);
   });
 
-  it('treats the seeded schema marker as empty', async () => {
-    const { base, teamName } = await makeTeam('{"schemaVersion":1}');
-    expect(await isMatterEffectivelyEmpty(base, teamName)).toBe(true);
+  it('treats unlinked matters as empty for this team', () => {
+    expect(
+      isMatterSnapshotEffectivelyEmpty(
+        snapshot([matter('m-1', { caption: 'Someone else v. Case' })], [])
+      )
+    ).toBe(true);
   });
 
-  it('treats audit-only bookkeeping as empty', async () => {
-    const { base, teamName } = await makeTeam(
-      JSON.stringify({
-        schemaVersion: 1,
-        updatedAt: '2026-08-01T00:00:00.000Z',
-        updatedBy: 'team-lead',
-        approvedBy: 'user',
-      })
-    );
-    expect(await isMatterEffectivelyEmpty(base, teamName)).toBe(true);
+  it('treats audit-only bookkeeping as empty', () => {
+    expect(
+      isMatterSnapshotEffectivelyEmpty(
+        snapshot(
+          [
+            matter('m-1', {
+              createdAt: '2026-08-01T00:00:00.000Z',
+              updatedAt: '2026-08-01T00:00:00.000Z',
+              updatedBy: 'team-lead',
+              approvedBy: 'user',
+            }),
+          ],
+          ['m-1']
+        )
+      )
+    ).toBe(true);
   });
 
-  it('treats real content sections as not empty', async () => {
-    const { base, teamName } = await makeTeam(
-      JSON.stringify({ schemaVersion: 1, caption: 'Smith v. Jones Trucking' })
-    );
-    expect(await isMatterEffectivelyEmpty(base, teamName)).toBe(false);
+  it('treats a linked matter with real content as not empty', () => {
+    expect(
+      isMatterSnapshotEffectivelyEmpty(
+        snapshot([matter('m-1', { caption: 'Smith v. Jones Trucking' })], ['m-1'])
+      )
+    ).toBe(false);
   });
 
-  it('treats corrupt JSON as empty', async () => {
-    const { base, teamName } = await makeTeam('{not json');
-    expect(await isMatterEffectivelyEmpty(base, teamName)).toBe(true);
+  it('needs only one linked matter with content', () => {
+    expect(
+      isMatterSnapshotEffectivelyEmpty(
+        snapshot([matter('m-1'), matter('m-2', { status: 'Active' })], ['m-1', 'm-2'])
+      )
+    ).toBe(false);
   });
 });

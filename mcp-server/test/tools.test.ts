@@ -2557,37 +2557,79 @@ describe('agent-teams-mcp tools', () => {
       writeTeamConfig(claudeDir, 'alpha', {
         members: [{ name: 'team-lead', agentType: 'team-lead' }],
       });
+      // Matters live in the app's own model-agnostic store, not under teams/.
+      const mattersDir = path.join(claudeDir, 'app-matters-store');
+      process.env.AGENT_TEAMS_MATTERS_DIR = mattersDir;
 
-      const proposeResult = parseJsonToolResult(
-        await getTool('matter_propose').execute({
-          claudeDir,
+      try {
+        const proposeResult = parseJsonToolResult(
+          await getTool('matter_propose').execute({
+            claudeDir,
+            teamName: 'alpha',
+            from: 'team-lead',
+            summary: ['Motion to compel filed Jul 10, 2026'],
+            changes: { discovery: { pendingMotion: { filed: 'Jul 10, 2026' } } },
+            taskRefs: ['task-1'],
+            sourceMode: 'link',
+            sourceRevision: 'revision-123',
+            evidence: [{ path: 'wiki/sources/motion.md' }],
+          })
+        );
+        expect(proposeResult.submitted).toBe(true);
+        expect(proposeResult.pendingUserReview).toBe(true);
+        expect(proposeResult.proposal.proposedBy).toBe('team-lead');
+        expect(proposeResult.proposal.sourceMode).toBe('link');
+        expect(proposeResult.proposal.evidence[0].path).toBe('wiki/sources/motion.md');
+
+        const proposalFile = path.join(mattersDir, 'proposals', 'alpha.json');
+        expect(fs.existsSync(proposalFile)).toBe(true);
+        // No matter document is written on propose — only on user approval —
+        // and nothing lands in the team dir.
+        expect(fs.existsSync(path.join(claudeDir, 'teams', 'alpha', 'matter.json'))).toBe(false);
+        expect(
+          fs.existsSync(path.join(claudeDir, 'teams', 'alpha', 'matter-proposal.json'))
+        ).toBe(false);
+
+        const getResult = parseJsonToolResult(
+          await getTool('matter_get').execute({ claudeDir, teamName: 'alpha' })
+        );
+        expect(getResult.matters).toEqual([]);
+        expect(getResult.matter).toBeNull();
+        expect(getResult.pendingProposal.summary).toEqual(['Motion to compel filed Jul 10, 2026']);
+        expect(getResult.sectionReference).toContain('matter_propose');
+      } finally {
+        delete process.env.AGENT_TEAMS_MATTERS_DIR;
+      }
+    });
+
+    it('accepts v2 sections (parties, settlement, events) and matterId', () => {
+      const propose = getTool('matter_propose');
+      expect(
+        propose.parameters?.safeParse({
           teamName: 'alpha',
-          from: 'team-lead',
-          summary: ['Motion to compel filed Jul 10, 2026'],
-          changes: { discovery: { pendingMotion: { filed: 'Jul 10, 2026' } } },
-          taskRefs: ['task-1'],
-          sourceMode: 'link',
-          sourceRevision: 'revision-123',
-          evidence: [{ path: 'wiki/sources/motion.md' }],
-        })
-      );
-      expect(proposeResult.submitted).toBe(true);
-      expect(proposeResult.pendingUserReview).toBe(true);
-      expect(proposeResult.proposal.proposedBy).toBe('team-lead');
-      expect(proposeResult.proposal.sourceMode).toBe('link');
-      expect(proposeResult.proposal.evidence[0].path).toBe('wiki/sources/motion.md');
-
-      const proposalFile = path.join(claudeDir, 'teams', 'alpha', 'matter-proposal.json');
-      expect(fs.existsSync(proposalFile)).toBe(true);
-      // matter.json is only written on user approval — never by the agent tools.
-      expect(fs.existsSync(path.join(claudeDir, 'teams', 'alpha', 'matter.json'))).toBe(false);
-
-      const getResult = parseJsonToolResult(
-        await getTool('matter_get').execute({ claudeDir, teamName: 'alpha' })
-      );
-      expect(getResult.matter).toBeNull();
-      expect(getResult.pendingProposal.summary).toEqual(['Motion to compel filed Jul 10, 2026']);
-      expect(getResult.sectionReference).toContain('matter_propose');
+          matterId: 'm-1',
+          summary: ['Mediation scheduled'],
+          changes: {
+            currentStage: 'settlement',
+            parties: [{ name: 'Daniel Anderson', side: 'Our client' }],
+            counsel: [{ name: 'Karen Lin', partyId: 'pty-a', role: 'Lead counsel' }],
+            settlement: {
+              records: [{ date: 'Jul 15, 2026', type: 'Counteroffer', amount: '$310,000' }],
+              mediations: [{ when: 'Sep 24, 2026', status: 'Scheduled' }],
+            },
+            events: [{ date: 'Jul 15, 2026', type: 'Settlement', description: 'Counteroffer served' }],
+            postJudgment: { enforcementActions: [{ action: 'Levy', status: 'Issued' }] },
+          },
+        }).success
+      ).toBe(true);
+      // The legacy v1 string form of enforcementActions stays accepted.
+      expect(
+        propose.parameters?.safeParse({
+          teamName: 'alpha',
+          summary: ['x'],
+          changes: { postJudgment: { enforcementActions: 'Renewal review Nov 2026' } },
+        }).success
+      ).toBe(true);
     });
 
     it('fails closed when the team config does not exist', async () => {
