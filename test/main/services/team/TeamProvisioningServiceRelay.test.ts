@@ -86,6 +86,11 @@ const hoisted = vi.hoisted(() => {
 
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>();
+  const virtualAccess = async (filePath: string | Buffer | URL, mode?: number): Promise<void> => {
+    const key = String(filePath).replace(/\\/g, '/');
+    if (hoisted.files.has(key)) return;
+    return actual.promises.access(filePath as string, mode);
+  };
   return {
     ...actual,
     promises: {
@@ -93,6 +98,7 @@ vi.mock('fs', async (importOriginal) => {
       stat: hoisted.stat,
       readFile: hoisted.readFile,
       mkdir: hoisted.mkdir,
+      access: virtualAccess,
     },
   };
 });
@@ -108,6 +114,12 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 });
 
 vi.mock('../../../../src/main/services/team/atomicWrite', () => ({
+  atomicWriteAsync: hoisted.atomicWrite,
+}));
+
+// The stock session mailbox bridge and the runtime binding store write through
+// the utils-level atomic writer; keep those writes in the virtual file map.
+vi.mock('../../../../src/main/utils/atomicWrite', () => ({
   atomicWriteAsync: hoisted.atomicWrite,
 }));
 
@@ -6072,5 +6084,177 @@ Messages:
     });
 
     expect(busy).toEqual({ busy: false });
+  });
+});
+
+describe('interactive stock lead delivery (custom lead name)', () => {
+  const LEAD_SESSION_ID = '9a7a5b0d-0000-4000-8000-000000000000';
+  const SESSION_TEAM = 'session-9a7a5b0d';
+
+  beforeEach(() => {
+    TeamConfigReader.clearCacheForTests();
+    hoisted.files.clear();
+    hoisted.readFile.mockClear();
+    hoisted.mkdir.mockClear();
+    hoisted.atomicWrite.mockClear();
+    hoisted.setAtomicWriteShouldFail(false);
+    vi.spyOn(fsPromises, 'mkdir').mockImplementation(hoisted.mkdir as never);
+  });
+
+  /** App team with a custom-named lead + the stock session team it runs in. */
+  function seedInteractiveTeam(teamName: string): void {
+    hoisted.files.set(
+      `/mock/teams/${teamName}/config.json`,
+      JSON.stringify({
+        name: teamName,
+        members: [
+          { name: 'legal-ops-supervisor', agentType: 'team-lead' },
+          { name: 'docket-agent' },
+        ],
+      })
+    );
+    hoisted.files.set(
+      `/mock/teams/${teamName}/interactive-runtime.json`,
+      JSON.stringify({
+        version: 2,
+        runtime: 'claude-interactive',
+        teamName,
+        leadName: 'legal-ops-supervisor',
+        runId: 'run-1',
+        tmuxSessionName: 'agteams-test',
+        leadSessionId: LEAD_SESSION_ID,
+        sessionTeamName: SESSION_TEAM,
+        leadPaneId: '%1',
+        lanes: [],
+        launchedAt: '2026-02-23T09:59:00.000Z',
+      })
+    );
+    // The stock runtime registers its lead under its OWN identity.
+    hoisted.files.set(
+      `/mock/teams/${SESSION_TEAM}/config.json`,
+      JSON.stringify({
+        name: SESSION_TEAM,
+        leadAgentId: `team-lead@${SESSION_TEAM}`,
+        members: [
+          { name: 'team-lead', agentId: `team-lead@${SESSION_TEAM}`, agentType: 'team-lead' },
+          { name: 'docket-agent' },
+        ],
+      })
+    );
+  }
+
+  /** An interactive run: alive, stock runtime, and — by design — no child. */
+  function attachInteractiveRun(service: TeamProvisioningService, teamName: string): void {
+    attachAliveRun(service, teamName);
+    const run = (service as unknown as { runs: Map<string, any> }).runs.get('run-1');
+    run.child = null;
+    run.stockClaudeRuntime = true;
+    run.interactiveRuntime = true;
+  }
+
+  function readSessionLeadMailbox(): Record<string, unknown>[] {
+    const raw = hoisted.files.get(`/mock/teams/${SESSION_TEAM}/inboxes/team-lead.json`);
+    return raw ? (JSON.parse(raw) as Record<string, unknown>[]) : [];
+  }
+
+  function readAppLeadInbox(teamName: string): Record<string, unknown>[] {
+    const raw = hoisted.files.get(`/mock/teams/${teamName}/inboxes/legal-ops-supervisor.json`);
+    return raw ? (JSON.parse(raw) as Record<string, unknown>[]) : [];
+  }
+
+  it('user → lead: translates the custom lead name to the session lead mailbox', async () => {
+    const service = new TeamProvisioningService();
+    const teamName = 'custom-lead-team';
+    seedInteractiveTeam(teamName);
+    attachInteractiveRun(service, teamName);
+    hoisted.files.set(
+      `/mock/teams/${teamName}/inboxes/legal-ops-supervisor.json`,
+      JSON.stringify([
+        {
+          from: 'user',
+          to: 'legal-ops-supervisor',
+          text: 'hello lead',
+          timestamp: '2026-02-23T10:00:00.000Z',
+          read: false,
+          source: 'user_sent',
+          messageId: 'user-msg-1',
+        },
+      ])
+    );
+
+    const delivered = await service.deliverStockTeammateDm(teamName, 'legal-ops-supervisor', {
+      text: 'hello lead',
+      summary: 'hello',
+      messageId: 'user-msg-1',
+    });
+
+    expect(delivered).toBe(true);
+    const mailbox = readSessionLeadMailbox();
+    expect(mailbox).toHaveLength(1);
+    expect(mailbox[0].text).toBe('hello lead');
+    expect(mailbox[0].from).toBe('user');
+    // The app-side copy flips read — the UI's delivering→delivered signal.
+    expect(readAppLeadInbox(teamName)[0].read).toBe(true);
+  });
+
+  it('member → lead: relayLeadInboxMessages delivers teammate rows with real attribution', async () => {
+    const service = new TeamProvisioningService();
+    const teamName = 'custom-lead-team';
+    seedInteractiveTeam(teamName);
+    attachInteractiveRun(service, teamName);
+    hoisted.files.set(
+      `/mock/teams/${teamName}/inboxes/legal-ops-supervisor.json`,
+      JSON.stringify([
+        {
+          from: 'docket-agent',
+          to: 'legal-ops-supervisor',
+          text: 'Task #4f4f5292 complete: no docket materials found; details in the task comment.',
+          timestamp: '2026-02-23T10:00:00.000Z',
+          read: false,
+          summary: '#4f4f5292 done',
+          messageId: 'member-msg-1',
+        },
+      ])
+    );
+
+    const relayed = await service.relayLeadInboxMessages(teamName);
+
+    expect(relayed).toBe(1);
+    const mailbox = readSessionLeadMailbox();
+    expect(mailbox).toHaveLength(1);
+    expect(mailbox[0].text).toContain('Task #4f4f5292 complete');
+    // Sender attribution is preserved — the lead must not think the user wrote it.
+    expect(mailbox[0].from).toBe('docket-agent');
+    expect(readAppLeadInbox(teamName)[0].read).toBe(true);
+
+    // Idempotent: everything is read now, nothing left to relay.
+    expect(await service.relayLeadInboxMessages(teamName)).toBe(0);
+    expect(readSessionLeadMailbox()).toHaveLength(1);
+  });
+
+  it('member → lead: leaves rows unread when the session team is not materialized yet', async () => {
+    const service = new TeamProvisioningService();
+    const teamName = 'custom-lead-team';
+    seedInteractiveTeam(teamName);
+    hoisted.files.delete(`/mock/teams/${SESSION_TEAM}/config.json`);
+    attachInteractiveRun(service, teamName);
+    hoisted.files.set(
+      `/mock/teams/${teamName}/inboxes/legal-ops-supervisor.json`,
+      JSON.stringify([
+        {
+          from: 'docket-agent',
+          to: 'legal-ops-supervisor',
+          text: 'Task #4f4f5292 complete: findings attached.',
+          timestamp: '2026-02-23T10:00:00.000Z',
+          read: false,
+          messageId: 'member-msg-2',
+        },
+      ])
+    );
+
+    expect(await service.relayLeadInboxMessages(teamName)).toBe(0);
+    expect(readSessionLeadMailbox()).toHaveLength(0);
+    // Still unread — the next relay nudge retries once the session team exists.
+    expect(readAppLeadInbox(teamName)[0].read).toBe(false);
   });
 });

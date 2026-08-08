@@ -1,5 +1,6 @@
 import { atomicWriteAsync } from '@main/utils/atomicWrite';
 import { getTeamsBasePath } from '@main/utils/pathDecoder';
+import { resolveTeamLeadIdentity } from '@shared/utils/leadDetection';
 import { createLogger } from '@shared/utils/logger';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
@@ -81,6 +82,34 @@ export interface StockSessionTeamDmInput {
   text: string;
   summary?: string;
   from?: string;
+}
+
+/** The session team's own name for its lead, from its config identity fields. */
+async function resolveSessionTeamLeadName(teamDir: string): Promise<string | null> {
+  try {
+    const raw = await fs.promises.readFile(path.join(teamDir, 'config.json'), 'utf-8');
+    const config = JSON.parse(raw) as Parameters<typeof resolveTeamLeadIdentity>[0];
+    const name = resolveTeamLeadIdentity(config).name.trim();
+    return name.length > 0 ? name : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The session team's OWN name for its lead (canonically "team-lead"). The
+ * stock runtime registers its lead under this identity, never under the
+ * app-side lead name — an imported team's custom lead name (e.g.
+ * "legal-ops-supervisor") has no mailbox in the session team. Callers that
+ * address the app-side lead translate the name through this resolver before
+ * delivering; the delivery function itself stays verbatim and fail-closed.
+ */
+export async function resolveStockSessionTeamLeadName(
+  leadSessionId: string | null | undefined
+): Promise<string | null> {
+  const teamDir = getStockSessionTeamDir(leadSessionId);
+  if (!teamDir) return null;
+  return resolveSessionTeamLeadName(teamDir);
 }
 
 /**

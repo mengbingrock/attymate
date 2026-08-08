@@ -231,7 +231,10 @@ import {
 } from './provisioning/CodexLaneBootstrapPrompts';
 import { resolveTeamRuntimeMode } from './provisioning/resolveTeamRuntimeMode';
 import { synthesizeStockClaudeTeamRuntimeState } from './provisioning/StockClaudeTeamStateSynthesizer';
-import { deliverStockSessionTeamDm } from './provisioning/StockSessionTeamBridge';
+import {
+  deliverStockSessionTeamDm,
+  resolveStockSessionTeamLeadName,
+} from './provisioning/StockSessionTeamBridge';
 import { getSystemLocale } from './provisioning/TeamProvisioningAgentLanguage';
 import {
   buildDeterministicCreateBootstrapSpec,
@@ -16439,6 +16442,91 @@ export class TeamProvisioningService {
     }
   }
 
+  /**
+   * Lead-inbox relay for INTERACTIVE stock runtimes: teammate `message_send`
+   * rows (and any other app-side lead-inbox entries) land in
+   * `inboxes/<appLeadName>.json` with no process stdin to relay into. Deliver
+   * each unread entry into the stock session mailbox, preserving the real
+   * sender; `deliverStockTeammateDm` translates the app lead name to the
+   * session team's own lead identity and marks the app copy read.
+   */
+  private async relayLeadInboxToStockSessionMailbox(
+    teamName: string,
+    run: ProvisioningRun,
+    options: { onlyMessageId?: string } = {}
+  ): Promise<number> {
+    if (!run.stockClaudeRuntime) return 0;
+    const binding = await interactiveTeamRuntimeService.readBinding(teamName);
+    if (!binding?.leadSessionId) return 0;
+
+    let config: Awaited<ReturnType<TeamConfigReader['getConfig']>> | null = null;
+    try {
+      config = await this.readConfigForObservation(teamName);
+    } catch {
+      return 0;
+    }
+    if (!config) return 0;
+    const leadName = resolveTeamLeadIdentity(config).name;
+    const normalizedLead = leadName.trim().toLowerCase();
+
+    let leadInboxMessages: Awaited<ReturnType<TeamInboxReader['getMessagesFor']>> = [];
+    try {
+      leadInboxMessages = await this.inboxReader.getMessagesFor(teamName, leadName);
+    } catch {
+      return 0;
+    }
+
+    const relayedIds = this.relayedLeadInboxMessageIds.get(teamName) ?? new Set<string>();
+    const unread = leadInboxMessages
+      .filter((m): m is InboxMessage & { messageId: string } => {
+        if (m.read) return false;
+        if (typeof m.text !== 'string' || m.text.trim().length === 0) return false;
+        if (!hasStableInboxMessageId(m)) return false;
+        if (relayedIds.has(m.messageId)) return false;
+        if (options.onlyMessageId && m.messageId !== options.onlyMessageId) return false;
+        // Never bounce the lead's own words back at it.
+        if ((m.from ?? '').trim().toLowerCase() === normalizedLead) return false;
+        return true;
+      })
+      .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+    if (unread.length === 0) return 0;
+
+    // Idle/shutdown chatter and cross-team sender copies are noise for a lead
+    // that talks to its teammates natively — mark read without delivering.
+    const { silentIdleIds, coarseNonIdleNoiseIds } = getLeadInboxRelayNoiseIds(unread);
+    const skipped = unread.filter(
+      (m) =>
+        silentIdleIds.has(m.messageId) ||
+        coarseNonIdleNoiseIds.has(m.messageId) ||
+        m.source === CROSS_TEAM_SENT_SOURCE
+    );
+    if (skipped.length > 0) {
+      await this.markInboxMessagesRead(teamName, leadName, skipped).catch(() => {});
+      for (const message of skipped) relayedIds.add(message.messageId);
+    }
+    const skippedIds = new Set(skipped.map((m) => m.messageId));
+
+    let relayed = 0;
+    for (const message of unread) {
+      if (skippedIds.has(message.messageId)) continue;
+      const delivered = await this.deliverStockTeammateDm(teamName, leadName, {
+        text: message.text,
+        ...(message.summary ? { summary: message.summary } : {}),
+        messageId: message.messageId,
+        ...(message.from ? { from: message.from } : {}),
+      });
+      // Session team not materialized yet — leave the rest unread and retry
+      // on the next inbox change or relay nudge.
+      if (!delivered) break;
+      relayedIds.add(message.messageId);
+      relayed += 1;
+    }
+    if (relayedIds.size > 0) {
+      this.relayedLeadInboxMessageIds.set(teamName, this.trimRelayedSet(relayedIds));
+    }
+    return relayed;
+  }
+
   async relayLeadInboxMessages(
     teamName: string,
     options: { onlyMessageId?: string } = {}
@@ -16487,7 +16575,13 @@ export class TeamProvisioningService {
       const runId = this.getAliveRunId(teamName) ?? this.getProvisioningRunId(teamName);
       if (!runId) return 0;
       const run = this.runs.get(runId);
-      if (!run?.child || run.processKilled || run.cancelRequested) return 0;
+      if (!run || run.processKilled || run.cancelRequested) return 0;
+      if (!run.child) {
+        // Interactive stock leads have no app-writable stdin (child is null by
+        // design) — their app-side inbox relays through the stock session
+        // mailbox instead of dead-ending here.
+        return this.relayLeadInboxToStockSessionMailbox(teamName, run, options);
+      }
       const isStaleRelayRun = (): boolean =>
         !this.isCurrentTrackedRun(run) || !run.child || run.processKilled || run.cancelRequested;
 
@@ -17067,7 +17161,7 @@ export class TeamProvisioningService {
   async deliverStockTeammateDm(
     teamName: string,
     memberName: string,
-    input: { text: string; summary?: string; messageId?: string }
+    input: { text: string; summary?: string; messageId?: string; from?: string }
   ): Promise<boolean> {
     const runId = this.getAliveRunId(teamName);
     const run = runId ? this.runs.get(runId) : null;
@@ -17075,27 +17169,47 @@ export class TeamProvisioningService {
       return false;
     }
     let leadSessionId = run?.detectedSessionId?.trim() || null;
-    if (!leadSessionId) {
+    let bindingLeadName: string | null = null;
+    {
       // Interactive/adopted runtimes persist the binding on disk.
       const binding = await interactiveTeamRuntimeService.readBinding(teamName);
-      leadSessionId = binding?.leadSessionId ?? null;
+      leadSessionId ||= binding?.leadSessionId ?? null;
+      bindingLeadName = binding?.leadName?.trim() || null;
     }
     if (!leadSessionId) {
       return false;
     }
+    // The stock session team registers its lead under its OWN identity
+    // (canonically "team-lead"), never under the app-side lead name — an
+    // imported team's custom lead name has no session mailbox. Translate
+    // lead-directed targets to the session team's lead name; every other
+    // name passes through verbatim and fails closed in the bridge.
+    const normalize = (value: string): string => value.trim().toLowerCase();
+    const normalizedTarget = normalize(memberName);
+    const appLeadName = normalize(run?.leadIdentity?.name ?? bindingLeadName ?? '');
+    const isLeadTarget =
+      normalizedTarget === 'team-lead' ||
+      normalizedTarget === 'lead' ||
+      (appLeadName !== '' && normalizedTarget === appLeadName);
+    const sessionTargetName = isLeadTarget
+      ? ((await resolveStockSessionTeamLeadName(leadSessionId)) ?? memberName)
+      : memberName;
     const delivered = await deliverStockSessionTeamDm(leadSessionId, {
-      memberName,
+      memberName: sessionTargetName,
       text: input.text,
       ...(input.summary ? { summary: input.summary } : {}),
+      ...(input.from ? { from: input.from } : {}),
     }).catch((error: unknown) => {
       logger.warn(
-        `[${teamName}] stock session-team DM to "${memberName}" failed: ${
+        `[${teamName}] stock session-team DM to "${sessionTargetName}" failed: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
       return false;
     });
     if (delivered && input.messageId) {
+      // The app-side mirror copy lives under the ORIGINAL app name; marking it
+      // read is what flips the UI from "delivering" to "delivered".
       await this.markInboxMessagesRead(teamName, memberName, [
         { messageId: input.messageId },
       ]).catch(() => {});
