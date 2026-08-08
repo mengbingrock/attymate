@@ -1,73 +1,88 @@
 # matter-dashboard
 
-Live litigation Matter Dashboard for a team, kept current by the **team lead
-agent** through a batched, user-confirmed update flow. Follows the
+Litigation Matter Dashboard over the app's **global, team-independent matters
+store**, kept current by direct user edits and by the **team lead agent**
+through a batched, user-confirmed update flow. Follows the
 [Feature Architecture Standard](../../../docs/FEATURE_ARCHITECTURE_STANDARD.md).
+
+## Matters are not team data
+
+A matter exists before any team is created and outlives every team. Storage is
+therefore the app's own model-agnostic location (Electron `userData`), never a
+runtime-branded path:
+
+```text
+<userData>/matters/<matterId>/matter.json   one matter document (schema v2, no team fields)
+<userData>/matters/team-links.json          { [teamName]: matterIds[] } — many-to-many
+<userData>/matters/proposals/<team>.json    the team's pending proposal
+```
+
+`agent-teams-controller/src/internal/matterStore.js` stays the ONLY writer; the
+app supplies the store path via the controller context (`mattersDir`) and the
+`AGENT_TEAMS_MATTERS_DIR` env var (which also reaches the MCP server processes).
+Any team can link to any matter; matter documents carry no team knowledge.
+
+**Legacy migration is lazy**: the first read of a team that still has a v1
+`~/.claude/teams/<team>/matter.json` imports it into the store (v1→v2 field
+mapping in `contracts/normalize.ts`), links the team, moves any pending
+proposal, and stubs the old file with `{ migratedTo }` so it never imports
+twice.
+
+## Schema v2 (the Matter Dashboard v3 template)
+
+`contracts/dto.ts` mirrors the v3 design: named scalars
+(`client`/`caseNumber`/`department`, back-filled from core-field labels),
+`parties[]` + `counsel[]` (linked by `partyId`), pleading `records[]` grouped by
+filing party, discovery `motions[]`/`meetAndConfers[]` plus richer requests/
+productions/depositions, trial settings/continuances/pretrial filings/MILs/
+sessions/verdicts, a new `settlement` stage (records + mediations), post-judgment
+`enforcementActions[]`, workspace `dir` links on records, and manual-only
+`events[]`. `normalizeMatterChanges` accepts BOTH v1 and v2 shapes, so leads
+running a cached v1 skill keep working.
+
+## Three write paths, one store
+
+1. **User edits (direct)** — every field in the matter view is editable.
+   `useMatterEditor` keeps a per-section draft, debounces whole-section flushes
+   through `matter:update`, and reconciles store echoes without clobbering
+   unflushed edits. Writes stamp `updatedBy: 'user'`. No proposal gate.
+2. **Agent proposals (gated)** — the lead calls `matter_get` /
+   `matter_propose { matterId? }`; the proposal renders as a summary +
+   per-section diff with **Approve & update** / **Reject** (a staleness note
+   appears when the matter changed after submission). Approving merges
+   (objects shallow-merge, arrays replace wholesale) and notifies the lead;
+   a matterless team's first approved proposal creates and links the matter.
+3. **Matter management** — create, link, unlink from the list view
+   (`matter:create`, `matter:link-team`, `matter:unlink-team`).
+
+Every store write broadcasts `matter:changed` to the renderer; `useMatter`
+refetches on it (plus legacy `team-change` matter events).
 
 ## The workflow lives in a skill, not in the app
 
-The instructions the lead follows — initial folder scan, batched update scan,
-delegation, grounding rules — are an **ordinary user skill** at
+The instructions the lead follows are an **ordinary user skill** at
 `~/.claude/skills/matter-dashboard/SKILL.md` (and `~/.codex/skills/` when Codex
-is set up). `MatterSkillSeeder` writes it once, when the slug is missing, and
-never touches it again: the user owns it, edits it like any other skill, and
-those edits take effect immediately because `MatterRefreshCoordinator` reads the
-file from disk (falling back to the bundled `MATTER_SKILL_MARKDOWN` only when it
-is absent). Deleting the folder re-seeds it on the next start.
+is set up). `MatterSkillSeeder` writes it when missing and — new in v2 —
+upgrades a **pristine** older seed in place (hash-gated against
+`LEGACY_SKILL_SHA256`). A user-edited copy is never overwritten; instead
+`buildMatterSkillInvocationPrompt` appends the authoritative section schema at
+prompt time so proposals still arrive in the current shape. The refresh prompt
+also names the target matter (`matterId`) or, for multi-matter teams, tells the
+lead to pick one via `matter_get`.
 
-Lead prompts therefore carry only a ~3-line pointer to the skill. The skill
-itself is team- and runtime-agnostic; `buildMatterSkillInvocationPrompt` adds
-the situational parts (team, project path, initial scan vs update, and whether
-the runtime permits spawning extra specialists — false for codex lanes, decided
-by `readTeamRuntimeFacts` from the runtime binding *and* the team's provider so
-the answer is still right for a stopped team).
+## Renderer (v3 layout)
 
-## Update lifecycle (propose → confirm → apply)
+`renderer/ui/` is decomposed: `MatterDashboardView` (shell: list | matter |
+history routing), `MattersListView` (search, status chips, link/unlink, new
+matter), `MatterCorePanel` + `NextDeadlineCard`, `PartiesPanel`, `StageRail`
+(five stages incl. Settlement & Mediation), `panes/*` per stage,
+`ProceduralHistoryView`, `ProposalReviewPanel`, `LinkEvidencePanel`,
+`matterTheme` (tone system) and `fieldPrimitives`. Without a team the view
+renders the demo fixture (`demoFixture.ts`).
 
-The dashboard is NOT updated per task. The flow is:
-
-1. A refresh is requested — either by the user (**Refresh dashboard** in the
-   dashboard header → `matter:request-refresh`) or automatically when a job's
-   last task completes (`TeamDataService.notifyLeadOnJobWrapUp`, which delegates
-   to `requestJobWrapUpRefresh`). Both paths deliver the same skill-backed
-   message through `sendUserInstructionToLead`. A team that has never launched
-   has no lead to address: that returns `accepted: false` with an explanation
-   rather than throwing.
-2. The lead calls MCP tool `matter_get`, compiles a list of what the completed
-   work changed (derived from task comments/results), and calls
-   `matter_propose` with that summary plus only the changed sections. This
-   writes `~/.claude/teams/<team>/matter-proposal.json` — nothing else.
-3. The dashboard renders the pending proposal (summary + per-section diff)
-   with **Approve & update** / **Reject** buttons.
-4. Approve → `TeamDataService.applyMatterProposal` merges the changes into
-   `~/.claude/teams/<team>/matter.json` (sections shallow-merge, arrays
-   replace wholesale), clears the proposal, and notifies the lead.
-   Reject → the proposal is cleared and the reason is sent to the lead's
-   inbox to revise and re-propose.
-
-Agents can only propose; the sole writer of `matter.json` is the app on user
-approval (`agent-teams-controller/src/internal/matterStore.js`).
-
-## Layers
-
-- `contracts/` — `MatterDto` / `MatterProposalDto` (fixture-faithful v1
-  schema), tolerant normalizers, IPC channels + HTTP route, and the skill slug
-  that lead prompts across the app name.
-- `core/domain/matterSkillDefinition.ts` — the SKILL.md markdown that is seeded
-  to the user's skill roots.
-- `main/` — read-only `MatterFileReader`, `createMatterFeature` composition
-  (apply/reject delegate to `TeamDataService`), IPC + HTTP adapters.
-- `preload/` — `createMatterBridge`.
-- `renderer/` — `MatterDashboardView` (demo fixture + live overlay + proposal
-  review panel) and `useMatter` (fetch + refetch on `team-change` events of
-  type `matter`).
-
-## Live updates
-
-`matter.json` / `matter-proposal.json` are watched by the existing teams
-watcher (`TeamTaskWatchRegistry` allowlist + `FileWatcher.processTeamsChange`
-classify them as `TeamChangeEvent { type: 'matter' }`). The renderer store
-ignores these events; only `useMatter` refetches.
+**Procedural history** is a projection: `core/domain/proceduralHistory.ts`
+derives auto events from the stage records on render — editing a source record
+updates the timeline with zero sync machinery. Only manual events are stored.
 
 ## Link evidence provider
 
@@ -90,8 +105,8 @@ or HTTP. The dashboard then offers explicit operations:
 - **Build proposal from Link** runs five bounded `lnk query ... --budget medium
 --json` calls, prefers substantive context-packet extracts over abbreviated
   recall capsules, deduplicates the evidence, fingerprints the packet, and
-  sends it to the lead. The lead projects only grounded changes through the
-  existing `matter_propose` review gate.
+  sends it to the lead (naming the active matter). The lead projects only
+  grounded changes through the existing `matter_propose` review gate.
 
 Electron and browser clients use the same feature operations. Link's
 MIT-licensed indexing and retrieval source is vendored under `vendor/link` and
@@ -110,12 +125,19 @@ Python 3.10+ must still be available. Runtime selection order is:
 See `THIRD_PARTY_NOTICES.md` and `vendor/link/UPSTREAM.md` for the upstream
 citation, MIT license, and base revision.
 
-Link never writes `matter.json`; user approval remains the only apply path.
+Link never writes matter documents; user edits and user approval are the only
+apply paths.
 
 ## Known limitations
 
-- Human inline edits in the view are local component state only: they are not
-  persisted and reset when the next approved update lands.
+- One pending proposal per team (last write wins), and array sections replace
+  wholesale — an approved proposal can overwrite records the user added after
+  it was submitted (the review panel warns when the matter is newer than the
+  proposal).
+- Dev and packaged builds use different `userData` roots, so they see
+  different matters stores.
+- Two teams that migrated copies of the same legacy matter.json each get their
+  own matter (no content dedupe).
 - The wrap-up nudge fires only when a completion leaves zero active tasks on
   the board; boards with long-lived unrelated open tasks rely on the standing
   prompt instruction alone.
