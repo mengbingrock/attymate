@@ -614,6 +614,8 @@ export interface TeamsAPI {
   launchTeam: (request: TeamLaunchRequest) => Promise<TeamLaunchResponse>;
   getAllTasks: () => Promise<GlobalTask[]>;
   updateConfig: (teamName: string, updates: TeamUpdateConfigRequest) => Promise<TeamConfig>;
+  /** Repoints a stopped team at a new project folder (applies at next launch). */
+  changeProjectPath: (teamName: string, projectPath: string) => Promise<{ projectPath: string }>;
   addMember: (teamName: string, request: AddMemberRequest) => Promise<void>;
   replaceMembers: (teamName: string, request: ReplaceMembersRequest) => Promise<void>;
   removeMember: (teamName: string, memberName: string) => Promise<void>;

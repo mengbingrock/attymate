@@ -236,7 +236,8 @@
     "fields": {
       "colorOptional": "Color (optional)",
       "description": "Description",
-      "name": "Name"
+      "name": "Name",
+      "projectFolder": "Project folder"
     },
     "memberRestartWarning": "Saving will restart this teammate to apply role, workflow, worktree isolation, provider, model, effort, or MCP access changes.",
     "notices": {
@@ -258,7 +259,13 @@
       "readOnlyHint": "Team lead name and role stay read-only here. Open the runtime panel on the lead row to change provider, model, or effort.",
       "role": "Team Lead"
     },
-    "title": "Edit Team"
+    "title": "Edit Team",
+    "projectFolder": {
+      "change": "Change…",
+      "unset": "No project folder set",
+      "liveHint": "Stop the team to change its project folder; running agents keep their current folder.",
+      "pendingHint": "Applies on save. The team works in the new folder from its next launch."
+    }
   },
   "memberDraft": {
     "actions": {
