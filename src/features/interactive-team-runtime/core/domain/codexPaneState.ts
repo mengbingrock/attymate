@@ -3,6 +3,7 @@ export type CodexPaneState =
   | 'trust-dialog'
   | 'login-required'
   | 'approval-dialog'
+  | 'mcp-startup'
   | 'unknown';
 
 /**
@@ -13,6 +14,13 @@ export type CodexPaneState =
  *
  * `ready` means the composer/status footer is the bottommost content and
  * pasted input will land in the composer (codex queues input even mid-turn).
+ *
+ * `mcp-startup` means the composer is visible but MCP servers are still
+ * initializing ("• Starting MCP servers (4/5): … (3s • esc to interrupt)"
+ * above the composer, codex-cli 0.147.0). Submitting input in this state
+ * cancels the remaining server initializations ("MCP startup interrupted"),
+ * leaving the session without its agent-teams tools — hold pastes until the
+ * line clears.
  */
 export function detectCodexPaneState(tail: string): CodexPaneState {
   const lines = tail
@@ -41,6 +49,11 @@ export function detectCodexPaneState(tail: string): CodexPaneState {
   const hasStatusFooter = last.includes('·');
   const hasComposerAbove = lines.slice(-4).some((line) => /^\s*›/.test(line));
   if (hasStatusFooter && hasComposerAbove) {
+    // The startup status line sits directly above the composer while servers
+    // initialize and is redrawn in place, so it only counts near the bottom.
+    if (lastFew.some((line) => /Starting MCP servers/i.test(line))) {
+      return 'mcp-startup';
+    }
     return 'ready';
   }
   return 'unknown';
