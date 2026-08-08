@@ -16,6 +16,7 @@ import {
   isViewerSessionNameFor,
 } from '../core/domain/sessionNaming';
 
+import { isPaneSafeLauncherEnvKey } from './launcherEnv';
 import {
   clearRuntimeBinding,
   readRuntimeBinding,
@@ -130,7 +131,7 @@ export class InteractiveTeamRuntimeService {
     const launcherDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'agteams-launch-'));
     const launcherPath = path.join(launcherDir, 'launch.sh');
     const envExports = Object.entries(input.env)
-      .filter(([key, value]) => typeof value === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(key))
+      .filter(([key, value]) => typeof value === 'string' && isPaneSafeLauncherEnvKey(key))
       .map(([key, value]) => `export ${key}=${JSON.stringify(value)}`)
       .join('\n');
     const argLine = input.args.map((arg) => JSON.stringify(arg)).join(' ');

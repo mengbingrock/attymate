@@ -9,6 +9,7 @@ import * as path from 'path';
 import { detectCodexPaneState } from '../core/domain/codexPaneState';
 import { buildInteractiveTmuxSessionName } from '../core/domain/sessionNaming';
 
+import { isPaneSafeLauncherEnvKey } from './launcherEnv';
 import { readRuntimeBinding, writeRuntimeBinding } from './runtimeBindingStore';
 
 import type { InteractiveRuntimeBinding, RuntimeLaneBinding } from '../core/domain/runtimeBinding';
@@ -80,7 +81,7 @@ export class CodexTeamLanesService {
     const launcherDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'agteams-codex-'));
     const launcherByMember = new Map<string, string>();
     const envExports = Object.entries(input.env)
-      .filter(([key, value]) => typeof value === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(key))
+      .filter(([key, value]) => typeof value === 'string' && isPaneSafeLauncherEnvKey(key))
       .map(([key, value]) => `export ${key}=${JSON.stringify(value)}`)
       .join('\n');
     for (const lane of input.lanes) {
@@ -224,7 +225,7 @@ export class CodexTeamLanesService {
    */
   async pasteIntoLane(teamName: string, memberName: string, text: string): Promise<boolean> {
     const binding = await readRuntimeBinding(teamName);
-    if (!binding || binding.runtime !== 'codex-lanes') return false;
+    if (binding?.runtime !== 'codex-lanes') return false;
     const lane =
       binding.lanes.find((entry) => entry.memberName === memberName) ??
       (memberName === 'team-lead' ? binding.lanes.find((entry) => entry.isLead) : undefined);
@@ -253,7 +254,7 @@ export class CodexTeamLanesService {
    */
   async syncAppConfigMembers(teamName: string, cwd: string): Promise<void> {
     const binding = await readRuntimeBinding(teamName);
-    if (!binding || binding.runtime !== 'codex-lanes') return;
+    if (binding?.runtime !== 'codex-lanes') return;
     const configPath = path.join(getTeamsBasePath(), teamName, 'config.json');
     try {
       const raw = await this.readFileWhenItExists(configPath, CONFIG_SYNC_WAIT_MS);
