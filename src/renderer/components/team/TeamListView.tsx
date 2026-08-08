@@ -81,7 +81,6 @@ import { TeamTaskStatusSummary } from './TeamTaskStatusSummary';
 import type { ActiveTeamRef, TeamCopyData } from './dialogs/CreateTeamDialog';
 import type { TeamLaunchDialogMode } from './dialogs/LaunchTeamDialog';
 import type { TeamListFilterState } from './TeamListFilterPopover';
-import type { OrganizationPlacementSelection } from '@features/organizations/contracts';
 import type { TeamStatus } from '@renderer/utils/teamListStatus';
 import type {
   ResolvedTeamMember,
@@ -576,7 +575,6 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
   );
   const {
     connectionMode,
-    createTeam,
     launchTeam,
     provisioningErrorByTeam,
     clearProvisioningError,
@@ -587,7 +585,6 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
   } = useStore(
     useShallow((s) => ({
       connectionMode: s.connectionMode,
-      createTeam: s.createTeam,
       launchTeam: s.launchTeam,
       provisioningErrorByTeam: s.provisioningErrorByTeam,
       clearProvisioningError: s.clearProvisioningError,
@@ -977,15 +974,8 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
   const [launchDialogMembers, setLaunchDialogMembers] = useState<ResolvedTeamMember[]>([]);
   const [launchDialogDefaultPath, setLaunchDialogDefaultPath] = useState<string | undefined>();
 
-  const handleLaunchTeam = useCallback(
-    async (
-      teamName: string,
-      projectPath: string | undefined,
-      mode: TeamLaunchDialogMode,
-      e: React.MouseEvent
-    ) => {
-      e.stopPropagation();
-      if (!projectPath) return;
+  const openLaunchDialogForTeam = useCallback(
+    async (teamName: string, mode: TeamLaunchDialogMode, fallbackPath?: string) => {
       try {
         const data = await api.teams.getData(teamName, {
           includeMemberBranches: false,
@@ -993,7 +983,10 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
         setLaunchDialogMode(mode);
         setLaunchDialogTeamName(teamName);
         setLaunchDialogMembers(resolveLaunchDialogMembers(data.members ?? []));
-        setLaunchDialogDefaultPath(data.config.projectPath ?? projectPath);
+        // Default-path precedence: active project first, then the team's last-used folder.
+        setLaunchDialogDefaultPath(
+          navigationProjectPath ?? data.config.projectPath ?? fallbackPath
+        );
         setLaunchDialogOpen(true);
       } catch (err) {
         // Draft teams (no config.json) throw TEAM_DRAFT — expected, use fallback
@@ -1004,11 +997,24 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
         setLaunchDialogMode(mode);
         setLaunchDialogTeamName(teamName);
         setLaunchDialogMembers([]);
-        setLaunchDialogDefaultPath(projectPath);
+        setLaunchDialogDefaultPath(navigationProjectPath ?? fallbackPath);
         setLaunchDialogOpen(true);
       }
     },
-    []
+    [navigationProjectPath]
+  );
+
+  const handleLaunchTeam = useCallback(
+    (
+      teamName: string,
+      projectPath: string | undefined,
+      mode: TeamLaunchDialogMode,
+      e: React.MouseEvent
+    ) => {
+      e.stopPropagation();
+      void openLaunchDialogForTeam(teamName, mode, projectPath);
+    },
+    [openLaunchDialogForTeam]
   );
 
   const handleLaunchSubmit = useCallback(
@@ -1094,24 +1100,6 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
     setCopyData(null);
   }, []);
 
-  const handleCreateSubmit = useCallback(
-    async (request: TeamCreateRequest, placement?: OrganizationPlacementSelection) => {
-      await createTeam(request);
-      if (placement) {
-        try {
-          await api.organizations.assignTeamToUnit({
-            ...placement,
-            teamName: request.teamName,
-            label: request.displayName || request.teamName,
-          });
-        } catch (error) {
-          console.warn('[Organizations] Failed to place created team in organization', error);
-        }
-      }
-    },
-    [createTeam]
-  );
-
   if (!electronMode) {
     return (
       <div className="flex size-full items-center justify-center p-6">
@@ -1148,7 +1136,7 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
         defaultProjectPath={createTeamDefaultProjectPath}
         forceDefaultProjectSelection={copyData == null && navigationProjectPath != null}
         onClose={handleCreateDialogClose}
-        onCreate={handleCreateSubmit}
+        onLaunchAfterCreate={(teamName) => void openLaunchDialogForTeam(teamName, 'launch')}
         onOpenTeam={openTeamTab}
       />
     </Suspense>
