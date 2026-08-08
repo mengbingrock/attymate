@@ -19,7 +19,6 @@ import {
   TEAM_ADD_TASK_RELATIONSHIP,
   TEAM_ALIVE_LIST,
   TEAM_CANCEL_PROVISIONING,
-  TEAM_CHANGE_PROJECT_PATH,
   TEAM_CREATE,
   TEAM_CREATE_CONFIG,
   TEAM_CREATE_INITIAL_GIT_COMMIT,
@@ -861,7 +860,6 @@ export function registerTeamHandlers(ipcMain: IpcMain): void {
   ipcMain.handle(TEAM_GET_TASK_EXACT_LOG_DETAIL, handleGetTaskExactLogDetail);
   ipcMain.handle(TEAM_GET_MEMBER_STATS, handleGetMemberStats);
   ipcMain.handle(TEAM_UPDATE_CONFIG, handleUpdateConfig);
-  ipcMain.handle(TEAM_CHANGE_PROJECT_PATH, handleChangeProjectPath);
   ipcMain.handle(TEAM_START_TASK, handleStartTask);
   ipcMain.handle(TEAM_START_TASK_BY_USER, handleStartTaskByUser);
   ipcMain.handle(TEAM_GET_ALL_TASKS, handleGetAllTasks);
@@ -951,7 +949,6 @@ export function removeTeamHandlers(ipcMain: IpcMain): void {
   ipcMain.removeHandler(TEAM_GET_TASK_EXACT_LOG_DETAIL);
   ipcMain.removeHandler(TEAM_GET_MEMBER_STATS);
   ipcMain.removeHandler(TEAM_UPDATE_CONFIG);
-  ipcMain.removeHandler(TEAM_CHANGE_PROJECT_PATH);
   ipcMain.removeHandler(TEAM_START_TASK);
   ipcMain.removeHandler(TEAM_START_TASK_BY_USER);
   ipcMain.removeHandler(TEAM_GET_ALL_TASKS);
@@ -1497,30 +1494,6 @@ async function handlePermanentlyDeleteTeam(
     if (teamBackupService) {
       await teamBackupService.markDeletedByUser(validated.value!);
     }
-  });
-}
-
-async function handleChangeProjectPath(
-  _event: IpcMainInvokeEvent,
-  teamName: unknown,
-  projectPath: unknown
-): Promise<IpcResult<{ projectPath: string }>> {
-  const validated = validateTeamName(teamName);
-  if (!validated.valid) {
-    return { success: false, error: validated.error ?? 'Invalid teamName' };
-  }
-  if (typeof projectPath !== 'string' || !projectPath.trim()) {
-    return { success: false, error: 'projectPath must be a non-empty string' };
-  }
-  return wrapTeamHandler('changeProjectPath', async () => {
-    const tn = validated.value!;
-    // Live agents keep working in their old cwd; a mid-run repoint would split
-    // the team across two folders. The next launch picks up the new path.
-    if (getTeamProvisioningService().isTeamAlive(tn)) {
-      throw new Error('Stop the team before changing its project folder.');
-    }
-    const applied = await getTeamDataService().changeProjectPath(tn, projectPath);
-    return { projectPath: applied };
   });
 }
 

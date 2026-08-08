@@ -118,7 +118,7 @@
       "teamName": "Team name"
     },
     "launchAfterCreate": {
-      "description": "Start the team immediately using its configured agent runtimes.",
+      "description": "Opens the launch dialog after the team is created; you pick the project folder there.",
       "label": "Run command after create"
     },
     "localOnly": "Available only in local Electron mode.",
@@ -236,8 +236,7 @@
     "fields": {
       "colorOptional": "Color (optional)",
       "description": "Description",
-      "name": "Name",
-      "projectFolder": "Project folder"
+      "name": "Name"
     },
     "memberRestartWarning": "Saving will restart this teammate to apply role, workflow, worktree isolation, provider, model, effort, or MCP access changes.",
     "notices": {
@@ -259,13 +258,7 @@
       "readOnlyHint": "Team lead name and role stay read-only here. Open the runtime panel on the lead row to change provider, model, or effort.",
       "role": "Team Lead"
     },
-    "title": "Edit Team",
-    "projectFolder": {
-      "change": "Change…",
-      "unset": "No project folder set",
-      "liveHint": "Stop the team to change its project folder; running agents keep their current folder.",
-      "pendingHint": "Applies on save. The team works in the new folder from its next launch."
-    }
+    "title": "Edit Team"
   },
   "memberDraft": {
     "actions": {

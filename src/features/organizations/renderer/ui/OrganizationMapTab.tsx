@@ -370,7 +370,6 @@ export const OrganizationMapTab = ({
                 structureManager.refreshStructure({ force: true }),
               ]);
             }}
-            onCreate={createTeamDialog.createTeam}
             onOpenTeam={createTeamDialog.openTeam}
           />
         </Suspense>

@@ -145,7 +145,6 @@ import {
   TEAM_ALIVE_LIST,
   TEAM_CANCEL_PROVISIONING,
   TEAM_CHANGE,
-  TEAM_CHANGE_PROJECT_PATH,
   TEAM_CREATE,
   TEAM_CREATE_CONFIG,
   TEAM_CREATE_INITIAL_GIT_COMMIT,
@@ -1240,13 +1239,6 @@ const electronAPI: ElectronAPI = {
     },
     updateConfig: async (teamName: string, updates: TeamUpdateConfigRequest) => {
       return invokeIpcWithResult<TeamConfig>(TEAM_UPDATE_CONFIG, teamName, updates);
-    },
-    changeProjectPath: async (teamName: string, projectPath: string) => {
-      return invokeIpcWithResult<{ projectPath: string }>(
-        TEAM_CHANGE_PROJECT_PATH,
-        teamName,
-        projectPath
-      );
     },
     addTaskComment: async (teamName: string, taskId: string, request: AddTaskCommentRequest) => {
       return invokeIpcWithResult<TaskComment>(TEAM_ADD_TASK_COMMENT, teamName, taskId, request);

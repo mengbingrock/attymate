@@ -106,6 +106,7 @@ import { TrashDialog } from './kanban/TrashDialog';
 import { MemberDetailDialog } from './members/MemberDetailDialog';
 import { type MemberActivityFilter, type MemberDetailTab } from './members/memberDetailTypes';
 import { deriveMetrics } from './context-metric-alias';
+import { resolveTeamsProjectNavigationPath } from './teamProjectSelection';
 
 import type { AddMemberEntry } from './dialogs/AddMemberDialog';
 import type { TeamLaunchDialogMode } from './dialogs/LaunchTeamDialog';
@@ -1839,6 +1840,11 @@ export const TeamDetailView = memo(function TeamDetailView({
 
   const [kanbanSearch, setKanbanSearch] = useState('');
 
+  // Launch-dialog folder prefill: active project selection wins over the team's last launch cwd.
+  const launchNavigationProjectPath = useStore((s) =>
+    resolveTeamsProjectNavigationPath(s.teamsProjectNavigationIntent, s.selectedProjectId)
+  );
+
   // Open editor overlay when a file reveal is requested (e.g. from chip click)
   const pendingRevealFile = useStore((s) => s.editorPendingRevealFile);
   useEffect(() => {
@@ -3032,7 +3038,7 @@ export const TeamDetailView = memo(function TeamDetailView({
                 open={launchDialogOpen}
                 teamName={teamName}
                 members={DRAFT_LAUNCH_DIALOG_MEMBERS}
-                defaultProjectPath={draftTeamSummary?.projectPath}
+                defaultProjectPath={launchNavigationProjectPath ?? draftTeamSummary?.projectPath}
                 provisioningError={provisioningError}
                 clearProvisioningError={clearProvisioningError}
                 onClose={closeLaunchDialog}
@@ -3808,7 +3814,7 @@ export const TeamDetailView = memo(function TeamDetailView({
                     open={launchDialogOpen}
                     teamName={teamName}
                     members={membersWithLiveBranches}
-                    defaultProjectPath={data.config.projectPath}
+                    defaultProjectPath={launchNavigationProjectPath ?? data.config.projectPath}
                     provisioningError={provisioningError}
                     clearProvisioningError={clearProvisioningError}
                     activeTeams={activeTeamsForLaunch}

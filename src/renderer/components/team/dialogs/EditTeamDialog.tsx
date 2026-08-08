@@ -168,7 +168,6 @@ export const EditTeamDialog = ({
     deriveTeammateWorktreeDefault(currentMembers)
   );
   const [saving, setSaving] = useState(false);
-  const [projectPathDraft, setProjectPathDraft] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveOutcomeError, setSaveOutcomeError] = useState<string | null>(null);
   const [membersPendingRestartRetry, setMembersPendingRestartRetry] = useState<
@@ -210,7 +209,6 @@ export const EditTeamDialog = ({
         setColor(currentColor);
         setMembers(membersToDrafts(currentMembers));
         setTeammateWorktreeDefault(deriveTeammateWorktreeDefault(currentMembers));
-        setProjectPathDraft(null);
         setError(null);
         setSaveOutcomeError(null);
         setMembersPendingRestartRetry({});
@@ -474,10 +472,6 @@ export const EditTeamDialog = ({
           color,
         });
         configSaved = true;
-        if (projectPathDraft && projectPathDraft !== (projectPath ?? null)) {
-          await api.teams.changeProjectPath(teamName, projectPathDraft);
-          setProjectPathDraft(null);
-        }
         if (hasMemberRosterChanges) {
           for (const removedMemberName of liveRemovedExistingMembers) {
             await api.teams.removeMember(teamName, removedMemberName);
@@ -632,43 +626,6 @@ export const EditTeamDialog = ({
               className="w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-border-emphasis)]"
               placeholder={t('editTeam.placeholders.description')}
             />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--color-text-secondary)]">
-              {t('editTeam.fields.projectFolder')}
-            </label>
-            <div className="flex items-center gap-2">
-              <span
-                className="min-w-0 flex-1 truncate rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-xs text-[var(--color-text)]"
-                title={projectPathDraft ?? projectPath ?? undefined}
-              >
-                {projectPathDraft ?? projectPath ?? t('editTeam.projectFolder.unset')}
-              </span>
-              <button
-                type="button"
-                disabled={saving || isTeamAlive || isTeamProvisioning}
-                onClick={() => {
-                  clearTransientErrors();
-                  void (async () => {
-                    const folders = await api.config.selectFolders();
-                    const picked = folders[0]?.trim();
-                    if (picked) setProjectPathDraft(picked);
-                  })();
-                }}
-                className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-text)] hover:border-[var(--color-border-emphasis)] disabled:cursor-default disabled:opacity-50"
-              >
-                {t('editTeam.projectFolder.change')}
-              </button>
-            </div>
-            {isTeamAlive || isTeamProvisioning ? (
-              <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
-                {t('editTeam.projectFolder.liveHint')}
-              </p>
-            ) : projectPathDraft && projectPathDraft !== (projectPath ?? null) ? (
-              <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
-                {t('editTeam.projectFolder.pendingHint')}
-              </p>
-            ) : null}
           </div>
           <div>
             <MembersEditorSection

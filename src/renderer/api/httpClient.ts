@@ -1239,9 +1239,6 @@ export class HttpAPIClient implements ElectronAPI {
     updateConfig: async () => {
       throw new Error('Team config update is not available in browser mode');
     },
-    changeProjectPath: async () => {
-      throw new Error('Changing the project folder is not available in browser mode');
-    },
     addTaskComment: async () => {
       throw new Error('Task comments are not available in browser mode');
     },

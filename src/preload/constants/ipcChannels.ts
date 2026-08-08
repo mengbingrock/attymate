@@ -365,9 +365,6 @@ export const TEAM_GET_TASK_EXACT_LOG_DETAIL = 'team:getTaskExactLogDetail';
 /** Update team config (name, description) */
 export const TEAM_UPDATE_CONFIG = 'team:updateConfig';
 
-/** Repoint a stopped team at a new project folder */
-export const TEAM_CHANGE_PROJECT_PATH = 'team:changeProjectPath';
-
 /** Get aggregated member stats */
 export const TEAM_GET_MEMBER_STATS = 'team:getMemberStats';
 

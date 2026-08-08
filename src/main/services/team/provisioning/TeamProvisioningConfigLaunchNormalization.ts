@@ -61,6 +61,29 @@ export function mergeMembersMetaForLaunch(
   ];
 }
 
+/**
+ * The project folder is a LAUNCH parameter: when a team launches into a
+ * different folder than last time, members that worked in the previous folder
+ * follow it. Without this, member-cwd precedence
+ * (persisted member cwd > config projectPath > launch cwd) would silently keep
+ * teammates in the old folder. Members with a deliberately different cwd
+ * (worktrees elsewhere) keep theirs.
+ */
+export function rehomeMemberCwdsForLaunch(
+  members: readonly TeamMember[],
+  previousCwd: string | null | undefined,
+  nextCwd: string | null | undefined
+): TeamMember[] {
+  const previous = previousCwd?.trim();
+  const next = nextCwd?.trim();
+  if (!previous || !next || previous === next) {
+    return [...members];
+  }
+  return members.map((member) =>
+    member.cwd?.trim() === previous ? { ...member, cwd: next } : member
+  );
+}
+
 export const PRELAUNCH_CONFIG_BACKUP_SUFFIX = '.prelaunch.bak';
 
 export function getPrelaunchConfigBackupPath(configPath: string): string {

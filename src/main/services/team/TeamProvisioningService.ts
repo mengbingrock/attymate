@@ -291,6 +291,7 @@ import {
   planCliAutoSuffixedConfigMemberCleanup,
   planCliAutoSuffixedMetaMemberCleanup,
   planTeamConfigLaunchNormalization,
+  rehomeMemberCwdsForLaunch,
   resolveLaunchExpectedMembersFromCompatibilityReport,
   selectMembersMetaTeammates,
 } from './provisioning/TeamProvisioningConfigLaunchNormalization';
@@ -12267,6 +12268,7 @@ export class TeamProvisioningService {
         const tasksDir = path.join(getTasksBasePath(), request.teamName);
         await fs.promises.mkdir(teamDir, { recursive: true });
         await fs.promises.mkdir(tasksDir, { recursive: true });
+        const previousLaunchCwd = (await this.teamMetaStore.getMeta(request.teamName))?.cwd ?? null;
         await this.teamMetaStore.writeMeta(request.teamName, {
           displayName: request.displayName,
           description: request.description,
@@ -12286,7 +12288,11 @@ export class TeamProvisioningService {
           launchIdentity,
           createdAt: Date.now(),
         });
-        const membersToWrite = buildMembersMetaWritePayload(allEffectiveMemberSpecs);
+        const membersToWrite = rehomeMemberCwdsForLaunch(
+          buildMembersMetaWritePayload(allEffectiveMemberSpecs),
+          previousLaunchCwd,
+          request.cwd
+        );
         await this.membersMetaStore.writeMembers(request.teamName, membersToWrite, {
           providerBackendId: request.providerBackendId,
         });
@@ -14813,6 +14819,7 @@ export class TeamProvisioningService {
       // Deterministic bootstrap launches fresh because --team-bootstrap-spec and
       // --resume are not a supported orchestrator combination.
       emitProvisioningCheckpoint(run, 'Persisting team metadata before spawn');
+      const previousLaunchCwd = (await this.teamMetaStore.getMeta(request.teamName))?.cwd ?? null;
       await this.teamMetaStore.writeMeta(request.teamName, {
         displayName: syntheticRequest.displayName,
         description: syntheticRequest.description,
@@ -14835,9 +14842,14 @@ export class TeamProvisioningService {
       const existingMeta = await this.membersMetaStore.getMeta(request.teamName);
       await this.membersMetaStore.writeMembers(
         request.teamName,
-        mergeMembersMetaForLaunch(
-          buildMembersMetaWritePayload(allEffectiveMemberSpecs),
-          existingMeta?.members ?? []
+        // Members that worked in the previous launch folder follow the new one.
+        rehomeMemberCwdsForLaunch(
+          mergeMembersMetaForLaunch(
+            buildMembersMetaWritePayload(allEffectiveMemberSpecs),
+            existingMeta?.members ?? []
+          ),
+          previousLaunchCwd,
+          request.cwd
         ),
         { providerBackendId: request.providerBackendId }
       );
