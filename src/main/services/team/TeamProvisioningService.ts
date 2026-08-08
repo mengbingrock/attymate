@@ -17077,16 +17077,26 @@ export class TeamProvisioningService {
       return false;
     }
     let leadSessionId = run?.detectedSessionId?.trim() || null;
-    if (!leadSessionId) {
+    let bindingLeadName: string | null = null;
+    {
       // Interactive/adopted runtimes persist the binding on disk.
       const binding = await interactiveTeamRuntimeService.readBinding(teamName);
-      leadSessionId = binding?.leadSessionId ?? null;
+      leadSessionId ||= binding?.leadSessionId ?? null;
+      bindingLeadName = binding?.leadName?.trim() || null;
     }
     if (!leadSessionId) {
       return false;
     }
+    // The stock session team registers its lead under its own identity, not
+    // the app-side lead name — flag lead-directed DMs so the bridge resolves
+    // the session team's actual lead mailbox (custom lead names have none).
+    const normalizedTarget = memberName.trim().toLowerCase();
+    const appLeadName = (run?.leadIdentity?.name ?? bindingLeadName ?? '').trim().toLowerCase();
+    const deliverToLead =
+      normalizedTarget === 'team-lead' || (appLeadName !== '' && normalizedTarget === appLeadName);
     const delivered = await deliverStockSessionTeamDm(leadSessionId, {
       memberName,
+      ...(deliverToLead ? { deliverToLead } : {}),
       text: input.text,
       ...(input.summary ? { summary: input.summary } : {}),
     }).catch((error: unknown) => {

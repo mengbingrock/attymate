@@ -47,6 +47,55 @@ describe('StockSessionTeamBridge', () => {
     ).toBe(false);
   });
 
+  it('routes a custom-named lead DM to the session team lead mailbox', async () => {
+    // The app-side lead is "legal-ops-supervisor" (imported lead profile), but
+    // the stock runtime registers its lead as "team-lead" — the session team
+    // has no mailbox under the custom name.
+    const teamDir = path.join(teamsBasePath, TEAM_NAME);
+    await fs.promises.mkdir(path.join(teamDir, 'inboxes'), { recursive: true });
+    await fs.promises.writeFile(
+      path.join(teamDir, 'config.json'),
+      JSON.stringify({
+        name: TEAM_NAME,
+        leadAgentId: `team-lead@${TEAM_NAME}`,
+        members: [
+          { name: 'team-lead', agentType: 'team-lead' },
+          { name: 'source-intake-agent' },
+        ],
+      })
+    );
+
+    const delivered = await deliverStockSessionTeamDm(LEAD_SESSION_ID, {
+      memberName: 'legal-ops-supervisor',
+      deliverToLead: true,
+      text: 'hello lead',
+    });
+
+    expect(delivered).toBe(true);
+    const inbox = JSON.parse(
+      await readFile(path.join(teamDir, 'inboxes', 'team-lead.json'), 'utf-8')
+    ) as Record<string, unknown>[];
+    expect(inbox).toHaveLength(1);
+    expect(inbox[0].text).toBe('hello lead');
+    // The custom name got no stray mailbox of its own.
+    expect(fs.existsSync(path.join(teamDir, 'inboxes', 'legal-ops-supervisor.json'))).toBe(false);
+  });
+
+  it('still fails closed for a non-lead unknown member, even with the flag', async () => {
+    const teamDir = path.join(teamsBasePath, TEAM_NAME);
+    await fs.promises.mkdir(path.join(teamDir, 'inboxes'), { recursive: true });
+    await fs.promises.writeFile(
+      path.join(teamDir, 'config.json'),
+      JSON.stringify({ name: TEAM_NAME, members: [] })
+    );
+    expect(
+      await deliverStockSessionTeamDm(LEAD_SESSION_ID, {
+        memberName: 'ghost',
+        text: 'nope',
+      })
+    ).toBe(false);
+  });
+
   it('appends a well-formed mailbox entry for a registered member', async () => {
     const teamDir = path.join(teamsBasePath, TEAM_NAME);
     await fs.promises.mkdir(path.join(teamDir, 'inboxes'), { recursive: true });

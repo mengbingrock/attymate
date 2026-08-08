@@ -1,5 +1,6 @@
 import { atomicWriteAsync } from '@main/utils/atomicWrite';
 import { getTeamsBasePath } from '@main/utils/pathDecoder';
+import { resolveTeamLeadIdentity } from '@shared/utils/leadDetection';
 import { createLogger } from '@shared/utils/logger';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
@@ -78,9 +79,29 @@ async function isRegisteredSessionTeamMember(
 
 export interface StockSessionTeamDmInput {
   memberName: string;
+  /**
+   * The target is the team lead. The stock runtime registers its lead under
+   * its own identity (canonically "team-lead"), NOT the app-side lead name —
+   * an imported team's custom lead name (e.g. "legal-ops-supervisor") has no
+   * mailbox in the session team, so lead DMs must resolve the session team's
+   * actual lead and deliver there.
+   */
+  deliverToLead?: boolean;
   text: string;
   summary?: string;
   from?: string;
+}
+
+/** The session team's own name for its lead, from its config identity fields. */
+async function resolveSessionTeamLeadName(teamDir: string): Promise<string | null> {
+  try {
+    const raw = await fs.promises.readFile(path.join(teamDir, 'config.json'), 'utf-8');
+    const config = JSON.parse(raw) as Parameters<typeof resolveTeamLeadIdentity>[0];
+    const name = resolveTeamLeadIdentity(config).name.trim();
+    return name.length > 0 ? name : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -100,11 +121,20 @@ export async function deliverStockSessionTeamDm(
   if (!teamDir || !(await pathExists(path.join(teamDir, 'config.json')))) {
     return false;
   }
-  if (!(await isRegisteredSessionTeamMember(teamDir, input.memberName))) {
+  let targetName = input.memberName;
+  if (input.deliverToLead && !(await isRegisteredSessionTeamMember(teamDir, targetName))) {
+    // Custom app-side lead names are unknown to the stock session team; fall
+    // back to the session team's own lead identity.
+    const sessionLeadName = await resolveSessionTeamLeadName(teamDir);
+    if (sessionLeadName) {
+      targetName = sessionLeadName;
+    }
+  }
+  if (!(await isRegisteredSessionTeamMember(teamDir, targetName))) {
     return false;
   }
 
-  const inboxPath = path.join(teamDir, 'inboxes', `${input.memberName}.json`);
+  const inboxPath = path.join(teamDir, 'inboxes', `${targetName}.json`);
   let existing: unknown[] = [];
   try {
     const raw = await fs.promises.readFile(inboxPath, 'utf-8');
@@ -130,7 +160,7 @@ export async function deliverStockSessionTeamDm(
   await fs.promises.mkdir(path.dirname(inboxPath), { recursive: true });
   await atomicWriteAsync(inboxPath, JSON.stringify(existing, null, 2));
   logger.info(
-    `[stock-session-team] Delivered DM to "${input.memberName}" via ${path.basename(teamDir)} mailbox`
+    `[stock-session-team] Delivered DM to "${targetName}" via ${path.basename(teamDir)} mailbox`
   );
   return true;
 }
