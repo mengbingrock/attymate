@@ -85,6 +85,43 @@ describe('detectCodexPaneState', () => {
     expect(detectCodexPaneState('Sign in with ChatGPT to continue')).toBe('login-required');
     expect(detectCodexPaneState('random shell output\n$')).toBe('unknown');
   });
+
+  // Fixture captured live from codex-cli 0.147.0: the composer and footer are
+  // already drawn while MCP servers initialize, so this pane must NOT count as
+  // ready — submitting input here cancels the remaining server startups.
+  it('holds while MCP servers are still starting', () => {
+    const tail = [
+      "  Tip: Try the Desktop app. Run 'codex app' or visit https://chatgpt.com/codex",
+      '• Starting MCP servers (4/5): agent_teams (3s • esc to interrupt)',
+      '› Summarize recent commits',
+      '  gpt-5.6-sol high fast · Context 0% used · weekly 90% left · ~/Git/attymate',
+    ].join('\n');
+    expect(detectCodexPaneState(tail)).toBe('mcp-startup');
+  });
+
+  it('treats a completed or failed MCP startup as ready again', () => {
+    const done = [
+      '⚠ MCP startup incomplete (failed: slowtest)',
+      '› Summarize recent commits',
+      '  gpt-5.6-sol high fast · Context 0% used · ~/Git/attymate',
+    ].join('\n');
+    expect(detectCodexPaneState(done)).toBe('ready');
+  });
+
+  it('ignores an old startup line that scrolled away from the bottom', () => {
+    const tail = [
+      '• Starting MCP servers (4/5): agent_teams (3s • esc to interrupt)',
+      '• Called agent_teams.task_list({"teamName":"demo"})',
+      '  └ {"tasks": []}',
+      '• Acknowledged. Waiting for instructions.',
+      '  one more line of history',
+      '  yet another line of history',
+      '  and one more to push the startup line out of the tail window',
+      '› Summarize recent commits',
+      '  gpt-5.6-sol high fast · Context 0% used · ~/Git/attymate',
+    ].join('\n');
+    expect(detectCodexPaneState(tail)).toBe('ready');
+  });
 });
 
 describe('parseRuntimeBinding', () => {

@@ -233,7 +233,10 @@ export class CodexTeamLanesService {
     const tmux = getTmuxSessionCommandExecutor();
     if (!(await tmux.hasSession(binding.tmuxSessionName))) return false;
     const tail = await tmux.capturePaneTail(lane.paneId, 20);
-    if (detectCodexPaneState(tail) === 'login-required') return false;
+    const paneState = detectCodexPaneState(tail);
+    // Submitting input while codex is still starting its MCP servers cancels
+    // the remaining initializations — report undelivered so the pump retries.
+    if (paneState === 'login-required' || paneState === 'mcp-startup') return false;
     try {
       await tmux.pasteTextIntoPane(lane.paneId, text);
       return true;
