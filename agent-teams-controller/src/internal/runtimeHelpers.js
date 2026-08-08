@@ -756,6 +756,7 @@ function saveTaskAttachmentFile(paths, taskId, flags) {
 }
 
 module.exports = {
+  assertSafePathSegment,
   assertSafeMemberFileSegment,
   assertExplicitTeamMemberName,
   collectExplicitTeamMembers,

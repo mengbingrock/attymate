@@ -75,6 +75,6 @@ describe('matter Link status IPC', () => {
 
     expect(feature.initializeLink).toHaveBeenCalledWith('case-team');
     expect(feature.requestLinkRefresh).toHaveBeenCalledWith('case-team');
-    expect(feature.requestLinkProposal).toHaveBeenCalledWith('case-team');
+    expect(feature.requestLinkProposal).toHaveBeenCalledWith('case-team', undefined);
   });
 });

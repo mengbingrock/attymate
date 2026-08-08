@@ -92,7 +92,12 @@ describe('matter Link status HTTP', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(operation).toHaveBeenCalledWith('case-team');
+    // Only the proposal route threads the optional matterId through.
+    if (method === 'requestLinkProposal') {
+      expect(operation).toHaveBeenCalledWith('case-team', undefined);
+    } else {
+      expect(operation).toHaveBeenCalledWith('case-team');
+    }
     await app.close();
   });
 });

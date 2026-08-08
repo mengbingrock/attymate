@@ -2,6 +2,8 @@ declare module 'agent-teams-controller' {
   export interface ControllerContextOptions {
     teamName: string;
     claudeDir?: string;
+    /** App-internal matters store; falls back to AGENT_TEAMS_MATTERS_DIR. */
+    mattersDir?: string;
     allowUserMessageSender?: boolean;
   }
 
@@ -115,8 +117,20 @@ declare module 'agent-teams-controller' {
   }
 
   export interface ControllerMatterApi {
-    readMatter(): Record<string, unknown> | null;
+    getSnapshot(): {
+      matters: Array<Record<string, unknown>>;
+      linkedMatterIds: string[];
+      proposal: Record<string, unknown> | null;
+    };
     readProposal(): Record<string, unknown> | null;
+    updateMatter(input: { matterId: string; changes: unknown; actor?: string }): {
+      matter: Record<string, unknown>;
+    };
+    createMatter(init?: { caption?: string; link?: boolean }): {
+      matter: Record<string, unknown>;
+    };
+    linkTeam(matterId: string): { linkedMatterIds: string[] };
+    unlinkTeam(matterId: string): { linkedMatterIds: string[] };
     submitProposal(proposal: Record<string, unknown>, actor?: string): Record<string, unknown>;
     applyProposal(approvedBy?: string): {
       matter: Record<string, unknown>;

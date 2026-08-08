@@ -7,6 +7,7 @@ import {
   type MatterLinkOperationResultDto,
   type MatterRefreshResultDto,
   type MatterSnapshotDto,
+  normalizeMatterChanges,
 } from '../../../../contracts';
 
 import type { MatterFeatureFacade } from '../../../composition/createMatterFeature';
@@ -14,7 +15,7 @@ import type { FastifyInstance } from 'fastify';
 
 const logger = createLogger('Feature:Matter:HTTP');
 
-const EMPTY_SNAPSHOT: MatterSnapshotDto = { matter: null, proposal: null };
+const EMPTY_SNAPSHOT: MatterSnapshotDto = { matters: [], linkedMatterIds: [], proposal: null };
 
 function linkStatusError(summary: string): MatterEvidenceStatusDto {
   return {
@@ -52,6 +53,10 @@ function readTeamName(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+function readOptionalId(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
 export function registerMatterHttp(app: FastifyInstance, feature: MatterFeatureFacade): void {
   app.get<{ Querystring: { teamName?: string } }>(
     MATTER_ROUTE,
@@ -70,7 +75,7 @@ export function registerMatterHttp(app: FastifyInstance, feature: MatterFeatureF
   const linkOperationRoutes: {
     path: string;
     operation: MatterLinkOperation;
-    run: (teamName: string) => Promise<MatterLinkOperationResultDto>;
+    run: (teamName: string, matterId?: string) => Promise<MatterLinkOperationResultDto>;
   }[] = [
     {
       path: 'link-initialize',
@@ -85,11 +90,11 @@ export function registerMatterHttp(app: FastifyInstance, feature: MatterFeatureF
     {
       path: 'link-proposal',
       operation: 'proposal-request',
-      run: (teamName) => feature.requestLinkProposal(teamName),
+      run: (teamName, matterId) => feature.requestLinkProposal(teamName, matterId),
     },
   ];
   for (const route of linkOperationRoutes) {
-    app.post<{ Body: { teamName?: string } }>(
+    app.post<{ Body: { teamName?: string; matterId?: string } }>(
       `${MATTER_ROUTE}/${route.path}`,
       async (request, reply): Promise<MatterLinkOperationResultDto> => {
         const teamName = readTeamName(request.body?.teamName);
@@ -98,7 +103,7 @@ export function registerMatterHttp(app: FastifyInstance, feature: MatterFeatureF
           return linkOperationError(route.operation, 'teamName is required');
         }
         try {
-          return await route.run(teamName);
+          return await route.run(teamName, readOptionalId(request.body?.matterId));
         } catch (error) {
           logger.error(`Failed to run matter ${route.operation} via HTTP`, error);
           void reply.status(500);
@@ -126,7 +131,7 @@ export function registerMatterHttp(app: FastifyInstance, feature: MatterFeatureF
     }
   );
 
-  app.post<{ Body: { teamName?: string } }>(
+  app.post<{ Body: { teamName?: string; matterId?: string } }>(
     `${MATTER_ROUTE}/request-refresh`,
     async (request, reply): Promise<MatterRefreshResultDto> => {
       const teamName = readTeamName(request.body?.teamName);
@@ -140,7 +145,10 @@ export function registerMatterHttp(app: FastifyInstance, feature: MatterFeatureF
         };
       }
       try {
-        return await feature.requestDashboardRefresh(teamName);
+        return await feature.requestDashboardRefresh(
+          teamName,
+          readOptionalId(request.body?.matterId)
+        );
       } catch (error) {
         logger.error('Failed to request a matter dashboard refresh via HTTP', error);
         void reply.status(500);
@@ -194,4 +202,70 @@ export function registerMatterHttp(app: FastifyInstance, feature: MatterFeatureF
       }
     }
   );
+
+  app.post<{ Body: { teamName?: string; matterId?: string; changes?: unknown } }>(
+    `${MATTER_ROUTE}/update`,
+    async (request, reply): Promise<MatterSnapshotDto> => {
+      const teamName = readTeamName(request.body?.teamName);
+      const matterId = readOptionalId(request.body?.matterId);
+      if (!teamName || !matterId) {
+        void reply.status(400);
+        return EMPTY_SNAPSHOT;
+      }
+      try {
+        return await feature.updateMatter(
+          teamName,
+          matterId,
+          normalizeMatterChanges(request.body?.changes)
+        );
+      } catch (error) {
+        logger.error('Failed to update matter via HTTP', error);
+        void reply.status(500);
+        return EMPTY_SNAPSHOT;
+      }
+    }
+  );
+
+  app.post<{ Body: { teamName?: string; caption?: string } }>(
+    `${MATTER_ROUTE}/create`,
+    async (request, reply): Promise<MatterSnapshotDto> => {
+      const teamName = readTeamName(request.body?.teamName);
+      if (!teamName) {
+        void reply.status(400);
+        return EMPTY_SNAPSHOT;
+      }
+      try {
+        const caption = readOptionalId(request.body?.caption);
+        return await feature.createMatter(teamName, caption ? { caption } : undefined);
+      } catch (error) {
+        logger.error('Failed to create matter via HTTP', error);
+        void reply.status(500);
+        return EMPTY_SNAPSHOT;
+      }
+    }
+  );
+
+  for (const [routePath, run] of [
+    ['link-team', (teamName: string, matterId: string) => feature.linkTeam(teamName, matterId)],
+    ['unlink-team', (teamName: string, matterId: string) => feature.unlinkTeam(teamName, matterId)],
+  ] as const) {
+    app.post<{ Body: { teamName?: string; matterId?: string } }>(
+      `${MATTER_ROUTE}/${routePath}`,
+      async (request, reply): Promise<MatterSnapshotDto> => {
+        const teamName = readTeamName(request.body?.teamName);
+        const matterId = readOptionalId(request.body?.matterId);
+        if (!teamName || !matterId) {
+          void reply.status(400);
+          return EMPTY_SNAPSHOT;
+        }
+        try {
+          return await run(teamName, matterId);
+        } catch (error) {
+          logger.error(`Failed matter ${routePath} via HTTP`, error);
+          void reply.status(500);
+          return EMPTY_SNAPSHOT;
+        }
+      }
+    );
+  }
 }

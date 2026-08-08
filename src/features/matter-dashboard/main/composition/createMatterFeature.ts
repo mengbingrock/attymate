@@ -3,12 +3,12 @@ import { SkillsMutationService } from '@main/services/extensions/skills/SkillsMu
 import { LinkMatterEvidenceSourceAdapter } from '../adapters/output/link/LinkMatterEvidenceSourceAdapter';
 import { MatterLinkCoordinator } from '../application/MatterLinkCoordinator';
 import { MatterRefreshCoordinator } from '../application/MatterRefreshCoordinator';
-import { MatterFileReader } from '../infrastructure/MatterFileReader';
-import { isMatterEffectivelyEmpty } from '../infrastructure/matterScanState';
 import { MatterSkillSeeder } from '../infrastructure/MatterSkillSeeder';
+import { normalizeMatterSnapshot } from '../infrastructure/matterSnapshot';
 import { readTeamRuntimeFacts } from '../infrastructure/teamRuntimeFacts';
 
 import type {
+  MatterChanges,
   MatterEvidenceStatusDto,
   MatterLinkOperationResultDto,
   MatterRefreshResultDto,
@@ -18,19 +18,37 @@ import type { MatterEvidenceSourcePort } from '../../core/application/ports/Matt
 import type { MatterLinkLeadNotifier } from '../application/MatterLinkCoordinator';
 import type { MatterRefreshRequest } from '../application/MatterRefreshCoordinator';
 
-export interface MatterProposalActions {
+/**
+ * Store operations delegated to TeamDataService, which owns the controller —
+ * the single writer of matter state. Raw returns are normalized here.
+ */
+export interface MatterStoreActions {
+  getSnapshot(teamName: string): unknown;
+  updateMatter(teamName: string, matterId: string, changes: MatterChanges): unknown;
+  createMatter(teamName: string, init?: { caption?: string }): unknown;
+  linkTeam(teamName: string, matterId: string): unknown;
+  unlinkTeam(teamName: string, matterId: string): unknown;
+  /** Apply/reject are user-approval actions that also notify the lead. */
   applyProposal(teamName: string): Promise<void>;
   rejectProposal(teamName: string, reason?: string): Promise<void>;
 }
 
 export interface MatterFeatureFacade {
   getSnapshot(teamName: string): Promise<MatterSnapshotDto>;
+  updateMatter(
+    teamName: string,
+    matterId: string,
+    changes: MatterChanges
+  ): Promise<MatterSnapshotDto>;
+  createMatter(teamName: string, init?: { caption?: string }): Promise<MatterSnapshotDto>;
+  linkTeam(teamName: string, matterId: string): Promise<MatterSnapshotDto>;
+  unlinkTeam(teamName: string, matterId: string): Promise<MatterSnapshotDto>;
   getLinkStatus(teamName: string): Promise<MatterEvidenceStatusDto>;
   initializeLink(teamName: string): Promise<MatterLinkOperationResultDto>;
   requestLinkRefresh(teamName: string): Promise<MatterLinkOperationResultDto>;
-  requestLinkProposal(teamName: string): Promise<MatterLinkOperationResultDto>;
+  requestLinkProposal(teamName: string, matterId?: string): Promise<MatterLinkOperationResultDto>;
   /** Ask the lead to (re)build the dashboard by following the matter skill. */
-  requestDashboardRefresh(teamName: string): Promise<MatterRefreshResultDto>;
+  requestDashboardRefresh(teamName: string, matterId?: string): Promise<MatterRefreshResultDto>;
   /** Same request, raised automatically when a job's last task completes. */
   requestJobWrapUpRefresh(
     teamName: string,
@@ -41,11 +59,12 @@ export interface MatterFeatureFacade {
 }
 
 export interface CreateMatterFeatureDeps {
-  teamsBasePath: string;
   resolveProjectPath(teamName: string): Promise<string | null>;
+  teamsBasePath: string;
   leadNotifier: MatterLinkLeadNotifier;
-  /** Apply/reject are user-approval actions delegated to TeamDataService. */
-  actions: MatterProposalActions;
+  actions: MatterStoreActions;
+  /** Fired after every successful write so the renderer can refetch. */
+  notifyMattersChanged?: () => void;
   /** Test/provider seam. Production uses the local Link CLI adapter. */
   evidenceSource?: MatterEvidenceSourcePort;
   /** Test seam for the user-owned skill file. Production seeds and reads disk. */
@@ -53,7 +72,6 @@ export interface CreateMatterFeatureDeps {
 }
 
 export function createMatterFeature(deps: CreateMatterFeatureDeps): MatterFeatureFacade {
-  const reader = new MatterFileReader(deps.teamsBasePath);
   const evidenceSource = deps.evidenceSource ?? new LinkMatterEvidenceSourceAdapter();
   const linkCoordinator = new MatterLinkCoordinator({
     resolveProjectPath: (teamName) => deps.resolveProjectPath(teamName),
@@ -67,8 +85,16 @@ export function createMatterFeature(deps: CreateMatterFeatureDeps): MatterFeatur
   // to the bundled markdown if the file never lands.
   void skillSeeder.seed();
 
+  const readSnapshot = async (teamName: string): Promise<MatterSnapshotDto> =>
+    normalizeMatterSnapshot(deps.actions.getSnapshot(teamName));
+
+  const changed = async (teamName: string): Promise<MatterSnapshotDto> => {
+    deps.notifyMattersChanged?.();
+    return readSnapshot(teamName);
+  };
+
   const refreshCoordinator = new MatterRefreshCoordinator({
-    isMatterEmpty: (teamName) => isMatterEffectivelyEmpty(deps.teamsBasePath, teamName),
+    readSnapshot,
     resolveRuntimeFacts: async (teamName) => ({
       projectPath: await deps.resolveProjectPath(teamName),
       ...(await readTeamRuntimeFacts(deps.teamsBasePath, teamName)),
@@ -80,12 +106,30 @@ export function createMatterFeature(deps: CreateMatterFeatureDeps): MatterFeatur
     refreshCoordinator.requestRefresh(request);
 
   return {
-    getSnapshot: (teamName) => reader.getSnapshot(teamName),
+    getSnapshot: readSnapshot,
+    updateMatter: async (teamName, matterId, changes) => {
+      deps.actions.updateMatter(teamName, matterId, changes);
+      return changed(teamName);
+    },
+    createMatter: async (teamName, init) => {
+      deps.actions.createMatter(teamName, init);
+      return changed(teamName);
+    },
+    linkTeam: async (teamName, matterId) => {
+      deps.actions.linkTeam(teamName, matterId);
+      return changed(teamName);
+    },
+    unlinkTeam: async (teamName, matterId) => {
+      deps.actions.unlinkTeam(teamName, matterId);
+      return changed(teamName);
+    },
     getLinkStatus: (teamName) => linkCoordinator.getStatus(teamName),
     initializeLink: (teamName) => linkCoordinator.initialize(teamName),
     requestLinkRefresh: (teamName) => linkCoordinator.requestRefresh(teamName),
-    requestLinkProposal: (teamName) => linkCoordinator.requestProposal(teamName),
-    requestDashboardRefresh: (teamName) => requestRefresh({ teamName, trigger: 'user-refresh' }),
+    requestLinkProposal: (teamName, matterId) =>
+      linkCoordinator.requestProposal(teamName, matterId),
+    requestDashboardRefresh: (teamName, matterId) =>
+      requestRefresh({ teamName, trigger: 'user-refresh', ...(matterId ? { matterId } : {}) }),
     requestJobWrapUpRefresh: (teamName, completedTaskLabel) =>
       requestRefresh({
         teamName,
@@ -94,11 +138,11 @@ export function createMatterFeature(deps: CreateMatterFeatureDeps): MatterFeatur
       }),
     applyProposal: async (teamName) => {
       await deps.actions.applyProposal(teamName);
-      return reader.getSnapshot(teamName);
+      return changed(teamName);
     },
     rejectProposal: async (teamName, reason) => {
       await deps.actions.rejectProposal(teamName, reason);
-      return reader.getSnapshot(teamName);
+      return changed(teamName);
     },
   };
 }

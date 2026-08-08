@@ -8,6 +8,7 @@
 
 import {
   MATTER_ROUTE,
+  type MatterChanges,
   type MatterElectronApi,
   type MatterEvidenceStatusDto,
   type MatterLinkOperationResultDto,
@@ -499,6 +500,18 @@ export class HttpAPIClient implements ElectronAPI {
   matter: MatterElectronApi['matter'] = {
     get: (teamName: string): Promise<MatterSnapshotDto> =>
       this.get<MatterSnapshotDto>(`${MATTER_ROUTE}?teamName=${encodeURIComponent(teamName)}`),
+    update: (
+      teamName: string,
+      matterId: string,
+      changes: MatterChanges
+    ): Promise<MatterSnapshotDto> =>
+      this.post<MatterSnapshotDto>(`${MATTER_ROUTE}/update`, { teamName, matterId, changes }),
+    create: (teamName: string, init?: { caption?: string }): Promise<MatterSnapshotDto> =>
+      this.post<MatterSnapshotDto>(`${MATTER_ROUTE}/create`, { teamName, ...init }),
+    linkTeam: (teamName: string, matterId: string): Promise<MatterSnapshotDto> =>
+      this.post<MatterSnapshotDto>(`${MATTER_ROUTE}/link-team`, { teamName, matterId }),
+    unlinkTeam: (teamName: string, matterId: string): Promise<MatterSnapshotDto> =>
+      this.post<MatterSnapshotDto>(`${MATTER_ROUTE}/unlink-team`, { teamName, matterId }),
     getLinkStatus: (teamName: string): Promise<MatterEvidenceStatusDto> =>
       this.get<MatterEvidenceStatusDto>(
         `${MATTER_ROUTE}/link-status?teamName=${encodeURIComponent(teamName)}`
@@ -507,14 +520,23 @@ export class HttpAPIClient implements ElectronAPI {
       this.post<MatterLinkOperationResultDto>(`${MATTER_ROUTE}/link-initialize`, { teamName }),
     requestLinkRefresh: (teamName: string): Promise<MatterLinkOperationResultDto> =>
       this.post<MatterLinkOperationResultDto>(`${MATTER_ROUTE}/link-refresh`, { teamName }),
-    requestLinkProposal: (teamName: string): Promise<MatterLinkOperationResultDto> =>
-      this.post<MatterLinkOperationResultDto>(`${MATTER_ROUTE}/link-proposal`, { teamName }),
-    requestRefresh: (teamName: string): Promise<MatterRefreshResultDto> =>
-      this.post<MatterRefreshResultDto>(`${MATTER_ROUTE}/request-refresh`, { teamName }),
+    requestLinkProposal: (
+      teamName: string,
+      matterId?: string
+    ): Promise<MatterLinkOperationResultDto> =>
+      this.post<MatterLinkOperationResultDto>(`${MATTER_ROUTE}/link-proposal`, {
+        teamName,
+        matterId,
+      }),
+    requestRefresh: (teamName: string, matterId?: string): Promise<MatterRefreshResultDto> =>
+      this.post<MatterRefreshResultDto>(`${MATTER_ROUTE}/request-refresh`, { teamName, matterId }),
     applyProposal: (teamName: string): Promise<MatterSnapshotDto> =>
       this.post<MatterSnapshotDto>(`${MATTER_ROUTE}/apply-proposal`, { teamName }),
     rejectProposal: (teamName: string, reason?: string): Promise<MatterSnapshotDto> =>
       this.post<MatterSnapshotDto>(`${MATTER_ROUTE}/reject-proposal`, { teamName, reason }),
+    // The web client has no push channel for store writes made elsewhere; the
+    // dashboard refetches on its own actions and on team-change events.
+    onMattersChanged: () => () => {},
   };
 
   getProjects = (): Promise<Project[]> => this.get<Project[]>('/api/projects');

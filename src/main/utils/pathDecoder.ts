@@ -568,6 +568,15 @@ export function getAppDataPath(): string {
   return path.join(getAppDataBasePath(), 'data');
 }
 
+/**
+ * Get the matters store directory. Matters are firm-level entities that exist
+ * independently of teams and AI runtimes, so they live in the app's own
+ * model-agnostic storage — never under a runtime-branded path like ~/.claude.
+ */
+export function getMattersBasePath(): string {
+  return path.join(getAppDataBasePath(), 'matters');
+}
+
 // ── App data root (Electron userData) ──
 
 const APP_DATA_FALLBACK_DIR_NAME = '.agent-teams-ai';

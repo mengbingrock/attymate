@@ -12,6 +12,11 @@ function createControllerContext(options = {}) {
   }
 
   const paths = runtimeHelpers.getPaths(flags, teamName);
+  // The matters store lives in the app's own model-agnostic location; the
+  // app supplies it here or process-wide via AGENT_TEAMS_MATTERS_DIR.
+  if (typeof options.mattersDir === 'string' && options.mattersDir.trim()) {
+    paths.mattersDir = options.mattersDir.trim();
+  }
   return {
     teamName,
     claudeDir: paths.claudeDir,

@@ -1,8 +1,9 @@
 import { MATTER_SKILL_MARKDOWN } from '../../core/domain/matterSkillDefinition';
+import { isMatterSnapshotEffectivelyEmpty } from '../infrastructure/matterScanState';
 
 import { buildMatterSkillInvocationPrompt } from './MatterSkillLeadPrompt';
 
-import type { MatterRefreshResultDto } from '../../contracts';
+import type { MatterRefreshResultDto, MatterSnapshotDto } from '../../contracts';
 import type { MatterRefreshTrigger } from './MatterSkillLeadPrompt';
 
 /** Runtime facts the skill prompt needs but the skill itself must not encode. */
@@ -18,7 +19,7 @@ export interface MatterRefreshLeadNotifier {
 }
 
 export interface MatterRefreshCoordinatorDeps {
-  isMatterEmpty(teamName: string): Promise<boolean>;
+  readSnapshot(teamName: string): Promise<MatterSnapshotDto>;
   resolveRuntimeFacts(teamName: string): Promise<MatterTeamRuntimeFacts>;
   /** The user's SKILL.md when it exists; null falls back to the bundled copy. */
   readInstalledSkillMarkdown(): Promise<string | null>;
@@ -28,6 +29,8 @@ export interface MatterRefreshCoordinatorDeps {
 export interface MatterRefreshRequest {
   teamName: string;
   trigger: MatterRefreshTrigger;
+  /** Matter the user was viewing; wrap-up nudges leave it unset. */
+  matterId?: string;
   completedTaskLabel?: string;
 }
 
@@ -43,13 +46,24 @@ export class MatterRefreshCoordinator {
 
   async requestRefresh(request: MatterRefreshRequest): Promise<MatterRefreshResultDto> {
     const { teamName } = request;
-    const [empty, facts, installedMarkdown] = await Promise.all([
-      this.deps.isMatterEmpty(teamName),
+    const [snapshot, facts, installedMarkdown] = await Promise.all([
+      this.deps.readSnapshot(teamName),
       this.deps.resolveRuntimeFacts(teamName),
       this.deps.readInstalledSkillMarkdown(),
     ]);
 
-    const mode = empty ? 'initial-scan' : 'update';
+    const linked = snapshot.matters.filter((matter) =>
+      snapshot.linkedMatterIds.includes(matter.id)
+    );
+    const target = request.matterId
+      ? (linked.find((matter) => matter.id === request.matterId) ??
+        snapshot.matters.find((matter) => matter.id === request.matterId) ??
+        null)
+      : linked.length === 1
+        ? linked[0]
+        : null;
+
+    const mode = isMatterSnapshotEffectivelyEmpty(snapshot) ? 'initial-scan' : 'update';
     const text = buildMatterSkillInvocationPrompt({
       teamName,
       projectPath: facts.projectPath,
@@ -58,6 +72,8 @@ export class MatterRefreshCoordinator {
       canSpawnTeammates: facts.canSpawnTeammates,
       skillMarkdown: installedMarkdown ?? MATTER_SKILL_MARKDOWN,
       trigger: request.trigger,
+      ...(target ? { matterId: target.id, matterCaption: target.caption } : {}),
+      linkedMatterCount: linked.length,
       ...(request.completedTaskLabel ? { completedTaskLabel: request.completedTaskLabel } : {}),
     });
 

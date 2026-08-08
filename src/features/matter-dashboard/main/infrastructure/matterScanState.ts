@@ -1,29 +1,25 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import type { MatterDto, MatterSnapshotDto } from '../../contracts';
 
-import { normalizeMatterDto } from '../../contracts';
+/** Bookkeeping keys that exist on every matter document; not case content. */
+const NON_CONTENT_KEYS = new Set([
+  'id',
+  'schemaVersion',
+  'createdAt',
+  'updatedAt',
+  'updatedBy',
+  'approvedBy',
+]);
 
-const MATTER_FILE = 'matter.json';
-
-/** Bookkeeping keys that exist on every matter file; not case content. */
-const NON_CONTENT_KEYS = new Set(['schemaVersion', 'updatedAt', 'updatedBy', 'approvedBy']);
+function isMatterContentEmpty(matter: MatterDto): boolean {
+  return Object.keys(matter).every((key) => NON_CONTENT_KEYS.has(key));
+}
 
 /**
- * True when the team has no matter content yet: the matter file is missing,
- * unreadable, or carries nothing beyond schema/audit bookkeeping. Used to gate
- * the lead's initial folder-scan instruction at launch.
+ * True when the team has no matter content yet: no linked matters, or every
+ * linked matter carries nothing beyond bookkeeping. Used to gate the lead's
+ * initial folder-scan instruction at refresh time.
  */
-export async function isMatterEffectivelyEmpty(
-  teamsBasePath: string,
-  teamName: string
-): Promise<boolean> {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(await fs.readFile(path.join(teamsBasePath, teamName, MATTER_FILE), 'utf8'));
-  } catch {
-    return true;
-  }
-  const matter = normalizeMatterDto(raw);
-  if (!matter) return true;
-  return Object.keys(matter).every((key) => NON_CONTENT_KEYS.has(key));
+export function isMatterSnapshotEffectivelyEmpty(snapshot: MatterSnapshotDto): boolean {
+  const linked = snapshot.matters.filter((matter) => snapshot.linkedMatterIds.includes(matter.id));
+  return linked.length === 0 || linked.every((matter) => isMatterContentEmpty(matter));
 }

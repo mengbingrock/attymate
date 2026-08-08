@@ -28,10 +28,9 @@ export {
   createMatterFeature,
   type CreateMatterFeatureDeps,
   type MatterFeatureFacade,
-  type MatterProposalActions,
+  type MatterStoreActions,
 } from './composition/createMatterFeature';
-export { initializeMatterFileIfMissing } from './infrastructure/initializeMatterFile';
-export { MatterFileReader } from './infrastructure/MatterFileReader';
-export { isMatterEffectivelyEmpty } from './infrastructure/matterScanState';
+export { isMatterSnapshotEffectivelyEmpty } from './infrastructure/matterScanState';
 export { MatterSkillSeeder } from './infrastructure/MatterSkillSeeder';
+export { normalizeMatterSnapshot } from './infrastructure/matterSnapshot';
 export { readTeamRuntimeFacts } from './infrastructure/teamRuntimeFacts';

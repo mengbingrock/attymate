@@ -93,6 +93,7 @@ import {
   createTeamRuntimeRecoveryFeature,
   type TeamRuntimeRecoveryFeatureFacade,
 } from '@features/team-runtime-recovery/main';
+import { MATTERS_CHANGED_EVENT } from '@features/matter-dashboard/contracts';
 import {
   createMatterFeature,
   registerMatterIpc,
@@ -214,6 +215,7 @@ import {
   getAppDataPath,
   getClaudeBasePath,
   getHomeDir,
+  getMattersBasePath,
   getProjectsBasePath,
   getTeamsBasePath,
   getTodosBasePath,
@@ -1923,8 +1925,21 @@ async function initializeServices(): Promise<void> {
       },
     },
     actions: {
+      getSnapshot: (teamName) => teamDataService.getMatterSnapshot(teamName),
+      updateMatter: (teamName, matterId, changes) =>
+        teamDataService.updateMatter(teamName, matterId, changes),
+      createMatter: (teamName, init) => teamDataService.createMatter(teamName, init),
+      linkTeam: (teamName, matterId) => teamDataService.linkMatterTeam(teamName, matterId),
+      unlinkTeam: (teamName, matterId) => teamDataService.unlinkMatterTeam(teamName, matterId),
       applyProposal: (teamName) => teamDataService.applyMatterProposal(teamName),
       rejectProposal: (teamName, reason) => teamDataService.rejectMatterProposal(teamName, reason),
+    },
+    notifyMattersChanged: () => {
+      try {
+        safeSendToRenderer(mainWindow, MATTERS_CHANGED_EVENT, {});
+      } catch {
+        // Best effort — the renderer refetches on the next snapshot request.
+      }
     },
   });
   // Close the loop the other way: a quiet board asks the lead for the same
@@ -3104,6 +3119,9 @@ void app.whenReady().then(async () => {
     );
   }
   logger.info('App ready, initializing...');
+  // The matters store path travels to every controller context, including the
+  // MCP server processes spawned for team runtimes, via this env var.
+  process.env.AGENT_TEAMS_MATTERS_DIR = getMattersBasePath();
   configureFatalDiagnosticReport({
     directory: join(app.getPath('userData'), 'diagnostics'),
     logger,

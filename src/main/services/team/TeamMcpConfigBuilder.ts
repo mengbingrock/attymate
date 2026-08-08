@@ -3,6 +3,7 @@ import { buildMergedCliPath } from '@main/utils/cliPathMerge';
 import { ensureMinimumNodeOldSpaceOptions } from '@main/utils/nodeOptions';
 import {
   getClaudeBasePath,
+  getMattersBasePath,
   getHomeDir,
   getMcpConfigsBasePath,
   getMcpServerBasePath,
@@ -49,6 +50,9 @@ interface WriteMcpConfigOptions {
 
 const MCP_SERVER_NAME = 'agent-teams';
 const MCP_CLAUDE_DIR_ENV = 'AGENT_TEAMS_MCP_CLAUDE_DIR';
+/** Matters live in the app's own model-agnostic store; the MCP server's
+ * controller resolves it from this env var. */
+const MCP_MATTERS_DIR_ENV = 'AGENT_TEAMS_MATTERS_DIR';
 const MCP_CONTROL_URL_ENV = 'CLAUDE_TEAM_CONTROL_URL';
 const ELECTRON_RUN_AS_NODE_ENV = 'ELECTRON_RUN_AS_NODE';
 const logger = createLogger('Service:TeamMcpConfigBuilder');
@@ -708,6 +712,7 @@ export async function buildAgentTeamsMcpServerSpec(
     env: {
       ...launchSpec.env,
       [MCP_CLAUDE_DIR_ENV]: getClaudeBasePath(),
+      [MCP_MATTERS_DIR_ENV]: getMattersBasePath(),
       ...(resolvedControlUrl ? { [MCP_CONTROL_URL_ENV]: resolvedControlUrl } : {}),
     },
   });
@@ -1004,6 +1009,7 @@ export class TeamMcpConfigBuilder {
       env: {
         ...launchSpec.env,
         [MCP_CLAUDE_DIR_ENV]: getClaudeBasePath(),
+        [MCP_MATTERS_DIR_ENV]: getMattersBasePath(),
         ...(controlApiBaseUrl ? { [MCP_CONTROL_URL_ENV]: controlApiBaseUrl } : {}),
       },
     });

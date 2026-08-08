@@ -4,13 +4,26 @@ const path = require('path');
 
 const matterStore = require('../src/internal/matterStore.js');
 
-describe('matterStore', () => {
+describe('matterStore (global, team-independent store)', () => {
   const tempDirs = [];
 
-  function makeContext() {
-    const teamDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-teams-matter-'));
-    tempDirs.push(teamDir);
-    return { teamName: 'my-team', paths: { teamDir } };
+  function makeContext(teamName = 'my-team') {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-teams-matter-'));
+    tempDirs.push(root);
+    const teamDir = path.join(root, 'teams', teamName);
+    fs.mkdirSync(teamDir, { recursive: true });
+    return {
+      teamName,
+      paths: { teamDir, mattersDir: path.join(root, 'matters') },
+    };
+  }
+
+  /** A second team sharing the same store as `context`. */
+  function siblingContext(context, teamName) {
+    const root = path.dirname(path.dirname(context.paths.teamDir));
+    const teamDir = path.join(root, 'teams', teamName);
+    fs.mkdirSync(teamDir, { recursive: true });
+    return { teamName, paths: { teamDir, mattersDir: context.paths.mattersDir } };
   }
 
   afterEach(() => {
@@ -19,22 +32,154 @@ describe('matterStore', () => {
     }
   });
 
-  function readFileJson(context, name) {
-    return JSON.parse(fs.readFileSync(path.join(context.paths.teamDir, name), 'utf8'));
+  function readMatterFile(context, matterId) {
+    return JSON.parse(
+      fs.readFileSync(path.join(context.paths.mattersDir, matterId, 'matter.json'), 'utf8')
+    );
   }
 
-  it('returns null for missing matter and proposal files', () => {
-    const context = makeContext();
-    expect(matterStore.readMatter(context)).toBeNull();
-    expect(matterStore.readProposal(context)).toBeNull();
+  it('throws when no matters dir is configured', () => {
+    expect(() =>
+      matterStore.getSnapshot({ teamName: 't', paths: { teamDir: '/tmp/nope' } })
+    ).toThrow(/mattersDir/);
   });
 
-  it('treats corrupt files as absent', () => {
+  it('returns an empty snapshot for a fresh store', () => {
     const context = makeContext();
-    fs.writeFileSync(path.join(context.paths.teamDir, 'matter.json'), '{not json');
-    fs.writeFileSync(path.join(context.paths.teamDir, 'matter-proposal.json'), '[]');
-    expect(matterStore.readMatter(context)).toBeNull();
-    expect(matterStore.readProposal(context)).toBeNull();
+    expect(matterStore.getSnapshot(context)).toEqual({
+      matters: [],
+      linkedMatterIds: [],
+      proposal: null,
+    });
+  });
+
+  it('creates a matter linked to the calling team', () => {
+    const context = makeContext();
+    const { matter } = matterStore.createMatter(context, { caption: 'Smith v. Jones' });
+    expect(matter.caption).toBe('Smith v. Jones');
+    expect(matter.schemaVersion).toBe(2);
+    expect(matter.updatedBy).toBe('user');
+    // No team fields on the matter document itself.
+    expect(Object.keys(matter)).not.toContain('teamName');
+    expect(Object.keys(matter)).not.toContain('linkedTeams');
+
+    const snapshot = matterStore.getSnapshot(context);
+    expect(snapshot.matters.map((entry) => entry.id)).toEqual([matter.id]);
+    expect(snapshot.linkedMatterIds).toEqual([matter.id]);
+  });
+
+  it('lists every matter store-wide but links per team', () => {
+    const context = makeContext();
+    const other = siblingContext(context, 'other-team');
+    const mine = matterStore.createMatter(context, { caption: 'Mine' }).matter;
+    const theirs = matterStore.createMatter(other, { caption: 'Theirs' }).matter;
+
+    const snapshot = matterStore.getSnapshot(context);
+    expect(snapshot.matters.map((entry) => entry.caption).sort()).toEqual(['Mine', 'Theirs']);
+    expect(snapshot.linkedMatterIds).toEqual([mine.id]);
+    expect(matterStore.getSnapshot(other).linkedMatterIds).toEqual([theirs.id]);
+  });
+
+  it('link and unlink edit the registry, never the matter document', () => {
+    const context = makeContext();
+    const other = siblingContext(context, 'other-team');
+    const { matter } = matterStore.createMatter(context, { caption: 'Shared' });
+
+    matterStore.linkTeam(other, matter.id);
+    expect(matterStore.getSnapshot(other).linkedMatterIds).toEqual([matter.id]);
+    expect(readMatterFile(context, matter.id)).toEqual(matter);
+
+    matterStore.unlinkTeam(other, matter.id);
+    expect(matterStore.getSnapshot(other).linkedMatterIds).toEqual([]);
+    // Unlinking never deletes the matter.
+    expect(matterStore.getSnapshot(context).matters).toHaveLength(1);
+  });
+
+  it('updateMatter merges sections, stamps user authorship and record ids', () => {
+    const context = makeContext();
+    const { matter } = matterStore.createMatter(context, { caption: 'Edit target' });
+    const { matter: updated } = matterStore.updateMatter(context, {
+      matterId: matter.id,
+      changes: {
+        status: 'Active',
+        parties: [{ name: 'Daniel Anderson', side: 'Our client' }],
+        discovery: { requests: [{ type: 'RFP' }] },
+      },
+    });
+    expect(updated.status).toBe('Active');
+    expect(updated.updatedBy).toBe('user');
+    expect(updated.parties[0].id).toMatch(/^rec-/);
+    expect(updated.discovery.requests[0].id).toMatch(/^rec-/);
+
+    // Object sections shallow-merge; arrays replace wholesale.
+    const { matter: second } = matterStore.updateMatter(context, {
+      matterId: matter.id,
+      changes: { discovery: { motions: [{ type: 'MTC' }] } },
+    });
+    expect(second.discovery.requests).toHaveLength(1);
+    expect(second.discovery.motions).toHaveLength(1);
+    expect(() =>
+      matterStore.updateMatter(context, { matterId: 'm-missing', changes: { status: 'X' } })
+    ).toThrow(/Unknown matter/);
+    expect(() => matterStore.updateMatter(context, { matterId: matter.id, changes: {} })).toThrow(
+      /non-empty/
+    );
+  });
+
+  it('imports a legacy team matter.json once, leaving a stub', () => {
+    const context = makeContext();
+    const legacyPath = path.join(context.paths.teamDir, 'matter.json');
+    fs.writeFileSync(
+      legacyPath,
+      JSON.stringify({ schemaVersion: 1, caption: 'Legacy v. Old', currentStage: 'discovery' })
+    );
+
+    const snapshot = matterStore.getSnapshot(context);
+    expect(snapshot.matters).toHaveLength(1);
+    expect(snapshot.matters[0].caption).toBe('Legacy v. Old');
+    expect(snapshot.linkedMatterIds).toEqual([snapshot.matters[0].id]);
+
+    const stub = JSON.parse(fs.readFileSync(legacyPath, 'utf8'));
+    expect(stub.migratedTo).toBe(snapshot.matters[0].id);
+
+    // A second read must not import again.
+    const again = matterStore.getSnapshot(context);
+    expect(again.matters).toHaveLength(1);
+  });
+
+  it('does not import an empty legacy file and still stubs it', () => {
+    const context = makeContext();
+    const legacyPath = path.join(context.paths.teamDir, 'matter.json');
+    fs.writeFileSync(legacyPath, JSON.stringify({ schemaVersion: 1 }));
+
+    const snapshot = matterStore.getSnapshot(context);
+    expect(snapshot.matters).toEqual([]);
+    const stub = JSON.parse(fs.readFileSync(legacyPath, 'utf8'));
+    expect(stub.schemaVersion).toBe(2);
+    expect(stub.migratedTo).toBeUndefined();
+  });
+
+  it('imports a legacy pending proposal and targets the imported matter', () => {
+    const context = makeContext();
+    fs.writeFileSync(
+      path.join(context.paths.teamDir, 'matter.json'),
+      JSON.stringify({ schemaVersion: 1, caption: 'Legacy v. Old' })
+    );
+    fs.writeFileSync(
+      path.join(context.paths.teamDir, 'matter-proposal.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        proposedAt: '2026-08-01T10:00:00.000Z',
+        proposedBy: 'team-lead',
+        summary: ['MTC filed'],
+        changes: { status: 'Active' },
+      })
+    );
+
+    const snapshot = matterStore.getSnapshot(context);
+    expect(snapshot.proposal).not.toBeNull();
+    expect(snapshot.proposal.matterId).toBe(snapshot.matters[0].id);
+    expect(fs.existsSync(path.join(context.paths.teamDir, 'matter-proposal.json'))).toBe(false);
   });
 
   it('validates proposal input', () => {
@@ -47,12 +192,8 @@ describe('matterStore', () => {
       /changes/
     );
     expect(() =>
-      matterStore.submitProposal(context, {
-        summary: ['a'],
-        changes: { caption: 'X' },
-        taskRefs: 'x',
-      })
-    ).toThrow(/taskRefs/);
+      matterStore.submitProposal(context, { summary: ['a'], changes: { caption: 'X' }, matterId: ' ' })
+    ).toThrow(/matterId/);
     expect(() =>
       matterStore.submitProposal(context, {
         summary: ['a'],
@@ -61,159 +202,87 @@ describe('matterStore', () => {
     ).toThrow(/too large/);
   });
 
-  it('writes a stamped proposal and overwrites on re-propose', () => {
+  it('resolves the sole linked matter when a proposal has no matterId', () => {
     const context = makeContext();
-    const first = matterStore.submitProposal(
+    const { matter } = matterStore.createMatter(context, { caption: 'Only one' });
+    const record = matterStore.submitProposal(
       context,
-      { summary: [' first '], changes: { caption: 'A v. B' }, taskRefs: ['t1'] },
-      'lead-alice'
+      { summary: ['Status confirmed'], changes: { status: 'Active' } },
+      'legal-ops-supervisor'
     );
-    expect(first.schemaVersion).toBe(1);
-    expect(first.proposedBy).toBe('lead-alice');
-    expect(first.summary).toEqual(['first']);
-    expect(typeof first.proposedAt).toBe('string');
+    expect(record.matterId).toBe(matter.id);
 
-    const second = matterStore.submitProposal(
-      context,
-      { summary: ['second'], changes: { status: 'Completed' } },
-      undefined
-    );
-    expect(second.proposedBy).toBe('team-lead');
-    const onDisk = readFileJson(context, 'matter-proposal.json');
-    expect(onDisk.summary).toEqual(['second']);
-    expect(onDisk.taskRefs).toBeUndefined();
+    const { matter: applied } = matterStore.applyProposal(context, 'user');
+    expect(applied.id).toBe(matter.id);
+    expect(applied.status).toBe('Active');
+    expect(applied.updatedBy).toBe('legal-ops-supervisor');
+    expect(applied.approvedBy).toBe('user');
+    expect(matterStore.readProposal(context)).toBeNull();
   });
 
-  it('preserves Link evidence metadata on a pending proposal', () => {
+  it('demands an explicit matterId when several matters are linked', () => {
     const context = makeContext();
-    const proposal = matterStore.submitProposal(
+    const first = matterStore.createMatter(context, { caption: 'First' }).matter;
+    matterStore.createMatter(context, { caption: 'Second' });
+    expect(() =>
+      matterStore.submitProposal(context, { summary: ['x'], changes: { status: 'Active' } })
+    ).toThrow(/matterId is required/);
+
+    const record = matterStore.submitProposal(context, {
+      summary: ['x'],
+      changes: { status: 'Active' },
+      matterId: first.id,
+    });
+    expect(record.matterId).toBe(first.id);
+    const { matter } = matterStore.applyProposal(context, 'user');
+    expect(matter.id).toBe(first.id);
+  });
+
+  it('rejects a proposal naming an unknown matter', () => {
+    const context = makeContext();
+    expect(() =>
+      matterStore.submitProposal(context, {
+        summary: ['x'],
+        changes: { status: 'Active' },
+        matterId: 'm-does-not-exist',
+      })
+    ).toThrow(/Unknown matter/);
+  });
+
+  it('a matterless team proposal creates and links the matter on apply', () => {
+    const context = makeContext();
+    matterStore.submitProposal(
       context,
-      {
-        summary: ['operative complaint confirmed'],
-        changes: { pleading: { operativePleading: 'First Amended Complaint' } },
-        sourceMode: 'link',
-        sourceRevision: 'revision-123',
-        evidence: [
-          {
-            path: 'wiki/sources/complaint.md',
-            source: 'pleadings/complaint.pdf',
-            fieldPaths: ['pleading.operativePleading'],
-          },
-        ],
-      },
+      { summary: ['Initial scan'], changes: { caption: 'Fresh v. Case', status: 'Active' } },
       'team-lead'
     );
-
-    expect(proposal.sourceMode).toBe('link');
-    expect(proposal.sourceRevision).toBe('revision-123');
-    expect(proposal.evidence).toHaveLength(1);
-    expect(readFileJson(context, 'matter-proposal.json').evidence[0].path).toBe(
-      'wiki/sources/complaint.md'
-    );
+    const { matter } = matterStore.applyProposal(context, 'user');
+    expect(matter.caption).toBe('Fresh v. Case');
+    const snapshot = matterStore.getSnapshot(context);
+    expect(snapshot.linkedMatterIds).toEqual([matter.id]);
   });
 
-  it('errors when applying or rejecting with no pending proposal', () => {
+  it('rejectProposal clears without applying', () => {
     const context = makeContext();
-    expect(() => matterStore.applyProposal(context, 'user')).toThrow(/No pending/);
+    matterStore.createMatter(context, { caption: 'Untouched' });
+    matterStore.submitProposal(context, { summary: ['x'], changes: { status: 'Closed' } });
+    const rejected = matterStore.rejectProposal(context);
+    expect(rejected.changes.status).toBe('Closed');
+    const snapshot = matterStore.getSnapshot(context);
+    expect(snapshot.proposal).toBeNull();
+    expect(snapshot.matters[0].status).toBeUndefined();
     expect(() => matterStore.rejectProposal(context)).toThrow(/No pending/);
   });
 
-  it('applies a proposal onto an empty matter and clears the proposal file', () => {
+  it('resolves the store from AGENT_TEAMS_MATTERS_DIR when the context has none', () => {
     const context = makeContext();
-    matterStore.submitProposal(
-      context,
-      { summary: ['init'], changes: { caption: 'A v. B', currentStage: 'discovery' } },
-      'team-lead'
-    );
-    const { matter, proposal } = matterStore.applyProposal(context, 'user');
-    expect(matter.caption).toBe('A v. B');
-    expect(matter.currentStage).toBe('discovery');
-    expect(matter.schemaVersion).toBe(1);
-    expect(matter.updatedBy).toBe('team-lead');
-    expect(matter.approvedBy).toBe('user');
-    expect(typeof matter.updatedAt).toBe('string');
-    expect(proposal.summary).toEqual(['init']);
-    expect(matterStore.readProposal(context)).toBeNull();
-    expect(matterStore.readMatter(context).caption).toBe('A v. B');
-  });
-
-  it('merges sections shallowly, preserves untouched sections, replaces arrays wholesale', () => {
-    const context = makeContext();
-    matterStore.submitProposal(
-      context,
-      {
-        summary: ['seed'],
-        changes: {
-          caption: 'A v. B',
-          coreFields: [{ label: 'Client', value: 'Old' }],
-          discovery: {
-            statusNote: 'in progress',
-            requests: [{ type: 'RFP', status: 'Served' }],
-            pendingMotion: { motionType: 'MTC', filed: 'Jul 10, 2026' },
-          },
-          trial: { trialDate: 'Feb 8, 2027' },
-        },
-      },
-      'team-lead'
-    );
-    matterStore.applyProposal(context, 'user');
-
-    matterStore.submitProposal(
-      context,
-      {
-        summary: ['update'],
-        changes: {
-          coreFields: [
-            { label: 'Client', value: 'New' },
-            { label: 'Judge', value: 'Hon. X' },
-          ],
-          discovery: {
-            requests: [{ type: 'RFP', status: 'Complete' }],
-            pendingMotion: { outcome: 'Granted' },
-          },
-        },
-      },
-      'team-lead'
-    );
-    const { matter } = matterStore.applyProposal(context, 'user');
-
-    // Untouched sections survive.
-    expect(matter.caption).toBe('A v. B');
-    expect(matter.trial).toEqual({ trialDate: 'Feb 8, 2027' });
-    // Arrays replace wholesale.
-    expect(matter.coreFields).toEqual([
-      { label: 'Client', value: 'New' },
-      { label: 'Judge', value: 'Hon. X' },
-    ]);
-    expect(matter.discovery.requests).toEqual([{ type: 'RFP', status: 'Complete' }]);
-    // Object sections merge shallowly: statusNote survives, pendingMotion is
-    // replaced as a whole (shallow merge is one level deep).
-    expect(matter.discovery.statusNote).toBe('in progress');
-    expect(matter.discovery.pendingMotion).toEqual({ outcome: 'Granted' });
-  });
-
-  it('treats a corrupt matter file as empty when applying', () => {
-    const context = makeContext();
-    fs.writeFileSync(path.join(context.paths.teamDir, 'matter.json'), '{oops');
-    matterStore.submitProposal(
-      context,
-      { summary: ['fix'], changes: { caption: 'Fresh' } },
-      'team-lead'
-    );
-    const { matter } = matterStore.applyProposal(context, 'user');
-    expect(matter.caption).toBe('Fresh');
-  });
-
-  it('rejectProposal clears the file and returns the rejected proposal', () => {
-    const context = makeContext();
-    matterStore.submitProposal(
-      context,
-      { summary: ['try'], changes: { caption: 'X' } },
-      'team-lead'
-    );
-    const rejected = matterStore.rejectProposal(context);
-    expect(rejected.summary).toEqual(['try']);
-    expect(matterStore.readProposal(context)).toBeNull();
-    expect(matterStore.readMatter(context)).toBeNull();
+    const envContext = { teamName: context.teamName, paths: { teamDir: context.paths.teamDir } };
+    process.env.AGENT_TEAMS_MATTERS_DIR = context.paths.mattersDir;
+    try {
+      matterStore.createMatter(envContext, { caption: 'Via env' });
+      expect(matterStore.getSnapshot(context).matters.map((m) => m.caption)).toEqual(['Via env']);
+    } finally {
+      delete process.env.AGENT_TEAMS_MATTERS_DIR;
+    }
   });
 });

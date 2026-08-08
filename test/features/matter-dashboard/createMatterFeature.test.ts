@@ -42,8 +42,17 @@ describe('createMatterFeature Link status', () => {
       evidenceSource,
       leadNotifier: { notifyLead: vi.fn() },
       actions: {
+        getSnapshot: vi.fn(() => ({ matters: [], linkedMatterIds: [], proposal: null })),
+        updateMatter: vi.fn(),
+        createMatter: vi.fn(),
+        linkTeam: vi.fn(),
+        unlinkTeam: vi.fn(),
         applyProposal: vi.fn(() => Promise.resolve()),
         rejectProposal: vi.fn(() => Promise.resolve()),
+      },
+      skillSeeder: {
+        seed: vi.fn(() => Promise.resolve()),
+        readInstalledMarkdown: vi.fn(() => Promise.resolve(null)),
       },
     });
 

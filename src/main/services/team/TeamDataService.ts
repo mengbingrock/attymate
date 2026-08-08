@@ -1,7 +1,11 @@
-import { initializeMatterFileIfMissing } from '@features/matter-dashboard/main';
 import { fromProvisioningMembers, isMixedOpenCodeSideLanePlan } from '@features/team-runtime-lanes';
 import { yieldToEventLoop } from '@main/utils/asyncYield';
-import { getClaudeBasePath, getTasksBasePath, getTeamsBasePath } from '@main/utils/pathDecoder';
+import {
+  getClaudeBasePath,
+  getMattersBasePath,
+  getTasksBasePath,
+  getTeamsBasePath,
+} from '@main/utils/pathDecoder';
 import { killProcessByPid } from '@main/utils/processKill';
 import { stripAgentBlocks, wrapAgentBlock } from '@shared/constants/agentBlocks';
 import { getMemberColorByName } from '@shared/constants/memberColors';
@@ -493,6 +497,7 @@ export class TeamDataService {
       createController({
         teamName,
         claudeDir: getClaudeBasePath(),
+        mattersDir: getMattersBasePath(),
       }),
     private readonly taskCommentNotificationJournal: TeamTaskCommentNotificationJournal = new TeamTaskCommentNotificationJournal(),
     private readonly teamMetaStore: TeamMetaStore = new TeamMetaStore(),
@@ -2483,9 +2488,36 @@ export class TeamDataService {
   }
 
   /**
+   * The team's view of the global matters store: every matter, the team's
+   * linked ids, and its pending proposal. Reading also imports any legacy
+   * per-team matter.json into the store (the controller handles both).
+   */
+  getMatterSnapshot(teamName: string): unknown {
+    return this.getController(teamName).matter.getSnapshot();
+  }
+
+  /** Persists a user-authored matter edit (no proposal gate). */
+  updateMatter(teamName: string, matterId: string, changes: unknown): unknown {
+    return this.getController(teamName).matter.updateMatter({ matterId, changes, actor: 'user' });
+  }
+
+  /** Creates a matter in the global store, linked to this team. */
+  createMatter(teamName: string, init?: { caption?: string }): unknown {
+    return this.getController(teamName).matter.createMatter(init ?? {});
+  }
+
+  linkMatterTeam(teamName: string, matterId: string): unknown {
+    return this.getController(teamName).matter.linkTeam(matterId);
+  }
+
+  unlinkMatterTeam(teamName: string, matterId: string): unknown {
+    return this.getController(teamName).matter.unlinkTeam(matterId);
+  }
+
+  /**
    * Applies the pending matter dashboard proposal (user approval action from
    * the dashboard UI) and notifies the lead. The controller merge is the only
-   * writer of matter.json.
+   * writer of matter state.
    */
   async applyMatterProposal(teamName: string): Promise<void> {
     this.getController(teamName).matter.applyProposal('user');
@@ -3593,9 +3625,8 @@ export class TeamDataService {
 
       const joinedAt = Date.now();
 
-      // Seed an empty matter file so the new team's Matter Dashboard starts
-      // blank instead of showing the demo fixture matter.
-      await initializeMatterFileIfMissing(getTeamsBasePath(), request.teamName);
+      // Matters are firm-level and team-independent — a new team starts with
+      // no matter linked; the user links or creates one from the dashboard.
 
       // Save team-level metadata to team.meta.json (NOT config.json).
       // config.json is CLI territory — created by TeamCreate during provisioning.
