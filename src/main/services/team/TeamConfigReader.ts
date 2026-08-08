@@ -1155,4 +1155,30 @@ export class TeamConfigReader {
     await TeamConfigReader.primeConfig(teamName, config);
     return config;
   }
+
+  /**
+   * Repoints the team at a new project folder. The previous path stays in
+   * `projectPathHistory` so past work remains discoverable; the caller is
+   * responsible for validating the path and for refusing while the team runs.
+   */
+  async updateProjectPath(teamName: string, projectPath: string): Promise<TeamConfig | null> {
+    const config = await this.getConfig(teamName);
+    if (!config) {
+      return null;
+    }
+    const next = projectPath.trim();
+    const history = Array.isArray(config.projectPathHistory) ? [...config.projectPathHistory] : [];
+    for (const candidate of [config.projectPath, next]) {
+      const trimmed = typeof candidate === 'string' ? candidate.trim() : '';
+      if (trimmed && !history.includes(trimmed)) {
+        history.push(trimmed);
+      }
+    }
+    config.projectPath = next;
+    config.projectPathHistory = history;
+    const configPath = path.join(getTeamsBasePath(), teamName, 'config.json');
+    await atomicWriteAsync(configPath, JSON.stringify(config, null, 2));
+    await TeamConfigReader.primeConfig(teamName, config);
+    return config;
+  }
 }

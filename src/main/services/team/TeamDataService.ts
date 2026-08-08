@@ -1361,6 +1361,62 @@ export class TeamDataService {
     return updated;
   }
 
+  /**
+   * Repoints an existing team at a new project folder. Every store that
+   * carries the old path moves together: config.json (`projectPath` +
+   * history), team.meta.json `cwd` (what the next launch uses), and
+   * members.meta cwds that pointed at the old folder. The caller must refuse
+   * this while the team is running — live agents keep their old cwd.
+   */
+  async changeProjectPath(teamName: string, projectPath: string): Promise<string> {
+    const next = projectPath.trim();
+    if (!next || !path.isAbsolute(next)) {
+      throw new Error('Project folder must be an absolute path');
+    }
+    let stat: fs.Stats;
+    try {
+      stat = await fs.promises.stat(next);
+    } catch {
+      throw new Error(`Project folder does not exist: ${next}`);
+    }
+    if (!stat.isDirectory()) {
+      throw new Error(`Project folder is not a directory: ${next}`);
+    }
+
+    const config = await this.configReader.getConfig(teamName);
+    if (!config) {
+      throw new Error(`Team not found: ${teamName}`);
+    }
+    const previousPath =
+      resolveProjectPathFromConfig(config) ?? (await this.teamMetaStore.getMeta(teamName))?.cwd;
+
+    const updated = await this.configReader.updateProjectPath(teamName, next);
+    if (!updated) {
+      throw new Error(`Team not found: ${teamName}`);
+    }
+
+    // team.meta.json cwd drives every future launch (getSavedRequest).
+    const meta = await this.teamMetaStore.getMeta(teamName);
+    if (meta) {
+      await this.teamMetaStore.writeMeta(teamName, { ...meta, cwd: next });
+    }
+
+    // Members that worked in the old project folder follow it; members with a
+    // deliberately different cwd (e.g. worktrees elsewhere) keep theirs.
+    const membersMeta = await this.membersMetaStore.getMeta(teamName);
+    if (membersMeta && previousPath) {
+      const members = membersMeta.members.map((member) =>
+        member.cwd?.trim() === previousPath ? { ...member, cwd: next } : member
+      );
+      await this.membersMetaStore.writeMembers(teamName, members, {
+        providerBackendId: membersMeta.providerBackendId,
+      });
+    }
+
+    this.invalidateNotificationContext(teamName);
+    return next;
+  }
+
   async deleteTeam(teamName: string): Promise<void> {
     const config = await this.configReader.getConfig(teamName);
     if (!config) {
