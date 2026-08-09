@@ -111,6 +111,7 @@ const makeSkill = (overrides: Partial<SkillCatalogItem>): SkillCatalogItem => ({
   folderName: 'demo',
   scope: 'user',
   rootKind: 'claude',
+  teamName: null,
   projectRoot: null,
   discoveryRoot: '/tmp/skills',
   skillDir: '/tmp/skills/demo',
@@ -1020,9 +1021,6 @@ describe('extensionsSlice', () => {
     });
   });
 
-  describe('installCustomMcpServer', () => {
-  });
-
   describe('uninstallMcpServer', () => {
     it('sets progress to pending then success', async () => {
       store.setState({ cliStatus: makeReadyCliStatus() });
@@ -1334,6 +1332,47 @@ describe('extensionsSlice', () => {
       expect(store.getState().skillsProjectCatalogByProjectPath['/tmp/project']).toEqual(
         secondResult
       );
+    });
+
+    it('forwards team options and splits library and team skills into their own caches', async () => {
+      const librarySkill = makeSkill({
+        id: '/tmp/library/demo',
+        skillDir: '/tmp/library/demo',
+        skillFile: '/tmp/library/demo/SKILL.md',
+        scope: 'library',
+        rootKind: 'library',
+        discoveryRoot: '/tmp/library',
+      });
+      const teamSkill = makeSkill({
+        id: '/tmp/teams/matter-team/demo',
+        skillDir: '/tmp/teams/matter-team/demo',
+        skillFile: '/tmp/teams/matter-team/demo/SKILL.md',
+        scope: 'team',
+        rootKind: 'library',
+        teamName: 'matter-team',
+        discoveryRoot: '/tmp/teams/matter-team',
+      });
+      (api.skills!.list as ReturnType<typeof vi.fn>).mockResolvedValue([
+        librarySkill,
+        teamSkill,
+        makeSkill({}),
+      ]);
+
+      await store.getState().fetchSkillsCatalog({ teamName: 'matter-team' });
+
+      expect(api.skills!.list).toHaveBeenLastCalledWith({ teamName: 'matter-team' });
+      expect(store.getState().skillsLibraryCatalog).toEqual([librarySkill]);
+      expect(store.getState().skillsTeamCatalog).toEqual([teamSkill]);
+      expect(store.getState().skillsTeamCatalogByTeamName['matter-team']).toEqual([teamSkill]);
+      expect(store.getState().skillsUserCatalog).toEqual([makeSkill({})]);
+    });
+
+    it('keeps passing a plain project path through to the skills API', async () => {
+      (api.skills!.list as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+      await store.getState().fetchSkillsCatalog('/tmp/project');
+
+      expect(api.skills!.list).toHaveBeenLastCalledWith('/tmp/project');
     });
 
     it('keeps the previous detail cache when a detail fetch fails', async () => {

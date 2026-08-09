@@ -40,6 +40,16 @@ function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+function readSlugs(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const slugs: string[] = [];
+  for (const entry of value) {
+    const slug = readString(entry);
+    if (slug && !slugs.includes(slug)) slugs.push(slug);
+  }
+  return slugs;
+}
+
 /**
  * Reads what a team is, as opposed to what it has been doing: the roster, each
  * agent's definition and instructions, and the lead prompt. Tasks, inboxes,
@@ -49,10 +59,12 @@ function readString(value: unknown): string | undefined {
 export class TeamExportSourceReader implements TeamExportSourceReaderPort {
   constructor(
     private readonly teamsBasePath: string,
-    /** Lists the slugs in the team's own project skill roots. */
+    /** Lists the slugs in the team's legacy project skill roots. */
     private readonly listProjectSkillSlugs: (
       projectPath: string
-    ) => Promise<string[]> = async () => []
+    ) => Promise<string[]> = async () => [],
+    /** Lists the slugs the team owns in the app's skill store. */
+    private readonly listTeamSkillSlugs: (teamName: string) => Promise<string[]> = async () => []
   ) {}
 
   async read(teamName: string): Promise<TeamExportSource> {
@@ -91,7 +103,15 @@ export class TeamExportSourceReader implements TeamExportSourceReaderPort {
     }
 
     const projectPath = readString(teamMeta?.cwd);
+    const teamSkillSlugs = await this.listTeamSkillSlugs(teamName);
     const projectSkillSlugs = projectPath ? await this.listProjectSkillSlugs(projectPath) : [];
+    // The lead is not exported as an agent, so its own skill assignment lives
+    // only here — reading it is what keeps a lead-only skill in the package.
+    const lead =
+      teamMeta?.lead && typeof teamMeta.lead === 'object' && !Array.isArray(teamMeta.lead)
+        ? (teamMeta.lead as Record<string, unknown>)
+        : null;
+    const leadSkillSlugs = readSlugs(lead?.skills);
 
     return {
       teamName,
@@ -99,6 +119,8 @@ export class TeamExportSourceReader implements TeamExportSourceReaderPort {
         ? { description: readString(teamMeta?.description)! }
         : {}),
       ...(readString(teamMeta?.prompt) ? { leadPrompt: readString(teamMeta?.prompt)! } : {}),
+      ...(teamSkillSlugs.length > 0 ? { teamSkillSlugs } : {}),
+      ...(leadSkillSlugs.length > 0 ? { leadSkillSlugs } : {}),
       ...(projectSkillSlugs.length > 0 ? { projectSkillSlugs } : {}),
       members,
     };

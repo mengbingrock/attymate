@@ -4,8 +4,10 @@ import * as path from 'node:path';
 import { isPathWithinRoot, validateFileName } from '@main/utils/pathValidation';
 import { shell } from 'electron';
 
+import { resolveWritableSkillRoot } from './resolveWritableSkillRoot';
 import { SkillImportService } from './SkillImportService';
 import { SkillPlanService } from './SkillPlanService';
+import { SkillProjectionService } from './SkillProjectionService';
 import { SkillRootsResolver } from './SkillRootsResolver';
 import { SkillScaffoldService } from './SkillScaffoldService';
 import { SkillsCatalogService } from './SkillsCatalogService';
@@ -24,7 +26,8 @@ export class SkillsMutationService {
     private readonly catalogService = new SkillsCatalogService(),
     private readonly scaffoldService = new SkillScaffoldService(rootsResolver),
     private readonly importService = new SkillImportService(),
-    private readonly planService = new SkillPlanService()
+    private readonly planService = new SkillPlanService(),
+    private readonly projectionService = new SkillProjectionService(rootsResolver)
   ) {}
 
   async previewUpsert(request: SkillUpsertRequest): Promise<SkillReviewPreview> {
@@ -33,7 +36,8 @@ export class SkillsMutationService {
       request.rootKind,
       request.projectPath,
       request.folderName,
-      request.existingSkillId
+      request.existingSkillId,
+      request.teamName
     );
     const files = this.scaffoldService.normalizeDraftFiles(request.files);
     const plan = await this.planService.buildUpsertPlan(targetSkillDir, files);
@@ -50,14 +54,36 @@ export class SkillsMutationService {
       request.rootKind,
       request.projectPath,
       request.folderName,
-      request.existingSkillId
+      request.existingSkillId,
+      request.teamName
     );
     const files = this.scaffoldService.normalizeDraftFiles(request.files);
     const plan = await this.planService.buildUpsertPlan(targetSkillDir, files);
     this.assertReviewedPlanMatches(request.reviewPlanId, plan.preview.planId);
     await this.planService.applyPlan(plan);
+    await this.projectIfLibraryScoped(request.scope, targetSkillDir);
 
-    return this.catalogService.getDetail(targetSkillDir, request.projectPath);
+    return this.catalogService.getDetail(targetSkillDir, {
+      projectPath: request.projectPath,
+      teamName: request.teamName,
+    });
+  }
+
+  /**
+   * A canonical skill is invisible to the CLIs until the app points their own
+   * skill folders at it. Library skills are pointed at machine-wide; team
+   * skills are projected by the team runtime for the duration of a run.
+   */
+  private async projectIfLibraryScoped(
+    scope: SkillUpsertRequest['scope'],
+    targetSkillDir: string
+  ): Promise<void> {
+    if (scope !== 'library') return;
+    try {
+      await this.projectionService.project(targetSkillDir, path.basename(targetSkillDir));
+    } catch {
+      // A missing pointer degrades discovery, never the save itself.
+    }
   }
 
   async previewImport(request: SkillImportRequest): Promise<SkillReviewPreview> {
@@ -80,12 +106,23 @@ export class SkillsMutationService {
     const plan = await this.planService.buildImportPlan(targetSkillDir, inspection.files);
     this.assertReviewedPlanMatches(request.reviewPlanId, plan.preview.planId);
     await this.planService.applyPlan(plan);
+    await this.projectIfLibraryScoped(request.scope, targetSkillDir);
 
-    return this.catalogService.getDetail(targetSkillDir, request.projectPath);
+    return this.catalogService.getDetail(targetSkillDir, {
+      projectPath: request.projectPath,
+      teamName: request.teamName,
+    });
   }
 
   async deleteSkill(request: SkillDeleteRequest): Promise<void> {
-    const skillDir = this.resolveExistingSkill(request.skillId, request.projectPath);
+    const skillDir = this.resolveExistingSkill(
+      request.skillId,
+      request.projectPath,
+      request.teamName
+    );
+    // Drop the pointers first: a dangling symlink in a CLI folder is worse
+    // than none, and release only removes links we installed ourselves.
+    await this.projectionService.release(path.basename(skillDir), skillDir).catch(() => undefined);
     await shell.trashItem(skillDir);
   }
 
@@ -94,7 +131,12 @@ export class SkillsMutationService {
   ): Promise<{ sourceDir: string; targetSkillDir: string }> {
     const sourceDir = await this.importService.validateSourceDir(request.sourceDir);
 
-    const root = this.resolveWritableRoot(request.scope, request.rootKind, request.projectPath);
+    const root = resolveWritableSkillRoot(this.rootsResolver, {
+      scope: request.scope,
+      rootKind: request.rootKind,
+      projectPath: request.projectPath,
+      teamName: request.teamName,
+    });
     await fs.mkdir(root.rootPath, { recursive: true });
 
     const folderName = request.folderName?.trim() || path.basename(sourceDir);
@@ -111,25 +153,9 @@ export class SkillsMutationService {
     return { sourceDir, targetSkillDir };
   }
 
-  private resolveWritableRoot(
-    scope: SkillUpsertRequest['scope'],
-    rootKind: SkillUpsertRequest['rootKind'],
-    projectPath?: string
-  ) {
-    const roots = this.rootsResolver.resolve(projectPath);
-    const match = roots.find((root) => root.scope === scope && root.rootKind === rootKind);
-    if (!match) {
-      throw new Error('Requested skill root is unavailable');
-    }
-    if (scope === 'project' && !projectPath) {
-      throw new Error('projectPath is required for project-scoped skills');
-    }
-    return match;
-  }
-
-  private resolveExistingSkill(skillId: string, projectPath?: string): string {
+  private resolveExistingSkill(skillId: string, projectPath?: string, teamName?: string): string {
     const normalizedSkillDir = path.resolve(skillId);
-    const roots = this.rootsResolver.resolve(projectPath);
+    const roots = this.rootsResolver.resolve({ projectPath, teamName });
     const owningRoot = roots.find((root) => isPathWithinRoot(normalizedSkillDir, root.rootPath));
     if (!owningRoot) {
       throw new Error('Skill is outside the allowed roots');

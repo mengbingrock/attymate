@@ -13,16 +13,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@renderer/components/ui
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip';
 import { useStore } from '@renderer/store';
 import { createLoadingMultimodelCliStatus } from '@renderer/store/slices/cliInstallerSlice';
-import { getVisibleMultimodelProviders } from '@renderer/utils/multimodelProviderVisibility';
-import {
-  getCliProviderExtensionCapability,
-  isCliExtensionCapabilityAvailable,
-} from '@shared/utils/providerExtensionCapabilities';
 import {
   formatSkillRootKind,
   getSkillAudience,
   getSkillAudienceLabel,
   isCodexSkillOverlayAvailable,
+  LIBRARY_SKILL_ROOT_KIND,
 } from '@shared/utils/skillRoots';
 import {
   AlertTriangle,
@@ -49,11 +45,14 @@ import { resolveSkillProjectPath } from './skillProjectUtils';
 import type { SkillsSortState } from '@renderer/hooks/useExtensionsTabState';
 import type { SkillCatalogItem, SkillDetail, SkillValidationIssue } from '@shared/types/extensions';
 
+const EMPTY_SKILLS: SkillCatalogItem[] = [];
 const SUCCESS_BANNER_MS = 2500;
 const NEW_SKILL_HIGHLIGHT_MS = 4000;
 const USER_SKILLS_CATALOG_KEY = '__user__';
 type SkillsQuickFilter =
   | 'all'
+  | 'library'
+  | 'team'
   | 'project'
   | 'personal'
   | 'shared'
@@ -109,19 +108,6 @@ function getSkillIssueTone(issue: SkillValidationIssue | null): {
   };
 }
 
-function formatRuntimeAudienceLabel(providerNames: readonly string[]): string {
-  if (providerNames.length === 0) {
-    return 'the configured runtime';
-  }
-  if (providerNames.length === 1) {
-    return providerNames[0];
-  }
-  if (providerNames.length === 2) {
-    return `${providerNames[0]} and ${providerNames[1]}`;
-  }
-  return `${providerNames.slice(0, -1).join(', ')}, and ${providerNames.at(-1)}`;
-}
-
 export const SkillsPanel = ({
   projectPath,
   projectLabel,
@@ -143,6 +129,8 @@ export const SkillsPanel = ({
   const skillsError = useStore((s) => s.skillsCatalogErrorByProjectPath[catalogKey] ?? null);
   const detailById = useStore(useShallow((s) => s.skillsDetailsById));
   const userSkills = useStore(useShallow((s) => s.skillsUserCatalog));
+  const librarySkills = useStore(useShallow((s) => s.skillsLibraryCatalog ?? EMPTY_SKILLS));
+  const teamSkills = useStore(useShallow((s) => s.skillsTeamCatalog ?? EMPTY_SKILLS));
   const projectSkills = useStore(
     useShallow((s) => (projectPath ? (s.skillsProjectCatalogByProjectPath[projectPath] ?? []) : []))
   );
@@ -165,9 +153,7 @@ export const SkillsPanel = ({
     [cliStatus, cliStatusLoading, multimodelEnabled]
   );
   const codexAccount = useCodexAccountSnapshot({
-    enabled:
-      false &&
-      Boolean(loadingCliStatus?.providers.some((provider) => provider.providerId === 'codex')),
+    enabled: false,
   });
   const codexSnapshotPending =
     isCodexAccountSnapshotPending(
@@ -191,14 +177,13 @@ export const SkillsPanel = ({
   );
 
   const mergedSkills = useMemo(
-    () => [...projectSkills, ...userSkills],
-    [projectSkills, userSkills]
+    () => [...librarySkills, ...teamSkills, ...projectSkills, ...userSkills],
+    [librarySkills, projectSkills, teamSkills, userSkills]
   );
   const codexSkillOverlayAvailable = useMemo(
     () => isCodexSkillOverlayAvailable(effectiveCliStatus),
     [effectiveCliStatus]
   );
-  const skillsAudienceLabel = useMemo(() => null, []);
   const codexOnlySkillsCount = useMemo(
     () => mergedSkills.filter((skill) => getSkillAudience(skill.rootKind) === 'codex').length,
     [mergedSkills]
@@ -250,8 +235,7 @@ export const SkillsPanel = ({
     });
     const changeCleanup = skillsApi.onChanged((event) => {
       const shouldRefresh =
-        event.scope === 'user' ||
-        (event.scope === 'project' && event.projectPath === (projectPath ?? null));
+        event.scope !== 'project' || event.projectPath === (projectPath ?? null);
       if (!shouldRefresh) return;
 
       void fetchSkillsCatalog(projectPath ?? undefined);
@@ -295,6 +279,10 @@ export const SkillsPanel = ({
         ? filteredByQuery
         : filteredByQuery.filter((skill) => {
             switch (quickFilter) {
+              case 'library':
+                return skill.scope === 'library';
+              case 'team':
+                return skill.scope === 'team';
               case 'project':
                 return skill.scope === 'project';
               case 'personal':
@@ -313,6 +301,14 @@ export const SkillsPanel = ({
           });
     return sortSkills(filtered, skillsSort);
   }, [mergedSkills, quickFilter, skillsSearchQuery, skillsSort]);
+  const visibleLibrarySkills = useMemo(
+    () => visibleSkills.filter((skill) => skill.scope === 'library'),
+    [visibleSkills]
+  );
+  const visibleTeamSkills = useMemo(
+    () => visibleSkills.filter((skill) => skill.scope === 'team'),
+    [visibleSkills]
+  );
   const visibleProjectSkills = useMemo(
     () => visibleSkills.filter((skill) => skill.scope === 'project'),
     [visibleSkills]
@@ -322,8 +318,12 @@ export const SkillsPanel = ({
     [visibleSkills]
   );
   const isRefreshing = skillsLoading && mergedSkills.length > 0;
-  const getScopeLabel = (skill: SkillCatalogItem): string =>
-    skill.scope === 'project' ? t('skillsPanel.scope.project') : t('skillsPanel.scope.user');
+  const getScopeLabel = (skill: SkillCatalogItem): string => {
+    if (skill.scope === 'library') return t('skillsPanel.scope.library');
+    if (skill.scope === 'team') return t('skillsPanel.scope.team');
+    if (skill.scope === 'project') return t('skillsPanel.scope.project');
+    return t('skillsPanel.scope.user');
+  };
   const getInvocationLabel = (skill: SkillCatalogItem): string =>
     skill.invocationMode === 'manual-only'
       ? t('skillsPanel.invocation.manualOnly')
@@ -337,18 +337,118 @@ export const SkillsPanel = ({
     }
     return t('skillsPanel.status.ready');
   };
+  // Library and team skills live in the app store, which is not a dot-folder.
+  const getStoredInLabel = (skill: SkillCatalogItem): string =>
+    formatSkillRootKind(
+      skill.scope === 'library' || skill.scope === 'team' ? LIBRARY_SKILL_ROOT_KIND : skill.rootKind
+    );
+
+  const renderSkillCard = (skill: SkillCatalogItem): React.JSX.Element => {
+    const primaryIssue = getPrimarySkillIssue(skill);
+    const issueTone = getSkillIssueTone(primaryIssue);
+    const IssueIcon = issueTone.Icon;
+    return (
+      <button
+        key={skill.id}
+        type="button"
+        onClick={() => setSelectedSkillId(skill.id)}
+        className={`rounded-xl border p-4 text-left transition-colors ${
+          highlightedSkillId === skill.id
+            ? 'border-green-500/50 bg-green-500/10 shadow-[0_0_0_1px_rgba(34,197,94,0.18)]'
+            : 'bg-surface-raised/10 border-border hover:border-border-emphasis'
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-sm font-semibold text-text">{skill.name}</h3>
+              {!skill.isValid && (
+                <Badge
+                  variant="outline"
+                  className="border-amber-500/40 text-amber-700 dark:text-amber-300"
+                >
+                  {t('skillsPanel.badges.needsAttention')}
+                </Badge>
+              )}
+            </div>
+            <p className="line-clamp-2 text-sm text-text-secondary">{skill.description}</p>
+          </div>
+          <Badge variant="outline">{getScopeLabel(skill)}</Badge>
+        </div>
+
+        <div className="mt-3 space-y-2 text-xs text-text-muted">
+          <p>{getInvocationLabel(skill)}</p>
+          <p>{getSkillStatus(skill)}</p>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          {skill.scope === 'team' && skill.teamName && (
+            <Badge variant="secondary" className="font-normal">
+              {t('skillsPanel.badges.team', { team: skill.teamName })}
+            </Badge>
+          )}
+          <Badge variant="secondary" className="font-normal">
+            {t('skillsPanel.badges.storedIn', { root: getStoredInLabel(skill) })}
+          </Badge>
+          <Badge variant="outline" className="font-normal">
+            {getSkillAudienceLabel(skill.rootKind)}
+          </Badge>
+          {skill.flags.hasScripts && (
+            <Badge variant="destructive" className="font-normal">
+              {t('skillsPanel.badges.hasScripts')}
+            </Badge>
+          )}
+          {skill.flags.hasReferences && (
+            <Badge variant="secondary" className="font-normal">
+              {t('skillsPanel.badges.references')}
+            </Badge>
+          )}
+          {skill.flags.hasAssets && (
+            <Badge variant="secondary" className="font-normal">
+              {t('skillsPanel.badges.assets')}
+            </Badge>
+          )}
+        </div>
+
+        {primaryIssue && (
+          <div
+            className={`mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${issueTone.className}`}
+          >
+            <IssueIcon className="mt-0.5 size-3.5 shrink-0" />
+            <span>{primaryIssue.message}</span>
+          </div>
+        )}
+      </button>
+    );
+  };
+
+  const renderSkillSection = (
+    sectionKey: string,
+    title: string,
+    description: string,
+    skills: SkillCatalogItem[]
+  ): React.JSX.Element | null => {
+    if (skills.length === 0) return null;
+    return (
+      <section key={sectionKey} className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-text">{title}</h3>
+            <p className="text-xs text-text-muted">{description}</p>
+          </div>
+          <Badge variant="secondary" className="font-normal">
+            {skills.length}
+          </Badge>
+        </div>
+        <div className="skills-grid grid grid-cols-1 gap-3 xl:grid-cols-2">
+          {skills.map((skill) => renderSkillCard(skill))}
+        </div>
+      </section>
+    );
+  };
 
   return (
     <div className="flex flex-col gap-4">
-      {false && (
-        <div className="rounded-md border border-blue-500/30 bg-blue-500/5 px-4 py-3 text-sm text-blue-300">
-          {codexSnapshotPending
-            ? t('store.provider.checkingStatus')
-            : t('skillsPanel.runtimeAudience', {
-                audience: skillsAudienceLabel ?? t('skillsPanel.configuredRuntime'),
-              })}
-        </div>
-      )}
       <div className="bg-surface-raised/20 rounded-xl border border-border p-4">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0 flex-1 space-y-1 xl:max-w-2xl">
@@ -441,6 +541,14 @@ export const SkillsPanel = ({
                 {t('skillsPanel.counts.total', { count: mergedSkills.length })}
               </Badge>
               <Badge variant="secondary" className="font-normal">
+                {t('skillsPanel.counts.library', { count: librarySkills.length })}
+              </Badge>
+              {teamSkills.length > 0 && (
+                <Badge variant="secondary" className="font-normal">
+                  {t('skillsPanel.counts.team', { count: teamSkills.length })}
+                </Badge>
+              )}
+              <Badge variant="secondary" className="font-normal">
                 {t('skillsPanel.counts.project', { count: projectSkills.length })}
               </Badge>
               <Badge variant="secondary" className="font-normal">
@@ -463,6 +571,8 @@ export const SkillsPanel = ({
         {(
           [
             ['all', t('skillsPanel.filters.all')],
+            ['library', t('skillsPanel.filters.library')],
+            ['team', t('skillsPanel.filters.team')],
             ['project', t('skillsPanel.filters.project')],
             ['personal', t('skillsPanel.filters.personal')],
             ['shared', t('skillsPanel.filters.shared')],
@@ -531,202 +641,29 @@ export const SkillsPanel = ({
 
       {visibleSkills.length > 0 && (
         <div className="space-y-6">
-          {visibleProjectSkills.length > 0 && (
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-text">
-                    {t('skillsPanel.sections.project.title')}
-                  </h3>
-                  <p className="text-xs text-text-muted">
-                    {t('skillsPanel.sections.project.description')}
-                  </p>
-                </div>
-                <Badge variant="secondary" className="font-normal">
-                  {visibleProjectSkills.length}
-                </Badge>
-              </div>
-              <div className="skills-grid grid grid-cols-1 gap-3 xl:grid-cols-2">
-                {visibleProjectSkills.map((skill) => {
-                  const primaryIssue = getPrimarySkillIssue(skill);
-                  const issueTone = getSkillIssueTone(primaryIssue);
-                  const IssueIcon = issueTone.Icon;
-                  return (
-                    <button
-                      key={skill.id}
-                      type="button"
-                      onClick={() => setSelectedSkillId(skill.id)}
-                      className={`rounded-xl border p-4 text-left transition-colors ${
-                        highlightedSkillId === skill.id
-                          ? 'border-green-500/50 bg-green-500/10 shadow-[0_0_0_1px_rgba(34,197,94,0.18)]'
-                          : 'bg-surface-raised/10 border-border hover:border-border-emphasis'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="truncate text-sm font-semibold text-text">
-                              {skill.name}
-                            </h3>
-                            {!skill.isValid && (
-                              <Badge
-                                variant="outline"
-                                className="border-amber-500/40 text-amber-700 dark:text-amber-300"
-                              >
-                                {t('skillsPanel.badges.needsAttention')}
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="line-clamp-2 text-sm text-text-secondary">
-                            {skill.description}
-                          </p>
-                        </div>
-                        <Badge variant="outline">{getScopeLabel(skill)}</Badge>
-                      </div>
-
-                      <div className="mt-3 space-y-2 text-xs text-text-muted">
-                        <p>{getInvocationLabel(skill)}</p>
-                        <p>{getSkillStatus(skill)}</p>
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Badge variant="secondary" className="font-normal">
-                          {t('skillsPanel.badges.storedIn', {
-                            root: formatSkillRootKind(skill.rootKind),
-                          })}
-                        </Badge>
-                        <Badge variant="outline" className="font-normal">
-                          {getSkillAudienceLabel(skill.rootKind)}
-                        </Badge>
-                        {skill.flags.hasScripts && (
-                          <Badge variant="destructive" className="font-normal">
-                            {t('skillsPanel.badges.hasScripts')}
-                          </Badge>
-                        )}
-                        {skill.flags.hasReferences && (
-                          <Badge variant="secondary" className="font-normal">
-                            {t('skillsPanel.badges.references')}
-                          </Badge>
-                        )}
-                        {skill.flags.hasAssets && (
-                          <Badge variant="secondary" className="font-normal">
-                            {t('skillsPanel.badges.assets')}
-                          </Badge>
-                        )}
-                      </div>
-
-                      {primaryIssue && (
-                        <div
-                          className={`mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${issueTone.className}`}
-                        >
-                          <IssueIcon className="mt-0.5 size-3.5 shrink-0" />
-                          <span>{primaryIssue.message}</span>
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
+          {renderSkillSection(
+            'library',
+            t('skillsPanel.sections.library.title'),
+            t('skillsPanel.sections.library.description'),
+            visibleLibrarySkills
           )}
-
-          {visibleUserSkills.length > 0 && (
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-text">
-                    {t('skillsPanel.sections.personal.title')}
-                  </h3>
-                  <p className="text-xs text-text-muted">
-                    {t('skillsPanel.sections.personal.description')}
-                  </p>
-                </div>
-                <Badge variant="secondary" className="font-normal">
-                  {visibleUserSkills.length}
-                </Badge>
-              </div>
-              <div className="skills-grid grid grid-cols-1 gap-3 xl:grid-cols-2">
-                {visibleUserSkills.map((skill) => {
-                  const primaryIssue = getPrimarySkillIssue(skill);
-                  const issueTone = getSkillIssueTone(primaryIssue);
-                  const IssueIcon = issueTone.Icon;
-                  return (
-                    <button
-                      key={skill.id}
-                      type="button"
-                      onClick={() => setSelectedSkillId(skill.id)}
-                      className={`rounded-xl border p-4 text-left transition-colors ${
-                        highlightedSkillId === skill.id
-                          ? 'border-green-500/50 bg-green-500/10 shadow-[0_0_0_1px_rgba(34,197,94,0.18)]'
-                          : 'bg-surface-raised/10 border-border hover:border-border-emphasis'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="truncate text-sm font-semibold text-text">
-                              {skill.name}
-                            </h3>
-                            {!skill.isValid && (
-                              <Badge
-                                variant="outline"
-                                className="border-amber-500/40 text-amber-700 dark:text-amber-300"
-                              >
-                                {t('skillsPanel.badges.needsAttention')}
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="line-clamp-2 text-sm text-text-secondary">
-                            {skill.description}
-                          </p>
-                        </div>
-                        <Badge variant="outline">{getScopeLabel(skill)}</Badge>
-                      </div>
-
-                      <div className="mt-3 space-y-2 text-xs text-text-muted">
-                        <p>{getInvocationLabel(skill)}</p>
-                        <p>{getSkillStatus(skill)}</p>
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Badge variant="secondary" className="font-normal">
-                          {t('skillsPanel.badges.storedIn', {
-                            root: formatSkillRootKind(skill.rootKind),
-                          })}
-                        </Badge>
-                        <Badge variant="outline" className="font-normal">
-                          {getSkillAudienceLabel(skill.rootKind)}
-                        </Badge>
-                        {skill.flags.hasScripts && (
-                          <Badge variant="destructive" className="font-normal">
-                            {t('skillsPanel.badges.hasScripts')}
-                          </Badge>
-                        )}
-                        {skill.flags.hasReferences && (
-                          <Badge variant="secondary" className="font-normal">
-                            {t('skillsPanel.badges.references')}
-                          </Badge>
-                        )}
-                        {skill.flags.hasAssets && (
-                          <Badge variant="secondary" className="font-normal">
-                            {t('skillsPanel.badges.assets')}
-                          </Badge>
-                        )}
-                      </div>
-
-                      {primaryIssue && (
-                        <div
-                          className={`mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${issueTone.className}`}
-                        >
-                          <IssueIcon className="mt-0.5 size-3.5 shrink-0" />
-                          <span>{primaryIssue.message}</span>
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
+          {renderSkillSection(
+            'team',
+            t('skillsPanel.sections.team.title'),
+            t('skillsPanel.sections.team.description'),
+            visibleTeamSkills
+          )}
+          {renderSkillSection(
+            'project',
+            t('skillsPanel.sections.project.title'),
+            t('skillsPanel.sections.project.description'),
+            visibleProjectSkills
+          )}
+          {renderSkillSection(
+            'personal',
+            t('skillsPanel.sections.personal.title'),
+            t('skillsPanel.sections.personal.description'),
+            visibleUserSkills
           )}
         </div>
       )}

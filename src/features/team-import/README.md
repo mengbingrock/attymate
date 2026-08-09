@@ -26,22 +26,23 @@ excluded from every teammate spawn list. Its imported workflow and agent files a
 app does not create an additional `team-lead` agent. Teams created outside this flow keep the
 legacy synthesized `team-lead` identity when no explicit profile is configured.
 
-## A team's skills live in its project folder
+## A team's skills live in the team's own store
 
-Imported skills are installed into `<projectPath>/.claude/skills/<slug>/` — and
-`<projectPath>/.codex/skills/` when Codex is set up on the machine — not into the user-wide
-`~/.claude/skills`. That folder is the team's own skill library: it is discovered by exactly that
-team's agents, it travels with the project, and two teams that both ship a `legal-research` skill
-no longer shadow one another. A source with no project folder (a URL import) has nothing to scope
-to and falls back to the user-wide roots, with a warning saying so.
+Imported skills are installed into the app's model-agnostic skill store, under
+`<userData>/skills/teams/<team>/<slug>/` (`SkillStore`) — not into `<projectPath>/.claude/skills`
+and not into the user-wide `~/.claude/skills`. That store is the team's own skill library: it
+belongs to the team rather than to one runtime or one folder (a project path is a launch
+parameter, and a team outlives it), and two teams that both ship a `legal-research` skill no
+longer shadow one another. Runtime discovery is restored at launch by the projection service,
+which points the current project's runtime-branded folders at the store. This keeps concurrent
+teams in different projects isolated while the canonical copy remains independent of any one
+launch folder. A caller with no team name yet (the
+preview, which runs before the team is named) falls back to the shared `skills/library`.
 
 The assignment is recorded in two places that must agree: `members.meta.json` carries each
 member's `skills` slugs (the record), and `agents/<member>/{AGENT.md, claude-agent-definition.md}`
-carry a copy for the agent to read. Existing slugs are never overwritten in any root.
-
-Known limitation: importing an *export bundle* makes the bundle folder the new team's project
-path, so its skills install back into that folder. The dialog does not yet let you choose a
-different project path.
+carry a copy for the agent to read. Existing slugs are never overwritten: a conflict is reported
+as a skip so local edits survive.
 
 Layer ownership:
 

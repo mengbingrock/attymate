@@ -12,6 +12,7 @@ import {
 import {
   isMatterSnapshotEffectivelyEmpty,
   normalizeMatterSnapshot,
+  TeamMatterSkillProvisioner,
 } from '@features/matter-dashboard/main';
 import { type RuntimeTurnSettledProvider } from '@features/member-work-sync/main';
 import { inspectOpenCodeLocalModelRuntimeReadiness } from '@features/runtime-provider-management/main';
@@ -6247,6 +6248,9 @@ export class TeamProvisioningService {
         `[${run.teamName}] Failed to release uniform stock-Claude MCP registration: ${String(error)}`
       )
     );
+    // Team skill pointers are run-scoped just like the MCP lease and must not
+    // remain in the launch project after the team stops.
+    void this.releaseTeamMatterSkillPointers(run.teamName, run.request.cwd);
   }
 
   private enrichRuntimeAdapterProgressTrace(
@@ -12340,14 +12344,20 @@ export class TeamProvisioningService {
         run.bootstrapSpecPath = bootstrapSpecPath;
         if (useStockClaudeBootstrap || useCodexLaneRuntime) {
           const matterNeedsInitialScan = this.isTeamMatterEffectivelyEmpty(bootstrapSpec.team.name);
+          const matterSkillFilePath = await this.prepareTeamMatterSkill(
+            bootstrapSpec.team.name,
+            request.cwd
+          );
           stockBootstrapPrompt = useStockClaudeBootstrap
             ? buildStockClaudeBootstrapPrompt(bootstrapSpec, initialUserPrompt, {
                 matterNeedsInitialScan,
+                ...(matterSkillFilePath ? { matterSkillFilePath } : {}),
                 leadName: run.leadIdentity.name,
                 leadWorkflow: request.lead?.workflow,
               })
             : buildCodexLeadBootstrapPrompt(bootstrapSpec, initialUserPrompt, {
                 matterNeedsInitialScan,
+                ...(matterSkillFilePath ? { matterSkillFilePath } : {}),
                 leadName: run.leadIdentity.name,
                 leadWorkflow: request.lead?.workflow,
               });
@@ -12417,6 +12427,7 @@ export class TeamProvisioningService {
         }
         await this.removeRunMemberMcpConfigFiles(run).catch(() => {});
         await this.releaseStockClaudeUniformMcpLease(run).catch(() => {});
+        await this.releaseTeamMatterSkillPointers(run.teamName, request.cwd);
         throw error;
       }
       const launchModelArg = getLaunchModelArg(
@@ -12587,6 +12598,7 @@ export class TeamProvisioningService {
         }
         await this.removeRunMemberMcpConfigFiles(run).catch(() => {});
         await this.releaseStockClaudeUniformMcpLease(run).catch(() => {});
+        await this.releaseTeamMatterSkillPointers(run.teamName, request.cwd);
         if (run.anthropicApiKeyHelper) {
           await cleanupAnthropicTeamApiKeyHelperMaterial({
             directory: run.anthropicApiKeyHelper.directory,
@@ -14648,6 +14660,10 @@ export class TeamProvisioningService {
         run.bootstrapSpecPath = bootstrapSpecPath;
         if (useStockClaudeBootstrap || useCodexLaneRuntime) {
           const matterNeedsInitialScan = this.isTeamMatterEffectivelyEmpty(bootstrapSpec.team.name);
+          const matterSkillFilePath = await this.prepareTeamMatterSkill(
+            bootstrapSpec.team.name,
+            request.cwd
+          );
           if (useStockClaudeBootstrap) {
             // Interactive relaunches must not carry the refresh-only hydration
             // instruction — the lead has to actually re-spawn teammates first.
@@ -14656,6 +14672,7 @@ export class TeamProvisioningService {
               useInteractiveRuntime ? '' : prompt,
               {
                 matterNeedsInitialScan,
+                ...(matterSkillFilePath ? { matterSkillFilePath } : {}),
                 leadName: run.leadIdentity.name,
                 leadWorkflow: run.request.lead?.workflow,
               }
@@ -14665,6 +14682,7 @@ export class TeamProvisioningService {
             // coordination and rediscovers tasks through the task tools.
             stockBootstrapPrompt = buildCodexLeadBootstrapPrompt(bootstrapSpec, '', {
               matterNeedsInitialScan,
+              ...(matterSkillFilePath ? { matterSkillFilePath } : {}),
               leadName: run.leadIdentity.name,
               leadWorkflow: run.request.lead?.workflow,
             });
@@ -14729,6 +14747,7 @@ export class TeamProvisioningService {
         }
         await this.removeRunMemberMcpConfigFiles(run).catch(() => {});
         await this.releaseStockClaudeUniformMcpLease(run).catch(() => {});
+        await this.releaseTeamMatterSkillPointers(run.teamName, request.cwd);
         await this.restorePrelaunchConfig(request.teamName);
         throw error;
       }
@@ -14975,6 +14994,7 @@ export class TeamProvisioningService {
         run.bootstrapUserPromptPath = null;
         await this.removeRunMemberMcpConfigFiles(run).catch(() => {});
         await this.releaseStockClaudeUniformMcpLease(run).catch(() => {});
+        await this.releaseTeamMatterSkillPointers(run.teamName, request.cwd);
         if (run.anthropicApiKeyHelper) {
           await cleanupAnthropicTeamApiKeyHelperMaterial({
             directory: run.anthropicApiKeyHelper.directory,
@@ -23387,9 +23407,37 @@ export class TeamProvisioningService {
   }
 
   /**
-   * Launch-time gate for the bootstrap's initial-scan wording. Reading the
-   * global matters store also imports any legacy per-team matter file.
+   * Give the team its own copy of the matter skill and point the runtimes at
+   * the team's skills, so the path named in the bootstrap prompt exists before
+   * the lead reads it. Returns that path, or null when it could not be made.
    */
+  private async prepareTeamMatterSkill(
+    teamName: string,
+    projectPath: string
+  ): Promise<string | null> {
+    try {
+      const provisioner = TeamMatterSkillProvisioner.create();
+      const ensured = await provisioner.ensure(teamName);
+      await provisioner.project(teamName, projectPath);
+      return ensured?.filePath ?? null;
+    } catch (error) {
+      logger.warn(`[${teamName}] Could not prepare the matter skill for launch: ${String(error)}`);
+      return null;
+    }
+  }
+
+  /** Reclaim the team's skill pointers once it is no longer running. */
+  private async releaseTeamMatterSkillPointers(
+    teamName: string,
+    projectPath?: string
+  ): Promise<void> {
+    try {
+      await TeamMatterSkillProvisioner.create().release(teamName, projectPath);
+    } catch (error) {
+      logger.warn(`[${teamName}] Could not release team skill pointers: ${String(error)}`);
+    }
+  }
+
   private isTeamMatterEffectivelyEmpty(teamName: string): boolean {
     try {
       const controller = createController({

@@ -1,6 +1,5 @@
-import { describe, expect, it } from 'vitest';
-
 import { SkillValidator } from '@main/services/extensions/skills/SkillValidator';
+import { describe, expect, it } from 'vitest';
 
 import type { SkillCatalogItem } from '@shared/types/extensions';
 
@@ -13,6 +12,7 @@ function makeSkill(overrides: Partial<SkillCatalogItem>): SkillCatalogItem {
     folderName: 'demo',
     scope: 'user',
     rootKind: 'claude',
+    teamName: null,
     projectRoot: null,
     discoveryRoot: '/tmp/.claude/skills',
     skillDir: '/tmp/.claude/skills/demo',
@@ -69,5 +69,24 @@ describe('SkillValidator', () => {
     ]);
 
     expect(result.map((item) => item.id)).toEqual(['/1', '/2', '/5', '/3', '/4']);
+  });
+
+  it('ranks a team copy above project, and the app library above the CLI user roots', () => {
+    const validator = new SkillValidator();
+
+    const result = validator.annotateCatalog([
+      makeSkill({ id: '/user', name: 'd-user', scope: 'user', rootKind: 'claude' }),
+      makeSkill({ id: '/library', name: 'c-library', scope: 'library', rootKind: 'library' }),
+      makeSkill({ id: '/project', name: 'b-project', scope: 'project', rootKind: 'claude' }),
+      makeSkill({
+        id: '/team',
+        name: 'a-team',
+        scope: 'team',
+        rootKind: 'library',
+        teamName: 'signal-ops',
+      }),
+    ]);
+
+    expect(result.map((item) => item.id)).toEqual(['/team', '/project', '/library', '/user']);
   });
 });

@@ -212,6 +212,48 @@ describe('matter dashboard lead instructions', () => {
     ).toContain(scanMarker);
   });
 
+  it("names this team's own copy of the skill when the path is known", () => {
+    const skillFilePath = '/app-data/skills/teams/signal-ops/matter-dashboard/SKILL.md';
+
+    for (const prompt of [
+      buildLeadMatterDashboardInstructions('signal-ops', { skillFilePath }),
+      buildLeadInitialMatterScanInstructions('signal-ops', { skillFilePath }),
+    ]) {
+      expect(prompt).toContain(`this team's copy is at ${skillFilePath}`);
+      expect(prompt).toContain('read that file and follow it');
+    }
+  });
+
+  it('still names the skill when no path is available', () => {
+    for (const prompt of [
+      buildLeadMatterDashboardInstructions('signal-ops'),
+      buildLeadInitialMatterScanInstructions('signal-ops'),
+    ]) {
+      expect(prompt).toContain('load the "matter-dashboard" skill and follow it');
+      expect(prompt).not.toContain("this team's copy is at");
+    }
+  });
+
+  it('carries the skill path into both runtimes bootstrap prompts', () => {
+    const matterSkillFilePath = '/app-data/skills/teams/signal-ops/matter-dashboard/SKILL.md';
+    const options = { matterNeedsInitialScan: true, matterSkillFilePath };
+
+    for (const prompt of [
+      buildStockClaudeBootstrapPrompt(bootstrapSpec, '', options),
+      buildCodexLeadBootstrapPrompt(bootstrapSpec, '', options),
+    ]) {
+      expect(prompt).toContain(`this team's copy is at ${matterSkillFilePath}`);
+    }
+
+    // Without the path the prompts still stand on their own.
+    for (const prompt of [
+      buildStockClaudeBootstrapPrompt(bootstrapSpec, '', { matterNeedsInitialScan: true }),
+      buildCodexLeadBootstrapPrompt(bootstrapSpec, '', { matterNeedsInitialScan: true }),
+    ]) {
+      expect(prompt).toContain('load the "matter-dashboard" skill and follow it');
+    }
+  });
+
   it('names the skill in the short bootstrap matter blocks of both runtimes', () => {
     for (const prompt of [
       buildStockClaudeBootstrapPrompt(bootstrapSpec, ''),

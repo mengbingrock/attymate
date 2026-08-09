@@ -3,38 +3,55 @@ import { isSupportedSlashCommandName } from '@shared/utils/slashCommands';
 
 import type { MentionSuggestion } from '@renderer/types/mention';
 import type { TeamProviderId } from '@shared/types';
-import type { SkillCatalogItem } from '@shared/types/extensions';
+import type { SkillCatalogItem, SkillScope } from '@shared/types/extensions';
 import type { KnownSlashCommandDefinition } from '@shared/utils/slashCommands';
+
+/**
+ * Narrowest home wins a slash-name collision: a project skill beats a team
+ * skill, which beats the app library, which beats the personal CLI folder.
+ */
+const SKILL_SCOPE_PRECEDENCE: readonly SkillScope[] = ['project', 'team', 'library', 'user'];
+
+function formatSkillScopeLabel(skill: SkillCatalogItem): string {
+  switch (skill.scope) {
+    case 'project':
+      return 'Project skill';
+    case 'team':
+      return skill.teamName ? `Team skill (${skill.teamName})` : 'Team skill';
+    case 'library':
+      return 'Library skill';
+    default:
+      return 'Personal skill';
+  }
+}
 
 function orderSkillsForProvider(
   projectSkills: readonly SkillCatalogItem[],
-  userSkills: readonly SkillCatalogItem[],
+  otherSkills: readonly SkillCatalogItem[],
   providerId?: TeamProviderId
 ): SkillCatalogItem[] {
-  const visibleProjectSkills = projectSkills.filter((skill) =>
+  const visibleSkills = [...projectSkills, ...otherSkills].filter((skill) =>
     isSkillAvailableForProvider(skill.rootKind, providerId)
   );
-  const visibleUserSkills = userSkills.filter((skill) =>
-    isSkillAvailableForProvider(skill.rootKind, providerId)
+  const groups = SKILL_SCOPE_PRECEDENCE.map((scope) =>
+    visibleSkills.filter((skill) => skill.scope === scope)
   );
 
   if (providerId !== 'codex') {
-    return [...visibleProjectSkills, ...visibleUserSkills];
+    return groups.flat();
   }
 
-  const isCodexOnly = (skill: SkillCatalogItem) => skill.rootKind === 'codex';
-  return [
-    ...visibleProjectSkills.filter(isCodexOnly),
-    ...visibleProjectSkills.filter((skill) => !isCodexOnly(skill)),
-    ...visibleUserSkills.filter(isCodexOnly),
-    ...visibleUserSkills.filter((skill) => !isCodexOnly(skill)),
-  ];
+  const isCodexOnly = (skill: SkillCatalogItem): boolean => skill.rootKind === 'codex';
+  return groups.flatMap((group) => [
+    ...group.filter(isCodexOnly),
+    ...group.filter((skill) => !isCodexOnly(skill)),
+  ]);
 }
 
 export function buildSlashCommandSuggestions(
   builtIns: readonly KnownSlashCommandDefinition[],
   projectSkills: readonly SkillCatalogItem[],
-  userSkills: readonly SkillCatalogItem[],
+  otherSkills: readonly SkillCatalogItem[],
   providerId?: TeamProviderId
 ): MentionSuggestion[] {
   const builtInNames = new Set(builtIns.map((command) => command.name.trim().toLowerCase()));
@@ -49,7 +66,7 @@ export function buildSlashCommandSuggestions(
 
   const seenSkillNames = new Set<string>();
   const skillSuggestions: MentionSuggestion[] = [];
-  for (const skill of orderSkillsForProvider(projectSkills, userSkills, providerId)) {
+  for (const skill of orderSkillsForProvider(projectSkills, otherSkills, providerId)) {
     const normalizedFolderName = skill.folderName.trim().toLowerCase();
     if (
       !skill.isValid ||
@@ -67,7 +84,7 @@ export function buildSlashCommandSuggestions(
       name: skill.folderName,
       command: `/${normalizedFolderName}`,
       description: skill.description,
-      subtitle: `${skill.scope === 'project' ? 'Project skill' : 'Personal skill'} - ${getSkillAudienceLabel(skill.rootKind)}`,
+      subtitle: `${formatSkillScopeLabel(skill)} - ${getSkillAudienceLabel(skill.rootKind)}`,
       searchText: `${skill.name} ${skill.folderName}`,
       type: 'skill',
     });

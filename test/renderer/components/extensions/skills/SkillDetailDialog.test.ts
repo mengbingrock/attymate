@@ -1,5 +1,6 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SkillDetail } from '@shared/types/extensions';
@@ -131,6 +132,7 @@ function makeDetail(overrides: Partial<SkillDetail['item']>): SkillDetail {
       folderName: 'review-helper',
       scope: 'project',
       rootKind: 'claude',
+      teamName: null,
       projectRoot: '/tmp/project-a',
       discoveryRoot: '/tmp/project-a/.claude/skills',
       skillDir: '/tmp/project-a/.claude/skills/review-helper',
@@ -272,6 +274,47 @@ describe('SkillDetailDialog', () => {
     });
 
     expect(openPathMock).toHaveBeenCalledWith(detail.item.skillFile, undefined);
+
+    await act(async () => {
+      root.unmount();
+      await Promise.resolve();
+    });
+  });
+
+  it('labels team skills with the app library storage and their team name', async () => {
+    const detail = makeDetail({
+      id: '/Users/me/Library/App/skills/teams/matter-team/review-helper',
+      scope: 'team',
+      rootKind: 'library',
+      teamName: 'matter-team',
+      projectRoot: null,
+      discoveryRoot: '/Users/me/Library/App/skills/teams/matter-team',
+      skillDir: '/Users/me/Library/App/skills/teams/matter-team/review-helper',
+      skillFile: '/Users/me/Library/App/skills/teams/matter-team/review-helper/SKILL.md',
+    });
+    storeState.skillsDetailsById[detail.item.id] = detail;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        React.createElement(SkillDetailDialog, {
+          skillId: detail.item.id,
+          open: true,
+          onClose: vi.fn(),
+          projectPath: '/tmp/project-b',
+          onEdit: vi.fn(),
+          onDeleted: vi.fn(),
+        })
+      );
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('This team only');
+    expect(host.textContent).toContain('Team: matter-team');
+    expect(host.textContent).toContain('Stored in App library');
 
     await act(async () => {
       root.unmount();

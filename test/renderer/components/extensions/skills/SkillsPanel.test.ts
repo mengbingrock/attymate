@@ -1,12 +1,12 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
+
+import { createDefaultCliExtensionCapabilities } from '@shared/utils/providerExtensionCapabilities';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CodexAccountSnapshotDto } from '@features/codex-account/contracts';
 import type { CliInstallationStatus } from '@shared/types';
 import type { SkillCatalogItem } from '@shared/types/extensions';
-import { createDefaultCliExtensionCapabilities } from '@shared/utils/providerExtensionCapabilities';
-
 interface StoreState {
   fetchSkillsCatalog: ReturnType<typeof vi.fn>;
   fetchSkillDetail: ReturnType<typeof vi.fn>;
@@ -14,6 +14,8 @@ interface StoreState {
   skillsCatalogErrorByProjectPath: Record<string, string | null>;
   skillsDetailsById: Record<string, unknown>;
   skillsUserCatalog: SkillCatalogItem[];
+  skillsLibraryCatalog: SkillCatalogItem[];
+  skillsTeamCatalog: SkillCatalogItem[];
   skillsProjectCatalogByProjectPath: Record<string, SkillCatalogItem[]>;
   cliStatus: CliInstallationStatus | null;
   cliStatusLoading: boolean;
@@ -176,6 +178,7 @@ function makeUserSkill(): SkillCatalogItem {
     folderName: 'review-helper',
     scope: 'user',
     rootKind: 'claude',
+    teamName: null,
     projectRoot: null,
     discoveryRoot: '/Users/me/.claude/skills',
     skillDir: '/Users/me/.claude/skills/review-helper',
@@ -204,6 +207,36 @@ function makeCodexSkill(): SkillCatalogItem {
     discoveryRoot: '/Users/me/.codex/skills',
     skillDir: '/Users/me/.codex/skills/codex-helper',
     skillFile: '/Users/me/.codex/skills/codex-helper/SKILL.md',
+  };
+}
+
+function makeLibrarySkill(): SkillCatalogItem {
+  return {
+    ...makeUserSkill(),
+    id: '/Users/me/Library/App/skills/library/library-helper',
+    name: 'Library Helper',
+    description: 'Available in every runtime',
+    folderName: 'library-helper',
+    scope: 'library',
+    rootKind: 'library',
+    discoveryRoot: '/Users/me/Library/App/skills/library',
+    skillDir: '/Users/me/Library/App/skills/library/library-helper',
+    skillFile: '/Users/me/Library/App/skills/library/library-helper/SKILL.md',
+  };
+}
+
+function makeTeamSkill(): SkillCatalogItem {
+  return {
+    ...makeLibrarySkill(),
+    id: '/Users/me/Library/App/skills/teams/matter-team/team-helper',
+    name: 'Team Helper',
+    description: 'Shared with one team',
+    folderName: 'team-helper',
+    scope: 'team',
+    teamName: 'matter-team',
+    discoveryRoot: '/Users/me/Library/App/skills/teams/matter-team',
+    skillDir: '/Users/me/Library/App/skills/teams/matter-team/team-helper',
+    skillFile: '/Users/me/Library/App/skills/teams/matter-team/team-helper/SKILL.md',
   };
 }
 
@@ -259,6 +292,8 @@ describe('SkillsPanel', () => {
     storeState.skillsCatalogErrorByProjectPath = {};
     storeState.skillsDetailsById = {};
     storeState.skillsUserCatalog = [makeUserSkill()];
+    storeState.skillsLibraryCatalog = [];
+    storeState.skillsTeamCatalog = [];
     storeState.skillsProjectCatalogByProjectPath = {
       '/tmp/project-a': [],
     };
@@ -343,6 +378,57 @@ describe('SkillsPanel', () => {
 
     expect(storeState.fetchSkillsCatalog).toHaveBeenCalledWith('/tmp/project-a');
     expect(storeState.fetchSkillDetail).toHaveBeenCalledWith(skill.id, undefined);
+
+    await act(async () => {
+      root.unmount();
+      await Promise.resolve();
+    });
+  });
+
+  it('groups library and team skills into their own sections with the team name', async () => {
+    storeState.skillsLibraryCatalog = [makeLibrarySkill()];
+    storeState.skillsTeamCatalog = [makeTeamSkill()];
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        React.createElement(SkillsPanel, {
+          projectPath: '/tmp/project-a',
+          projectLabel: 'Project A',
+          skillsSearchQuery: '',
+          setSkillsSearchQuery: vi.fn(),
+          skillsSort: 'name-asc',
+          setSkillsSort: vi.fn(),
+          selectedSkillId: null,
+          setSelectedSkillId: vi.fn(),
+        })
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('App library skills');
+    expect(host.textContent).toContain('Library Helper');
+    expect(host.textContent).toContain('Team skills');
+    expect(host.textContent).toContain('Team: matter-team');
+    expect(host.textContent).toContain('Stored in App library');
+
+    const teamFilterButton = Array.from(host.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Team'
+    ) as HTMLButtonElement;
+    expect(teamFilterButton).toBeDefined();
+
+    await act(async () => {
+      teamFilterButton.click();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('Team Helper');
+    expect(host.textContent).not.toContain('Library Helper');
+    expect(host.textContent).not.toContain('Review Helper');
 
     await act(async () => {
       root.unmount();

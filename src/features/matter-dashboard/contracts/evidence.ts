@@ -60,7 +60,10 @@ export interface MatterRefreshResultDto {
   accepted: boolean;
   mode: MatterRefreshMode;
   message: string;
-  /** False when the seeded skill was missing and the bundled copy was sent. */
+  /**
+   * True when the lead was pointed at this team's own copy of the skill; false
+   * when that copy could not be prepared and the bundled workflow was inlined.
+   */
   usedInstalledSkill: boolean;
 }
 

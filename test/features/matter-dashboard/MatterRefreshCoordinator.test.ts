@@ -2,9 +2,25 @@ import { MATTER_SKILL_MARKDOWN } from '@features/matter-dashboard/core/domain/ma
 import { MatterRefreshCoordinator } from '@features/matter-dashboard/main';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { EnsuredTeamMatterSkill } from '@features/matter-dashboard/main';
+
+const TEAM_SKILL_DIR = '/app-data/skills/teams/my-team/matter-dashboard';
+const TEAM_SKILL_FILE = `${TEAM_SKILL_DIR}/SKILL.md`;
+
+/** What the provisioner hands back once the team's own copy is on disk. */
+function teamSkill(markdown = MATTER_SKILL_MARKDOWN): EnsuredTeamMatterSkill {
+  return {
+    filePath: TEAM_SKILL_FILE,
+    skillDir: TEAM_SKILL_DIR,
+    markdown,
+    source: 'seeded-from-bundled',
+  };
+}
+
 function createCoordinator(overrides: {
   empty?: boolean;
-  installedMarkdown?: string | null;
+  /** Undefined keeps the default prepared copy; null means none could be made. */
+  ensuredSkill?: EnsuredTeamMatterSkill | null;
   hasTeammates?: boolean;
   canSpawnTeammates?: boolean;
   deliveryError?: Error;
@@ -29,10 +45,10 @@ function createCoordinator(overrides: {
       hasTeammates: overrides.hasTeammates ?? true,
       canSpawnTeammates: overrides.canSpawnTeammates ?? true,
     }),
-    readInstalledSkillMarkdown: vi
+    ensureTeamSkill: vi
       .fn()
       .mockResolvedValue(
-        overrides.installedMarkdown === undefined ? null : overrides.installedMarkdown
+        overrides.ensuredSkill === undefined ? teamSkill() : overrides.ensuredSkill
       ),
     leadNotifier: { notifyLead },
   });
@@ -107,10 +123,8 @@ describe('MatterRefreshCoordinator', () => {
     expect(notifyLead.mock.calls[0][2]).toContain('your matter_propose will create one');
   });
 
-  it('sends the user edited skill file when one is installed', async () => {
-    const installedMarkdown =
-      '---\nname: matter-dashboard\ndescription: mine\n---\n\nFIRM HOUSE RULES\n';
-    const { coordinator, notifyLead } = createCoordinator({ installedMarkdown });
+  it("points the lead at this team's own copy of the skill", async () => {
+    const { coordinator, notifyLead } = createCoordinator({});
 
     const result = await coordinator.requestRefresh({
       teamName: 'my-team',
@@ -118,7 +132,22 @@ describe('MatterRefreshCoordinator', () => {
     });
 
     expect(result.usedInstalledSkill).toBe(true);
-    expect(notifyLead.mock.calls[0][2]).toContain('FIRM HOUSE RULES');
+    expect(notifyLead.mock.calls[0][2]).toContain(`Skill file: ${TEAM_SKILL_FILE}`);
+    // Referenced, not pasted: the team's copy stays the authoritative text.
+    expect(notifyLead.mock.calls[0][2]).not.toContain('--- matter-dashboard skill ---');
+  });
+
+  it("appends the current schema when the team's copy has drifted", async () => {
+    const edited = `${MATTER_SKILL_MARKDOWN}\n\n## Firm house rules\nAlways cite the docket.\n`;
+    const { coordinator, notifyLead } = createCoordinator({
+      ensuredSkill: { ...teamSkill(edited), source: 'team' },
+    });
+
+    await coordinator.requestRefresh({ teamName: 'my-team', trigger: 'user-refresh' });
+
+    expect(notifyLead.mock.calls[0][2]).toContain(
+      'Authoritative section schema for this app version'
+    );
   });
 
   it('explains an undeliverable request instead of throwing at the dashboard', async () => {
@@ -135,8 +164,8 @@ describe('MatterRefreshCoordinator', () => {
     expect(result.message).toContain('Launch the team first');
   });
 
-  it('falls back to the bundled skill when the file is missing or unreadable', async () => {
-    const { coordinator, notifyLead } = createCoordinator({ installedMarkdown: null });
+  it("inlines the bundled skill when the team's copy could not be prepared", async () => {
+    const { coordinator, notifyLead } = createCoordinator({ ensuredSkill: null });
 
     const result = await coordinator.requestRefresh({
       teamName: 'my-team',
@@ -144,6 +173,7 @@ describe('MatterRefreshCoordinator', () => {
     });
 
     expect(result.usedInstalledSkill).toBe(false);
+    expect(notifyLead.mock.calls[0][2]).not.toContain('Skill file:');
     expect(notifyLead.mock.calls[0][2]).toContain(
       MATTER_SKILL_MARKDOWN.split('\n').find((line) => line.startsWith('# Matter dashboard'))!
     );

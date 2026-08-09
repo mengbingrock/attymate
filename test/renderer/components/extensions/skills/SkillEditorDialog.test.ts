@@ -161,6 +161,7 @@ function makeDetail(rawContent: string): SkillDetail {
       folderName: 'custom-skill',
       scope: 'project',
       rootKind: 'claude',
+      teamName: null,
       projectRoot: '/tmp/project',
       discoveryRoot: '/tmp/project/.claude/skills',
       skillDir: '/tmp/project/.claude/skills/custom-skill',
@@ -197,6 +198,16 @@ function makeCodexDetail(rawContent: string): SkillDetail {
       skillFile: '/tmp/project/.codex/skills/custom-skill/SKILL.md',
     },
   };
+}
+
+async function selectScope(host: HTMLElement, value: string): Promise<void> {
+  const scopeSelect = host.querySelectorAll('select')[0] as HTMLSelectElement;
+  await act(async () => {
+    const setValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+    setValue?.call(scopeSelect, value);
+    scopeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await Promise.resolve();
+  });
 }
 
 describe('SkillEditorDialog', () => {
@@ -383,6 +394,77 @@ This file uses a freeform layout without generated sections.
     });
   });
 
+  it('defaults new skills to the app library and hides the CLI root picker', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        React.createElement(SkillEditorDialog, {
+          open: true,
+          mode: 'create',
+          projectPath: '/tmp/project',
+          projectLabel: 'Project',
+          allowCodexRootKind: true,
+          detail: null,
+          onClose: vi.fn(),
+          onSaved: vi.fn(),
+        })
+      );
+      await Promise.resolve();
+    });
+
+    const scopeSelect = host.querySelectorAll('select')[0] as HTMLSelectElement;
+    expect(scopeSelect.value).toBe('library');
+    expect(Array.from(scopeSelect.options)[0]?.value).toBe('library');
+    expect(host.textContent).toContain('App library (all runtimes)');
+
+    // No CLI folder to pick for library skills: only scope + invocation remain.
+    const selects = host.querySelectorAll('select');
+    expect(selects.length).toBe(2);
+    expect(Array.from(selects).some((select) => select.value === 'claude')).toBe(false);
+    expect(host.textContent).toContain('there is no CLI folder to pick');
+
+    await act(async () => {
+      root.unmount();
+      await Promise.resolve();
+    });
+  });
+
+  it('restores the CLI root picker when switching away from the app library', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        React.createElement(SkillEditorDialog, {
+          open: true,
+          mode: 'create',
+          projectPath: '/tmp/project',
+          projectLabel: 'Project',
+          allowCodexRootKind: true,
+          detail: null,
+          onClose: vi.fn(),
+          onSaved: vi.fn(),
+        })
+      );
+      await Promise.resolve();
+    });
+
+    await selectScope(host, 'user');
+
+    const selects = host.querySelectorAll('select');
+    expect(selects.length).toBe(3);
+    expect((selects[1] as HTMLSelectElement).value).toBe('claude');
+
+    await act(async () => {
+      root.unmount();
+      await Promise.resolve();
+    });
+  });
+
   it('hides the codex root option in create mode when codex runtime is unavailable', async () => {
     const host = document.createElement('div');
     document.body.appendChild(host);
@@ -403,6 +485,8 @@ This file uses a freeform layout without generated sections.
       );
       await Promise.resolve();
     });
+
+    await selectScope(host, 'user');
 
     const selects = host.querySelectorAll('select');
     const rootSelect = selects[1] as HTMLSelectElement;
@@ -441,6 +525,7 @@ This file uses a freeform layout without generated sections.
     };
 
     await renderEditor(true, false);
+    await selectScope(host, 'user');
     const nameInput = host.querySelector('#skill-name') as HTMLInputElement;
     const rootSelect = host.querySelectorAll('select')[1] as HTMLSelectElement;
     await act(async () => {

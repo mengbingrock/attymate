@@ -24,13 +24,17 @@ import {
   DialogTitle,
 } from '@renderer/components/ui/dialog';
 import { useStore } from '@renderer/store';
-import { formatSkillRootKind, getSkillAudienceLabel } from '@shared/utils/skillRoots';
+import {
+  formatSkillRootKind,
+  getSkillAudienceLabel,
+  LIBRARY_SKILL_ROOT_KIND,
+} from '@shared/utils/skillRoots';
 import { AlertTriangle, ExternalLink, FolderOpen, Info, Pencil, Trash2 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { resolveSkillProjectPath } from './skillProjectUtils';
 
-import type { SkillValidationIssue } from '@shared/types/extensions';
+import type { SkillScope, SkillValidationIssue } from '@shared/types/extensions';
 
 interface SkillDetailDialogProps {
   skillId: string | null;
@@ -86,11 +90,18 @@ export const SkillDetailDialog = ({
     ? resolveSkillProjectPath(item.scope, projectPath, item.projectRoot)
     : (projectPath ?? undefined);
   const issuesTone = item?.issues.length ? getIssuesTone(item.issues) : null;
+  // Library and team skills live in the app store, which is not a dot-folder.
+  const storedInLabel = item
+    ? formatSkillRootKind(
+        item.scope === 'library' || item.scope === 'team' ? LIBRARY_SKILL_ROOT_KIND : item.rootKind
+      )
+    : '';
 
-  function formatScopeLabel(scope: 'user' | 'project'): string {
-    return scope === 'project'
-      ? t('skillDetail.scope.projectOnly')
-      : t('skillDetail.scope.personal');
+  function formatScopeLabel(scope: SkillScope): string {
+    if (scope === 'project') return t('skillDetail.scope.projectOnly');
+    if (scope === 'team') return t('skillDetail.scope.team');
+    if (scope === 'library') return t('skillDetail.scope.library');
+    return t('skillDetail.scope.personal');
   }
 
   function formatInvocationLabel(invocationMode: 'auto' | 'manual-only'): string {
@@ -128,6 +139,7 @@ export const SkillDetailDialog = ({
       await deleteSkill({
         skillId: item.id,
         projectPath: effectiveProjectPath,
+        ...(item.teamName ? { teamName: item.teamName } : {}),
       });
       setDeleteConfirmOpen(false);
       onDeleted();
@@ -184,8 +196,13 @@ export const SkillDetailDialog = ({
             )}
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{formatScopeLabel(item.scope)}</Badge>
+              {item.scope === 'team' && item.teamName && (
+                <Badge variant="outline">
+                  {t('skillDetail.badges.team', { team: item.teamName })}
+                </Badge>
+              )}
               <Badge variant="outline">
-                {t('skillDetail.badges.storedIn', { root: formatSkillRootKind(item.rootKind) })}
+                {t('skillDetail.badges.storedIn', { root: storedInLabel })}
               </Badge>
               <Badge variant="outline">{getSkillAudienceLabel(item.rootKind)}</Badge>
               <Badge variant="secondary">

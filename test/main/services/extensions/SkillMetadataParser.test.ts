@@ -1,12 +1,12 @@
-import { describe, expect, it } from 'vitest';
-
 import { SkillMetadataParser } from '@main/services/extensions/skills/SkillMetadataParser';
+import { describe, expect, it } from 'vitest';
 
 describe('SkillMetadataParser', () => {
   const parser = new SkillMetadataParser();
   const root = {
     scope: 'project' as const,
     rootKind: 'claude' as const,
+    teamName: null,
     projectRoot: '/tmp/project',
     rootPath: '/tmp/project/.claude/skills',
   };

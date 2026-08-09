@@ -31,6 +31,10 @@ export {
   type MatterStoreActions,
 } from './composition/createMatterFeature';
 export { isMatterSnapshotEffectivelyEmpty } from './infrastructure/matterScanState';
-export { MatterSkillSeeder } from './infrastructure/MatterSkillSeeder';
+export { isPristineBundledSkill, MatterSkillSeeder } from './infrastructure/MatterSkillSeeder';
 export { normalizeMatterSnapshot } from './infrastructure/matterSnapshot';
+export {
+  type EnsuredTeamMatterSkill,
+  TeamMatterSkillProvisioner,
+} from './infrastructure/TeamMatterSkillProvisioner';
 export { readTeamRuntimeFacts } from './infrastructure/teamRuntimeFacts';

@@ -7,7 +7,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@renderer/components/ui/dialog';
@@ -21,7 +20,7 @@ import {
   SelectValue,
 } from '@renderer/components/ui/select';
 import { useStore } from '@renderer/store';
-import { SKILL_ROOT_DEFINITIONS } from '@shared/utils/skillRoots';
+import { LIBRARY_SKILL_ROOT_KIND, SKILL_ROOT_DEFINITIONS } from '@shared/utils/skillRoots';
 import { FileSearch, FolderOpen, X } from 'lucide-react';
 
 import { getSuggestedSkillFolderNameFromPath } from './skillFolderNameUtils';
@@ -29,7 +28,7 @@ import { resolveSkillProjectPath } from './skillProjectUtils';
 import { SkillReviewDialog } from './SkillReviewDialog';
 import { validateSkillFolderName, validateSkillImportSourceDir } from './skillValidationUtils';
 
-import type { SkillReviewPreview, SkillRootKind } from '@shared/types/extensions';
+import type { SkillReviewPreview, SkillRootKind, SkillScope } from '@shared/types/extensions';
 
 type ExtensionsT = ReturnType<typeof useAppTranslation>['t'];
 
@@ -81,8 +80,8 @@ export const SkillImportDialog = ({
   const [sourceDir, setSourceDir] = useState('');
   const [folderName, setFolderName] = useState('');
   const [folderNameEdited, setFolderNameEdited] = useState(false);
-  const [scope, setScope] = useState<'user' | 'project'>('user');
-  const [rootKind, setRootKind] = useState<SkillRootKind>('claude');
+  const [scope, setScope] = useState<SkillScope>(LIBRARY_SKILL_ROOT_KIND);
+  const [rootKind, setRootKind] = useState<SkillRootKind>(LIBRARY_SKILL_ROOT_KIND);
   const [preview, setPreview] = useState<SkillReviewPreview | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
@@ -94,8 +93,9 @@ export const SkillImportDialog = ({
     setSourceDir('');
     setFolderName('');
     setFolderNameEdited(false);
-    setScope(projectPath ? 'project' : 'user');
-    setRootKind('claude');
+    // Imports land in the app library by default so every runtime can reach them.
+    setScope(LIBRARY_SKILL_ROOT_KIND);
+    setRootKind(LIBRARY_SKILL_ROOT_KIND);
     setPreview(null);
     setReviewOpen(false);
     setReviewLoading(false);
@@ -128,12 +128,27 @@ export const SkillImportDialog = ({
     }
   }, [open, projectPath, scope]);
 
+  // The app library names no CLI directory, so its root kind follows the scope.
+  useEffect(() => {
+    if (!open) return;
+    if (scope === 'library') {
+      if (rootKind !== LIBRARY_SKILL_ROOT_KIND) {
+        setRootKind(LIBRARY_SKILL_ROOT_KIND);
+      }
+      return;
+    }
+    if (rootKind === LIBRARY_SKILL_ROOT_KIND) {
+      setRootKind('claude');
+    }
+  }, [open, rootKind, scope]);
+
   useEffect(() => {
     if (open && rootKind === 'codex' && !allowCodexRootKind && !codexRootKindPending) {
       setRootKind('claude');
     }
   }, [allowCodexRootKind, codexRootKindPending, open, rootKind]);
 
+  const usesLibraryStore = scope === 'library';
   const visibleRootDefinitions = SKILL_ROOT_DEFINITIONS.filter(
     (definition) =>
       definition.rootKind !== 'codex' ||
@@ -281,14 +296,12 @@ export const SkillImportDialog = ({
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="skill-import-scope">{t('skillImport.fields.audience')}</Label>
-                    <Select
-                      value={scope}
-                      onValueChange={(value) => setScope(value as 'user' | 'project')}
-                    >
+                    <Select value={scope} onValueChange={(value) => setScope(value as SkillScope)}>
                       <SelectTrigger id="skill-import-scope">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="library">{t('skillImport.scope.library')}</SelectItem>
                         <SelectItem value="user">{t('skillImport.scope.user')}</SelectItem>
                         <SelectItem value="project" disabled={!projectPath}>
                           {projectPath
@@ -301,27 +314,39 @@ export const SkillImportDialog = ({
                     </Select>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="skill-import-root">{t('skillImport.fields.storage')}</Label>
-                    <Select
-                      value={rootKind}
-                      onValueChange={(value) => setRootKind(value as SkillRootKind)}
-                    >
-                      <SelectTrigger id="skill-import-root">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {visibleRootDefinitions.map((definition) => (
-                          <SelectItem key={definition.rootKind} value={definition.rootKind}>
-                            {definition.directoryName}
-                            {definition.audience === 'codex'
-                              ? t('skillImport.rootSuffix.codexOnly')
-                              : t('skillImport.rootSuffix.shared')}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {usesLibraryStore ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="skill-import-root-library">
+                        {t('skillImport.fields.storage')}
+                      </Label>
+                      <p id="skill-import-root-library" className="text-sm text-text">
+                        {t('skillImport.rootLibrary.value')}
+                      </p>
+                      <p className="text-xs text-text-muted">{t('skillImport.rootLibrary.hint')}</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="skill-import-root">{t('skillImport.fields.storage')}</Label>
+                      <Select
+                        value={rootKind}
+                        onValueChange={(value) => setRootKind(value as SkillRootKind)}
+                      >
+                        <SelectTrigger id="skill-import-root">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {visibleRootDefinitions.map((definition) => (
+                            <SelectItem key={definition.rootKind} value={definition.rootKind}>
+                              {definition.directoryName}
+                              {definition.audience === 'codex'
+                                ? t('skillImport.rootSuffix.codexOnly')
+                                : t('skillImport.rootSuffix.shared')}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
 
                 {mutationError && (

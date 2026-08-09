@@ -1,7 +1,6 @@
-import { describe, expect, it } from 'vitest';
-
 import { buildSlashCommandSuggestions } from '@renderer/utils/skillCommandSuggestions';
 import { KNOWN_SLASH_COMMANDS } from '@shared/utils/slashCommands';
+import { describe, expect, it } from 'vitest';
 
 import type { SkillCatalogItem } from '@shared/types/extensions';
 
@@ -14,6 +13,7 @@ function createSkill(overrides: Partial<SkillCatalogItem>): SkillCatalogItem {
     folderName: overrides.folderName ?? 'skill-name',
     scope: overrides.scope ?? 'project',
     rootKind: overrides.rootKind ?? 'claude',
+    teamName: overrides.teamName ?? null,
     projectRoot: overrides.projectRoot ?? '/Users/test/project',
     discoveryRoot: overrides.discoveryRoot ?? '/Users/test/project/.claude/skills',
     skillDir: overrides.skillDir ?? '/Users/test/project/.claude/skills/skill-name',
@@ -113,6 +113,56 @@ describe('buildSlashCommandSuggestions', () => {
     );
     expect(suggestions.find((suggestion) => suggestion.command === '/review-skill')?.id).toBe(
       'skill:codex-project'
+    );
+  });
+
+  it('offers library and team skills to every provider', () => {
+    const suggestions = buildSlashCommandSuggestions(
+      KNOWN_SLASH_COMMANDS,
+      [],
+      [
+        createSkill({ id: 'library-skill', folderName: 'library-skill', scope: 'library', rootKind: 'library' }),
+        createSkill({
+          id: 'team-skill',
+          folderName: 'team-skill',
+          scope: 'team',
+          rootKind: 'library',
+          teamName: 'matter-team',
+        }),
+      ],
+      'codex'
+    );
+
+    expect(suggestions.find((suggestion) => suggestion.id === 'skill:library-skill')).toMatchObject({
+      command: '/library-skill',
+      subtitle: 'Library skill - Shared',
+    });
+    expect(suggestions.find((suggestion) => suggestion.id === 'skill:team-skill')).toMatchObject({
+      command: '/team-skill',
+      subtitle: 'Team skill (matter-team) - Shared',
+    });
+  });
+
+  it('prefers library skills over the personal CLI copy of the same slash name', () => {
+    const suggestions = buildSlashCommandSuggestions(
+      KNOWN_SLASH_COMMANDS,
+      [],
+      [
+        createSkill({ id: 'user-copy', folderName: 'shared-skill', scope: 'user' }),
+        createSkill({
+          id: 'library-original',
+          folderName: 'shared-skill',
+          scope: 'library',
+          rootKind: 'library',
+        }),
+      ]
+    );
+
+    expect(suggestions.filter((suggestion) => suggestion.command === '/shared-skill')).toHaveLength(
+      1
+    );
+    expect(suggestions.find((suggestion) => suggestion.command === '/shared-skill')?.id).toBe(
+      'skill:library-original'
     );
   });
 

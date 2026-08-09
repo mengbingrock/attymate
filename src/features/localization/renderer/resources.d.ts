@@ -1707,6 +1707,7 @@ export default interface Resources {
         manualUse: 'Manual use';
         references: 'References';
         storedIn: 'Stored in {{root}}';
+        team: 'Team: {{team}}';
       };
       deleteDialog: {
         description: 'Delete this skill and move it to Trash?';
@@ -1741,8 +1742,10 @@ export default interface Resources {
       };
       loading: 'Loading skill details...';
       scope: {
+        library: 'Everyone on this machine';
         personal: 'Your personal skills';
         projectOnly: 'This project only';
+        team: 'This team only';
       };
       summary: {
         howUsed: 'How it is used';
@@ -1830,11 +1833,15 @@ export default interface Resources {
       };
       root: {
         codexOnly: ' - Codex only';
+        libraryHint: 'Stored once in the app library and linked into every runtime, so there is no CLI folder to pick.';
+        libraryValue: 'App library';
         shared: ' - Shared';
       };
       scope: {
+        library: 'App library (all runtimes)';
         project: 'Project: {{project}}';
         projectUnavailable: 'Project unavailable';
+        team: 'Team: {{team}}';
         user: 'User';
       };
       title: {
@@ -1873,11 +1880,16 @@ export default interface Resources {
       };
       reviewHint: 'Review the copied files first, then confirm the import in the next step.';
       reviewLabel: 'Importing this skill';
+      rootLibrary: {
+        hint: 'Stored once in the app library and linked into every runtime, so there is no CLI folder to pick.';
+        value: 'App library';
+      };
       rootSuffix: {
         codexOnly: ' - Codex only';
         shared: ' - Shared';
       };
       scope: {
+        library: 'App library (all runtimes)';
         project: 'Project: {{project}}';
         projectUnavailable: 'Project unavailable';
         user: 'User';
@@ -1926,6 +1938,7 @@ export default interface Resources {
         needsAttention: 'Needs attention';
         references: 'References';
         storedIn: 'Stored in {{root}}';
+        team: 'Team: {{team}}';
       };
       configuredRuntime: 'the configured runtime';
       counts: {
@@ -1934,6 +1947,11 @@ export default interface Resources {
         codexOnly_many: '{{count}} Codex only';
         codexOnly_one: '{{count}} Codex only';
         codexOnly_other: '{{count}} Codex only';
+        library: '{{count}} in library';
+        library_few: '{{count}} in library';
+        library_many: '{{count}} in library';
+        library_one: '{{count}} in library';
+        library_other: '{{count}} in library';
         personal: '{{count}} personal';
         personal_few: '{{count}} personal';
         personal_many: '{{count}} personal';
@@ -1949,6 +1967,11 @@ export default interface Resources {
         shared_many: '{{count}} shared';
         shared_one: '{{count}} shared';
         shared_other: '{{count}} shared';
+        team: '{{count}} team';
+        team_few: '{{count}} team';
+        team_many: '{{count}} team';
+        team_one: '{{count}} team';
+        team_other: '{{count}} team';
         total: '{{count}} total';
         total_few: '{{count}} total';
         total_many: '{{count}} total';
@@ -1965,10 +1988,12 @@ export default interface Resources {
         all: 'All skills';
         codexOnly: 'Codex only';
         hasScripts: 'Has scripts';
+        library: 'App library';
         needsAttention: 'Needs attention';
         personal: 'Personal';
         project: 'Project';
         shared: 'Shared';
+        team: 'Team';
       };
       hero: {
         codexAvailable: 'Use `.codex` when a skill should stay Codex-only.';
@@ -1989,11 +2014,17 @@ export default interface Resources {
       };
       runtimeAudience: 'Shared skills in `.claude`, `.cursor`, and `.agents` are available to {{audience}}. Skills stored in `.codex` stay Codex-only when Codex support is available.';
       scope: {
+        library: 'App library';
         project: 'This project';
+        team: 'Team';
         user: 'Personal';
       };
       searchPlaceholder: 'Search by skill name or what it helps with...';
       sections: {
+        library: {
+          description: 'Kept in the app library and available in every runtime.';
+          title: 'App library skills';
+        };
         personal: {
           description: 'Habits and instructions you want available everywhere.';
           title: 'Personal skills';
@@ -2001,6 +2032,10 @@ export default interface Resources {
         project: {
           description: 'Workflows that only make sense for this codebase.';
           title: 'Project skills';
+        };
+        team: {
+          description: 'Shared with a team and available in every runtime.';
+          title: 'Team skills';
         };
       };
       sort: {

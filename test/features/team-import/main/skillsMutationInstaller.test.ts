@@ -1,187 +1,178 @@
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
 import { SkillsMutationInstaller } from '@features/team-import/main/infrastructure/SkillsMutationInstaller';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SkillStore } from '@main/services/extensions/skills/SkillStore';
+import { setAppDataBasePath } from '@main/utils/pathDecoder';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { TeamImportBundleSkill } from '@features/team-import/contracts';
-import type { SkillsMutationService } from '@main/services/extensions/skills/SkillsMutationService';
 
 function skill(slug: string): TeamImportBundleSkill {
-  return { slug, description: 'demo', files: [{ relativePath: 'SKILL.md', content: 'x' }] };
-}
-
-function fakeMutationService() {
   return {
-    previewUpsert: vi.fn().mockResolvedValue({ planId: 'plan-1' }),
-    applyUpsert: vi.fn().mockResolvedValue(null),
-  } as unknown as SkillsMutationService;
+    slug,
+    description: 'demo',
+    files: [
+      { relativePath: 'SKILL.md', content: `---\nname: ${slug}\n---\n\nBody\n` },
+      { relativePath: 'references/notes.md', content: 'notes' },
+    ],
+  };
 }
 
 describe('SkillsMutationInstaller', () => {
-  let homeDir: string;
-  let projectDir: string;
+  let appDataDir: string;
 
-  beforeEach(() => {
-    homeDir = mkdtempSync(path.join(tmpdir(), 'skills-installer-'));
-    mkdirSync(path.join(homeDir, '.claude', 'skills'), { recursive: true });
-    projectDir = mkdtempSync(path.join(tmpdir(), 'skills-installer-project-'));
+  function teamSkillDir(teamName: string, slug: string): string {
+    return path.join(appDataDir, 'skills', 'teams', teamName, slug);
+  }
+
+  function librarySkillDir(slug: string): string {
+    return path.join(appDataDir, 'skills', 'library', slug);
+  }
+
+  async function seedSkill(skillDir: string, content = 'existing'): Promise<void> {
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(path.join(skillDir, 'SKILL.md'), content);
+  }
+
+  beforeEach(async () => {
+    appDataDir = await mkdtemp(path.join(tmpdir(), 'skills-installer-'));
+    setAppDataBasePath(appDataDir);
   });
 
-  afterEach(() => {
-    rmSync(homeDir, { recursive: true, force: true });
-    rmSync(projectDir, { recursive: true, force: true });
+  afterEach(async () => {
+    setAppDataBasePath(null);
+    await rm(appDataDir, { recursive: true, force: true });
   });
 
-  describe('with a project folder — a team owns its skills', () => {
-    it('installs into the project skill root, not the user-wide one', async () => {
-      const service = fakeMutationService();
-      const installer = new SkillsMutationInstaller(service, homeDir);
+  describe('a team owns its skills', () => {
+    it('installs into the importing team store, not a runtime or project folder', async () => {
+      const installer = new SkillsMutationInstaller();
 
-      const result = await installer.install(skill('demo-skill'), { projectPath: projectDir });
+      const result = await installer.install(skill('demo-skill'), {
+        teamName: 'demo-team',
+        projectPath: '/some/project',
+      });
 
-      expect(result.status).toBe('installed');
-      expect(vi.mocked(service.applyUpsert).mock.calls.map(([request]) => request)).toEqual([
-        expect.objectContaining({
-          scope: 'project',
-          rootKind: 'claude',
-          projectPath: projectDir,
-          folderName: 'demo-skill',
-        }),
-      ]);
+      expect(result).toEqual({ status: 'installed' });
+      await expect(
+        readFile(path.join(teamSkillDir('demo-team', 'demo-skill'), 'SKILL.md'), 'utf8')
+      ).resolves.toContain('name: demo-skill');
+      // Nested skill files travel with it.
+      await expect(
+        readFile(
+          path.join(teamSkillDir('demo-team', 'demo-skill'), 'references', 'notes.md'),
+          'utf8'
+        )
+      ).resolves.toBe('notes');
     });
 
-    it('adds the project Codex root only when Codex is set up on this machine', async () => {
-      mkdirSync(path.join(homeDir, '.codex'), { recursive: true });
-      const service = fakeMutationService();
-      const installer = new SkillsMutationInstaller(service, homeDir);
+    it('refuses to overwrite a skill the team already has', async () => {
+      await seedSkill(teamSkillDir('demo-team', 'demo-skill'), 'local edits');
+      const installer = new SkillsMutationInstaller();
 
-      await installer.install(skill('demo-skill'), { projectPath: projectDir });
+      const result = await installer.install(skill('demo-skill'), { teamName: 'demo-team' });
 
-      expect(vi.mocked(service.applyUpsert).mock.calls.map(([request]) => request.rootKind)).toEqual(
-        ['claude', 'codex']
-      );
-      expect(
-        vi.mocked(service.applyUpsert).mock.calls.every(([request]) => request.scope === 'project')
-      ).toBe(true);
-    });
-
-    it('still refuses to overwrite a skill the project already has', async () => {
-      mkdirSync(path.join(projectDir, '.claude', 'skills', 'demo-skill'), { recursive: true });
-      const service = fakeMutationService();
-      const installer = new SkillsMutationInstaller(service, homeDir);
-
-      const result = await installer.install(skill('demo-skill'), { projectPath: projectDir });
-
-      expect(result.status).toBe('skipped');
-      expect(service.applyUpsert).not.toHaveBeenCalled();
-    });
-
-    it('lists the project slugs, not the user-wide ones', async () => {
-      mkdirSync(path.join(projectDir, '.claude', 'skills', 'project-skill'), { recursive: true });
-      mkdirSync(path.join(homeDir, '.claude', 'skills', 'user-skill'), { recursive: true });
-      const installer = new SkillsMutationInstaller(fakeMutationService(), homeDir);
-
-      const slugs = await installer.listExistingSlugs({ projectPath: projectDir });
-
-      expect(slugs.has('project-skill')).toBe(true);
-      expect(slugs.has('user-skill')).toBe(false);
+      expect(result).toEqual({
+        status: 'skipped',
+        detail: 'already exists in skills/teams/demo-team',
+      });
+      await expect(
+        readFile(path.join(teamSkillDir('demo-team', 'demo-skill'), 'SKILL.md'), 'utf8')
+      ).resolves.toBe('local edits');
     });
 
     it('does not let two teams collide over a same-named skill', async () => {
-      const otherProjectDir = mkdtempSync(path.join(tmpdir(), 'skills-installer-other-'));
-      mkdirSync(path.join(projectDir, '.claude', 'skills', 'legal-research'), { recursive: true });
-      const service = fakeMutationService();
-      const installer = new SkillsMutationInstaller(service, homeDir);
+      await seedSkill(teamSkillDir('other-team', 'legal-research'));
+      const installer = new SkillsMutationInstaller();
 
-      const result = await installer.install(skill('legal-research'), {
-        projectPath: otherProjectDir,
+      const result = await installer.install(skill('legal-research'), { teamName: 'demo-team' });
+
+      expect(result.status).toBe('installed');
+    });
+
+    it('lists the team slugs, not another team or the library', async () => {
+      await seedSkill(teamSkillDir('demo-team', 'team-skill'));
+      await seedSkill(teamSkillDir('other-team', 'other-skill'));
+      await seedSkill(librarySkillDir('library-skill'));
+      const installer = new SkillsMutationInstaller();
+
+      const slugs = await installer.listExistingSlugs({ teamName: 'demo-team' });
+
+      expect([...slugs]).toEqual(['team-skill']);
+    });
+
+    it('reports a failure with the target instead of throwing', async () => {
+      const installer = new SkillsMutationInstaller();
+
+      const result = await installer.install(skill('demo-skill'), { teamName: '../escape' });
+
+      expect(result.status).toBe('failed');
+      expect(result.detail).toContain('../escape');
+    });
+  });
+
+  // The preview runs before the team is named, so the only target left is the
+  // shared library.
+  describe('without a team name', () => {
+    it('preserves references to skills already usable by the target project', async () => {
+      let receivedScope: unknown;
+      const installer = new SkillsMutationInstaller(new SkillStore(), {
+        list: (scope) => {
+          receivedScope = scope;
+          return Promise.resolve([
+            { folderName: 'project-skill' } as never,
+            { folderName: 'personal-skill' } as never,
+          ]);
+        },
       });
 
-      // The other team already having this slug must not block this one.
-      expect(result.status).toBe('installed');
-      rmSync(otherProjectDir, { recursive: true, force: true });
+      const slugs = await installer.listExistingSlugs({ projectPath: '/case/project' });
+
+      expect(receivedScope).toBe('/case/project');
+      expect([...slugs]).toEqual(['project-skill', 'personal-skill']);
     });
-  });
 
-  // Without a project folder (a URL import) there is nothing to scope to, so
-  // the skills fall back to the user-wide roots.
-  it('installs only to the Claude root when Codex is not set up', async () => {
-    const service = fakeMutationService();
-    const installer = new SkillsMutationInstaller(service, homeDir);
+    it('installs into the shared library', async () => {
+      const installer = new SkillsMutationInstaller();
 
-    const result = await installer.install(skill('demo-skill'));
+      const result = await installer.install(skill('demo-skill'));
 
-    expect(result.status).toBe('installed');
-    expect(vi.mocked(service.applyUpsert).mock.calls.map(([request]) => request.rootKind)).toEqual([
-      'claude',
-    ]);
-  });
-
-  it('installs to both roots when ~/.codex exists', async () => {
-    mkdirSync(path.join(homeDir, '.codex'), { recursive: true });
-    const service = fakeMutationService();
-    const installer = new SkillsMutationInstaller(service, homeDir);
-
-    const result = await installer.install(skill('demo-skill'));
-
-    expect(result.status).toBe('installed');
-    expect(vi.mocked(service.applyUpsert).mock.calls.map(([request]) => request.rootKind)).toEqual([
-      'claude',
-      'codex',
-    ]);
-  });
-
-  it('skips per root and reports a mixed outcome', async () => {
-    mkdirSync(path.join(homeDir, '.codex', 'skills'), { recursive: true });
-    mkdirSync(path.join(homeDir, '.claude', 'skills', 'demo-skill'), { recursive: true });
-    const service = fakeMutationService();
-    const installer = new SkillsMutationInstaller(service, homeDir);
-
-    const result = await installer.install(skill('demo-skill'));
-
-    expect(result.status).toBe('installed');
-    expect(result.detail).toContain('~/.codex/skills');
-    expect(result.detail).toContain('already existed in ~/.claude/skills');
-    expect(vi.mocked(service.applyUpsert).mock.calls.map(([request]) => request.rootKind)).toEqual([
-      'codex',
-    ]);
-  });
-
-  it('reports skipped when the slug exists in every root', async () => {
-    mkdirSync(path.join(homeDir, '.claude', 'skills', 'demo-skill'), { recursive: true });
-    const service = fakeMutationService();
-    const installer = new SkillsMutationInstaller(service, homeDir);
-
-    const result = await installer.install(skill('demo-skill'));
-
-    expect(result).toEqual({
-      status: 'skipped',
-      detail: 'already exists in ~/.claude/skills',
+      expect(result).toEqual({ status: 'installed' });
+      await expect(
+        readFile(path.join(librarySkillDir('demo-skill'), 'SKILL.md'), 'utf8')
+      ).resolves.toContain('name: demo-skill');
     });
-    expect(service.applyUpsert).not.toHaveBeenCalled();
-  });
 
-  it('lists existing slugs as a union across roots', async () => {
-    mkdirSync(path.join(homeDir, '.claude', 'skills', 'claude-only'), { recursive: true });
-    mkdirSync(path.join(homeDir, '.codex', 'skills', 'codex-only'), { recursive: true });
-    const installer = new SkillsMutationInstaller(fakeMutationService(), homeDir);
+    it('reports skipped when the library already has the slug', async () => {
+      await seedSkill(librarySkillDir('demo-skill'));
+      const installer = new SkillsMutationInstaller();
 
-    const slugs = await installer.listExistingSlugs();
+      const result = await installer.install(skill('demo-skill'));
 
-    expect(slugs.has('claude-only')).toBe(true);
-    expect(slugs.has('codex-only')).toBe(true);
-  });
+      expect(result).toEqual({
+        status: 'skipped',
+        detail: 'already exists in skills/library',
+      });
+    });
 
-  it('reports failed with per-root detail when a root install throws', async () => {
-    const service = fakeMutationService();
-    vi.mocked(service.applyUpsert).mockRejectedValue(new Error('disk full'));
-    const installer = new SkillsMutationInstaller(service, homeDir);
+    it('lists the library slugs', async () => {
+      await seedSkill(librarySkillDir('library-skill'));
+      await seedSkill(teamSkillDir('demo-team', 'team-skill'));
+      const installer = new SkillsMutationInstaller();
 
-    const result = await installer.install(skill('demo-skill'));
+      const slugs = await installer.listExistingSlugs();
 
-    expect(result.status).toBe('failed');
-    expect(result.detail).toContain('~/.claude/skills: disk full');
+      expect([...slugs]).toEqual(['library-skill']);
+    });
+
+    it('returns an empty set when nothing is installed yet', async () => {
+      const installer = new SkillsMutationInstaller();
+
+      await expect(installer.listExistingSlugs({ teamName: 'demo-team' })).resolves.toEqual(
+        new Set()
+      );
+    });
   });
 });

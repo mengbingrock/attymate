@@ -1,10 +1,13 @@
+import { SkillProjectionService } from '@main/services/extensions/skills/SkillProjectionService';
 import { SkillsMutationService } from '@main/services/extensions/skills/SkillsMutationService';
+import { SkillStore } from '@main/services/extensions/skills/SkillStore';
 
 import { LinkMatterEvidenceSourceAdapter } from '../adapters/output/link/LinkMatterEvidenceSourceAdapter';
 import { MatterLinkCoordinator } from '../application/MatterLinkCoordinator';
 import { MatterRefreshCoordinator } from '../application/MatterRefreshCoordinator';
 import { MatterSkillSeeder } from '../infrastructure/MatterSkillSeeder';
 import { normalizeMatterSnapshot } from '../infrastructure/matterSnapshot';
+import { TeamMatterSkillProvisioner } from '../infrastructure/TeamMatterSkillProvisioner';
 import { readTeamRuntimeFacts } from '../infrastructure/teamRuntimeFacts';
 
 import type {
@@ -56,6 +59,16 @@ export interface MatterFeatureFacade {
   ): Promise<MatterRefreshResultDto>;
   applyProposal(teamName: string): Promise<MatterSnapshotDto>;
   rejectProposal(teamName: string, reason?: string): Promise<MatterSnapshotDto>;
+  /**
+   * Prepare this team's copy of the matter skill and point the runtimes at the
+   * team's skills. Called at launch so the path named in bootstrap prompts
+   * exists before the lead reads it.
+   */
+  prepareTeamSkills(teamName: string, projectPath?: string): Promise<void>;
+  /** Reclaim those pointers when the team stops. */
+  releaseTeamSkills(teamName: string, projectPath?: string): Promise<void>;
+  /** Absolute path of this team's matter SKILL.md, for prompt text. */
+  resolveTeamSkillFilePath(teamName: string): string;
 }
 
 export interface CreateMatterFeatureDeps {
@@ -67,8 +80,13 @@ export interface CreateMatterFeatureDeps {
   notifyMattersChanged?: () => void;
   /** Test/provider seam. Production uses the local Link CLI adapter. */
   evidenceSource?: MatterEvidenceSourcePort;
-  /** Test seam for the user-owned skill file. Production seeds and reads disk. */
+  /** Test seam for the library skill file. Production seeds and reads disk. */
   skillSeeder?: Pick<MatterSkillSeeder, 'seed' | 'readInstalledMarkdown'>;
+  /** Test seam for each team's own copy of the skill. */
+  teamSkillProvisioner?: Pick<
+    TeamMatterSkillProvisioner,
+    'ensure' | 'project' | 'release' | 'resolveSkillFilePath'
+  >;
 }
 
 export function createMatterFeature(deps: CreateMatterFeatureDeps): MatterFeatureFacade {
@@ -79,11 +97,25 @@ export function createMatterFeature(deps: CreateMatterFeatureDeps): MatterFeatur
     leadNotifier: deps.leadNotifier,
   });
 
-  const skillSeeder = deps.skillSeeder ?? new MatterSkillSeeder(new SkillsMutationService());
-  // The skill is an ordinary user skill: written once when absent, then owned
+  const skillStore = new SkillStore();
+  const projectionService = new SkillProjectionService();
+  const skillSeeder =
+    deps.skillSeeder ??
+    new MatterSkillSeeder(new SkillsMutationService(), skillStore, projectionService);
+  // The skill is an ordinary library skill: written once when absent, then owned
   // by the user. Seeding is fire-and-forget because the refresh path falls back
   // to the bundled markdown if the file never lands.
   void skillSeeder.seed();
+
+  // Each team gets its own copy, seeded from the library, so a team's edits and
+  // its exported bundle stay independent of the machine-wide skill.
+  const teamSkillProvisioner =
+    deps.teamSkillProvisioner ??
+    new TeamMatterSkillProvisioner(
+      skillStore,
+      () => skillSeeder.readInstalledMarkdown(),
+      projectionService
+    );
 
   const readSnapshot = async (teamName: string): Promise<MatterSnapshotDto> =>
     normalizeMatterSnapshot(deps.actions.getSnapshot(teamName));
@@ -99,7 +131,7 @@ export function createMatterFeature(deps: CreateMatterFeatureDeps): MatterFeatur
       projectPath: await deps.resolveProjectPath(teamName),
       ...(await readTeamRuntimeFacts(deps.teamsBasePath, teamName)),
     }),
-    readInstalledSkillMarkdown: () => skillSeeder.readInstalledMarkdown(),
+    ensureTeamSkill: (teamName) => teamSkillProvisioner.ensure(teamName),
     leadNotifier: deps.leadNotifier,
   });
   const requestRefresh = (request: MatterRefreshRequest): Promise<MatterRefreshResultDto> =>
@@ -144,5 +176,12 @@ export function createMatterFeature(deps: CreateMatterFeatureDeps): MatterFeatur
       await deps.actions.rejectProposal(teamName, reason);
       return changed(teamName);
     },
+    prepareTeamSkills: async (teamName, projectPath) => {
+      await teamSkillProvisioner.ensure(teamName);
+      await teamSkillProvisioner.project(teamName, projectPath);
+    },
+    releaseTeamSkills: (teamName, projectPath) =>
+      teamSkillProvisioner.release(teamName, projectPath),
+    resolveTeamSkillFilePath: (teamName) => teamSkillProvisioner.resolveSkillFilePath(teamName),
   };
 }

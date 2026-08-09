@@ -47,9 +47,20 @@ export interface TeamExportSource {
   /** team.meta.json prompt — becomes the bundle's lead prompt and CLAUDE.md. */
   leadPrompt?: string;
   /**
-   * Slugs found in the team's own project skill root. That folder is the team's
+   * Slugs the team owns in the app's skill store. That store is the team's own
    * skill library, so these ship whether or not a member happens to name them —
    * thin per-member attribution must not silently drop a team's skills.
+   */
+  teamSkillSlugs?: string[];
+  /**
+   * Skills assigned to the lead in team.meta.json. The lead is never exported
+   * as an agent definition, so without this a lead-only skill would be lost.
+   */
+  leadSkillSlugs?: string[];
+  /**
+   * Slugs found in the team's project skill root. Legacy placement: teams
+   * created before the model-agnostic store kept their library in the project
+   * folder, and those skills must still travel.
    */
   projectSkillSlugs?: string[];
   members: TeamExportMemberSource[];
@@ -175,10 +186,15 @@ export function buildTeamExportMembers(source: TeamExportSource): TeamExportMemb
     });
   }
 
-  // The team's own skill folder ships in full, even when no member names its
-  // slugs — that omission is exactly what made an imported team export zero
-  // skills before.
-  for (const slug of source.projectSkillSlugs ?? []) {
+  // The team's own skills ship in full, even when no member names their slugs —
+  // that omission is exactly what made an imported team export zero skills
+  // before. The lead's assignment counts too: the lead never becomes an
+  // exported agent, so nothing else would carry a lead-only skill.
+  for (const slug of [
+    ...(source.teamSkillSlugs ?? []),
+    ...(source.leadSkillSlugs ?? []),
+    ...(source.projectSkillSlugs ?? []),
+  ]) {
     if (!referencedSlugs.includes(slug)) referencedSlugs.push(slug);
   }
 

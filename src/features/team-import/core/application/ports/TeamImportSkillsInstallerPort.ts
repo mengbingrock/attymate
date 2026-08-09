@@ -8,17 +8,25 @@ export interface TeamImportSkillInstallResult {
 }
 
 /**
- * Where a team's skills belong. A team's skills are scoped to its project
- * folder, so they are discovered by exactly that team's agents and two teams
- * shipping a same-named skill no longer collide. A source with no project
- * folder (a URL import) has nothing to scope to and falls back to the user root.
+ * Where a team's skills belong: the team's own store in the app's
+ * model-agnostic skill storage. A team outlives the project folder it happens
+ * to launch in, so the folder is no longer the carrier — a launch-time
+ * projection restores runtime discovery. Before the team is named, preview
+ * uses the project path only to discover references that are already usable;
+ * it does not install into that folder.
  */
 export interface TeamImportSkillTarget {
-  projectPath: string;
+  /** The importing team; the primary and preferred target. */
+  teamName?: string;
+  /**
+   * The source's folder. Accepted for callers that only know a folder (the
+   * preview runs before the team is named); nothing installs there anymore.
+   */
+  projectPath?: string;
 }
 
 export interface TeamImportSkillsInstallerPort {
-  /** Slugs already present in the target's skill roots. */
+  /** Slugs already usable by the target, or already owned by the named team. */
   listExistingSlugs(target?: TeamImportSkillTarget): Promise<ReadonlySet<string>>;
   /** Installs one skill; existing slugs are never overwritten. */
   install(

@@ -1902,7 +1902,7 @@ async function initializeServices(): Promise<void> {
     getLocalContext: () => contextRegistry.get('local'),
     logger: createLogger('Feature:RecentProjects'),
   });
-  teamImportFeature = createTeamImportFeature({ teamDataService, skillsMutationService });
+  teamImportFeature = createTeamImportFeature({ teamDataService });
   teamExportFeature = createTeamExportFeature({ teamsBasePath: getTeamsBasePath() });
   organizationsFeature = createOrganizationsFeature({
     teamDataService,

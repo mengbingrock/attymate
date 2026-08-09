@@ -269,6 +269,8 @@ export function describeStockBootstrapMember(member: RuntimeBootstrapMemberSpec)
 export interface StockClaudeBootstrapPromptOptions {
   /** The team's matter dashboard has no content yet: instruct an initial folder scan. */
   matterNeedsInitialScan?: boolean;
+  /** Absolute path of this team's copy of the matter skill, for the lead to read. */
+  matterSkillFilePath?: string;
   /** Structured identity of the primary runtime. */
   leadName?: string;
   /** Imported profile instructions applied to the primary runtime. */
@@ -356,6 +358,7 @@ export function buildStockClaudeBootstrapPrompt(
       buildLeadInitialMatterScanInstructions(spec.team.name, {
         hasTeammates: spec.members.length > 0,
         canSpawnTeammates: true,
+        ...(options.matterSkillFilePath ? { skillFilePath: options.matterSkillFilePath } : {}),
       })
     );
   }

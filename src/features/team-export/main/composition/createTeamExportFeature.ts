@@ -29,18 +29,25 @@ export interface CreateTeamExportFeatureDeps {
 export function createTeamExportFeature(
   deps: CreateTeamExportFeatureDeps
 ): TeamExportFeatureFacade {
-  // The skill source is scoped to the exported team's project folder, and the
-  // source reader asks it which skills that folder holds — a team's skills live
-  // with its project, so both halves need the same lookup.
+  // The skill source is scoped to the exported team — its own store first, its
+  // project folder second — and the source reader asks it which skills each of
+  // those holds, so both halves work from the same lookup.
   const skillSource = deps.skillSource ?? new TeamExportSkillSource();
-  const projectAwareSkillSource = skillSource instanceof TeamExportSkillSource ? skillSource : null;
+  const scopedSkillSource = skillSource instanceof TeamExportSkillSource ? skillSource : null;
 
   const sourceReader =
     deps.sourceReader ??
-    new TeamExportSourceReader(deps.teamsBasePath, async (projectPath) => {
-      projectAwareSkillSource?.setProjectPath(projectPath);
-      return (await projectAwareSkillSource?.listProjectSlugs(projectPath)) ?? [];
-    });
+    new TeamExportSourceReader(
+      deps.teamsBasePath,
+      async (projectPath) => {
+        scopedSkillSource?.setProjectPath(projectPath);
+        return (await scopedSkillSource?.listProjectSlugs(projectPath)) ?? [];
+      },
+      async (teamName) => {
+        scopedSkillSource?.setTeamName(teamName);
+        return (await scopedSkillSource?.listTeamSlugs(teamName)) ?? [];
+      }
+    );
 
   const useCase = new ExportTeamUseCase(
     sourceReader,

@@ -44,6 +44,15 @@ import type { StateCreator } from 'zustand';
 // Slice Interface
 // =============================================================================
 
+/**
+ * Which skill roots a catalog fetch should cover. A bare string keeps the older
+ * plain-projectPath call sites working.
+ */
+export interface SkillsCatalogFetchOptions {
+  projectPath?: string;
+  teamName?: string;
+}
+
 export interface ExtensionsSlice {
   // ── Plugin catalog cache ──
   pluginCatalog: EnrichedPlugin[];
@@ -84,6 +93,12 @@ export interface ExtensionsSlice {
 
   // ── Skills catalog cache ──
   skillsUserCatalog: SkillCatalogItem[];
+  /** App-owned machine-wide skills (`<userData>/skills/library`). */
+  skillsLibraryCatalog: SkillCatalogItem[];
+  /** App-owned team skills (`<userData>/skills/teams/<team>`). */
+  skillsTeamCatalog: SkillCatalogItem[];
+  /** Team catalogs are keyed so multiple open team panes cannot overwrite one another. */
+  skillsTeamCatalogByTeamName: Record<string, SkillCatalogItem[]>;
   skillsProjectCatalogByProjectPath: Record<string, SkillCatalogItem[]>;
   skillsCatalogLoadingByProjectPath: Record<string, boolean>;
   skillsCatalogErrorByProjectPath: Record<string, string | null>;
@@ -104,7 +119,7 @@ export interface ExtensionsSlice {
   mcpBrowse: (cursor?: string) => Promise<void>;
   mcpFetchInstalled: (projectPath?: string) => Promise<void>;
   runMcpDiagnostics: (projectPath?: string) => Promise<void>;
-  fetchSkillsCatalog: (projectPath?: string) => Promise<void>;
+  fetchSkillsCatalog: (options?: string | SkillsCatalogFetchOptions) => Promise<void>;
   fetchSkillDetail: (skillId: string, projectPath?: string) => Promise<void>;
   previewSkillUpsert: (request: SkillUpsertRequest) => Promise<SkillReviewPreview>;
   applySkillUpsert: (request: SkillUpsertRequest) => Promise<SkillDetail | null>;
@@ -338,8 +353,15 @@ function clearMcpProjectScopedSuccessResetTimers(): void {
   }
 }
 
-function getSkillsCatalogKey(projectPath?: string): string {
-  return projectPath ?? USER_SKILLS_CATALOG_KEY;
+function normalizeSkillsCatalogOptions(
+  options?: string | SkillsCatalogFetchOptions
+): SkillsCatalogFetchOptions {
+  return typeof options === 'string' ? { projectPath: options } : (options ?? {});
+}
+
+function getSkillsCatalogKey(options: SkillsCatalogFetchOptions): string {
+  const projectKey = options.projectPath ?? USER_SKILLS_CATALOG_KEY;
+  return options.teamName ? `${projectKey}::team:${options.teamName}` : projectKey;
 }
 
 function upsertApiKeyEntry(entries: ApiKeyEntry[], entry: ApiKeyEntry): ApiKeyEntry[] {
@@ -410,6 +432,9 @@ export const createExtensionsSlice: StateCreator<AppState, [], [], ExtensionsSli
   apiKeyStorageStatus: null,
 
   skillsUserCatalog: [],
+  skillsLibraryCatalog: [],
+  skillsTeamCatalog: [],
+  skillsTeamCatalogByTeamName: {},
   skillsProjectCatalogByProjectPath: {},
   skillsCatalogLoadingByProjectPath: {},
   skillsCatalogErrorByProjectPath: {},
@@ -678,10 +703,12 @@ export const createExtensionsSlice: StateCreator<AppState, [], [], ExtensionsSli
     await promise;
   },
 
-  fetchSkillsCatalog: async (projectPath?: string) => {
+  fetchSkillsCatalog: async (options?: string | SkillsCatalogFetchOptions) => {
     if (!api.skills) return;
 
-    const requestKey = getSkillsCatalogKey(projectPath);
+    const normalizedOptions = normalizeSkillsCatalogOptions(options);
+    const { projectPath } = normalizedOptions;
+    const requestKey = getSkillsCatalogKey(normalizedOptions);
     const requestId = ++skillsCatalogRequestSeq;
     latestSkillsCatalogRequestByKey.set(requestKey, requestId);
 
@@ -701,7 +728,9 @@ export const createExtensionsSlice: StateCreator<AppState, [], [], ExtensionsSli
       };
     });
     try {
-      const skills = await api.skills.list(projectPath);
+      const skills = await api.skills.list(
+        normalizedOptions.teamName ? normalizedOptions : projectPath
+      );
       if (latestSkillsCatalogRequestByKey.get(requestKey) !== requestId) {
         return;
       }
@@ -721,6 +750,14 @@ export const createExtensionsSlice: StateCreator<AppState, [], [], ExtensionsSli
         }),
         skillsError: null,
         skillsUserCatalog: skills.filter((skill) => skill.scope === 'user'),
+        skillsLibraryCatalog: skills.filter((skill) => skill.scope === 'library'),
+        skillsTeamCatalog: skills.filter((skill) => skill.scope === 'team'),
+        skillsTeamCatalogByTeamName: normalizedOptions.teamName
+          ? {
+              ...prev.skillsTeamCatalogByTeamName,
+              [normalizedOptions.teamName]: skills.filter((skill) => skill.scope === 'team'),
+            }
+          : prev.skillsTeamCatalogByTeamName,
         skillsProjectCatalogByProjectPath: projectPath
           ? {
               ...prev.skillsProjectCatalogByProjectPath,
@@ -813,7 +850,10 @@ export const createExtensionsSlice: StateCreator<AppState, [], [], ExtensionsSli
     set({ skillsMutationLoading: true, skillsMutationError: null });
     try {
       const detail = await api.skills.applyUpsert(request);
-      await get().fetchSkillsCatalog(request.projectPath);
+      await get().fetchSkillsCatalog({
+        projectPath: request.projectPath,
+        teamName: request.teamName,
+      });
       set((prev) => ({
         skillsMutationLoading: false,
         skillsDetailsById: detail?.item.id
@@ -853,7 +893,10 @@ export const createExtensionsSlice: StateCreator<AppState, [], [], ExtensionsSli
     set({ skillsMutationLoading: true, skillsMutationError: null });
     try {
       const detail = await api.skills.applyImport(request);
-      await get().fetchSkillsCatalog(request.projectPath);
+      await get().fetchSkillsCatalog({
+        projectPath: request.projectPath,
+        teamName: request.teamName,
+      });
       set((prev) => ({
         skillsMutationLoading: false,
         skillsDetailsById: detail?.item.id
@@ -876,7 +919,10 @@ export const createExtensionsSlice: StateCreator<AppState, [], [], ExtensionsSli
     set({ skillsMutationLoading: true, skillsMutationError: null });
     try {
       await api.skills.deleteSkill(request);
-      await get().fetchSkillsCatalog(request.projectPath);
+      await get().fetchSkillsCatalog({
+        projectPath: request.projectPath,
+        teamName: request.teamName,
+      });
       set((prev) => {
         const nextDetails = { ...prev.skillsDetailsById };
         delete nextDetails[request.skillId];
