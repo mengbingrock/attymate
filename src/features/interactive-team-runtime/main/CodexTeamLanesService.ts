@@ -249,15 +249,17 @@ export class CodexTeamLanesService {
   /**
    * Mark every lane member active in the app team config.
    *
-   * config.json is born when the lead's first MCP call registers the team —
-   * seconds AFTER every lane reports ready, which is when this sync fires. A
-   * single unretried attempt lost that race: it hit ENOENT, logged at debug,
-   * and the UI showed all ten healthy lanes as "stale runtime" for the life of
-   * the run. Wait for the file (bounded) instead of failing silently.
+   * Live launches pass the binding returned by launchCodexLanes directly so
+   * config projection does not depend on rereading interactive-runtime.json.
+   * That file remains the durable recovery record for app restarts.
+   *
+   * config.json can be created after lane startup, so keep the bounded wait.
+   * Callers must run this after post-launch config materialization; otherwise
+   * two independent read-modify-write cycles can lose the lane metadata.
    */
-  async syncAppConfigMembers(teamName: string, cwd: string): Promise<void> {
-    const binding = await readRuntimeBinding(teamName);
-    if (binding?.runtime !== 'codex-lanes') return;
+  async syncAppConfigMembers(binding: InteractiveRuntimeBinding, cwd: string): Promise<void> {
+    if (binding.runtime !== 'codex-lanes') return;
+    const { teamName } = binding;
     const configPath = path.join(getTeamsBasePath(), teamName, 'config.json');
     try {
       const raw = await this.readFileWhenItExists(configPath, CONFIG_SYNC_WAIT_MS);

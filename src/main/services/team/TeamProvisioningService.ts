@@ -7,6 +7,7 @@ import {
   buildInteractiveCliArgs,
   type CodexLaneSpec,
   codexTeamLanesService,
+  type InteractiveRuntimeBinding,
   interactiveTeamRuntimeService,
 } from '@features/interactive-team-runtime/main';
 import {
@@ -1282,6 +1283,10 @@ interface ProvisioningRun {
    * inbound messages are pasted into member panes.
    */
   codexLaneRuntime?: boolean;
+  /** In-memory binding used by the live launch path; disk is recovery-only. */
+  codexLaneBinding?: InteractiveRuntimeBinding;
+  /** Resolves once every Codex lane is ready to receive its initial briefing. */
+  codexLanesReady?: Promise<boolean>;
   codexLanePumpHandle?: NodeJS.Timeout | null;
   launchCleanupStateFinalized?: boolean;
   workspaceTrustPlan?: WorkspaceTrustFullPlanResult | null;
@@ -11196,6 +11201,10 @@ export class TeamProvisioningService {
     onAllLanesReady?: () => void;
   }): Promise<void> {
     const { run, runId, teamName, cwd, shellEnv } = params;
+    let resolveCodexLanesReady: (ready: boolean) => void = () => undefined;
+    run.codexLanesReady = new Promise<boolean>((resolve) => {
+      resolveCodexLanesReady = resolve;
+    });
     if (!(await interactiveTeamRuntimeService.isEligible())) {
       throw new Error(
         'Codex teams run as interactive tmux lanes and require tmux (not supported on Windows). Install tmux and try again.'
@@ -11248,38 +11257,44 @@ export class TeamProvisioningService {
       'Launching codex team lanes',
       `lanes=${lanes.length} cwd=${cwd}`
     );
-    await codexTeamLanesService.launchCodexLanes({
-      teamName,
-      runId,
-      cwd,
-      codexPath,
-      env: { ...shellEnv },
-      lanes,
-      callbacks: {
-        checkpoint: (label, detail) => emitProvisioningCheckpoint(run, label, detail),
-        onLaneReady: (memberName) => {
-          readyLanes.add(memberName);
-          if (memberName !== leadName) {
-            this.setMemberSpawnStatus(run, memberName, 'online', undefined, 'process');
-          }
-          if (readyLanes.size >= lanes.length) {
-            void codexTeamLanesService.syncAppConfigMembers(teamName, cwd).catch(() => {});
-            params.onAllLanesReady?.();
-          }
+    try {
+      run.codexLaneBinding = await codexTeamLanesService.launchCodexLanes({
+        teamName,
+        runId,
+        cwd,
+        codexPath,
+        env: { ...shellEnv },
+        lanes,
+        callbacks: {
+          checkpoint: (label, detail) => emitProvisioningCheckpoint(run, label, detail),
+          onLaneReady: (memberName) => {
+            readyLanes.add(memberName);
+            if (memberName !== leadName) {
+              this.setMemberSpawnStatus(run, memberName, 'online', undefined, 'process');
+            }
+            if (readyLanes.size >= lanes.length) {
+              resolveCodexLanesReady(true);
+              params.onAllLanesReady?.();
+            }
+          },
+          onFailed: (reason) => {
+            resolveCodexLanesReady(false);
+            if (run.provisioningComplete && run.progress.state === 'ready') {
+              logger.warn(`[${teamName}] codex lane runtime ended: ${reason}`);
+              this.runtimeAdapterRunByTeam.delete(teamName);
+              this.deleteAliveRunId(teamName);
+              return;
+            }
+            const progress = updateProgress(run, 'failed', reason, { error: reason });
+            run.onProgress(progress);
+            this.cleanupRun(run);
+          },
         },
-        onFailed: (reason) => {
-          if (run.provisioningComplete) {
-            logger.warn(`[${teamName}] codex lane runtime ended: ${reason}`);
-            this.runtimeAdapterRunByTeam.delete(teamName);
-            this.deleteAliveRunId(teamName);
-            return;
-          }
-          const progress = updateProgress(run, 'failed', reason, { error: reason });
-          run.onProgress(progress);
-          this.cleanupRun(run);
-        },
-      },
-    });
+      });
+    } catch (error) {
+      resolveCodexLanesReady(false);
+      throw error;
+    }
     this.runtimeAdapterRunByTeam.set(teamName, {
       runId,
       providerId: params.resolvedProviderId,
@@ -23509,6 +23524,16 @@ export class TeamProvisioningService {
       stopStallWatchdog: (run) => this.stopStallWatchdog(run),
       updateConfigPostLaunch: (teamName, cwd, detectedSessionId, color, options) =>
         this.updateConfigPostLaunch(teamName, cwd, detectedSessionId, color, options),
+      syncCodexLaneConfigMembers: async (run) => {
+        if (!run.codexLaneRuntime) return;
+        const lanesReady = await run.codexLanesReady;
+        if (!lanesReady) return;
+        if (!run.codexLaneBinding) {
+          logger.warn(`[${run.teamName}] codex lanes became ready without an in-memory binding`);
+          return;
+        }
+        await codexTeamLanesService.syncAppConfigMembers(run.codexLaneBinding, run.request.cwd);
+      },
       cleanupPrelaunchBackup: (teamName) => this.cleanupPrelaunchBackup(teamName),
       refreshMemberSpawnStatusesFromLeadInbox: (run) =>
         this.refreshMemberSpawnStatusesFromLeadInbox(run),
