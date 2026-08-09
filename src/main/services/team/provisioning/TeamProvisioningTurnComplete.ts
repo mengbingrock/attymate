@@ -97,6 +97,7 @@ export interface TeamProvisioningTurnCompletePorts<
     }
   ): Promise<unknown>;
   cleanupPrelaunchBackup(teamName: string): Promise<unknown>;
+  syncCodexLaneConfigMembers(run: TRun): Promise<unknown>;
   refreshMemberSpawnStatusesFromLeadInbox(run: TRun): Promise<unknown>;
   maybeAuditMemberSpawnStatuses(run: TRun, options: { force: true }): Promise<unknown>;
   finalizeMissingRegisteredMembersAsFailed(run: TRun): Promise<unknown>;
@@ -464,6 +465,10 @@ export async function handleTeamProvisioningTurnComplete<
         members: run.allEffectiveMembers,
       }
     );
+    await ports.syncCodexLaneConfigMembers(run);
+    if (!ports.isProvisioningRunStillPromotable(run)) {
+      return;
+    }
     await ports.cleanupPrelaunchBackup(run.teamName);
 
     await warnOnPostLaunchSuffixedMembers(run.teamName);
@@ -573,6 +578,10 @@ export async function handleTeamProvisioningTurnComplete<
       members: run.allEffectiveMembers,
     }
   );
+  await ports.syncCodexLaneConfigMembers(run);
+  if (!ports.isProvisioningRunStillPromotable(run)) {
+    return;
+  }
 
   const {
     persistedLaunchSnapshot,
