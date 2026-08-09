@@ -61,9 +61,18 @@ export interface McpCatalogAPI {
 
 // ── Skills API ─────────────────────────────────────────────────────────────
 
+/**
+ * Which roots a catalog listing should cover. A bare string stays supported for
+ * the plain-projectPath call sites.
+ */
+export interface SkillsListOptions {
+  projectPath?: string;
+  teamName?: string;
+}
+
 export interface SkillsCatalogAPI {
-  list: (projectPath?: string) => Promise<SkillCatalogItem[]>;
-  getDetail: (skillId: string, projectPath?: string) => Promise<SkillDetail | null>;
+  list: (options?: string | SkillsListOptions) => Promise<SkillCatalogItem[]>;
+  getDetail: (skillId: string, options?: string | SkillsListOptions) => Promise<SkillDetail | null>;
   previewUpsert: (request: SkillUpsertRequest) => Promise<SkillReviewPreview>;
   applyUpsert: (request: SkillUpsertRequest) => Promise<SkillDetail | null>;
   previewImport: (request: SkillImportRequest) => Promise<SkillReviewPreview>;

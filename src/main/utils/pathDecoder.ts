@@ -577,6 +577,18 @@ export function getMattersBasePath(): string {
   return path.join(getAppDataBasePath(), 'matters');
 }
 
+/**
+ * Get the skill store directory. Skills belong to the user and their teams, not
+ * to one AI runtime, so the canonical copies live in the app's own
+ * model-agnostic storage — never under a runtime-branded path like
+ * ~/.claude/skills. The runtime-branded directories still hold pointers
+ * (symlinks) so each CLI keeps discovering them natively; see
+ * SkillProjectionService.
+ */
+export function getSkillsBasePath(): string {
+  return path.join(getAppDataBasePath(), 'skills');
+}
+
 // ── App data root (Electron userData) ──
 
 const APP_DATA_FALLBACK_DIR_NAME = '.agent-teams-ai';

@@ -3,6 +3,8 @@ import {
   MAX_AGENT_ATTACHMENT_SERIALIZED_PAYLOAD_BYTES,
 } from '@features/agent-attachments/contracts';
 import { addMainBreadcrumb } from '@main/sentry';
+import { SkillProjectionService } from '@main/services/extensions/skills/SkillProjectionService';
+import { SkillStore } from '@main/services/extensions/skills/SkillStore';
 import { setCurrentMainOp } from '@main/services/infrastructure/EventLoopLagMonitor';
 import { markTeamEngaged } from '@main/services/infrastructure/teamWatchScope';
 import {
@@ -1478,6 +1480,7 @@ async function handlePermanentlyDeleteTeam(
   }
   return wrapTeamHandler('permanentlyDeleteTeam', async () => {
     await getTeamDataService().permanentlyDeleteTeam(validated.value!);
+    await removeTeamSkillStore(validated.value!);
     getTeamDataWorkerClient().invalidateTeamConfig(validated.value!);
     // Clean up app-owned data (attachments, task-attachments) that lives outside ~/.claude/
     const appData = getAppDataPath();
@@ -5689,5 +5692,21 @@ async function handleDeleteDraft(
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
     await getTeamDataService().permanentlyDeleteTeam(validated.value!);
+    await removeTeamSkillStore(validated.value!);
   });
+}
+
+/** Remove app-owned team skills and any runtime pointers that still target them. */
+async function removeTeamSkillStore(teamName: string): Promise<void> {
+  const store = new SkillStore();
+  const teamSkillsRoot = store.resolveTeamSkillsDir(teamName);
+  try {
+    await new SkillProjectionService().releaseUnder(teamSkillsRoot);
+    await store.removeTeam(teamName);
+  } catch (error) {
+    // Team deletion already succeeded. Match the other app-owned cleanup in
+    // this handler: report the orphan for diagnosis without turning a
+    // successful deletion into a misleading failure.
+    logger.warn(`[${teamName}] Failed to remove the team skill store`, error);
+  }
 }

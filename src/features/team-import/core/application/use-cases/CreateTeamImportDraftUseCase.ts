@@ -95,15 +95,12 @@ export class CreateTeamImportDraftUseCase {
     const skillDescriptions = new Map(
       bundle.skills.map((skill) => [skill.slug, skill.description])
     );
-    // A team's skills belong to its project folder. Without one (URL import)
-    // they can only go to the user-wide roots, which is worth saying out loud
-    // because they are then shared with every other team on this machine.
-    const skillTarget = projectPath.trim() ? { projectPath: projectPath.trim() } : undefined;
-    if (!skillTarget && bundle.skills.length > 0) {
-      warnings.push(
-        'This source has no project folder, so its skills were installed for all teams (~/.claude/skills) instead of just this one.'
-      );
-    }
+    // A team's skills belong to the team, in the app's own store — every import
+    // gets its own copy, whether or not the source had a project folder.
+    const skillTarget = {
+      teamName,
+      ...(projectPath.trim() ? { projectPath: projectPath.trim() } : {}),
+    };
 
     for (const member of bundle.members) {
       try {
@@ -131,8 +128,6 @@ export class CreateTeamImportDraftUseCase {
             `Skill "${skill.slug}" could not be installed: ${result.detail ?? 'unknown error'}`
           );
         } else if (result.detail) {
-          // Mixed outcome across runtime skill roots (e.g. new in ~/.codex/skills
-          // but already present in ~/.claude/skills) — worth surfacing.
           warnings.push(`Skill "${skill.slug}": ${result.detail}.`);
         }
       } catch (error) {

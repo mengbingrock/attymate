@@ -2,7 +2,13 @@
  * Extension Store types — barrel export.
  */
 
-export type { ApiKeysAPI, McpCatalogAPI, PluginCatalogAPI, SkillsCatalogAPI } from './api';
+export type {
+  ApiKeysAPI,
+  McpCatalogAPI,
+  PluginCatalogAPI,
+  SkillsCatalogAPI,
+  SkillsListOptions,
+} from './api';
 export type {
   ApiKeyEntry,
   ApiKeyLookupResult,
@@ -51,6 +57,9 @@ export type {
   SkillImportRequest,
   SkillInvocationMode,
   SkillIssueSeverity,
+  SkillProjectionOutcome,
+  SkillProjectionResult,
+  SkillProjectionTarget,
   SkillReviewAction,
   SkillReviewFileChange,
   SkillReviewPreview,

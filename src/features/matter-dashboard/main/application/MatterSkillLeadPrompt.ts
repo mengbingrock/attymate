@@ -14,7 +14,12 @@ export interface MatterSkillInvocationInput {
   mode: MatterRefreshMode;
   hasTeammates: boolean;
   canSpawnTeammates: boolean;
-  /** Raw SKILL.md (the user's copy when present, else the bundled one). */
+  /**
+   * Absolute path of this team's SKILL.md. Null only when the copy could not be
+   * prepared, which falls back to inlining the body.
+   */
+  skillFilePath: string | null;
+  /** Raw SKILL.md — used for the drift check, and as the fallback body. */
   skillMarkdown: string;
   trigger: MatterRefreshTrigger;
   /** The matter this refresh targets, when one is determined. */
@@ -31,9 +36,10 @@ export interface MatterSkillInvocationInput {
  *
  * The skill itself is team- and runtime-agnostic, so everything situational is
  * added here: which team, which folder, whether this is a first scan, and what
- * the runtime permits. The skill body is inlined rather than merely named, so
- * the workflow arrives intact on runtimes that do not discover skills on their
- * own — and so the user's edits to SKILL.md take effect immediately.
+ * the runtime permits. The workflow is REFERENCED by name and absolute path
+ * rather than inlined — the lead loads it itself, so the team's own copy stays
+ * authoritative and its edits take effect immediately. The body is inlined only
+ * when that copy could not be prepared, so a refresh never fails on a disk error.
  */
 export function buildMatterSkillInvocationPrompt(input: MatterSkillInvocationInput): string {
   const lines: string[] = [];
@@ -76,14 +82,26 @@ export function buildMatterSkillInvocationPrompt(input: MatterSkillInvocationInp
     );
   }
 
-  lines.push(
-    '',
-    `Follow the "${MATTER_SKILL_SLUG}" skill below (also installed in your skills directory):`,
-    '',
-    `--- ${MATTER_SKILL_SLUG} skill ---`,
-    stripSkillFrontmatter(input.skillMarkdown),
-    `--- end ${MATTER_SKILL_SLUG} skill ---`
-  );
+  if (input.skillFilePath) {
+    // The skill is a file the lead loads itself: Claude can invoke it by name
+    // (the app points its skills folder at this copy), and any runtime can read
+    // the path directly. Naming the path keeps the team's own edits authoritative.
+    lines.push(
+      '',
+      `Follow the "${MATTER_SKILL_SLUG}" skill. This team has its own copy and it is the authoritative one — read it now and follow it:`,
+      `Skill file: ${input.skillFilePath}`,
+      `Read that file with your file-reading or shell tools. If your runtime already discovered a skill named "${MATTER_SKILL_SLUG}", invoking it works too — it resolves to this same file.`
+    );
+  } else {
+    lines.push(
+      '',
+      `Follow the "${MATTER_SKILL_SLUG}" skill below:`,
+      '',
+      `--- ${MATTER_SKILL_SLUG} skill ---`,
+      stripSkillFrontmatter(input.skillMarkdown),
+      `--- end ${MATTER_SKILL_SLUG} skill ---`
+    );
+  }
 
   // A user-edited (or older) installed copy keeps its own workflow text, but
   // the section schema it teaches may predate this app version — append the

@@ -24,7 +24,7 @@ import {
 import { Textarea } from '@renderer/components/ui/textarea';
 import { useMarkdownScrollSync } from '@renderer/hooks/useMarkdownScrollSync';
 import { useStore } from '@renderer/store';
-import { SKILL_ROOT_DEFINITIONS } from '@shared/utils/skillRoots';
+import { LIBRARY_SKILL_ROOT_KIND, SKILL_ROOT_DEFINITIONS } from '@shared/utils/skillRoots';
 import { FileSearch, RotateCcw, X } from 'lucide-react';
 
 import { SkillCodeEditor } from './SkillCodeEditor';
@@ -44,6 +44,7 @@ import type {
   SkillInvocationMode,
   SkillReviewPreview,
   SkillRootKind,
+  SkillScope,
 } from '@shared/types/extensions';
 
 const SKILL_MARKDOWN_FILENAME = ['SKILL', 'md'].join('.');
@@ -60,6 +61,11 @@ interface SkillEditorDialogProps {
   detail: SkillDetail | null;
   onClose: () => void;
   onSaved: (skillId: string | null) => void;
+}
+
+/** Library and team skills live in the app's own store, not in a CLI folder. */
+function isLibraryBackedScope(scope: SkillScope): boolean {
+  return scope === 'library' || scope === 'team';
 }
 
 function parseInitialName(detail: SkillDetail | null): string {
@@ -88,8 +94,8 @@ export const SkillEditorDialog = ({
   const previewSkillUpsert = useStore((s) => s.previewSkillUpsert);
   const applySkillUpsert = useStore((s) => s.applySkillUpsert);
 
-  const [scope, setScope] = useState<'user' | 'project'>('user');
-  const [rootKind, setRootKind] = useState<SkillRootKind>('claude');
+  const [scope, setScope] = useState<SkillScope>(LIBRARY_SKILL_ROOT_KIND);
+  const [rootKind, setRootKind] = useState<SkillRootKind>(LIBRARY_SKILL_ROOT_KIND);
   const [folderName, setFolderName] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -170,8 +176,11 @@ export const SkillEditorDialog = ({
     if (!open) return;
 
     const item = detail?.item;
-    const nextScope = item?.scope ?? (projectPath ? 'project' : 'user');
-    const nextRootKind = item?.rootKind ?? 'claude';
+    // The app library is the default home for new skills: one canonical copy the
+    // app links into every runtime's skills folder.
+    const nextScope: SkillScope = item?.scope ?? LIBRARY_SKILL_ROOT_KIND;
+    const nextRootKind =
+      item?.rootKind ?? (isLibraryBackedScope(nextScope) ? LIBRARY_SKILL_ROOT_KIND : 'claude');
     const nextFolderName = item?.folderName ?? '';
     const nextName = parseInitialName(detail);
     const nextDescription = parseInitialDescription(detail);
@@ -248,6 +257,20 @@ export const SkillEditorDialog = ({
     }
   }, [mode, open, projectPath, scope]);
 
+  // Library-backed scopes name no CLI directory, so the root kind follows the scope.
+  useEffect(() => {
+    if (!open) return;
+    if (isLibraryBackedScope(scope)) {
+      if (rootKind !== LIBRARY_SKILL_ROOT_KIND) {
+        setRootKind(LIBRARY_SKILL_ROOT_KIND);
+      }
+      return;
+    }
+    if (rootKind === LIBRARY_SKILL_ROOT_KIND) {
+      setRootKind('claude');
+    }
+  }, [open, rootKind, scope]);
+
   useEffect(() => {
     if (
       open &&
@@ -279,6 +302,7 @@ export const SkillEditorDialog = ({
       scope,
       rootKind,
       projectPath: effectiveProjectPath,
+      teamName: scope === 'team' ? (detail?.item.teamName ?? undefined) : undefined,
       folderName,
       existingSkillId: mode === 'edit' ? detail?.item.id : undefined,
       files: buildSkillDraftFiles({
@@ -290,6 +314,7 @@ export const SkillEditorDialog = ({
     }),
     [
       detail?.item.id,
+      detail?.item.teamName,
       folderName,
       includeAssets,
       includeReferences,
@@ -311,6 +336,7 @@ export const SkillEditorDialog = ({
   );
 
   const canUseProjectScope = Boolean(projectPath);
+  const usesLibraryStore = isLibraryBackedScope(scope);
   const visibleRootDefinitions = useMemo(
     () =>
       SKILL_ROOT_DEFINITIONS.filter(
@@ -436,13 +462,14 @@ export const SkillEditorDialog = ({
                     <Label htmlFor="skill-scope">{t('skillEditor.fields.scope')}</Label>
                     <Select
                       value={scope}
-                      onValueChange={(value) => setScope(value as 'user' | 'project')}
+                      onValueChange={(value) => setScope(value as SkillScope)}
                       disabled={mode === 'edit'}
                     >
                       <SelectTrigger id="skill-scope">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="library">{t('skillEditor.scope.library')}</SelectItem>
                         <SelectItem value="user">{t('skillEditor.scope.user')}</SelectItem>
                         <SelectItem value="project" disabled={!canUseProjectScope}>
                           {canUseProjectScope
@@ -451,32 +478,51 @@ export const SkillEditorDialog = ({
                               })
                             : t('skillEditor.scope.projectUnavailable')}
                         </SelectItem>
+                        {/* Team skills arrive through import/matter flows; only shown
+                            so an existing team skill keeps a matching option. */}
+                        {scope === 'team' && (
+                          <SelectItem value="team">
+                            {t('skillEditor.scope.team', {
+                              team: detail?.item.teamName ?? '',
+                            })}
+                          </SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="skill-root">{t('skillEditor.fields.root')}</Label>
-                    <Select
-                      value={rootKind}
-                      onValueChange={(value) => setRootKind(value as SkillRootKind)}
-                      disabled={mode === 'edit'}
-                    >
-                      <SelectTrigger id="skill-root">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {visibleRootDefinitions.map((definition) => (
-                          <SelectItem key={definition.rootKind} value={definition.rootKind}>
-                            {definition.directoryName}
-                            {definition.audience === 'codex'
-                              ? t('skillEditor.root.codexOnly')
-                              : t('skillEditor.root.shared')}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {usesLibraryStore ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="skill-root-library">{t('skillEditor.fields.root')}</Label>
+                      <p id="skill-root-library" className="text-sm text-text">
+                        {t('skillEditor.root.libraryValue')}
+                      </p>
+                      <p className="text-xs text-text-muted">{t('skillEditor.root.libraryHint')}</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="skill-root">{t('skillEditor.fields.root')}</Label>
+                      <Select
+                        value={rootKind}
+                        onValueChange={(value) => setRootKind(value as SkillRootKind)}
+                        disabled={mode === 'edit'}
+                      >
+                        <SelectTrigger id="skill-root">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {visibleRootDefinitions.map((definition) => (
+                            <SelectItem key={definition.rootKind} value={definition.rootKind}>
+                              {definition.directoryName}
+                              {definition.audience === 'codex'
+                                ? t('skillEditor.root.codexOnly')
+                                : t('skillEditor.root.shared')}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <Label htmlFor="skill-folder">{t('skillEditor.fields.folderName')}</Label>

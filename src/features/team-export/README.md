@@ -32,18 +32,23 @@ instead.
 
 ## Which skills ship
 
-A team's skills live in its project folder, where
+A team's skills live in the team's own store, `<userData>/skills/teams/<team>`, where
 [team-import](../team-import/README.md) installs them. So the export ships:
 
-- **everything in `<projectPath>/.claude/skills`** — that folder *is* the team's skill library;
-- **plus** any user-wide skill a member's roster entry or agent definition explicitly names.
+- **the `matter-dashboard` skill for every team**, resolved from the team's copy when present or
+  the shared library before first launch, and prioritized so the skill ceiling cannot drop it;
+- **everything in the team's store** — that store *is* the team's skill library;
+- **plus** the lead's `skills` from `team.meta.json` — the lead is never exported as an agent, so
+  nothing else would carry a lead-only skill;
+- **plus** anything a member's roster entry or agent definition explicitly names;
+- **plus** whatever a legacy team still keeps in `<projectPath>/.claude/skills`.
 
-Shipping the whole project library, not just what members reference, is deliberate: a team
-imported *with* skills used to export *none*, because attribution lived only in per-member
-frontmatter the importer had left empty. Member assignments are read from `members.meta.json`
-`skills` first, falling back to `claude-agent-definition.md` frontmatter for teams created before
-that field existed. When a project skill and a user-wide skill share a slug, the team's own copy
-wins.
+Shipping the whole library, not just what members reference, is deliberate: a team imported *with*
+skills used to export *none*, because attribution lived only in per-member frontmatter the
+importer had left empty. Member assignments are read from `members.meta.json` `skills` first,
+falling back to `claude-agent-definition.md` frontmatter for teams created before that field
+existed. Slugs resolve in ownership order — the exporting team's store, then the shared
+`skills/library`, then the catalog (project, then user) — so the team's own copy always wins.
 
 ## Fidelity rules
 
@@ -55,7 +60,8 @@ wins.
 - Each member's `claude-agent-definition.md` is reused when present; otherwise an equivalent is
   synthesized with the importer's own `buildClaudeAgentDefinitionMarkdown`, so teams created in
   the UI (which have no `agents/` directory) still export cleanly.
-- The lead is never exported — the app creates it at team creation.
+- The lead is never exported as an agent — the app creates it at team creation — but its skills
+  are, from `team.meta.json`.
 - The importer's ceilings are respected (20 members, 20 skills, 30 files per skill, 64 KiB per
   file). Anything dropped is reported as a warning rather than silently truncated, and members
   whose names the importer would reject are skipped with the reason.
@@ -66,7 +72,8 @@ wins.
 - `core/domain/teamExportPolicy.ts` — team state → bundle → files. Pure, and tested against the
   importer's domain functions in `test/features/team-export/exportImportRoundTrip.test.ts`.
 - `core/application/` — the export use case over ports.
-- `main/` — filesystem reads of the team directory, skill resolution from the user's skill roots,
+- `main/` — filesystem reads of the team directory, skill resolution from the skill store and
+  catalog,
   folder + zip writing, the destination picker, and IPC.
 - `preload/` — the typed bridge.
 

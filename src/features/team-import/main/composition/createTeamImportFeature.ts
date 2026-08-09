@@ -18,7 +18,6 @@ import type {
   TeamImportPreview,
   TeamImportSourceRequest,
 } from '@features/team-import/contracts';
-import type { SkillsMutationService } from '@main/services/extensions/skills/SkillsMutationService';
 import type { TeamDataService } from '@main/services/team/TeamDataService';
 
 export interface TeamImportFeatureFacade {
@@ -32,7 +31,6 @@ export interface TeamImportFeatureFacade {
 
 export interface TeamImportFeatureDependencies {
   teamDataService: TeamDataService;
-  skillsMutationService: SkillsMutationService;
 }
 
 const NO_PROGRESS: TeamImportProgressPort = { report: () => undefined };
@@ -43,7 +41,7 @@ export function createTeamImportFeature(
   const reviewStore = new InMemoryTeamImportReviewStore();
   const folderPicker = new ElectronTeamImportFolderPicker();
   const deterministicSource = new SafeLocalTeamImportFolderSource();
-  const skillsInstaller = new SkillsMutationInstaller(dependencies.skillsMutationService);
+  const skillsInstaller = new SkillsMutationInstaller();
 
   const reviewUseCase = new ReviewTeamImportUseCase(folderPicker, deterministicSource, reviewStore);
   const smartPreviewUseCase = new SmartPreviewTeamImportUseCase(

@@ -2,11 +2,21 @@ import { formatSkillRootKind, getSkillAudience } from '@shared/utils/skillRoots'
 
 import type { SkillCatalogItem } from '@shared/types/extensions';
 
+// The app's own store outranks the CLI directories: when a canonical skill and
+// the pointer installed for it are both visible, the canonical entry wins.
 const ROOT_PRECEDENCE: Record<SkillCatalogItem['rootKind'], number> = {
-  claude: 0,
-  cursor: 1,
-  agents: 2,
-  codex: 3,
+  library: 0,
+  claude: 1,
+  cursor: 2,
+  agents: 3,
+  codex: 4,
+};
+
+const SCOPE_PRECEDENCE: Record<SkillCatalogItem['scope'], number> = {
+  team: 0,
+  project: 1,
+  library: 2,
+  user: 3,
 };
 
 export class SkillValidator {
@@ -14,7 +24,7 @@ export class SkillValidator {
     const withDuplicates = this.annotateDuplicateNames(items);
     return withDuplicates.sort((a, b) => {
       if (a.isValid !== b.isValid) return a.isValid ? -1 : 1;
-      if (a.scope !== b.scope) return a.scope === 'project' ? -1 : 1;
+      if (a.scope !== b.scope) return SCOPE_PRECEDENCE[a.scope] - SCOPE_PRECEDENCE[b.scope];
       if (a.rootKind !== b.rootKind)
         return ROOT_PRECEDENCE[a.rootKind] - ROOT_PRECEDENCE[b.rootKind];
       return a.name.localeCompare(b.name);

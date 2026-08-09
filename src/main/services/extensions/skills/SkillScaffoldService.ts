@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 import { isPathWithinRoot, validateFileName } from '@main/utils/pathValidation';
 
+import { resolveWritableSkillRoot } from './resolveWritableSkillRoot';
 import { SkillRootsResolver } from './SkillRootsResolver';
 
 import type { SkillDraftFile, SkillRootKind, SkillScope } from '@shared/types/extensions';
@@ -15,9 +16,15 @@ export class SkillScaffoldService {
     rootKind: SkillRootKind,
     projectPath: string | undefined,
     folderName: string,
-    existingSkillId?: string
+    existingSkillId?: string,
+    teamName?: string
   ): Promise<string> {
-    const root = this.resolveWritableRoot(scope, rootKind, projectPath);
+    const root = resolveWritableSkillRoot(this.rootsResolver, {
+      scope,
+      rootKind,
+      projectPath,
+      teamName,
+    });
     await fs.mkdir(root.rootPath, { recursive: true });
 
     const folderValidation = validateFileName(folderName);
@@ -40,26 +47,6 @@ export class SkillScaffoldService {
       ...file,
       relativePath: this.normalizeRelativePath(file.relativePath),
     }));
-  }
-
-  async writeTextFiles(targetSkillDir: string, files: SkillDraftFile[]): Promise<void> {
-    for (const file of files) {
-      const absolutePath = path.join(targetSkillDir, file.relativePath);
-      await fs.mkdir(path.dirname(absolutePath), { recursive: true });
-      await fs.writeFile(absolutePath, file.content, 'utf8');
-    }
-  }
-
-  private resolveWritableRoot(scope: SkillScope, rootKind: SkillRootKind, projectPath?: string) {
-    const roots = this.rootsResolver.resolve(projectPath);
-    const match = roots.find((root) => root.scope === scope && root.rootKind === rootKind);
-    if (!match) {
-      throw new Error('Requested skill root is unavailable');
-    }
-    if (scope === 'project' && !projectPath) {
-      throw new Error('projectPath is required for project-scoped skills');
-    }
-    return match;
   }
 
   private normalizeRelativePath(relativePath: string): string {

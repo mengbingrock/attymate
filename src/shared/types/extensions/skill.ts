@@ -2,9 +2,21 @@
  * Skill domain types — local filesystem-backed skill catalog metadata and details.
  */
 
-export type SkillScope = 'user' | 'project';
+/**
+ * Where a skill's canonical files live.
+ *
+ * `library` and `team` are the app's own model-agnostic store; `user` and
+ * `project` are the runtime-branded CLI directories (~/.claude/skills,
+ * <project>/.codex/skills, …) which the app still reads and writes for skills
+ * it did not create.
+ */
+export type SkillScope = 'library' | 'team' | 'user' | 'project';
 
-export type SkillRootKind = 'claude' | 'cursor' | 'agents' | 'codex';
+/**
+ * `library` marks the app's own store and is not a CLI directory name; the
+ * others each name one runtime's skills folder.
+ */
+export type SkillRootKind = 'library' | 'claude' | 'cursor' | 'agents' | 'codex';
 
 export type SkillSourceType = 'filesystem';
 
@@ -44,6 +56,8 @@ export interface SkillCatalogItem {
   folderName: string;
   scope: SkillScope;
   rootKind: SkillRootKind;
+  /** Team this skill belongs to, for `team` scope only. */
+  teamName: string | null;
   projectRoot: string | null;
   discoveryRoot: string;
   skillDir: string;
@@ -120,6 +134,8 @@ export interface SkillUpsertRequest {
   scope: SkillScope;
   rootKind: SkillRootKind;
   projectPath?: string;
+  /** Required for `team` scope. */
+  teamName?: string;
   folderName: string;
   existingSkillId?: string;
   files: SkillDraftFile[];
@@ -131,6 +147,8 @@ export interface SkillImportRequest {
   scope: SkillScope;
   rootKind: SkillRootKind;
   projectPath?: string;
+  /** Required for `team` scope. */
+  teamName?: string;
   folderName?: string;
   reviewPlanId?: string;
 }
@@ -138,6 +156,7 @@ export interface SkillImportRequest {
 export interface SkillDeleteRequest {
   skillId: string;
   projectPath?: string;
+  teamName?: string;
 }
 
 export type CreateSkillRequest = SkillUpsertRequest;
@@ -155,4 +174,24 @@ export interface SkillWatcherEvent {
   projectPath: string | null;
   path: string;
   type: 'create' | 'change' | 'delete';
+}
+
+/** One runtime-branded directory a canonical skill is pointed into. */
+export interface SkillProjectionTarget {
+  rootKind: SkillRootKind;
+  /** Absolute path of the pointer, e.g. ~/.claude/skills/<slug>. */
+  linkPath: string;
+}
+
+export type SkillProjectionOutcome =
+  | 'linked'
+  | 'copied'
+  | 'already-linked'
+  | 'skipped-existing'
+  | 'failed';
+
+export interface SkillProjectionResult {
+  slug: string;
+  canonicalDir: string;
+  targets: { linkPath: string; outcome: SkillProjectionOutcome; message?: string }[];
 }

@@ -4,7 +4,11 @@ import * as path from 'node:path';
 import { createLogger } from '@shared/utils/logger';
 
 import { SkillMetadataParser } from './SkillMetadataParser';
-import { type ResolvedSkillRoot, SkillRootsResolver } from './SkillRootsResolver';
+import {
+  type ResolvedSkillRoot,
+  type SkillRootsResolveOptions,
+  SkillRootsResolver,
+} from './SkillRootsResolver';
 import { SkillScanner } from './SkillScanner';
 import { SkillValidator } from './SkillValidator';
 
@@ -20,16 +24,19 @@ export class SkillsCatalogService {
     private readonly validator = new SkillValidator()
   ) {}
 
-  async list(projectPath?: string): Promise<SkillCatalogItem[]> {
-    const roots = this.rootsResolver.resolve(projectPath);
+  async list(options?: string | SkillRootsResolveOptions): Promise<SkillCatalogItem[]> {
+    const roots = this.rootsResolver.resolve(options);
     const scannedItems = (
       await Promise.all(roots.map((root) => this.readSkillsFromRoot(root)))
     ).flat();
     return this.validator.annotateCatalog(scannedItems);
   }
 
-  async getDetail(skillId: string, projectPath?: string): Promise<SkillDetail | null> {
-    const roots = this.rootsResolver.resolve(projectPath);
+  async getDetail(
+    skillId: string,
+    options?: string | SkillRootsResolveOptions
+  ): Promise<SkillDetail | null> {
+    const roots = this.rootsResolver.resolve(options);
     const allowedRoots = new Set(roots.map((root) => path.resolve(root.rootPath)));
     const normalizedSkillDir = path.resolve(skillId);
 

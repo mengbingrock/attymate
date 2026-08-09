@@ -12,8 +12,10 @@ import type { ResolvedSkillRoot } from '@main/services/extensions/skills/SkillRo
 const ROOT: ResolvedSkillRoot = {
   scope: 'user',
   rootKind: 'claude',
+  teamName: null,
+  projectRoot: null,
   rootPath: '/home/user/.claude/skills',
-} as ResolvedSkillRoot;
+};
 
 function parseSkill(folderName: string) {
   return new SkillMetadataParser().parseCatalogItem({
@@ -59,11 +61,14 @@ describe('matter dashboard skill definition', () => {
 });
 
 describe('buildMatterSkillInvocationPrompt', () => {
+  const TEAM_SKILL_FILE = '/app-data/skills/teams/signal-ops/matter-dashboard/SKILL.md';
+  const INLINE_FENCE = `--- ${MATTER_SKILL_SLUG} skill ---`;
   const base = {
     teamName: 'signal-ops',
     projectPath: '/cases/1234567',
     hasTeammates: true,
     canSpawnTeammates: true,
+    skillFilePath: TEAM_SKILL_FILE,
     skillMarkdown: MATTER_SKILL_MARKDOWN,
     trigger: 'user-refresh' as const,
   };
@@ -104,15 +109,46 @@ describe('buildMatterSkillInvocationPrompt', () => {
     expect(lanes).not.toContain('spawn additional instances');
   });
 
-  it('inlines the skill body so runtimes without skill discovery still get it', () => {
+  it('references the team copy by path instead of inlining it', () => {
+    const prompt = buildMatterSkillInvocationPrompt({ ...base, mode: 'update' });
+
+    expect(prompt).toContain(`Skill file: ${TEAM_SKILL_FILE}`);
+    expect(prompt).toContain('Read that file with your file-reading or shell tools');
+    // The lead loads the file itself, so the body must not be pasted in.
+    expect(prompt).not.toContain(INLINE_FENCE);
+    expect(prompt).not.toContain('## Multiple matters');
+  });
+
+  it('inlines the skill body when no team copy could be prepared', () => {
     const prompt = buildMatterSkillInvocationPrompt({
       ...base,
       mode: 'update',
+      skillFilePath: null,
       skillMarkdown: '---\nname: matter-dashboard\ndescription: x\n---\n\nEDITED BY THE USER\n',
     });
 
+    expect(prompt).toContain(INLINE_FENCE);
     expect(prompt).toContain('EDITED BY THE USER');
+    expect(prompt).not.toContain('Skill file:');
     // Frontmatter is skill-file bookkeeping, not instruction text.
     expect(prompt).not.toContain('description: x');
+  });
+
+  it('appends the authoritative schema whenever the copy drifted from the bundled text', () => {
+    const drifted = `${MATTER_SKILL_MARKDOWN}\n\n## House rules\nAlways cite the docket.\n`;
+
+    for (const skillFilePath of [TEAM_SKILL_FILE, null]) {
+      const prompt = buildMatterSkillInvocationPrompt({
+        ...base,
+        mode: 'update',
+        skillFilePath,
+        skillMarkdown: drifted,
+      });
+      expect(prompt).toContain('Authoritative section schema for this app version');
+    }
+
+    expect(buildMatterSkillInvocationPrompt({ ...base, mode: 'update' })).not.toContain(
+      'Authoritative section schema for this app version'
+    );
   });
 });

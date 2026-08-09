@@ -20,6 +20,7 @@ import type {
   SkillDetail,
   SkillImportRequest,
   SkillReviewPreview,
+  SkillsListOptions,
   SkillUpsertRequest,
 } from '@shared/types/extensions';
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
@@ -104,28 +105,39 @@ function getSkillsWatcherService(): SkillsWatcherService {
   return skillsWatcherService;
 }
 
+/** Accepts a bare project path (existing callers) or a scope options object. */
+function normalizeCatalogScope(
+  scope: string | SkillsListOptions | undefined
+): string | SkillsListOptions | undefined {
+  if (typeof scope === 'string') return scope;
+  if (scope && typeof scope === 'object') {
+    return {
+      ...(typeof scope.projectPath === 'string' ? { projectPath: scope.projectPath } : {}),
+      ...(typeof scope.teamName === 'string' ? { teamName: scope.teamName } : {}),
+    };
+  }
+  return undefined;
+}
+
 async function handleSkillsList(
   _event: IpcMainInvokeEvent,
-  projectPath?: string
+  scope?: string | SkillsListOptions
 ): Promise<IpcResult<SkillCatalogItem[]>> {
   return wrapHandler('skillsList', () =>
-    getSkillsCatalogService().list(typeof projectPath === 'string' ? projectPath : undefined)
+    getSkillsCatalogService().list(normalizeCatalogScope(scope))
   );
 }
 
 async function handleSkillsGetDetail(
   _event: IpcMainInvokeEvent,
   skillId?: string,
-  projectPath?: string
+  scope?: string | SkillsListOptions
 ): Promise<IpcResult<SkillDetail | null>> {
   return wrapHandler('skillsGetDetail', () => {
     if (typeof skillId !== 'string' || !skillId) {
       throw new Error('skillId is required');
     }
-    return getSkillsCatalogService().getDetail(
-      skillId,
-      typeof projectPath === 'string' ? projectPath : undefined
-    );
+    return getSkillsCatalogService().getDetail(skillId, normalizeCatalogScope(scope));
   });
 }
 

@@ -1,10 +1,11 @@
 /**
  * The matter dashboard workflow, as an ordinary user skill.
  *
- * This markdown is seeded to `~/.claude/skills/matter-dashboard/SKILL.md` (and
- * `~/.codex/skills/` when Codex is set up) the first time the app runs, then
- * never touched again — the user owns and edits it like any other skill. The
- * app reads the on-disk copy when it asks a lead to refresh the dashboard, so
+ * This markdown seeds the app's model-agnostic skill library
+ * (`<userData>/skills/library/matter-dashboard/SKILL.md`) the first time the app
+ * runs, then is never touched again — the user owns and edits it like any other
+ * skill, and each team gets its own copy under `<userData>/skills/teams/<team>/`.
+ * The lead is pointed at that on-disk copy rather than being sent this text, so
  * editing the file is the supported way to tune the workflow.
  *
  * Keep this text TEAM- and RUNTIME-agnostic: one copy is shared by every team,

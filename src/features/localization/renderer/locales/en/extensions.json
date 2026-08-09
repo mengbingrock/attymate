@@ -280,12 +280,16 @@
     },
     "root": {
       "codexOnly": " - Codex only",
-      "shared": " - Shared"
+      "shared": " - Shared",
+      "libraryValue": "App library",
+      "libraryHint": "Stored once in the app library and linked into every runtime, so there is no CLI folder to pick."
     },
     "scope": {
       "project": "Project: {{project}}",
       "projectUnavailable": "Project unavailable",
-      "user": "User"
+      "user": "User",
+      "library": "App library (all runtimes)",
+      "team": "Team: {{team}}"
     },
     "title": {
       "create": "Create skill",
@@ -309,7 +313,8 @@
       "hasScripts": "Has scripts",
       "manualUse": "Manual use",
       "references": "References",
-      "storedIn": "Stored in {{root}}"
+      "storedIn": "Stored in {{root}}",
+      "team": "Team: {{team}}"
     },
     "deleteDialog": {
       "description": "Delete this skill and move it to Trash?",
@@ -344,8 +349,10 @@
     },
     "loading": "Loading skill details...",
     "scope": {
+      "library": "Everyone on this machine",
       "personal": "Your personal skills",
-      "projectOnly": "This project only"
+      "projectOnly": "This project only",
+      "team": "This team only"
     },
     "summary": {
       "howUsed": "How it is used",
@@ -364,7 +371,8 @@
       "hasScripts": "Has scripts",
       "needsAttention": "Needs attention",
       "references": "References",
-      "storedIn": "Stored in {{root}}"
+      "storedIn": "Stored in {{root}}",
+      "team": "Team: {{team}}"
     },
     "configuredRuntime": "the configured runtime",
     "counts": {
@@ -392,7 +400,17 @@
       "total_few": "{{count}} total",
       "total_many": "{{count}} total",
       "total_one": "{{count}} total",
-      "total_other": "{{count}} total"
+      "total_other": "{{count}} total",
+      "library": "{{count}} in library",
+      "library_few": "{{count}} in library",
+      "library_many": "{{count}} in library",
+      "library_one": "{{count}} in library",
+      "library_other": "{{count}} in library",
+      "team": "{{count}} team",
+      "team_few": "{{count}} team",
+      "team_many": "{{count}} team",
+      "team_one": "{{count}} team",
+      "team_other": "{{count}} team"
     },
     "empty": {
       "noMatches": "No skills match your search",
@@ -407,7 +425,9 @@
       "needsAttention": "Needs attention",
       "personal": "Personal",
       "project": "Project",
-      "shared": "Shared"
+      "shared": "Shared",
+      "library": "App library",
+      "team": "Team"
     },
     "hero": {
       "codexAvailable": "Use `.codex` when a skill should stay Codex-only.",
@@ -429,10 +449,16 @@
     "runtimeAudience": "Shared skills in `.claude`, `.cursor`, and `.agents` are available to {{audience}}. Skills stored in `.codex` stay Codex-only when Codex support is available.",
     "scope": {
       "project": "This project",
-      "user": "Personal"
+      "user": "Personal",
+      "library": "App library",
+      "team": "Team"
     },
     "searchPlaceholder": "Search by skill name or what it helps with...",
     "sections": {
+      "library": {
+        "description": "Kept in the app library and available in every runtime.",
+        "title": "App library skills"
+      },
       "personal": {
         "description": "Habits and instructions you want available everywhere.",
         "title": "Personal skills"
@@ -440,6 +466,10 @@
       "project": {
         "description": "Workflows that only make sense for this codebase.",
         "title": "Project skills"
+      },
+      "team": {
+        "description": "Shared with a team and available in every runtime.",
+        "title": "Team skills"
       }
     },
     "sort": {
@@ -518,7 +548,8 @@
     "scope": {
       "user": "User",
       "project": "Project: {{project}}",
-      "projectUnavailable": "Project unavailable"
+      "projectUnavailable": "Project unavailable",
+      "library": "App library (all runtimes)"
     },
     "rootSuffix": {
       "codexOnly": " - Codex only",
@@ -535,6 +566,10 @@
       "mustBeDirectory": "Choose a folder to import, not a single file.",
       "reviewFailed": "Failed to review import changes",
       "importFailed": "Failed to import skill"
+    },
+    "rootLibrary": {
+      "value": "App library",
+      "hint": "Stored once in the app library and linked into every runtime, so there is no CLI folder to pick."
     }
   },
   "mcpPanel": {

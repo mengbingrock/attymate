@@ -161,13 +161,14 @@ describe('CreateTeamImportDraftUseCase', () => {
       expect.arrayContaining([expect.objectContaining({ relativePath: 'AGENT.md' })])
     );
     expect(skillsInstaller.install).toHaveBeenCalledTimes(1);
-    // Skills belong to the team, so they install into its project folder.
+    // Skills belong to the team, so they install into the team's own store.
     expect(vi.mocked(skillsInstaller.install).mock.calls[0][1]).toEqual({
+      teamName: 'demo-team',
       projectPath: '/project',
     });
   });
 
-  it('warns when a source has no project folder to scope its skills to', async () => {
+  it('still gives the team its own skill copy when the source has no project folder', async () => {
     const reviewStore = new InMemoryTeamImportReviewStore();
     const preview = reviewStore.save(
       { ...previewInput(), importKind: 'smart', projectPath: '' },
@@ -187,8 +188,10 @@ describe('CreateTeamImportDraftUseCase', () => {
       leadName: 'writer',
     });
 
-    expect(vi.mocked(skillsInstaller.install).mock.calls[0][1]).toBeUndefined();
-    expect(result.applyWarnings?.[0]).toContain('installed for all teams');
+    // A URL import has no folder to scope to, and no longer needs one: the
+    // team store is the target either way, so there is nothing to warn about.
+    expect(vi.mocked(skillsInstaller.install).mock.calls[0][1]).toEqual({ teamName: 'demo-team' });
+    expect(result.applyWarnings).toBeUndefined();
   });
 
   it('collects apply warnings instead of failing when skills or agent files fail', async () => {

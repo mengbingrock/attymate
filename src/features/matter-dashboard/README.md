@@ -60,15 +60,32 @@ refetches on it (plus legacy `team-change` matter events).
 
 ## The workflow lives in a skill, not in the app
 
-The instructions the lead follows are an **ordinary user skill** at
-`~/.claude/skills/matter-dashboard/SKILL.md` (and `~/.codex/skills/` when Codex
-is set up). `MatterSkillSeeder` writes it when missing and — new in v2 —
-upgrades a **pristine** older seed in place (hash-gated against
-`LEGACY_SKILL_SHA256`). A user-edited copy is never overwritten; instead
-`buildMatterSkillInvocationPrompt` appends the authoritative section schema at
-prompt time so proposals still arrive in the current shape. The refresh prompt
-also names the target matter (`matterId`) or, for multi-matter teams, tells the
-lead to pick one via `matter_get`.
+The instructions the lead follows are an **ordinary skill**, stored where every
+runtime can reach it rather than inside one runtime's folder:
+
+- `<userData>/skills/library/matter-dashboard/` — the machine-wide copy.
+  `MatterSkillSeeder` writes it when missing, upgrades a **pristine** older seed
+  in place (hash-gated against `LEGACY_SKILL_SHA256`), and adopts the edited
+  `~/.claude` or `~/.codex` copy that older builds wrote. A user-edited copy is
+  never overwritten.
+- `<userData>/skills/teams/<team>/matter-dashboard/` — the team's own copy,
+  seeded from the library by `TeamMatterSkillProvisioner`. It is what that
+  team's lead follows and what travels in the team's export bundle, so two teams
+  can run different versions of the workflow.
+
+`SkillProjectionService` symlinks the machine-wide library into
+`~/.claude/skills` and `~/.codex/skills`. At launch it projects the team's copy
+into the current project's `.claude/skills` and `.codex/skills`, whose project
+precedence selects the right team's workflow without making the team depend on
+that launch folder. Pointers never overwrite a hand-made skill, and a team's
+pointers are reclaimed when the team stops.
+
+`buildMatterSkillInvocationPrompt` **references** the skill by name and absolute
+path — the lead reads the file itself — and inlines the body only when the copy
+could not be prepared. When the copy has drifted from the bundled text it still
+appends the authoritative section schema so proposals arrive in the current
+shape. The refresh prompt also names the target matter (`matterId`) or, for
+multi-matter teams, tells the lead to pick one via `matter_get`.
 
 ## Renderer (v3 layout)
 

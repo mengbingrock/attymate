@@ -332,14 +332,29 @@ export const MessageComposer = ({
   const userSkills = useStore(
     useShallow((s) => (slashCommandDataEnabled ? s.skillsUserCatalog : EMPTY_SKILL_CATALOG))
   );
+  // App-owned skills reach every runtime, so they belong in every suggestion list.
+  const librarySkills = useStore(
+    useShallow((s) =>
+      slashCommandDataEnabled
+        ? (s.skillsLibraryCatalog ?? EMPTY_SKILL_CATALOG)
+        : EMPTY_SKILL_CATALOG
+    )
+  );
+  const teamSkills = useStore(
+    useShallow((s) =>
+      slashCommandDataEnabled
+        ? (s.skillsTeamCatalogByTeamName?.[teamName] ?? EMPTY_SKILL_CATALOG)
+        : EMPTY_SKILL_CATALOG
+    )
+  );
   const fetchSkillsCatalog = useStore((s) => s.fetchSkillsCatalog);
   const isLaunchBlocking = isProvisioning && !isTeamAlive;
 
   // Fetch the catalog only when slash suggestions are actually needed.
   useEffect(() => {
     if (!slashCommandDataEnabled) return;
-    void fetchSkillsCatalog(projectPath ?? undefined);
-  }, [fetchSkillsCatalog, projectPath, slashCommandDataEnabled]);
+    void fetchSkillsCatalog({ teamName, ...(projectPath ? { projectPath } : {}) });
+  }, [fetchSkillsCatalog, projectPath, slashCommandDataEnabled, teamName]);
 
   const slashCommandSuggestions = useMemo<MentionSuggestion[]>(
     () =>
@@ -347,11 +362,11 @@ export const MessageComposer = ({
         ? buildSlashCommandSuggestions(
             getSuggestedSlashCommandsForProvider(leadProviderId),
             projectSkills,
-            userSkills,
+            [...teamSkills, ...librarySkills, ...userSkills],
             leadProviderId
           )
         : EMPTY_MENTION_SUGGESTIONS,
-    [leadProviderId, projectSkills, slashCommandDataEnabled, userSkills]
+    [leadProviderId, librarySkills, projectSkills, slashCommandDataEnabled, teamSkills, userSkills]
   );
 
   const trimmed = stripEncodedTaskReferenceMetadata(draft.text).trim();

@@ -1,7 +1,6 @@
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-
-import { getHomeDir } from '@main/utils/pathDecoder';
+import { getLibrarySkillsRootPath } from '@main/services/extensions/skills/SkillRootsResolver';
+import { SkillsCatalogService } from '@main/services/extensions/skills/SkillsCatalogService';
+import { SkillStore } from '@main/services/extensions/skills/SkillStore';
 
 import type {
   TeamImportSkillInstallResult,
@@ -9,161 +8,107 @@ import type {
   TeamImportSkillTarget,
 } from '../../core/application/ports/TeamImportSkillsInstallerPort';
 import type { TeamImportBundleSkill } from '@features/team-import/contracts';
-import type { SkillsMutationService } from '@main/services/extensions/skills/SkillsMutationService';
 
 interface SkillInstallTarget {
-  scope: 'user' | 'project';
-  rootKind: 'claude' | 'codex';
-  rootPath: string;
-  projectPath?: string;
+  skillsDir: string;
+  resolveSkillDir(slug: string): string;
   label: string;
 }
 
-async function directoryExists(dirPath: string): Promise<boolean> {
-  try {
-    return (await fs.stat(dirPath)).isDirectory();
-  } catch {
-    return false;
-  }
+/** Names a target for warnings, including one the store itself rejects. */
+function describeTarget(target?: TeamImportSkillTarget): string {
+  const teamName = target?.teamName?.trim();
+  return teamName ? `skills/teams/${teamName}` : 'skills/library';
 }
 
 /**
- * Installs an imported team's skills into that team's own project folder, into
- * every skill root an assigned runtime may read: stock Claude discovers
- * `<project>/.claude/skills` and stock Codex `<project>/.codex/skills`, and the
- * team's provider is chosen after import — so the skill lands in both (Codex
- * only when ~/.codex exists on the machine).
+ * Installs an imported team's skills into that team's own store
+ * (`<userData>/skills/teams/<team>/<slug>`).
  *
- * Project scope is what ties a skill to the team that shipped it: the folder is
- * the team's skill library, it travels with the project, and two teams that both
- * ship a "legal-research" skill no longer overwrite or shadow each other.
- * Sources with no project folder (URL imports) fall back to the user root.
+ * The team store — not a runtime-branded folder and not the project folder — is
+ * what ties a skill to the team that shipped it: the store is model-agnostic,
+ * it survives the project folder changing (a project is a launch parameter, not
+ * the team's home), and two teams that both ship a "legal-research" skill no
+ * longer overwrite or shadow each other. Runtime discovery is restored at
+ * launch by the projection service, so nothing is written into
+ * `<project>/.claude/skills` or `~/.claude/skills` here anymore.
  *
- * Existing slugs are never touched in any root: the user chose skip-and-warn
- * over overwrite for conflicts.
+ * A caller with no team name yet (the preview, which runs before the team is
+ * named) falls back to the shared library.
+ *
+ * Existing slugs are never touched: the user chose skip-and-warn over overwrite
+ * for conflicts.
  */
 export class SkillsMutationInstaller implements TeamImportSkillsInstallerPort {
   constructor(
-    private readonly skillsMutationService: SkillsMutationService,
-    private readonly homeDir: string = getHomeDir()
+    private readonly store: SkillStore = new SkillStore(),
+    private readonly catalog: Pick<SkillsCatalogService, 'list'> = new SkillsCatalogService()
   ) {}
 
-  private async getTargets(target?: TeamImportSkillTarget): Promise<SkillInstallTarget[]> {
-    const projectPath = target?.projectPath?.trim();
-    const codexInstalled = await directoryExists(path.join(this.homeDir, '.codex'));
-
-    if (!projectPath) {
-      // No project folder to scope to (URL import): keep the skills usable by
-      // falling back to the user-wide roots.
-      const userTargets: SkillInstallTarget[] = [
-        {
-          scope: 'user',
-          rootKind: 'claude',
-          rootPath: path.join(this.homeDir, '.claude', 'skills'),
-          label: '~/.claude/skills',
-        },
-      ];
-      if (codexInstalled) {
-        userTargets.push({
-          scope: 'user',
-          rootKind: 'codex',
-          rootPath: path.join(this.homeDir, '.codex', 'skills'),
-          label: '~/.codex/skills',
-        });
-      }
-      return userTargets;
+  private getTarget(target?: TeamImportSkillTarget): SkillInstallTarget {
+    const teamName = target?.teamName?.trim();
+    if (teamName) {
+      return {
+        skillsDir: this.store.resolveTeamSkillsDir(teamName),
+        resolveSkillDir: (slug) => this.store.resolveTeamSkillDir(teamName, slug),
+        label: `skills/teams/${teamName}`,
+      };
     }
-
-    const targets: SkillInstallTarget[] = [
-      {
-        scope: 'project',
-        rootKind: 'claude',
-        rootPath: path.join(projectPath, '.claude', 'skills'),
-        projectPath,
-        label: `${projectPath}/.claude/skills`,
-      },
-    ];
-    if (codexInstalled) {
-      targets.push({
-        scope: 'project',
-        rootKind: 'codex',
-        rootPath: path.join(projectPath, '.codex', 'skills'),
-        projectPath,
-        label: `${projectPath}/.codex/skills`,
-      });
-    }
-    return targets;
-  }
-
-  private async listRootSlugs(rootPath: string): Promise<ReadonlySet<string>> {
-    try {
-      const entries = await fs.readdir(rootPath, { withFileTypes: true });
-      return new Set(
-        entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name.toLowerCase())
-      );
-    } catch {
-      return new Set();
-    }
+    return {
+      skillsDir: getLibrarySkillsRootPath(),
+      resolveSkillDir: (slug) => this.store.resolveLibrarySkillDir(slug),
+      label: 'skills/library',
+    };
   }
 
   async listExistingSlugs(target?: TeamImportSkillTarget): Promise<ReadonlySet<string>> {
-    const union = new Set<string>();
-    for (const installTarget of await this.getTargets(target)) {
-      for (const slug of await this.listRootSlugs(installTarget.rootPath)) union.add(slug);
+    const teamName = target?.teamName?.trim();
+    if (teamName) {
+      try {
+        const slugs = await this.store.listTeamSlugs(teamName);
+        return new Set(slugs.map((slug) => slug.toLowerCase()));
+      } catch {
+        // An unusable team name owns nothing; the caller only wants conflicts.
+        return new Set();
+      }
     }
-    return union;
+
+    // Preview happens before the final team name exists. Preserve references
+    // to every skill the target project can already use (project, library, and
+    // legacy user roots), rather than pruning those references as unknown.
+    try {
+      const projectPath = target?.projectPath?.trim();
+      const items = await this.catalog.list(projectPath || undefined);
+      return new Set(items.map((item) => item.folderName.toLowerCase()));
+    } catch {
+      const slugs = await this.store.listSlugs(getLibrarySkillsRootPath());
+      return new Set(slugs.map((slug) => slug.toLowerCase()));
+    }
   }
 
   async install(
     skill: TeamImportBundleSkill,
     target?: TeamImportSkillTarget
   ): Promise<TeamImportSkillInstallResult> {
-    const targets = await this.getTargets(target);
-    const installedTo: string[] = [];
-    const skippedAt: string[] = [];
-    const failures: string[] = [];
-
-    for (const installTarget of targets) {
-      const existing = await this.listRootSlugs(installTarget.rootPath);
-      if (existing.has(skill.slug.toLowerCase())) {
-        skippedAt.push(installTarget.label);
-        continue;
-      }
-      try {
-        const files = skill.files.map((file) => ({
+    try {
+      const installTarget = this.getTarget(target);
+      const outcome = await this.store.writeSkill(
+        installTarget.resolveSkillDir(skill.slug),
+        skill.files.map((file) => ({
           relativePath: file.relativePath,
           content: file.content,
-        }));
-        const request = {
-          scope: installTarget.scope,
-          rootKind: installTarget.rootKind,
-          folderName: skill.slug,
-          files,
-          ...(installTarget.projectPath ? { projectPath: installTarget.projectPath } : {}),
-        };
-        const preview = await this.skillsMutationService.previewUpsert(request);
-        await this.skillsMutationService.applyUpsert({ ...request, reviewPlanId: preview.planId });
-        installedTo.push(installTarget.label);
-      } catch (error) {
-        failures.push(
-          `${installTarget.label}: ${error instanceof Error ? error.message : String(error)}`
-        );
-      }
+        }))
+      );
+      return outcome === 'skipped'
+        ? { status: 'skipped', detail: `already exists in ${installTarget.label}` }
+        : { status: 'installed' };
+    } catch (error) {
+      return {
+        status: 'failed',
+        detail: `${describeTarget(target)}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
     }
-
-    if (failures.length > 0) {
-      return { status: 'failed', detail: failures.join('; ') };
-    }
-    if (installedTo.length === 0) {
-      return { status: 'skipped', detail: `already exists in ${skippedAt.join(' and ')}` };
-    }
-    return {
-      status: 'installed',
-      ...(skippedAt.length > 0
-        ? {
-            detail: `installed to ${installedTo.join(' and ')}; already existed in ${skippedAt.join(' and ')}`,
-          }
-        : {}),
-    };
   }
 }

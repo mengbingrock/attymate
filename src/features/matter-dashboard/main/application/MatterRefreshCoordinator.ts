@@ -4,6 +4,7 @@ import { isMatterSnapshotEffectivelyEmpty } from '../infrastructure/matterScanSt
 import { buildMatterSkillInvocationPrompt } from './MatterSkillLeadPrompt';
 
 import type { MatterRefreshResultDto, MatterSnapshotDto } from '../../contracts';
+import type { EnsuredTeamMatterSkill } from '../infrastructure/TeamMatterSkillProvisioner';
 import type { MatterRefreshTrigger } from './MatterSkillLeadPrompt';
 
 /** Runtime facts the skill prompt needs but the skill itself must not encode. */
@@ -21,8 +22,11 @@ export interface MatterRefreshLeadNotifier {
 export interface MatterRefreshCoordinatorDeps {
   readSnapshot(teamName: string): Promise<MatterSnapshotDto>;
   resolveRuntimeFacts(teamName: string): Promise<MatterTeamRuntimeFacts>;
-  /** The user's SKILL.md when it exists; null falls back to the bundled copy. */
-  readInstalledSkillMarkdown(): Promise<string | null>;
+  /**
+   * Prepares this team's own copy of the skill and returns where it lives.
+   * Null falls back to inlining the bundled workflow.
+   */
+  ensureTeamSkill(teamName: string): Promise<EnsuredTeamMatterSkill | null>;
   leadNotifier: MatterRefreshLeadNotifier;
 }
 
@@ -46,10 +50,10 @@ export class MatterRefreshCoordinator {
 
   async requestRefresh(request: MatterRefreshRequest): Promise<MatterRefreshResultDto> {
     const { teamName } = request;
-    const [snapshot, facts, installedMarkdown] = await Promise.all([
+    const [snapshot, facts, teamSkill] = await Promise.all([
       this.deps.readSnapshot(teamName),
       this.deps.resolveRuntimeFacts(teamName),
-      this.deps.readInstalledSkillMarkdown(),
+      this.deps.ensureTeamSkill(teamName),
     ]);
 
     const linked = snapshot.matters.filter((matter) =>
@@ -70,7 +74,8 @@ export class MatterRefreshCoordinator {
       mode,
       hasTeammates: facts.hasTeammates,
       canSpawnTeammates: facts.canSpawnTeammates,
-      skillMarkdown: installedMarkdown ?? MATTER_SKILL_MARKDOWN,
+      skillFilePath: teamSkill?.filePath ?? null,
+      skillMarkdown: teamSkill?.markdown ?? MATTER_SKILL_MARKDOWN,
       trigger: request.trigger,
       ...(target ? { matterId: target.id, matterCaption: target.caption } : {}),
       linkedMatterCount: linked.length,
@@ -89,7 +94,7 @@ export class MatterRefreshCoordinator {
       return {
         accepted: false,
         mode,
-        usedInstalledSkill: installedMarkdown !== null,
+        usedInstalledSkill: teamSkill !== null,
         message: `The request could not be delivered: ${
           error instanceof Error ? error.message : String(error)
         }. Launch the team first.`,
@@ -99,7 +104,7 @@ export class MatterRefreshCoordinator {
     return {
       accepted: true,
       mode,
-      usedInstalledSkill: installedMarkdown !== null,
+      usedInstalledSkill: teamSkill !== null,
       message:
         mode === 'initial-scan'
           ? 'The team lead was asked to scan the case folder and propose an initial dashboard.'

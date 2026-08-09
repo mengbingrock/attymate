@@ -866,6 +866,19 @@ export function buildLeadRosterContextBlock(
 export interface LeadMatterInstructionOptions {
   /** The team has specialist teammates the lead should delegate matter work to. */
   hasTeammates?: boolean;
+  /**
+   * Absolute path of this team's own copy of the skill. Naming the path lets a
+   * lead load the workflow itself on any runtime, and keeps the team's copy
+   * authoritative over any machine-wide one.
+   */
+  skillFilePath?: string;
+}
+
+/** "load the skill" phrased so it works with or without native discovery. */
+function formatSkillReference(skillFilePath: string | undefined): string {
+  return skillFilePath
+    ? `load the "${MATTER_SKILL_SLUG}" skill — this team's copy is at ${skillFilePath}; read that file and follow it`
+    : `load the "${MATTER_SKILL_SLUG}" skill and follow it`;
 }
 
 export function buildLeadMatterDashboardInstructions(
@@ -874,7 +887,7 @@ export function buildLeadMatterDashboardInstructions(
 ): string {
   return [
     `Matter dashboard (MANDATORY — batched updates with user confirmation):`,
-    `- Do NOT update it per task. When a related series of work (a job) finishes, load the "${MATTER_SKILL_SLUG}" skill and follow it. The app also sends you that skill whenever the user asks for a refresh or the board goes quiet.`,
+    `- Do NOT update it per task. When a related series of work (a job) finishes, ${formatSkillReference(options.skillFilePath)}. The app also points you at that skill whenever the user asks for a refresh or the board goes quiet.`,
     `- You may only propose: call MCP tools matter_get then matter_propose with { teamName: "${teamName}" }. The user approves or rejects in the dashboard; nothing changes until they approve.`,
     `- Grounded facts only — never invent dates, amounts, parties, or outcomes; leave unknown fields absent.`,
     ...(options.hasTeammates
@@ -907,7 +920,7 @@ export function buildLeadInitialMatterScanInstructions(
 ): string {
   return [
     `Initial matter scan (do this early, alongside team assembly): this team's matter dashboard is empty.`,
-    `- Load the "${MATTER_SKILL_SLUG}" skill and follow its initial-scan steps for { teamName: "${teamName}" }: read the case documents in the project folder, then propose an initial dashboard. If the folder holds no case content, skip it.`,
+    `- ${formatSkillReference(options.skillFilePath)}, following its initial-scan steps for { teamName: "${teamName}" }: read the case documents in the project folder, then propose an initial dashboard. If the folder holds no case content, skip it.`,
     ...(options.hasTeammates
       ? [
           `- Delegate the scan across your specialists and message them IN PARALLEL, giving each a different subfolder.`,

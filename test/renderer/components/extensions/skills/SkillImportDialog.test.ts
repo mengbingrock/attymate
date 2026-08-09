@@ -1,5 +1,6 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface StoreState {
@@ -107,6 +108,16 @@ vi.mock('lucide-react', () => {
 });
 
 import { SkillImportDialog } from '@renderer/components/extensions/skills/SkillImportDialog';
+
+async function selectScope(host: HTMLElement, value: string): Promise<void> {
+  const scopeSelect = host.querySelectorAll('select')[0] as HTMLSelectElement;
+  await act(async () => {
+    const setValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+    setValue?.call(scopeSelect, value);
+    scopeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await Promise.resolve();
+  });
+}
 
 describe('SkillImportDialog', () => {
   beforeEach(() => {
@@ -278,6 +289,8 @@ describe('SkillImportDialog', () => {
       );
       await Promise.resolve();
     });
+
+    await selectScope(host, 'project');
 
     const scopeSelect = host.querySelectorAll('select')[0] as HTMLSelectElement;
     expect(scopeSelect.value).toBe('project');
@@ -481,6 +494,37 @@ describe('SkillImportDialog', () => {
     });
   });
 
+  it('defaults imports to the app library and hides the CLI storage picker', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        React.createElement(SkillImportDialog, {
+          open: true,
+          projectPath: '/tmp/project-a',
+          projectLabel: 'Project A',
+          allowCodexRootKind: true,
+          onClose: vi.fn(),
+          onImported: vi.fn(),
+        })
+      );
+      await Promise.resolve();
+    });
+
+    const scopeSelect = host.querySelectorAll('select')[0] as HTMLSelectElement;
+    expect(scopeSelect.value).toBe('library');
+    expect(Array.from(scopeSelect.options)[0]?.value).toBe('library');
+    expect(host.querySelectorAll('select').length).toBe(1);
+    expect(host.textContent).toContain('there is no CLI folder to pick');
+
+    await act(async () => {
+      root.unmount();
+      await Promise.resolve();
+    });
+  });
+
   it('hides the codex root option when codex runtime is unavailable', async () => {
     const host = document.createElement('div');
     document.body.appendChild(host);
@@ -499,6 +543,8 @@ describe('SkillImportDialog', () => {
       );
       await Promise.resolve();
     });
+
+    await selectScope(host, 'user');
 
     const selects = host.querySelectorAll('select');
     const rootSelect = selects[1] as HTMLSelectElement;

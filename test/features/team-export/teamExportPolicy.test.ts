@@ -162,6 +162,52 @@ describe('buildTeamExportMembers', () => {
 });
 
 describe('a team owns its skills', () => {
+  it('exports the team store library even when no member names a slug', () => {
+    const unattributed = source({
+      teamSkillSlugs: ['legal-calendaring-workflow', 'lasc-docket-check'],
+      members: [
+        { name: 'calendar-agent', role: 'Calendar Specialist', workflow: 'Derive deadlines.' },
+      ],
+    });
+
+    const { referencedSlugs, members } = buildTeamExportMembers(unattributed);
+
+    expect(members[0].skills).toEqual([]);
+    expect(referencedSlugs).toEqual(['legal-calendaring-workflow', 'lasc-docket-check']);
+  });
+
+  it('carries a lead-only skill, which no exported agent would reference', () => {
+    // The lead is never exported as an agent definition, so team.meta.json is
+    // the only carrier of its skills.
+    const { referencedSlugs } = buildTeamExportMembers(
+      source({
+        leadSkillSlugs: ['matter-dashboard'],
+        members: [
+          { name: 'calendar-agent', role: 'Calendar Specialist', workflow: 'Derive deadlines.' },
+        ],
+      })
+    );
+
+    expect(referencedSlugs).toEqual(['matter-dashboard']);
+  });
+
+  it('unions member, team store, lead, and project slugs without duplicates', () => {
+    const { referencedSlugs } = buildTeamExportMembers(
+      source({
+        teamSkillSlugs: ['legal-calendaring-workflow', 'lasc-docket-check'],
+        leadSkillSlugs: ['matter-dashboard', 'legal-calendaring-workflow'],
+        projectSkillSlugs: ['lasc-docket-check', 'legacy-project-skill'],
+      })
+    );
+
+    expect(referencedSlugs).toEqual([
+      'legal-calendaring-workflow',
+      'lasc-docket-check',
+      'matter-dashboard',
+      'legacy-project-skill',
+    ]);
+  });
+
   it('exports the project skill library even when no member names a slug', () => {
     // The reported regression: a team imported with skills exported zero of
     // them, because attribution lived only in per-member frontmatter that the

@@ -1,3 +1,4 @@
+import { MATTER_SKILL_SLUG } from '@features/matter-dashboard/contracts';
 import { suggestTeamImportName } from '@features/team-import/core';
 
 import {
@@ -37,7 +38,14 @@ export class ExportTeamUseCase {
 
     const warnings: TeamExportWarning[] = [];
     const skills: TeamImportBundleSkill[] = [];
-    for (const slug of membersResult.referencedSlugs) {
+    // Every reusable legal team needs the dashboard workflow, including teams
+    // that have not launched yet and therefore have no team-local skill copy.
+    // Resolve it first so the importer's skill ceiling can never drop it.
+    const requestedSkillSlugs = [
+      MATTER_SKILL_SLUG,
+      ...membersResult.referencedSlugs.filter((slug) => slug !== MATTER_SKILL_SLUG),
+    ];
+    for (const slug of requestedSkillSlugs) {
       const skill = await this.skillSource.resolve(slug);
       if (skill) {
         skills.push(skill);

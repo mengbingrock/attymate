@@ -428,6 +428,7 @@ import type {
   SkillDetail,
   SkillImportRequest,
   SkillReviewPreview,
+  SkillsListOptions,
   SkillUpsertRequest,
   SkillWatcherEvent,
 } from '@shared/types/extensions';
@@ -2025,10 +2026,10 @@ const electronAPI: ElectronAPI = {
 
   // ===== Skills Catalog API (Electron-only) =====
   skills: {
-    list: (projectPath?: string) =>
-      invokeIpcWithResult<SkillCatalogItem[]>(SKILLS_LIST, projectPath),
-    getDetail: (skillId: string, projectPath?: string) =>
-      invokeIpcWithResult<SkillDetail | null>(SKILLS_GET_DETAIL, skillId, projectPath),
+    list: (options?: string | SkillsListOptions) =>
+      invokeIpcWithResult<SkillCatalogItem[]>(SKILLS_LIST, options),
+    getDetail: (skillId: string, options?: string | SkillsListOptions) =>
+      invokeIpcWithResult<SkillDetail | null>(SKILLS_GET_DETAIL, skillId, options),
     previewUpsert: (request: SkillUpsertRequest) =>
       invokeIpcWithResult<SkillReviewPreview>(SKILLS_PREVIEW_UPSERT, request),
     applyUpsert: (request: SkillUpsertRequest) =>

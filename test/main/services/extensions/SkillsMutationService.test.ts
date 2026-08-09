@@ -2,27 +2,56 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
-
 import { SkillPlanService } from '@main/services/extensions/skills/SkillPlanService';
+import { SkillRootsResolver } from '@main/services/extensions/skills/SkillRootsResolver';
 import { SkillScaffoldService } from '@main/services/extensions/skills/SkillScaffoldService';
 import { SkillsCatalogService } from '@main/services/extensions/skills/SkillsCatalogService';
 import { SkillsMutationService } from '@main/services/extensions/skills/SkillsMutationService';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ResolvedSkillRoot } from '@main/services/extensions/skills/SkillRootsResolver';
 
-function createResolver(rootPath: string) {
-  return {
-    resolve(projectPath?: string): ResolvedSkillRoot[] {
+function createResolver(rootPath: string): SkillRootsResolver {
+  const resolver = new SkillRootsResolver();
+  vi.spyOn(resolver, 'resolve').mockImplementation(
+    (options?: string | { projectPath?: string }): ResolvedSkillRoot[] => {
+      const projectPath = typeof options === 'string' ? options : options?.projectPath;
       return [
         {
           scope: 'project',
           rootKind: 'claude',
+          teamName: null,
           projectRoot: projectPath ?? rootPath,
           rootPath,
         },
       ];
+    }
+  );
+  return resolver;
+}
+
+function createLibraryResolver(rootPath: string): SkillRootsResolver {
+  const resolver = new SkillRootsResolver();
+  vi.spyOn(resolver, 'resolve').mockReturnValue([
+    {
+      scope: 'library',
+      rootKind: 'library',
+      teamName: null,
+      projectRoot: null,
+      rootPath,
     },
+  ]);
+  return resolver;
+}
+
+/**
+ * The pointers into the CLI folders are a side effect of a save, not part of
+ * it: stubbing them keeps these tests off the real skill directories.
+ */
+function createProjectionService() {
+  return {
+    project: vi.fn().mockResolvedValue(undefined),
+    release: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -45,11 +74,12 @@ describe('SkillsMutationService', () => {
 
     const resolver = createResolver(skillsRoot);
     const mutationService = new SkillsMutationService(
-      resolver as any,
-      new SkillsCatalogService(resolver as any),
-      new SkillScaffoldService(resolver as any),
+      resolver,
+      new SkillsCatalogService(resolver),
+      new SkillScaffoldService(resolver),
       undefined,
-      new SkillPlanService()
+      new SkillPlanService(),
+      createProjectionService() as never
     );
 
     const request = {
@@ -81,11 +111,12 @@ describe('SkillsMutationService', () => {
 
     const resolver = createResolver(skillsRoot);
     const mutationService = new SkillsMutationService(
-      resolver as any,
-      new SkillsCatalogService(resolver as any),
-      new SkillScaffoldService(resolver as any),
+      resolver,
+      new SkillsCatalogService(resolver),
+      new SkillScaffoldService(resolver),
       undefined,
-      new SkillPlanService()
+      new SkillPlanService(),
+      createProjectionService() as never
     );
 
     const request = {
@@ -103,5 +134,34 @@ describe('SkillsMutationService', () => {
     await expect(
       mutationService.applyUpsert({ ...request, reviewPlanId: preview.planId })
     ).rejects.toThrow('changed after review');
+  });
+
+  it('points the runtime folders at a saved library skill', async () => {
+    const appData = await fs.mkdtemp(path.join(os.tmpdir(), 'skill-mutation-lib-'));
+    createdDirs.push(appData);
+
+    const libraryRoot = path.join(appData, 'skills', 'library');
+    const resolver = createLibraryResolver(libraryRoot);
+    const projectionService = createProjectionService();
+    const mutationService = new SkillsMutationService(
+      resolver,
+      new SkillsCatalogService(resolver),
+      new SkillScaffoldService(resolver),
+      undefined,
+      new SkillPlanService(),
+      projectionService as never
+    );
+
+    const request = {
+      scope: 'library' as const,
+      rootKind: 'library' as const,
+      folderName: 'demo',
+      files: [{ relativePath: 'SKILL.md', content: '# demo' }],
+    };
+
+    const preview = await mutationService.previewUpsert(request);
+    await mutationService.applyUpsert({ ...request, reviewPlanId: preview.planId });
+
+    expect(projectionService.project).toHaveBeenCalledWith(path.join(libraryRoot, 'demo'), 'demo');
   });
 });

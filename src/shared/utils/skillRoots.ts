@@ -1,8 +1,3 @@
-import {
-  getCliProviderExtensionCapability,
-  isCliExtensionCapabilityAvailable,
-} from './providerExtensionCapabilities';
-
 import type { TeamProviderId } from '@shared/types';
 import type { CliInstallationStatus } from '@shared/types';
 import type { SkillRootKind } from '@shared/types/extensions';
@@ -43,16 +38,29 @@ export const SKILL_ROOT_DEFINITIONS: readonly SkillRootDefinition[] = [
   },
 ] as const;
 
-export function getSkillRootDefinition(rootKind: SkillRootKind): SkillRootDefinition {
-  return SKILL_ROOT_DEFINITIONS.find((definition) => definition.rootKind === rootKind)!;
+/**
+ * The app's own store. Unlike the entries above it names no CLI directory: its
+ * skills are reachable from every runtime because the app points the
+ * runtime-branded folders at them (see SkillProjectionService).
+ */
+export const LIBRARY_SKILL_ROOT_KIND = 'library';
+
+export function isLibrarySkillRootKind(rootKind: SkillRootKind): boolean {
+  return rootKind === LIBRARY_SKILL_ROOT_KIND;
+}
+
+/** Null for the app library, which is backed by no CLI directory. */
+export function getSkillRootDefinition(rootKind: SkillRootKind): SkillRootDefinition | null {
+  return SKILL_ROOT_DEFINITIONS.find((definition) => definition.rootKind === rootKind) ?? null;
 }
 
 export function formatSkillRootKind(rootKind: SkillRootKind): string {
-  return getSkillRootDefinition(rootKind).directoryName;
+  return getSkillRootDefinition(rootKind)?.directoryName ?? 'App library';
 }
 
 export function getSkillAudience(rootKind: SkillRootKind): SkillAudience {
-  return getSkillRootDefinition(rootKind).audience;
+  // Library skills reach every runtime, so they are shared by definition.
+  return getSkillRootDefinition(rootKind)?.audience ?? 'shared';
 }
 
 export function getSkillAudienceLabel(rootKind: SkillRootKind): string {

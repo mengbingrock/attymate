@@ -154,6 +154,7 @@ export class SkillMetadataParser {
       folderName,
       scope: root.scope,
       rootKind: root.rootKind,
+      teamName: root.teamName,
       projectRoot: root.projectRoot,
       discoveryRoot: root.rootPath,
       skillDir,

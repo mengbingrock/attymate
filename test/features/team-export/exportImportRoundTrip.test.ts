@@ -1,15 +1,24 @@
+import { mkdir, mkdtemp, readFile as readTextFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import * as nodePath from 'node:path';
+
+import { MATTER_SKILL_SLUG } from '@features/matter-dashboard/contracts';
 import {
   assembleTeamExportBundle,
   buildTeamExportFiles,
   buildTeamExportMembers,
 } from '@features/team-export/core/domain/teamExportPolicy';
+import { createTeamExportFeature } from '@features/team-export/main/composition/createTeamExportFeature';
 import { bundleToPreview, parseTeamImportBundle } from '@features/team-import/core';
 import { buildTeamImportPreview } from '@features/team-import/core/domain/teamImportPolicy';
-import { describe, expect, it } from 'vitest';
+import { SkillsMutationInstaller } from '@features/team-import/main/infrastructure/SkillsMutationInstaller';
+import { setAppDataBasePath } from '@main/utils/pathDecoder';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import type { TeamExportWriterPort } from '@features/team-export/core/application/ports/TeamExportPorts';
 import type { TeamExportFile, TeamExportSource } from '@features/team-export/core/domain/teamExportPolicy';
-import type { TeamImportFolderSnapshot } from '@features/team-import/core/application/models/TeamImportFolderSnapshot';
 import type { TeamImportBundleSkill } from '@features/team-import/contracts';
+import type { TeamImportFolderSnapshot } from '@features/team-import/core/application/models/TeamImportFolderSnapshot';
 
 /**
  * Export and import are two halves of one contract, and both halves are pure
@@ -197,5 +206,118 @@ describe('export → import round trip', () => {
       expect(file.content).not.toContain('/Users/');
       expect(file.content).not.toContain('matter.json');
     }
+  });
+});
+
+/**
+ * The same round trip through the real store-backed adapters: what a team owns
+ * in `<userData>/skills/teams/<team>` is exactly what travels, and it lands in
+ * the importing team's own store — no runtime folder and no project folder is
+ * involved on either side.
+ */
+describe('a team-owned skill survives the round trip through the skill store', () => {
+  let appDataDir: string;
+  let teamsBasePath: string;
+
+  const SKILL_MARKDOWN =
+    '---\nname: team-only-skill\ndescription: Only this team has it.\n---\n\nDo the team-owned work.\n';
+  const MATTER_SKILL_MARKDOWN =
+    '---\nname: matter-dashboard\ndescription: Keep the matter dashboard current.\n---\n\nPropose grounded dashboard updates.\n';
+
+  function teamSkillDir(teamName: string, slug: string): string {
+    return nodePath.join(appDataDir, 'skills', 'teams', teamName, slug);
+  }
+
+  beforeEach(async () => {
+    appDataDir = await mkdtemp(nodePath.join(tmpdir(), 'team-skill-roundtrip-'));
+    teamsBasePath = await mkdtemp(nodePath.join(tmpdir(), 'team-skill-roundtrip-teams-'));
+    setAppDataBasePath(appDataDir);
+
+    // The required dashboard workflow exists in the shared library before an
+    // unlaunched team receives its own projected copy.
+    const matterSkillDir = nodePath.join(
+      appDataDir,
+      'skills',
+      'library',
+      MATTER_SKILL_SLUG
+    );
+    await mkdir(matterSkillDir, { recursive: true });
+    await writeFile(nodePath.join(matterSkillDir, 'SKILL.md'), MATTER_SKILL_MARKDOWN);
+
+    // The exporting team: one member, and a skill only its own store holds.
+    const teamDir = nodePath.join(teamsBasePath, 'source-team');
+    await mkdir(teamDir, { recursive: true });
+    await writeFile(
+      nodePath.join(teamDir, 'team.meta.json'),
+      JSON.stringify({ description: 'Source team', prompt: 'Coordinate.' })
+    );
+    await writeFile(
+      nodePath.join(teamDir, 'members.meta.json'),
+      JSON.stringify({
+        members: [{ name: 'docket-agent', role: 'Docket Specialist', workflow: 'Check the docket.' }],
+      })
+    );
+    const skillDir = teamSkillDir('source-team', 'team-only-skill');
+    await mkdir(nodePath.join(skillDir, 'references'), { recursive: true });
+    await writeFile(nodePath.join(skillDir, 'SKILL.md'), SKILL_MARKDOWN);
+    await writeFile(nodePath.join(skillDir, 'references', 'checklist.md'), 'Checklist.\n');
+  });
+
+  afterEach(async () => {
+    setAppDataBasePath(null);
+    await rm(appDataDir, { recursive: true, force: true });
+    await rm(teamsBasePath, { recursive: true, force: true });
+  });
+
+  it('exports from the owning team store and imports into the new team store', async () => {
+    let written: readonly TeamExportFile[] = [];
+    const writer: TeamExportWriterPort = {
+      write: (input) => {
+        written = input.files;
+        return Promise.resolve({ folderPath: '/exports/source-team-export', zipPath: null });
+      },
+    };
+    const feature = createTeamExportFeature({
+      teamsBasePath,
+      writer,
+      destinationPicker: { chooseDestination: () => Promise.resolve('/exports') },
+    });
+
+    const result = await feature.exportTeam({ teamName: 'source-team' });
+
+    // No member names the slug: the team's own store is what puts it in the
+    // package.
+    expect(result?.skillSlugs).toEqual([MATTER_SKILL_SLUG, 'team-only-skill']);
+    expect(written.map((file) => file.relativePath)).toContain(
+      `skills/${MATTER_SKILL_SLUG}/SKILL.md`
+    );
+    expect(written.map((file) => file.relativePath)).toContain(
+      'skills/team-only-skill/references/checklist.md'
+    );
+
+    const bundleJson = written.find(
+      (file) => file.relativePath === 'team-import-bundle.json'
+    )!.content;
+    const { bundle, blockingErrors } = parseTeamImportBundle(bundleJson);
+    expect(blockingErrors).toEqual([]);
+    const teamOnlySkill = bundle!.skills.find((candidate) => candidate.slug === 'team-only-skill');
+    expect(teamOnlySkill).toMatchObject({
+      slug: 'team-only-skill',
+      description: 'Only this team has it.',
+    });
+
+    const installer = new SkillsMutationInstaller();
+    const installed = await installer.install(teamOnlySkill!, { teamName: 'imported-team' });
+
+    expect(installed).toEqual({ status: 'installed' });
+    await expect(
+      readTextFile(nodePath.join(teamSkillDir('imported-team', 'team-only-skill'), 'SKILL.md'), 'utf8')
+    ).resolves.toBe(SKILL_MARKDOWN);
+    await expect(
+      readTextFile(
+        nodePath.join(teamSkillDir('imported-team', 'team-only-skill'), 'references', 'checklist.md'),
+        'utf8'
+      )
+    ).resolves.toBe('Checklist.\n');
   });
 });

@@ -99,23 +99,26 @@ export class SkillsWatcherService {
 
   private enqueueEventsForPath(type: SkillWatcherEvent['type'], filePath: string): void {
     const matchedProjectPaths = new Set<string | null>();
-    let matchedUserRoot = false;
+    // Scopes that are not tied to a project folder: the app's own store and the
+    // runtime-branded user directories. Reported under their own scope so the
+    // UI does not mistake a library edit for a change in some project.
+    const matchedGlobalScopes = new Set<SkillWatcherEvent['scope']>();
 
     for (const projectPath of this.subscriptions.values()) {
       const roots = this.rootsResolver.resolve(projectPath ?? undefined);
       for (const root of roots) {
         if (!isPathWithinRoot(filePath, root.rootPath)) continue;
-        if (root.scope === 'user') {
-          matchedUserRoot = true;
-        } else {
+        if (root.scope === 'project') {
           matchedProjectPaths.add(projectPath ?? null);
+        } else {
+          matchedGlobalScopes.add(root.scope);
         }
       }
     }
 
-    if (matchedUserRoot) {
-      this.pendingEvents.set(`user:${type}`, {
-        scope: 'user',
+    for (const scope of matchedGlobalScopes) {
+      this.pendingEvents.set(`${scope}:${type}`, {
+        scope,
         projectPath: null,
         path: filePath,
         type,
