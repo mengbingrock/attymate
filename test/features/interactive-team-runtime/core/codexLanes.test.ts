@@ -1,12 +1,11 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
-
 import {
   buildCodexLaneArgs,
   CODEX_AGENT_TEAMS_MCP_SERVER_NAME,
 } from '@features/interactive-team-runtime/core/domain/codexLaneArgs';
 import { detectCodexPaneState } from '@features/interactive-team-runtime/core/domain/codexPaneState';
 import { parseRuntimeBinding } from '@features/interactive-team-runtime/core/domain/runtimeBinding';
+import { describe, expect, it } from 'vitest';
 
 const MCP_SERVER = {
   command: '/repo/node_modules/.bin/tsx',
@@ -31,7 +30,8 @@ describe('buildCodexLaneArgs', () => {
     expect(joined).toContain(`${key}.args=["/repo/mcp-server/src/index.ts"]`);
     expect(joined).toContain(`${key}.env.AGENT_TEAMS_MCP_CLAUDE_DIR="/Users/x/.claude"`);
     expect(joined).toContain(`${key}.env.CLAUDE_TEAM_CONTROL_URL="http://127.0.0.1:3456"`);
-    expect(joined).toContain(`${key}.startup_timeout_sec=30`);
+    expect(joined).toContain(`${key}.required=true`);
+    expect(joined).toContain(`${key}.startup_timeout_sec=60`);
     // Quoted-key TOML path for the trusted project (cwd contains a space).
     expect(joined).toContain('projects."/tmp/my project".trust_level="trusted"');
     expect(args).toContain('-m');

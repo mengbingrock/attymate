@@ -26,8 +26,8 @@ export interface CodexLaneArgsInput {
  */
 export const CODEX_AGENT_TEAMS_MCP_SERVER_NAME = 'agent_teams';
 
-/** MCP cold start can exceed codex's 10s default (Electron-node fallback). */
-const MCP_STARTUP_TIMEOUT_SEC = 30;
+/** Parallel lane cold starts can exceed codex's 10s default in development. */
+const MCP_STARTUP_TIMEOUT_SEC = 60;
 
 /** TOML basic strings share JSON's escape grammar for our value set. */
 function tomlString(value: string): string {
@@ -56,6 +56,9 @@ export function buildCodexLaneArgs(input: CodexLaneArgsInput): string[] {
   for (const [key, value] of Object.entries(input.mcpServer.env)) {
     args.push(...configOverride(`${mcpKey}.env.${key}`, tomlString(value)));
   }
+  // Team coordination is unavailable without this server. Mark it required so
+  // codex does not admit the first turn while omitting a still-pending server.
+  args.push(...configOverride(`${mcpKey}.required`, 'true'));
   args.push(...configOverride(`${mcpKey}.startup_timeout_sec`, String(MCP_STARTUP_TIMEOUT_SEC)));
   // Best-effort trust pin; the TUI still shows its trust dialog on first run,
   // which the lane launcher auto-answers (verified against codex-cli 0.145.0).
