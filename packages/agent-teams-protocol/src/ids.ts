@@ -1,0 +1,41 @@
+import { z } from 'zod';
+
+const opaqueId = <T extends string>() => z.uuid().brand<T>();
+
+export const organizationIdSchema = opaqueId<'OrganizationId'>();
+export const personIdSchema = opaqueId<'PersonId'>();
+export const nodeIdSchema = opaqueId<'NodeId'>();
+export const workerInstanceIdSchema = opaqueId<'WorkerInstanceId'>();
+export const controlSessionIdSchema = opaqueId<'ControlSessionId'>();
+export const teamIdSchema = opaqueId<'TeamId'>();
+export const membershipIdSchema = opaqueId<'MembershipId'>();
+export const workspaceIdSchema = opaqueId<'WorkspaceId'>();
+export const workItemIdSchema = opaqueId<'WorkItemId'>();
+export const assignmentIdSchema = opaqueId<'AssignmentId'>();
+export const attemptIdSchema = opaqueId<'AttemptId'>();
+export const approvalRequestIdSchema = opaqueId<'ApprovalRequestId'>();
+export const conversationIdSchema = opaqueId<'ConversationId'>();
+export const calendarEventIdSchema = opaqueId<'CalendarEventId'>();
+export const artifactIdSchema = opaqueId<'ArtifactId'>();
+export const commandIdSchema = opaqueId<'CommandId'>();
+export const eventIdSchema = opaqueId<'EventId'>();
+export const turnIdSchema = opaqueId<'TurnId'>();
+
+export type OrganizationId = z.infer<typeof organizationIdSchema>;
+export type PersonId = z.infer<typeof personIdSchema>;
+export type NodeId = z.infer<typeof nodeIdSchema>;
+export type WorkerInstanceId = z.infer<typeof workerInstanceIdSchema>;
+export type ControlSessionId = z.infer<typeof controlSessionIdSchema>;
+export type TeamId = z.infer<typeof teamIdSchema>;
+export type MembershipId = z.infer<typeof membershipIdSchema>;
+export type WorkspaceId = z.infer<typeof workspaceIdSchema>;
+export type WorkItemId = z.infer<typeof workItemIdSchema>;
+export type AssignmentId = z.infer<typeof assignmentIdSchema>;
+export type AttemptId = z.infer<typeof attemptIdSchema>;
+export type ApprovalRequestId = z.infer<typeof approvalRequestIdSchema>;
+export type ConversationId = z.infer<typeof conversationIdSchema>;
+export type CalendarEventId = z.infer<typeof calendarEventIdSchema>;
+export type ArtifactId = z.infer<typeof artifactIdSchema>;
+export type CommandId = z.infer<typeof commandIdSchema>;
+export type EventId = z.infer<typeof eventIdSchema>;
+export type TurnId = z.infer<typeof turnIdSchema>;

@@ -13,6 +13,11 @@
     "noEmit": true,
     "paths": {
       "@claude-teams/agent-graph": ["./packages/agent-graph/src/index.ts"],
+      "@claude-teams/agent-teams-protocol": [
+        "./packages/agent-teams-protocol/src/index.ts"
+      ],
+      "@claude-teams/agent-teams-relay": ["./packages/agent-teams-relay/src/index.ts"],
+      "@claude-teams/agent-teams-worker": ["./packages/agent-teams-worker/src/index.ts"],
       "@features/*": ["./src/features/*"],
       "@main/*": ["./src/main/*"],
       "@renderer/*": ["./src/renderer/*"],

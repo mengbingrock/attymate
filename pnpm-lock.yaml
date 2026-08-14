@@ -772,6 +772,63 @@ importers:
         specifier: ^3.0.10
         version: 3.0.10
 
+  packages/agent-teams-protocol:
+    dependencies:
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
+  packages/agent-teams-relay:
+    dependencies:
+      '@claude-teams/agent-teams-protocol':
+        specifier: workspace:*
+        version: link:../agent-teams-protocol
+      fastify:
+        specifier: ^5.8.5
+        version: 5.8.5
+      ws:
+        specifier: 8.21.0
+        version: 8.21.0
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
+  packages/agent-teams-worker:
+    dependencies:
+      '@claude-teams/agent-teams-protocol':
+        specifier: workspace:*
+        version: link:../agent-teams-protocol
+      ws:
+        specifier: 8.21.0
+        version: 8.21.0
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
 packages:
 
   '@alloc/quick-lru@5.2.0':

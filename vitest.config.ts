@@ -23,6 +23,18 @@ export default defineConfig({
       '@renderer': resolve(__dirname, 'src/renderer'),
       '@preload': resolve(__dirname, 'src/preload'),
       '@claude-teams/agent-graph': resolve(__dirname, 'packages/agent-graph/src/index.ts'),
+      '@claude-teams/agent-teams-protocol': resolve(
+        __dirname,
+        'packages/agent-teams-protocol/src/index.ts'
+      ),
+      '@claude-teams/agent-teams-relay': resolve(
+        __dirname,
+        'packages/agent-teams-relay/src/index.ts'
+      ),
+      '@claude-teams/agent-teams-worker': resolve(
+        __dirname,
+        'packages/agent-teams-worker/src/index.ts'
+      ),
       '@radix-ui/react-compose-refs': resolve(
         __dirname,
         'src/renderer/vendor/radixComposeRefs.ts'

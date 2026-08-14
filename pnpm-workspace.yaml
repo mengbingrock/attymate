@@ -3,6 +3,9 @@ packages:
   - mcp-server
   - landing
   - packages/agent-graph
+  - packages/agent-teams-protocol
+  - packages/agent-teams-relay
+  - packages/agent-teams-worker
 minimumReleaseAge: 4320
 minimumReleaseAgeExclude:
   - '@esbuild/*'
