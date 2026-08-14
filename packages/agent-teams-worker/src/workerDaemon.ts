@@ -10,6 +10,8 @@ import {
 } from '@claude-teams/agent-teams-protocol';
 import WebSocket from 'ws';
 
+import { WorkerInboxStore, type WorkerInboxCommand } from './workerInboxStore';
+
 export interface AgentTeamsWorkerOptions {
   readonly relayUrl: string;
   readonly dataDir: string;
@@ -44,12 +46,14 @@ export interface AgentTeamsWorkerStatus {
   readonly connectedAt?: string;
   readonly lastHeartbeatAckAt?: string;
   readonly lastHeartbeatSequence: number;
+  readonly lastInboundCursor: number;
   readonly updatedAt: string;
 }
 
 export interface StartedAgentTeamsWorker {
   readonly ready: Promise<void>;
   readonly getStatus: () => AgentTeamsWorkerStatus;
+  readonly listInboxCommands: () => readonly WorkerInboxCommand[];
   readonly stop: () => Promise<void>;
 }
 
@@ -57,6 +61,7 @@ export const startAgentTeamsWorker = async (
   options: AgentTeamsWorkerOptions
 ): Promise<StartedAgentTeamsWorker> => {
   await mkdir(options.dataDir, { recursive: true });
+  const inboxStore = new WorkerInboxStore(options.dataDir);
   let socket: WebSocket | undefined;
   let heartbeatTimer: NodeJS.Timeout | undefined;
   let reconnectTimer: NodeJS.Timeout | undefined;
@@ -81,6 +86,7 @@ export const startAgentTeamsWorker = async (
     relayUrl: options.relayUrl,
     state: 'starting',
     lastHeartbeatSequence: 0,
+    lastInboundCursor: inboxStore.lastInboundCursor(),
     updatedAt: new Date().toISOString(),
   };
 
@@ -118,6 +124,7 @@ export const startAgentTeamsWorker = async (
           workerInstanceId: options.workerInstanceId,
           workerGeneration: options.workerGeneration,
           label: options.label,
+          lastInboundCursor: inboxStore.lastInboundCursor(),
           sentAt: new Date().toISOString(),
         })
       );
@@ -150,6 +157,35 @@ export const startAgentTeamsWorker = async (
         }, message.heartbeatIntervalMs);
         return;
       }
+      if (message.type === 'relay.command') {
+        if (message.envelope.targetNodeId !== options.nodeId) {
+          socket?.send(
+            JSON.stringify({
+              type: 'worker.command_ack',
+              protocolVersion: 2,
+              commandId: message.envelope.commandId,
+              cursor: message.cursor,
+              status: 'rejected',
+              receivedAt: new Date().toISOString(),
+              error: 'Command target does not match this Worker node',
+            })
+          );
+          return;
+        }
+        inboxStore.accept(message.cursor, message.envelope);
+        updateStatus({ lastInboundCursor: inboxStore.lastInboundCursor() });
+        socket?.send(
+          JSON.stringify({
+            type: 'worker.command_ack',
+            protocolVersion: 2,
+            commandId: message.envelope.commandId,
+            cursor: message.cursor,
+            status: 'received',
+            receivedAt: new Date().toISOString(),
+          })
+        );
+        return;
+      }
       updateStatus({
         lastHeartbeatAckAt: message.receivedAt,
         lastHeartbeatSequence: message.sequence,
@@ -176,6 +212,7 @@ export const startAgentTeamsWorker = async (
   return {
     ready,
     getStatus: () => status,
+    listInboxCommands: () => inboxStore.list(),
     stop: async () => {
       stopped = true;
       clearHeartbeat();
@@ -188,6 +225,7 @@ export const startAgentTeamsWorker = async (
       }
       updateStatus({ state: 'stopped' });
       await persistStatus();
+      inboxStore.close();
     },
   };
 };

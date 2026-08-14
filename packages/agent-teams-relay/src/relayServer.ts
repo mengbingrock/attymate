@@ -2,6 +2,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
+  commandIdSchema,
+  workerCommandAckMessageSchema,
   workerHeartbeatMessageSchema,
   workerHelloMessageSchema,
   type NodeId,
@@ -11,6 +13,8 @@ import {
 } from '@claude-teams/agent-teams-protocol';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { type RawData, WebSocket, WebSocketServer } from 'ws';
+
+import { RelayCommandStore, type RelayCommandRecord } from './relayCommandStore';
 
 export interface AgentTeamsRelayOptions {
   readonly host: string;
@@ -47,6 +51,8 @@ export interface StartedAgentTeamsRelay {
   readonly wsUrl: string;
   readonly app: FastifyInstance;
   readonly listWorkers: () => readonly ConnectedWorkerProjection[];
+  readonly enqueueCommand: (input: unknown) => RelayCommandRecord;
+  readonly listCommands: () => readonly RelayCommandRecord[];
   readonly close: () => Promise<void>;
 }
 
@@ -55,11 +61,41 @@ const parseJsonMessage = (data: RawData): unknown => JSON.parse(data.toString('u
 export const startAgentTeamsRelay = async (
   options: AgentTeamsRelayOptions
 ): Promise<StartedAgentTeamsRelay> => {
+  await mkdir(options.dataDir, { recursive: true });
   const heartbeatIntervalMs = options.heartbeatIntervalMs ?? 2_000;
   const staleAfterMs = options.staleAfterMs ?? heartbeatIntervalMs * 3;
   const sessions = new Map<NodeId, MutableWorkerSession>();
   const app = Fastify({ logger: options.logger ?? false });
   const webSocketServer = new WebSocketServer({ noServer: true });
+  const commandStore = new RelayCommandStore(options.dataDir);
+
+  const sendCommand = (session: MutableWorkerSession, record: RelayCommandRecord): void => {
+    session.socket.send(
+      JSON.stringify({
+        type: 'relay.command',
+        protocolVersion: 2,
+        cursor: record.cursor,
+        envelope: record.envelope,
+      })
+    );
+    commandStore.markDelivered(record.commandId);
+  };
+
+  const sendPendingCommands = (session: MutableWorkerSession, afterCursor: number): void => {
+    for (const record of commandStore.listForNodeAfter(session.hello.nodeId, afterCursor)) {
+      sendCommand(session, record);
+    }
+  };
+
+  const enqueueCommand = (input: unknown): RelayCommandRecord => {
+    const record = commandStore.enqueue(input);
+    const session = sessions.get(record.targetNodeId);
+    if (session !== undefined && record.status !== 'acknowledged') {
+      sendCommand(session, record);
+      return commandStore.get(record.commandId) ?? record;
+    }
+    return record;
+  };
 
   const listWorkers = (): readonly ConnectedWorkerProjection[] => {
     const now = Date.now();
@@ -99,6 +135,18 @@ export const startAgentTeamsRelay = async (
     insecureLanMode: true,
     workers: listWorkers(),
   }));
+  app.get('/v2/commands', async () => ({ commands: commandStore.listAll() }));
+  app.get('/v2/commands/:commandId', async (request, reply) => {
+    const rawCommandId = (request.params as { commandId?: unknown }).commandId;
+    const commandId = commandIdSchema.parse(rawCommandId);
+    const command = commandStore.get(commandId);
+    if (command === undefined) return reply.code(404).send({ error: 'command_not_found' });
+    return { command };
+  });
+  app.post('/v2/commands', async (request, reply) => {
+    const command = enqueueCommand(request.body);
+    return reply.code(201).send({ command });
+  });
 
   app.server.on('upgrade', (request, socket, head) => {
     const requestUrl = new URL(request.url ?? '/', 'http://relay.local');
@@ -133,6 +181,7 @@ export const startAgentTeamsRelay = async (
             lastHeartbeatAt: connectedAt,
             lastHeartbeatSequence: 0,
           });
+          commandStore.acknowledgeThrough(hello.nodeId, hello.lastInboundCursor);
           socket.send(
             JSON.stringify({
               type: 'relay.welcome',
@@ -142,16 +191,42 @@ export const startAgentTeamsRelay = async (
               connectedAt,
             })
           );
+          const currentSession = sessions.get(hello.nodeId);
+          if (currentSession !== undefined) {
+            sendPendingCommands(currentSession, hello.lastInboundCursor);
+          }
           void persistProjection();
           return;
         }
 
-        const heartbeat = workerHeartbeatMessageSchema.parse(input);
         const session = sessions.get(boundNodeId);
         if (session === undefined || session.socket !== socket) {
           socket.close(4002, 'Worker session is no longer current');
           return;
         }
+        const inputType =
+          typeof input === 'object' && input !== null && 'type' in input ? input.type : undefined;
+        if (inputType === 'worker.command_ack') {
+          const acknowledgement = workerCommandAckMessageSchema.parse(input);
+          const stored = commandStore.get(acknowledgement.commandId);
+          if (
+            stored === undefined ||
+            stored.targetNodeId !== boundNodeId ||
+            stored.cursor !== acknowledgement.cursor
+          ) {
+            socket.close(4004, 'Command acknowledgement does not match delivery');
+            return;
+          }
+          commandStore.acknowledge(
+            acknowledgement.commandId,
+            boundNodeId,
+            acknowledgement.status,
+            acknowledgement.error
+          );
+          return;
+        }
+
+        const heartbeat = workerHeartbeatMessageSchema.parse(input);
         if (heartbeat.sequence <= session.lastHeartbeatSequence) {
           socket.close(4003, 'Heartbeat sequence must increase');
           return;
@@ -191,7 +266,6 @@ export const startAgentTeamsRelay = async (
     });
   });
 
-  await mkdir(options.dataDir, { recursive: true });
   await app.listen({ host: options.host, port: options.port });
   const address = app.server.address();
   if (address === null || typeof address === 'string') {
@@ -206,6 +280,8 @@ export const startAgentTeamsRelay = async (
     wsUrl: `${httpUrl.replace(/^http/, 'ws')}/v2/worker-stream`,
     app,
     listWorkers,
+    enqueueCommand,
+    listCommands: () => commandStore.listAll(),
     close: async () => {
       for (const session of sessions.values()) {
         session.socket.close(1001, 'Relay shutting down');
@@ -213,6 +289,7 @@ export const startAgentTeamsRelay = async (
       sessions.clear();
       webSocketServer.close();
       await app.close();
+      commandStore.close();
     },
   };
 };
