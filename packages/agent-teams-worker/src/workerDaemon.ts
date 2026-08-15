@@ -23,6 +23,11 @@ import {
   WorkerAssignmentStore,
 } from './workerAssignmentStore';
 import { WorkerInboxStore, type WorkerInboxCommand } from './workerInboxStore';
+import {
+  WorkerMessageStore,
+  type WorkerMessageExecutionScope,
+  type WorkerTeamMessage,
+} from './workerMessageStore';
 import { WorkerOutboxStore, type WorkerOutboxEvent } from './workerOutboxStore';
 import type { WorkerRuntimeBinding } from './workerRuntimeStore';
 
@@ -77,6 +82,7 @@ export interface StartedAgentTeamsWorker {
   readonly ready: Promise<void>;
   readonly getStatus: () => AgentTeamsWorkerStatus;
   readonly listInboxCommands: () => readonly WorkerInboxCommand[];
+  readonly listMessages: () => readonly WorkerTeamMessage[];
   readonly listAssignments: () => ReturnType<WorkerAssignmentStore['list']>;
   readonly listOutboxEvents: () => readonly WorkerOutboxEvent[];
   readonly listRuntimeBindings: () => readonly WorkerRuntimeBinding[];
@@ -98,7 +104,32 @@ export const startAgentTeamsWorker = async (
   await mkdir(options.dataDir, { recursive: true });
   const inboxStore = new WorkerInboxStore(options.dataDir);
   const assignmentStore = new WorkerAssignmentStore(options.dataDir);
+  const messageStore = new WorkerMessageStore(options.dataDir);
+  const activeMessageScope = (): WorkerMessageExecutionScope | undefined => {
+    const identity = assignmentStore.activeLeaseIdentity();
+    if (identity === undefined) return undefined;
+    const assignment = assignmentStore.get(identity.assignmentId);
+    if (
+      assignment?.teamId === undefined ||
+      assignment.membershipId === undefined ||
+      assignment.workspaceId === undefined
+    ) {
+      return undefined;
+    }
+    return {
+      teamId: assignment.teamId,
+      membershipId: assignment.membershipId,
+      workspaceId: assignment.workspaceId,
+      assignmentId: identity.assignmentId,
+      attemptId: identity.attemptId,
+      leaseEpoch: identity.leaseEpoch,
+    };
+  };
   const applyAssignmentCommand = (command: WorkerInboxCommand) => {
+    if (command.envelope.type === 'team.message.deliver') {
+      messageStore.acceptDelivery(command, activeMessageScope());
+      return undefined;
+    }
     if (command.envelope.type === 'assignment.lease_grant') {
       const { assignmentId, attemptId, leaseEpoch, expiresAt } = command.envelope;
       if (
@@ -109,13 +140,16 @@ export const startAgentTeamsWorker = async (
       ) {
         throw new Error('Lease grant is missing execution identity');
       }
-      return assignmentStore.grantLease({
+      const assignment = assignmentStore.grantLease({
         assignmentId,
         attemptId,
         leaseEpoch,
         expiresAt,
         payload: command.envelope.payload,
       });
+      const scope = activeMessageScope();
+      if (scope !== undefined) messageStore.reconcileActiveScope(scope);
+      return assignment;
     }
     return assignmentStore.projectOffer(command);
   };
@@ -514,6 +548,7 @@ export const startAgentTeamsWorker = async (
     controlServer = await startWorkerControlServer(options.controlSocketPath, {
       getStatus: () => status,
       listInboxCommands: () => inboxStore.list(),
+      listMessages: () => messageStore.listAll(),
       listAssignments: () => assignmentStore.list(),
       getAssignment: (assignmentId) => assignmentStore.get(assignmentId),
       listAssignmentActivity: (assignmentId) => assignmentStore.listActivity(assignmentId),
@@ -531,6 +566,7 @@ export const startAgentTeamsWorker = async (
     ready,
     getStatus: () => status,
     listInboxCommands: () => inboxStore.list(),
+    listMessages: () => messageStore.listAll(),
     listAssignments: () => assignmentStore.list(),
     listOutboxEvents: () => outboxStore.listAll(),
     listRuntimeBindings: () => runtimeSupervisor?.listBindings() ?? [],
@@ -563,6 +599,7 @@ export const startAgentTeamsWorker = async (
       await runtimeSupervisor?.close();
       assignmentStore.close();
       outboxStore.close();
+      messageStore.close();
       inboxStore.close();
     },
   };

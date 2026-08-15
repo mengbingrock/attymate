@@ -10,6 +10,7 @@ export * from './workerDaemon';
 export * from './workerDiagnostics';
 export * from './workerAssignmentStore';
 export * from './workerInboxStore';
+export * from './workerMessageStore';
 export * from './workerOutboxStore';
 export * from './workerRuntimeStore';
 export * from './workerRuntimeSessionStore';

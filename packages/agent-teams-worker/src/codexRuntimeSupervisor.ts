@@ -481,6 +481,7 @@ export class WorkerCodexRuntimeSupervisor {
       assignment.membershipId === undefined ||
       assignment.workspaceId === undefined ||
       assignment.attemptId === undefined ||
+      assignment.leaseId === undefined ||
       assignment.leaseEpoch === undefined ||
       assignment.leaseExpiresAt === undefined
     ) {

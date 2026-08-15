@@ -179,12 +179,20 @@ export class WorkerOutboxStore {
         attemptId: context.attemptId,
         leaseEpoch: context.leaseEpoch,
         type: input.type,
-        payload: {
-          ...input.payload,
-          membershipId: context.membershipId,
-          workspaceId: context.workspaceId,
-          turnId: context.turnId,
-        },
+        payload:
+          input.type === 'team.message'
+            ? {
+                ...input.payload,
+                senderMembershipId: context.membershipId,
+                senderWorkspaceId: context.workspaceId,
+                turnId: context.turnId,
+              }
+            : {
+                ...input.payload,
+                membershipId: context.membershipId,
+                workspaceId: context.workspaceId,
+                turnId: context.turnId,
+              },
       });
       this.database
         .prepare('UPDATE outbox_events SET envelope_json = ? WHERE sequence = ?')

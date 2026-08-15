@@ -1,9 +1,14 @@
+import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
+  assignmentOfferPayloadSchema,
   assignmentStateChangedPayloadSchema,
+  commandEnvelopeSchema,
   commandIdSchema,
+  teamMessageDeliveryPayloadSchema,
+  teamMessageEventPayloadSchema,
   workerEventMessageSchema,
   workerCommandAckMessageSchema,
   workerHeartbeatMessageSchema,
@@ -19,6 +24,10 @@ import { type RawData, WebSocket, WebSocketServer } from 'ws';
 import { RelayCommandStore, type RelayCommandRecord } from './relayCommandStore';
 import { RelayEventStore, type RelayEventRecord } from './relayEventStore';
 import { RelayLeaseStore, type RelayLeaseRecord } from './relayLeaseStore';
+import {
+  RelayMembershipRouteStore,
+  type RelayMembershipRoute,
+} from './relayMembershipRouteStore';
 
 export interface AgentTeamsRelayOptions {
   readonly host: string;
@@ -61,10 +70,22 @@ export interface StartedAgentTeamsRelay {
   readonly listCommands: () => readonly RelayCommandRecord[];
   readonly listEvents: () => readonly RelayEventRecord[];
   readonly listLeases: () => readonly RelayLeaseRecord[];
+  readonly listMembershipRoutes: () => readonly RelayMembershipRoute[];
   readonly close: () => Promise<void>;
 }
 
 const parseJsonMessage = (data: RawData): unknown => JSON.parse(data.toString('utf8'));
+
+const peerDeliveryCommandId = (eventId: string, recipientMembershipId: string): string => {
+  const bytes = createHash('sha256')
+    .update(`agent-teams-peer-delivery:${eventId}:${recipientMembershipId}`)
+    .digest()
+    .subarray(0, 16);
+  bytes[6] = (bytes[6]! & 0x0f) | 0x50;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
 
 export const startAgentTeamsRelay = async (
   options: AgentTeamsRelayOptions
@@ -78,6 +99,7 @@ export const startAgentTeamsRelay = async (
   const commandStore = new RelayCommandStore(options.dataDir);
   const eventStore = new RelayEventStore(options.dataDir);
   const leaseStore = new RelayLeaseStore(options.dataDir, options.leaseDurationMs);
+  const membershipRouteStore = new RelayMembershipRouteStore(options.dataDir);
 
   const sendCommand = (session: MutableWorkerSession, record: RelayCommandRecord): void => {
     session.socket.send(
@@ -98,14 +120,124 @@ export const startAgentTeamsRelay = async (
   };
 
   const enqueueCommand = (input: unknown): RelayCommandRecord => {
-    const record = commandStore.enqueue(input);
+    const envelope = commandEnvelopeSchema.parse(input);
+    const registerMembershipRoute = (): boolean => {
+      if (envelope.type !== 'assignment.offer') return false;
+      const payload = assignmentOfferPayloadSchema.parse(envelope.payload);
+      if (payload.membershipId !== undefined) {
+        if (envelope.teamId === undefined || payload.workspaceId === undefined) {
+          throw new TypeError('Routed assignment offers require team and workspace identity');
+        }
+        membershipRouteStore.register({
+          membershipId: payload.membershipId,
+          teamId: envelope.teamId,
+          nodeId: envelope.targetNodeId,
+          workspaceId: payload.workspaceId,
+        });
+        return true;
+      }
+      return false;
+    };
+    const existing = commandStore.get(envelope.commandId);
+    const registeredMembershipRoute =
+      existing === undefined
+        ? registerMembershipRoute()
+        : (() => {
+            commandStore.enqueue(envelope);
+            return registerMembershipRoute();
+          })();
+    const record = existing === undefined ? commandStore.enqueue(envelope) : existing;
     const session = sessions.get(record.targetNodeId);
     if (session !== undefined && record.status !== 'acknowledged') {
       sendCommand(session, record);
-      return commandStore.get(record.commandId) ?? record;
+      const delivered = commandStore.get(record.commandId) ?? record;
+      if (registeredMembershipRoute) reconcilePeerMessageDeliveries();
+      return delivered;
     }
+    if (registeredMembershipRoute) reconcilePeerMessageDeliveries();
     return record;
   };
+
+  const assertAuthorizedPeerMessage = (
+    event: ReturnType<typeof workerEventMessageSchema.parse>['envelope'],
+    sourceNodeId: NodeId
+  ): ReturnType<typeof teamMessageEventPayloadSchema.parse> => {
+    if (
+      event.teamId === undefined ||
+      event.assignmentId === undefined ||
+      event.attemptId === undefined ||
+      event.leaseEpoch === undefined
+    ) {
+      throw new TypeError('Team messages require the full team assignment execution identity');
+    }
+    const payload = teamMessageEventPayloadSchema.parse(event.payload);
+    const senderRoute = membershipRouteStore.get(payload.senderMembershipId);
+    if (
+      senderRoute === undefined ||
+      senderRoute.teamId !== event.teamId ||
+      senderRoute.nodeId !== sourceNodeId ||
+      senderRoute.workspaceId !== payload.senderWorkspaceId
+    ) {
+      throw new TypeError('Team message sender does not match its Relay membership route');
+    }
+    leaseStore.expireThrough();
+    const currentLease = leaseStore
+      .listAll()
+      .find(
+        (lease) =>
+          lease.assignmentId === event.assignmentId &&
+          lease.attemptId === event.attemptId &&
+          lease.leaseEpoch === event.leaseEpoch
+      );
+    if (
+      currentLease === undefined ||
+      !['granted', 'active'].includes(currentLease.status) ||
+      currentLease.nodeId !== sourceNodeId ||
+      currentLease.teamId !== event.teamId
+    ) {
+      throw new TypeError('Team message sender does not hold the current execution lease');
+    }
+    const recipientRoute = membershipRouteStore.get(payload.recipientMembershipId);
+    if (recipientRoute !== undefined && recipientRoute.teamId !== event.teamId) {
+      throw new TypeError('Team message recipient is not a member of the sender team');
+    }
+    return payload;
+  };
+
+  function reconcilePeerMessageDeliveries(): void {
+    for (const event of eventStore.listAll()) {
+      if (event.envelope.type !== 'team.message') continue;
+      const parsedPayload = teamMessageEventPayloadSchema.safeParse(event.envelope.payload);
+      if (!parsedPayload.success || event.envelope.teamId === undefined) continue;
+      const payload = parsedPayload.data;
+      const recipientRoute = membershipRouteStore.get(payload.recipientMembershipId);
+      if (recipientRoute === undefined || recipientRoute.teamId !== event.envelope.teamId) continue;
+      if (
+        event.envelope.assignmentId === undefined ||
+        event.envelope.attemptId === undefined ||
+        event.envelope.leaseEpoch === undefined
+      ) {
+        continue;
+      }
+      enqueueCommand({
+        protocolVersion: 2,
+        commandId: peerDeliveryCommandId(event.eventId, payload.recipientMembershipId),
+        sequence: event.cursor,
+        teamId: event.envelope.teamId,
+        targetNodeId: recipientRoute.nodeId,
+        assignmentId: event.envelope.assignmentId,
+        attemptId: event.envelope.attemptId,
+        leaseEpoch: event.envelope.leaseEpoch,
+        type: 'team.message.deliver',
+        payload: teamMessageDeliveryPayloadSchema.parse({
+          ...payload,
+          messageId: event.eventId,
+          recipientWorkspaceId: recipientRoute.workspaceId,
+          sentAt: event.envelope.occurredAt,
+        }),
+      });
+    }
+  }
 
   const maybeGrantNextAssignment = (nodeId: NodeId): void => {
     leaseStore.expireThrough();
@@ -167,6 +299,7 @@ export const startAgentTeamsRelay = async (
   app.get('/v2/commands', async () => ({ commands: commandStore.listAll() }));
   app.get('/v2/events', async () => ({ events: eventStore.listAll() }));
   app.get('/v2/leases', async () => ({ leases: leaseStore.listAll() }));
+  app.get('/v2/membership-routes', async () => ({ routes: membershipRouteStore.listAll() }));
   app.get('/v2/commands/:commandId', async (request, reply) => {
     const rawCommandId = (request.params as { commandId?: unknown }).commandId;
     const commandId = commandIdSchema.parse(rawCommandId);
@@ -271,6 +404,9 @@ export const startAgentTeamsRelay = async (
             }
             assignmentStateChangedPayloadSchema.parse(message.envelope.payload);
           }
+          if (message.envelope.type === 'team.message') {
+            assertAuthorizedPeerMessage(message.envelope, boundNodeId);
+          }
           const existing = eventStore.get(message.envelope.eventId);
           if (
             existing === undefined &&
@@ -280,6 +416,9 @@ export const startAgentTeamsRelay = async (
             return;
           }
           eventStore.accept(message.envelope);
+          if (message.envelope.type === 'team.message') {
+            reconcilePeerMessageDeliveries();
+          }
           session.lastEventSequence = Math.max(
             session.lastEventSequence,
             message.envelope.sequence
@@ -373,6 +512,8 @@ export const startAgentTeamsRelay = async (
     });
   });
 
+  reconcilePeerMessageDeliveries();
+
   await app.listen({ host: options.host, port: options.port });
   const address = app.server.address();
   if (address === null || typeof address === 'string') {
@@ -391,6 +532,7 @@ export const startAgentTeamsRelay = async (
     listCommands: () => commandStore.listAll(),
     listEvents: () => eventStore.listAll(),
     listLeases: () => leaseStore.listAll(),
+    listMembershipRoutes: () => membershipRouteStore.listAll(),
     close: async () => {
       for (const session of sessions.values()) {
         session.socket.close(1001, 'Relay shutting down');
@@ -401,6 +543,7 @@ export const startAgentTeamsRelay = async (
       commandStore.close();
       eventStore.close();
       leaseStore.close();
+      membershipRouteStore.close();
     },
   };
 };

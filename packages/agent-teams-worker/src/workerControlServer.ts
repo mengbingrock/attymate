@@ -16,6 +16,7 @@ import type {
   WorkerAssignmentActivity,
 } from './workerAssignmentStore';
 import type { WorkerInboxCommand } from './workerInboxStore';
+import type { WorkerTeamMessage } from './workerMessageStore';
 
 const MAX_CONTROL_RESPONSE_BYTES = 2 * 1024 * 1024;
 const MAX_CONTROL_REQUEST_BYTES = 64 * 1024;
@@ -23,6 +24,7 @@ const MAX_CONTROL_REQUEST_BYTES = 64 * 1024;
 export interface WorkerControlSnapshotProvider {
   readonly getStatus: () => AgentTeamsWorkerStatus;
   readonly listInboxCommands: () => readonly WorkerInboxCommand[];
+  readonly listMessages: () => readonly WorkerTeamMessage[];
   readonly listAssignments: () => readonly WorkerAssignment[];
   readonly getAssignment: (assignmentId: string) => WorkerAssignment | undefined;
   readonly listAssignmentActivity: (assignmentId?: string) => readonly WorkerAssignmentActivity[];
@@ -189,6 +191,10 @@ const handleControlRequest = async (
     jsonResponse(response, { assignments: provider.listAssignments() });
     return;
   }
+  if (request.method === 'GET' && url.pathname === '/v2/messages') {
+    jsonResponse(response, { messages: provider.listMessages() });
+    return;
+  }
   if (request.method === 'GET' && url.pathname === '/v2/assignment-activity') {
     const assignmentId = url.searchParams.get('assignmentId') ?? undefined;
     jsonResponse(response, {
@@ -323,6 +329,7 @@ export const requestWorkerControl = async <T>(
     | '/v2/agent-context'
     | '/v2/worker-status'
     | '/v2/assignments'
+    | '/v2/messages'
     | '/v2/assignment-activity'
     | `/v2/runtime-tools/${string}`
     | `/v2/assignments/${string}`

@@ -166,6 +166,7 @@ describe('Worker owner-control bridge', () => {
     const control = await startWorkerControlServer(socketPath, {
       getStatus: () => status,
       listInboxCommands: () => inbox,
+      listMessages: () => [],
       listAssignments: () => assignmentStore.list(),
       getAssignment: (assignmentId) => assignmentStore.get(assignmentId),
       listAssignmentActivity: (assignmentId) => assignmentStore.listActivity(assignmentId),

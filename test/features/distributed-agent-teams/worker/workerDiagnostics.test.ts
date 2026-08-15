@@ -46,6 +46,7 @@ describe('Worker diagnostics', () => {
     const control = await startWorkerControlServer(socketPath, {
       getStatus: () => status,
       listInboxCommands: () => [],
+      listMessages: () => [],
       listAssignments: () => [],
       getAssignment: () => undefined,
       listAssignmentActivity: () => [],

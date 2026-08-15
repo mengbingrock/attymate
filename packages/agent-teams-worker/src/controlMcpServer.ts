@@ -6,6 +6,7 @@ import { requestWorkerControl, type WorkerAgentContextProjection } from './worke
 import type { WorkerAssignment, WorkerAssignmentActivity } from './workerAssignmentStore';
 import type { AgentTeamsWorkerStatus } from './workerDaemon';
 import type { WorkerInboxCommand } from './workerInboxStore';
+import type { WorkerTeamMessage } from './workerMessageStore';
 
 export const OWNER_CONTROL_BRIDGE_TOOL_NAMES = [
   'agent_context',
@@ -17,6 +18,7 @@ export const OWNER_CONTROL_BRIDGE_TOOL_NAMES = [
   'assignment_reject',
   'assignment_defer',
   'assignment_activity_get',
+  'message_list',
 ] as const satisfies readonly PublicMcpToolName[];
 
 const jsonContent = (value: unknown) => ({
@@ -152,6 +154,18 @@ export const createOwnerControlToolDefinitions = (
       description: 'Show durable assignment transitions and received commands',
       parameters: emptyParameters,
       execute: async () => jsonContent(await activity()),
+    },
+    {
+      name: 'message_list',
+      description: 'List durable peer messages delivered to this personal Worker',
+      parameters: emptyParameters,
+      execute: async () =>
+        jsonContent(
+          await requestWorkerControl<{ messages: readonly WorkerTeamMessage[] }>(
+            socketPath,
+            '/v2/messages'
+          )
+        ),
     },
   ];
 
