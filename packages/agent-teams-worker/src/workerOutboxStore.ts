@@ -87,6 +87,13 @@ export class WorkerOutboxStore {
 
     const eventId = eventIdSchema.parse(randomUUID());
     const createdAt = new Date().toISOString();
+    const executionState = !['proposed', 'accepted', 'rejected', 'deferred', 'queued'].includes(
+      activity.toState
+    );
+    const executionIdentity =
+      executionState && assignment.attemptId !== undefined && assignment.leaseEpoch !== undefined
+        ? { attemptId: assignment.attemptId, leaseEpoch: assignment.leaseEpoch }
+        : {};
     this.database.exec('BEGIN IMMEDIATE;');
     try {
       const insert = this.database
@@ -106,6 +113,7 @@ export class WorkerOutboxStore {
         workerInstanceId: this.identity.workerInstanceId,
         ...(assignment.teamId === undefined ? {} : { teamId: assignment.teamId }),
         assignmentId: assignment.assignmentId,
+        ...executionIdentity,
         type: 'assignment.state_changed',
         payload: assignmentStateChangedPayloadSchema.parse({
           revision: activity.revision,
@@ -114,6 +122,12 @@ export class WorkerOutboxStore {
           reason: activity.reason,
           ...(activity.toState === 'deferred' && assignment.deferredUntil !== undefined
             ? { deferredUntil: assignment.deferredUntil }
+            : {}),
+          ...(executionState && assignment.leaseId !== undefined
+            ? { leaseId: assignment.leaseId }
+            : {}),
+          ...(executionState && assignment.leaseExpiresAt !== undefined
+            ? { leaseExpiresAt: assignment.leaseExpiresAt }
             : {}),
         }),
       });

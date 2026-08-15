@@ -5,14 +5,19 @@ import {
   assertAssignmentTransition,
   assignmentExecutionStateSchema,
   assignmentIdSchema,
+  assignmentLeaseGrantPayloadSchema,
   assignmentOfferPayloadSchema,
+  attemptIdSchema,
   commandIdSchema,
   nodeIdSchema,
+  leaseIdSchema,
   teamIdSchema,
   type AssignmentExecutionState,
   type AssignmentId,
+  type AttemptId,
   type CommandId,
   type NodeId,
+  type LeaseId,
   type TeamId,
 } from '@claude-teams/agent-teams-protocol';
 
@@ -31,6 +36,10 @@ export interface WorkerAssignment {
   readonly updatedAt: string;
   readonly deferredUntil?: string;
   readonly decisionReason?: string;
+  readonly attemptId?: AttemptId;
+  readonly leaseId?: LeaseId;
+  readonly leaseEpoch?: number;
+  readonly leaseExpiresAt?: string;
 }
 
 export interface WorkerAssignmentActivity {
@@ -53,6 +62,14 @@ export interface AssignmentDeferInput extends AssignmentMutationInput {
   readonly deferredUntil?: string;
 }
 
+export interface AssignmentLeaseGrantInput {
+  readonly assignmentId: string;
+  readonly attemptId: string;
+  readonly leaseEpoch: number;
+  readonly expiresAt: string;
+  readonly payload: unknown;
+}
+
 interface AssignmentRow {
   assignment_id: string;
   offer_command_id: string;
@@ -66,6 +83,10 @@ interface AssignmentRow {
   updated_at: string;
   deferred_until: string | null;
   decision_reason: string | null;
+  attempt_id: string | null;
+  lease_id: string | null;
+  lease_epoch: number | null;
+  lease_expires_at: string | null;
 }
 
 interface ActivityRow {
@@ -91,6 +112,10 @@ const mapAssignment = (row: AssignmentRow): WorkerAssignment => ({
   updatedAt: row.updated_at,
   ...(row.deferred_until === null ? {} : { deferredUntil: row.deferred_until }),
   ...(row.decision_reason === null ? {} : { decisionReason: row.decision_reason }),
+  ...(row.attempt_id === null ? {} : { attemptId: attemptIdSchema.parse(row.attempt_id) }),
+  ...(row.lease_id === null ? {} : { leaseId: leaseIdSchema.parse(row.lease_id) }),
+  ...(row.lease_epoch === null ? {} : { leaseEpoch: row.lease_epoch }),
+  ...(row.lease_expires_at === null ? {} : { leaseExpiresAt: row.lease_expires_at }),
 });
 
 const mapActivity = (row: ActivityRow): WorkerAssignmentActivity => ({
@@ -184,7 +209,11 @@ export class WorkerAssignmentStore {
         offered_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         deferred_until TEXT,
-        decision_reason TEXT
+        decision_reason TEXT,
+        attempt_id TEXT,
+        lease_id TEXT,
+        lease_epoch INTEGER,
+        lease_expires_at TEXT
       );
       CREATE TABLE IF NOT EXISTS assignment_activity (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -198,6 +227,10 @@ export class WorkerAssignmentStore {
       CREATE INDEX IF NOT EXISTS assignment_activity_assignment_idx
         ON assignment_activity (assignment_id, id);
     `);
+    this.ensureAssignmentColumn('attempt_id', 'TEXT');
+    this.ensureAssignmentColumn('lease_id', 'TEXT');
+    this.ensureAssignmentColumn('lease_epoch', 'INTEGER');
+    this.ensureAssignmentColumn('lease_expires_at', 'TEXT');
   }
 
   projectOffer(command: WorkerInboxCommand): WorkerAssignment | undefined {
@@ -307,6 +340,64 @@ export class WorkerAssignmentStore {
     });
   }
 
+  grantLease(input: AssignmentLeaseGrantInput): WorkerAssignment {
+    const assignmentId = assignmentIdSchema.parse(input.assignmentId);
+    const attemptId = attemptIdSchema.parse(input.attemptId);
+    const payload = assignmentLeaseGrantPayloadSchema.parse(input.payload);
+    if (!Number.isInteger(input.leaseEpoch) || input.leaseEpoch <= 0) {
+      throw new TypeError('leaseEpoch must be a positive integer');
+    }
+    const expiresAt = new Date(input.expiresAt);
+    if (!Number.isFinite(expiresAt.getTime())) throw new TypeError('expiresAt must be a timestamp');
+    const existing = this.require(assignmentId);
+    if (
+      existing.attemptId === attemptId &&
+      existing.leaseId === payload.leaseId &&
+      existing.leaseEpoch === input.leaseEpoch &&
+      existing.leaseExpiresAt === expiresAt.toISOString()
+    ) {
+      return existing;
+    }
+    return this.mutate(assignmentId, payload.assignmentRevision, (current, occurredAt) => {
+      assertAssignmentTransition(current.state, 'leased');
+      const leased = this.transition(current, 'leased', 'relay_lease_granted', occurredAt);
+      this.database
+        .prepare(
+          `UPDATE assignments
+           SET attempt_id = ?, lease_id = ?, lease_epoch = ?, lease_expires_at = ?
+           WHERE assignment_id = ? AND revision = ?`
+        )
+        .run(
+          attemptId,
+          payload.leaseId,
+          input.leaseEpoch,
+          expiresAt.toISOString(),
+          assignmentId,
+          leased.revision
+        );
+      return this.require(assignmentId);
+    });
+  }
+
+  fenceExpired(now = new Date()): readonly WorkerAssignment[] {
+    const candidates = this.database
+      .prepare(
+        `SELECT * FROM assignments
+         WHERE state IN ('leased', 'preparing_workspace', 'running', 'waiting_local_approval',
+                         'verifying', 'committing', 'awaiting_push', 'reporting')
+           AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?
+         ORDER BY lease_expires_at ASC`
+      )
+      .all(now.toISOString()) as unknown as AssignmentRow[];
+    return candidates.map((row) => {
+      const current = mapAssignment(row);
+      return this.mutate(current.assignmentId, current.revision, (latest, occurredAt) => {
+        assertAssignmentTransition(latest.state, 'fenced');
+        return this.transition(latest, 'fenced', 'lease_expired', occurredAt);
+      });
+    });
+  }
+
   close(): void {
     this.database.close();
   }
@@ -387,5 +478,15 @@ export class WorkerAssignmentStore {
          VALUES (?, ?, ?, ?, ?, ?)`
       )
       .run(assignmentId, revision, fromState, toState, reason, occurredAt);
+  }
+
+  private ensureAssignmentColumn(name: string, definition: string): void {
+    const columns = this.database
+      .prepare('PRAGMA table_info(assignments)')
+      .all() as unknown as Array<{
+      name: string;
+    }>;
+    if (columns.some((column) => column.name === name)) return;
+    this.database.exec(`ALTER TABLE assignments ADD COLUMN ${name} ${definition}`);
   }
 }

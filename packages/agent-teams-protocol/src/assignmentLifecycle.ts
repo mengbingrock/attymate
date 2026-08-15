@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { assignmentIdSchema } from './ids';
+import { assignmentIdSchema, leaseIdSchema } from './ids';
 
 export const assignmentOfferPayloadSchema = z
   .object({
@@ -11,6 +11,15 @@ export const assignmentOfferPayloadSchema = z
   .strict();
 
 export type AssignmentOfferPayload = z.infer<typeof assignmentOfferPayloadSchema>;
+
+export const assignmentLeaseGrantPayloadSchema = z
+  .object({
+    leaseId: leaseIdSchema,
+    assignmentRevision: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type AssignmentLeaseGrantPayload = z.infer<typeof assignmentLeaseGrantPayloadSchema>;
 
 export const assignmentExecutionStateSchema = z.enum([
   'proposed',
@@ -42,6 +51,8 @@ export const assignmentStateChangedPayloadSchema = z
     state: assignmentExecutionStateSchema,
     reason: z.string().trim().min(1).max(2_000),
     deferredUntil: z.iso.datetime({ offset: true }).optional(),
+    leaseId: leaseIdSchema.optional(),
+    leaseExpiresAt: z.iso.datetime({ offset: true }).optional(),
   })
   .strict();
 

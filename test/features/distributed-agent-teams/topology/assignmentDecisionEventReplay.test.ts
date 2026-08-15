@@ -92,7 +92,17 @@ describe('assignment decision event replay', () => {
       });
       relayIsRunning = true;
       await vi.waitFor(() => {
-        expect(eventStates(relay)).toEqual(['proposed', 'deferred', 'accepted', 'queued']);
+        expect(eventStates(relay)).toEqual([
+          'proposed',
+          'deferred',
+          'accepted',
+          'queued',
+          'leased',
+        ]);
+        expect(worker.listAssignments()[0]).toMatchObject({
+          state: 'leased',
+          leaseEpoch: 1,
+        });
         expect(worker.listOutboxEvents().every((event) => event.acknowledgedAt !== undefined)).toBe(
           true
         );

@@ -105,6 +105,21 @@ export class RelayEventStore {
     return rows.map(mapRow);
   }
 
+  listLatestAssignmentEventsForNode(nodeId: NodeId): readonly RelayEventRecord[] {
+    const latestByAssignment = new Map<string, RelayEventRecord>();
+    for (const event of this.listAll()) {
+      if (
+        event.sourceNodeId !== nodeId ||
+        event.envelope.type !== 'assignment.state_changed' ||
+        event.envelope.assignmentId === undefined
+      ) {
+        continue;
+      }
+      latestByAssignment.set(event.envelope.assignmentId, event);
+    }
+    return [...latestByAssignment.values()].sort((left, right) => left.cursor - right.cursor);
+  }
+
   lastSequenceForNode(nodeId: NodeId): number {
     const row = this.database
       .prepare(

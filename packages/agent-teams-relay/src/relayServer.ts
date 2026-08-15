@@ -18,6 +18,7 @@ import { type RawData, WebSocket, WebSocketServer } from 'ws';
 
 import { RelayCommandStore, type RelayCommandRecord } from './relayCommandStore';
 import { RelayEventStore, type RelayEventRecord } from './relayEventStore';
+import { RelayLeaseStore, type RelayLeaseRecord } from './relayLeaseStore';
 
 export interface AgentTeamsRelayOptions {
   readonly host: string;
@@ -25,6 +26,7 @@ export interface AgentTeamsRelayOptions {
   readonly dataDir: string;
   readonly heartbeatIntervalMs?: number;
   readonly staleAfterMs?: number;
+  readonly leaseDurationMs?: number;
   readonly logger?: boolean;
 }
 
@@ -58,6 +60,7 @@ export interface StartedAgentTeamsRelay {
   readonly enqueueCommand: (input: unknown) => RelayCommandRecord;
   readonly listCommands: () => readonly RelayCommandRecord[];
   readonly listEvents: () => readonly RelayEventRecord[];
+  readonly listLeases: () => readonly RelayLeaseRecord[];
   readonly close: () => Promise<void>;
 }
 
@@ -74,6 +77,7 @@ export const startAgentTeamsRelay = async (
   const webSocketServer = new WebSocketServer({ noServer: true });
   const commandStore = new RelayCommandStore(options.dataDir);
   const eventStore = new RelayEventStore(options.dataDir);
+  const leaseStore = new RelayLeaseStore(options.dataDir, options.leaseDurationMs);
 
   const sendCommand = (session: MutableWorkerSession, record: RelayCommandRecord): void => {
     session.socket.send(
@@ -101,6 +105,24 @@ export const startAgentTeamsRelay = async (
       return commandStore.get(record.commandId) ?? record;
     }
     return record;
+  };
+
+  const maybeGrantNextAssignment = (nodeId: NodeId): void => {
+    leaseStore.expireThrough();
+    for (const event of eventStore.listLatestAssignmentEventsForNode(nodeId)) {
+      const assignmentId = event.envelope.assignmentId;
+      if (assignmentId === undefined) continue;
+      const state = assignmentStateChangedPayloadSchema.parse(event.envelope.payload);
+      if (state.state !== 'queued') continue;
+      const grant = leaseStore.grantIfCapacity({
+        assignmentId,
+        assignmentRevision: state.revision,
+        nodeId,
+        ...(event.envelope.teamId === undefined ? {} : { teamId: event.envelope.teamId }),
+      });
+      if (grant !== undefined) enqueueCommand(grant.command);
+      return;
+    }
   };
 
   const listWorkers = (): readonly ConnectedWorkerProjection[] => {
@@ -144,6 +166,7 @@ export const startAgentTeamsRelay = async (
   }));
   app.get('/v2/commands', async () => ({ commands: commandStore.listAll() }));
   app.get('/v2/events', async () => ({ events: eventStore.listAll() }));
+  app.get('/v2/leases', async () => ({ leases: leaseStore.listAll() }));
   app.get('/v2/commands/:commandId', async (request, reply) => {
     const rawCommandId = (request.params as { commandId?: unknown }).commandId;
     const commandId = commandIdSchema.parse(rawCommandId);
@@ -204,6 +227,7 @@ export const startAgentTeamsRelay = async (
           if (currentSession !== undefined) {
             sendPendingCommands(currentSession, hello.lastInboundCursor);
           }
+          maybeGrantNextAssignment(hello.nodeId);
           void persistProjection();
           return;
         }
@@ -269,6 +293,34 @@ export const startAgentTeamsRelay = async (
               receivedAt: new Date().toISOString(),
             })
           );
+          const state =
+            message.envelope.type === 'assignment.state_changed'
+              ? assignmentStateChangedPayloadSchema.parse(message.envelope.payload)
+              : undefined;
+          if (state?.state === 'leased') {
+            if (
+              message.envelope.assignmentId !== undefined &&
+              message.envelope.attemptId !== undefined &&
+              message.envelope.leaseEpoch !== undefined
+            ) {
+              leaseStore.markActive(
+                message.envelope.assignmentId,
+                message.envelope.attemptId,
+                message.envelope.leaseEpoch
+              );
+            }
+          } else if (
+            state !== undefined &&
+            ['rejected', 'completed', 'cancelled', 'failed', 'fenced'].includes(state.state) &&
+            message.envelope.assignmentId !== undefined
+          ) {
+            leaseStore.release(
+              message.envelope.assignmentId,
+              message.envelope.attemptId,
+              message.envelope.leaseEpoch
+            );
+          }
+          maybeGrantNextAssignment(boundNodeId);
           return;
         }
 
@@ -329,6 +381,7 @@ export const startAgentTeamsRelay = async (
     enqueueCommand,
     listCommands: () => commandStore.listAll(),
     listEvents: () => eventStore.listAll(),
+    listLeases: () => leaseStore.listAll(),
     close: async () => {
       for (const session of sessions.values()) {
         session.socket.close(1001, 'Relay shutting down');
@@ -338,6 +391,7 @@ export const startAgentTeamsRelay = async (
       await app.close();
       commandStore.close();
       eventStore.close();
+      leaseStore.close();
     },
   };
 };

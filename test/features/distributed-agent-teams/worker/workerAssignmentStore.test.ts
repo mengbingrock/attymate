@@ -66,6 +66,26 @@ describe('WorkerAssignmentStore', () => {
       expect(() => store.accept({ assignmentId, expectedRevision: 0 })).toThrow(
         WorkerAssignmentRevisionConflictError
       );
+      const leaseGrant = {
+        assignmentId,
+        attemptId: '00000000-0000-4000-8000-000000000008',
+        leaseEpoch: 1,
+        expiresAt: '2026-08-14T20:05:00.000Z',
+        payload: {
+          leaseId: '00000000-0000-4000-8000-000000000009',
+          assignmentRevision: 2,
+        },
+      };
+      expect(store.grantLease(leaseGrant)).toMatchObject({
+        state: 'leased',
+        revision: 3,
+        leaseEpoch: 1,
+        leaseExpiresAt: '2026-08-14T20:05:00.000Z',
+      });
+      expect(store.grantLease(leaseGrant)).toMatchObject({ state: 'leased', revision: 3 });
+      expect(store.fenceExpired(new Date('2026-08-14T20:05:01.000Z'))).toEqual([
+        expect.objectContaining({ state: 'fenced', revision: 4 }),
+      ]);
     } finally {
       store.close();
     }

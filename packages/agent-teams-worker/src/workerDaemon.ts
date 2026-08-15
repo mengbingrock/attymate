@@ -30,6 +30,7 @@ export interface AgentTeamsWorkerOptions {
   readonly label: string;
   readonly controlSocketPath?: string;
   readonly reconnectDelayMs?: number;
+  readonly leaseSweepIntervalMs?: number;
 }
 
 export type WorkerConnectionState =
@@ -83,13 +84,34 @@ export const startAgentTeamsWorker = async (
   await mkdir(options.dataDir, { recursive: true });
   const inboxStore = new WorkerInboxStore(options.dataDir);
   const assignmentStore = new WorkerAssignmentStore(options.dataDir);
+  const applyAssignmentCommand = (command: WorkerInboxCommand) => {
+    if (command.envelope.type === 'assignment.lease_grant') {
+      const { assignmentId, attemptId, leaseEpoch, expiresAt } = command.envelope;
+      if (
+        assignmentId === undefined ||
+        attemptId === undefined ||
+        leaseEpoch === undefined ||
+        expiresAt === undefined
+      ) {
+        throw new Error('Lease grant is missing execution identity');
+      }
+      return assignmentStore.grantLease({
+        assignmentId,
+        attemptId,
+        leaseEpoch,
+        expiresAt,
+        payload: command.envelope.payload,
+      });
+    }
+    return assignmentStore.projectOffer(command);
+  };
   const outboxStore = new WorkerOutboxStore(options.dataDir, {
     nodeId: options.nodeId,
     workerInstanceId: options.workerInstanceId,
   });
   for (const command of inboxStore.list()) {
     try {
-      assignmentStore.projectOffer(command);
+      applyAssignmentCommand(command);
     } catch {
       // A malformed historical offer remains visible in raw activity but cannot enter the queue.
     }
@@ -186,6 +208,13 @@ export const startAgentTeamsWorker = async (
     return assignment;
   };
 
+  const sweepExpiredLeases = (): void => {
+    for (const assignment of assignmentStore.fenceExpired()) {
+      projectAssignmentActivity(assignment.assignmentId);
+    }
+    flushPendingEvents();
+  };
+
   const connect = (): void => {
     if (stopped) return;
     updateStatus({ state: readyResolved ? 'reconnecting' : 'connecting' });
@@ -259,14 +288,8 @@ export const startAgentTeamsWorker = async (
         const inboxCommand = inboxStore.accept(message.cursor, message.envelope);
         updateStatus({ lastInboundCursor: inboxStore.lastInboundCursor() });
         try {
-          assignmentStore.projectOffer(inboxCommand);
-          const assignmentId =
-            typeof inboxCommand.envelope.payload === 'object' &&
-            inboxCommand.envelope.payload !== null &&
-            'assignmentId' in inboxCommand.envelope.payload
-              ? inboxCommand.envelope.payload.assignmentId
-              : undefined;
-          if (typeof assignmentId === 'string') projectAssignmentActivity(assignmentId);
+          const assignment = applyAssignmentCommand(inboxCommand);
+          if (assignment !== undefined) projectAssignmentActivity(assignment.assignmentId);
         } catch (error) {
           socket?.send(
             JSON.stringify({
@@ -328,6 +351,8 @@ export const startAgentTeamsWorker = async (
       deferAssignment,
     });
   }
+  sweepExpiredLeases();
+  const leaseSweepTimer = setInterval(sweepExpiredLeases, options.leaseSweepIntervalMs ?? 1_000);
   connect();
 
   return {
@@ -343,6 +368,7 @@ export const startAgentTeamsWorker = async (
       stopped = true;
       await controlServer?.close();
       clearHeartbeat();
+      clearInterval(leaseSweepTimer);
       if (reconnectTimer !== undefined) clearTimeout(reconnectTimer);
       if (socket !== undefined && socket.readyState < WebSocket.CLOSING) {
         await new Promise<void>((resolve) => {
