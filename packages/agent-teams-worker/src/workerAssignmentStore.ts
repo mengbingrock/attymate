@@ -463,6 +463,32 @@ export class WorkerAssignmentStore {
     });
   }
 
+  prepareRuntime(identity: ExecutionLeaseIdentity): WorkerAssignment | undefined {
+    return this.transitionRuntime(identity, 'leased', 'preparing_workspace', 'runtime_starting');
+  }
+
+  markRuntimeRunning(identity: ExecutionLeaseIdentity): WorkerAssignment | undefined {
+    return this.transitionRuntime(identity, 'preparing_workspace', 'running', 'codex_turn_started');
+  }
+
+  markRuntimeCompleted(identity: ExecutionLeaseIdentity): WorkerAssignment | undefined {
+    return this.transitionRuntime(identity, 'running', 'verifying', 'codex_turn_completed');
+  }
+
+  markRuntimeFailed(
+    identity: ExecutionLeaseIdentity,
+    reason: string
+  ): WorkerAssignment | undefined {
+    const assignment = this.get(identity.assignmentId);
+    if (assignment === undefined || !this.matchesLeaseIdentity(assignment, identity))
+      return undefined;
+    if (!activeLeaseStates.has(assignment.state)) return undefined;
+    return this.mutate(assignment.assignmentId, assignment.revision, (current, occurredAt) => {
+      assertAssignmentTransition(current.state, 'failed');
+      return this.transition(current, 'failed', reason.slice(0, 2_000), occurredAt);
+    });
+  }
+
   fenceExpired(now = new Date()): readonly WorkerAssignment[] {
     const candidates = this.database
       .prepare(
@@ -572,6 +598,26 @@ export class WorkerAssignmentStore {
     }>;
     if (columns.some((column) => column.name === name)) return;
     this.database.exec(`ALTER TABLE assignments ADD COLUMN ${name} ${definition}`);
+  }
+
+  private transitionRuntime(
+    identity: ExecutionLeaseIdentity,
+    fromState: AssignmentExecutionState,
+    toState: AssignmentExecutionState,
+    reason: string
+  ): WorkerAssignment | undefined {
+    const assignment = this.get(identity.assignmentId);
+    if (
+      assignment === undefined ||
+      !this.matchesLeaseIdentity(assignment, identity) ||
+      assignment.state !== fromState
+    ) {
+      return undefined;
+    }
+    return this.mutate(assignment.assignmentId, assignment.revision, (current, occurredAt) => {
+      assertAssignmentTransition(current.state, toState);
+      return this.transition(current, toState, reason, occurredAt);
+    });
   }
 
   private matchesLeaseIdentity(

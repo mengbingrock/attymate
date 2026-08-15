@@ -1,0 +1,244 @@
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import readline from 'node:readline';
+
+export interface CodexAppServerNotification {
+  readonly method: string;
+  readonly params: unknown;
+}
+
+export interface CodexAppServerRequest {
+  readonly id: number;
+  readonly method: string;
+  readonly params: unknown;
+}
+
+export interface WorkerCodexAppServerSession {
+  readonly request: <T>(method: string, params?: unknown, timeoutMs?: number) => Promise<T>;
+  readonly notify: (method: string, params?: unknown) => void;
+  readonly onNotification: (
+    listener: (notification: CodexAppServerNotification) => void
+  ) => () => void;
+  readonly close: () => Promise<void>;
+}
+
+export interface WorkerCodexAppServerSessionFactory {
+  readonly open: () => Promise<WorkerCodexAppServerSession>;
+}
+
+export interface CodexAppServerProcessFactoryOptions {
+  readonly binaryPath: string;
+  readonly launcherArgs?: readonly string[];
+  readonly env?: NodeJS.ProcessEnv;
+  readonly requestTimeoutMs?: number;
+  readonly initializeTimeoutMs?: number;
+  readonly onServerRequest?: (request: CodexAppServerRequest) => Promise<unknown>;
+}
+
+interface JsonRpcMessage {
+  readonly id?: number;
+  readonly method?: string;
+  readonly params?: unknown;
+  readonly result?: unknown;
+  readonly error?: { readonly code?: number; readonly message?: string; readonly data?: unknown };
+}
+
+interface PendingRequest {
+  readonly method: string;
+  readonly resolve: (value: unknown) => void;
+  readonly reject: (error: Error) => void;
+  readonly timeout: NodeJS.Timeout;
+}
+
+export class CodexAppServerRequestError extends Error {
+  constructor(
+    readonly method: string,
+    readonly code: number | undefined,
+    readonly data: unknown,
+    message: string
+  ) {
+    super(message);
+    this.name = 'CodexAppServerRequestError';
+  }
+}
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
+export class CodexAppServerProcessFactory implements WorkerCodexAppServerSessionFactory {
+  constructor(private readonly options: CodexAppServerProcessFactoryOptions) {}
+
+  async open(): Promise<WorkerCodexAppServerSession> {
+    const child = spawn(
+      this.options.binaryPath,
+      [...(this.options.launcherArgs ?? []), 'app-server'],
+      {
+        env: this.options.env,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      }
+    );
+    const session = this.createSession(child);
+    try {
+      await session.request(
+        'initialize',
+        {
+          clientInfo: {
+            name: 'agent_teams_worker',
+            title: 'Agent Teams Worker',
+            version: '0.1.0',
+          },
+          capabilities: {
+            experimentalApi: false,
+            optOutNotificationMethods: [
+              'item/agentMessage/delta',
+              'item/agentReasoning/delta',
+              'item/execCommandOutputDelta',
+            ],
+          },
+        },
+        this.options.initializeTimeoutMs ?? 12_000
+      );
+      session.notify('initialized', {});
+      return session;
+    } catch (error) {
+      await session.close();
+      throw error;
+    }
+  }
+
+  private createSession(child: ChildProcessWithoutNullStreams): WorkerCodexAppServerSession {
+    const pending = new Map<number, PendingRequest>();
+    const listeners = new Set<(notification: CodexAppServerNotification) => void>();
+    const reader = readline.createInterface({ input: child.stdout });
+    let requestId = 0;
+    let closed = false;
+
+    child.stderr.resume();
+
+    const send = (message: unknown): void => {
+      if (closed || child.stdin.destroyed || child.stdin.writableEnded) {
+        throw new Error('Codex app-server session is closed');
+      }
+      child.stdin.write(`${JSON.stringify(message)}\n`);
+    };
+
+    const rejectAll = (error: Error): void => {
+      for (const [id, entry] of pending) {
+        clearTimeout(entry.timeout);
+        entry.reject(error);
+        pending.delete(id);
+      }
+    };
+
+    const handleServerRequest = async (message: JsonRpcMessage): Promise<void> => {
+      const request = {
+        id: message.id!,
+        method: message.method!,
+        params: message.params,
+      };
+      try {
+        if (this.options.onServerRequest === undefined) {
+          throw new Error(
+            'Owner approval or input is required, but no local handler is configured'
+          );
+        }
+        send({ id: request.id, result: await this.options.onServerRequest(request) });
+      } catch (error) {
+        send({
+          id: request.id,
+          error: { code: -32000, message: errorMessage(error).slice(0, 512) },
+        });
+      }
+    };
+
+    reader.on('line', (line) => {
+      let message: JsonRpcMessage;
+      try {
+        message = JSON.parse(line) as JsonRpcMessage;
+      } catch {
+        return;
+      }
+      if (typeof message.id === 'number' && typeof message.method === 'string') {
+        void handleServerRequest(message);
+        return;
+      }
+      if (typeof message.id === 'number') {
+        const entry = pending.get(message.id);
+        if (entry === undefined) return;
+        pending.delete(message.id);
+        clearTimeout(entry.timeout);
+        if (message.error !== undefined) {
+          entry.reject(
+            new CodexAppServerRequestError(
+              entry.method,
+              message.error.code,
+              message.error.data,
+              message.error.message ?? 'Codex app-server request failed'
+            )
+          );
+        } else {
+          entry.resolve(message.result);
+        }
+        return;
+      }
+      if (typeof message.method !== 'string') return;
+      for (const listener of listeners)
+        listener({ method: message.method, params: message.params });
+    });
+
+    child.once('error', (error) => rejectAll(error));
+    child.once('exit', (code, signal) => {
+      rejectAll(
+        new Error(`Codex app-server exited (code=${code ?? 'null'} signal=${signal ?? 'null'})`)
+      );
+    });
+
+    return {
+      request: <T>(method: string, params?: unknown, timeoutMs?: number): Promise<T> => {
+        requestId += 1;
+        const id = requestId;
+        return new Promise<T>((resolve, reject) => {
+          const timeout = setTimeout(
+            () => {
+              pending.delete(id);
+              reject(new Error(`${method} timed out`));
+            },
+            timeoutMs ?? this.options.requestTimeoutMs ?? 30_000
+          );
+          pending.set(id, {
+            method,
+            resolve: (value) => resolve(value as T),
+            reject,
+            timeout,
+          });
+          try {
+            send({ id, method, params: params ?? {} });
+          } catch (error) {
+            clearTimeout(timeout);
+            pending.delete(id);
+            reject(error instanceof Error ? error : new Error(String(error)));
+          }
+        });
+      },
+      notify: (method, params) => send({ method, params: params ?? {} }),
+      onNotification: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      close: async () => {
+        if (closed) return;
+        closed = true;
+        rejectAll(new Error('Codex app-server session closed'));
+        reader.close();
+        child.stdin.end();
+        if (child.exitCode === null && child.signalCode === null) {
+          const exited = await Promise.race([
+            new Promise<boolean>((resolve) => child.once('close', () => resolve(true))),
+            new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1_000)),
+          ]);
+          if (!exited) child.kill('SIGTERM');
+        }
+      },
+    };
+  }
+}

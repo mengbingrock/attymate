@@ -10,6 +10,8 @@ import {
 } from '@claude-teams/agent-teams-protocol';
 import WebSocket from 'ws';
 
+import type { WorkerCodexAppServerSessionFactory } from './codexAppServerClient';
+import { WorkerCodexRuntimeSupervisor } from './codexRuntimeSupervisor';
 import { startWorkerControlServer, type StartedWorkerControlServer } from './workerControlServer';
 import {
   type AssignmentDeferInput,
@@ -18,6 +20,7 @@ import {
 } from './workerAssignmentStore';
 import { WorkerInboxStore, type WorkerInboxCommand } from './workerInboxStore';
 import { WorkerOutboxStore, type WorkerOutboxEvent } from './workerOutboxStore';
+import type { WorkerRuntimeBinding } from './workerRuntimeStore';
 
 export interface AgentTeamsWorkerOptions {
   readonly relayUrl: string;
@@ -31,6 +34,11 @@ export interface AgentTeamsWorkerOptions {
   readonly controlSocketPath?: string;
   readonly reconnectDelayMs?: number;
   readonly leaseSweepIntervalMs?: number;
+  readonly codexRuntime?: {
+    readonly cwd: string;
+    readonly model?: string;
+    readonly sessionFactory: WorkerCodexAppServerSessionFactory;
+  };
 }
 
 export type WorkerConnectionState =
@@ -66,6 +74,7 @@ export interface StartedAgentTeamsWorker {
   readonly listInboxCommands: () => readonly WorkerInboxCommand[];
   readonly listAssignments: () => ReturnType<WorkerAssignmentStore['list']>;
   readonly listOutboxEvents: () => readonly WorkerOutboxEvent[];
+  readonly listRuntimeBindings: () => readonly WorkerRuntimeBinding[];
   readonly acceptAssignment: (
     input: AssignmentMutationInput
   ) => ReturnType<WorkerAssignmentStore['accept']>;
@@ -126,6 +135,35 @@ export const startAgentTeamsWorker = async (
   for (const assignment of assignmentStore.list()) {
     projectAssignmentActivity(assignment.assignmentId);
   }
+  const runtimeSupervisor =
+    options.codexRuntime === undefined
+      ? undefined
+      : new WorkerCodexRuntimeSupervisor({
+          dataDir: options.dataDir,
+          cwd: options.codexRuntime.cwd,
+          ...(options.codexRuntime.model === undefined
+            ? {}
+            : { model: options.codexRuntime.model }),
+          sessionFactory: options.codexRuntime.sessionFactory,
+          onStarted: (binding) => {
+            const assignment = assignmentStore.markRuntimeRunning(binding);
+            if (assignment !== undefined) projectAssignmentActivity(assignment.assignmentId);
+            flushPendingEvents();
+          },
+          onCompleted: (binding) => {
+            const assignment = assignmentStore.markRuntimeCompleted(binding);
+            if (assignment !== undefined) projectAssignmentActivity(assignment.assignmentId);
+            flushPendingEvents();
+          },
+          onFailed: (binding, error) => {
+            const assignment = assignmentStore.markRuntimeFailed(
+              binding,
+              `codex_runtime_failed: ${error.message}`
+            );
+            if (assignment !== undefined) projectAssignmentActivity(assignment.assignmentId);
+            flushPendingEvents();
+          },
+        });
   let controlServer: StartedWorkerControlServer | undefined;
   let socket: WebSocket | undefined;
   let heartbeatTimer: NodeJS.Timeout | undefined;
@@ -224,9 +262,29 @@ export const startAgentTeamsWorker = async (
     return assignment;
   };
 
+  const maybeStartRuntime = (assignmentId: string): void => {
+    if (runtimeSupervisor === undefined) return;
+    const assignment = assignmentStore.get(assignmentId);
+    if (assignment === undefined || assignment.state !== 'leased') return;
+    const preparing = assignmentStore.prepareRuntime({
+      assignmentId: assignment.assignmentId,
+      attemptId: assignment.attemptId!,
+      leaseId: assignment.leaseId!,
+      leaseEpoch: assignment.leaseEpoch!,
+    });
+    if (preparing === undefined) return;
+    projectAssignmentActivity(preparing.assignmentId);
+    flushPendingEvents();
+    void runtimeSupervisor.start(preparing).catch(() => undefined);
+  };
+
   const sweepExpiredLeases = (): void => {
+    const activeIdentity = assignmentStore.activeLeaseIdentity();
     for (const assignment of assignmentStore.fenceExpired()) {
       projectAssignmentActivity(assignment.assignmentId);
+      if (activeIdentity?.assignmentId === assignment.assignmentId) {
+        void runtimeSupervisor?.interrupt(activeIdentity, 'lease_expired');
+      }
     }
     flushPendingEvents();
   };
@@ -330,7 +388,9 @@ export const startAgentTeamsWorker = async (
           message.leaseReconciliation,
           message.leaseReconciliation.expiresAt
         );
+        maybeStartRuntime(message.leaseReconciliation.assignmentId);
       } else if (message.leaseReconciliation.action === 'fence') {
+        const activeIdentity = assignmentStore.activeLeaseIdentity();
         const assignment = assignmentStore.fenceLease(
           message.leaseReconciliation,
           `relay_${message.leaseReconciliation.reason}`
@@ -338,6 +398,12 @@ export const startAgentTeamsWorker = async (
         if (assignment !== undefined) {
           projectAssignmentActivity(assignment.assignmentId);
           flushPendingEvents();
+          if (activeIdentity?.assignmentId === assignment.assignmentId) {
+            void runtimeSupervisor?.interrupt(
+              activeIdentity,
+              `relay_${message.leaseReconciliation.reason}`
+            );
+          }
         }
       }
       updateStatus({
@@ -383,11 +449,21 @@ export const startAgentTeamsWorker = async (
     listInboxCommands: () => inboxStore.list(),
     listAssignments: () => assignmentStore.list(),
     listOutboxEvents: () => outboxStore.listAll(),
+    listRuntimeBindings: () => runtimeSupervisor?.listBindings() ?? [],
     acceptAssignment,
     rejectAssignment,
     deferAssignment,
     stop: async () => {
       stopped = true;
+      const activeIdentity = assignmentStore.activeLeaseIdentity();
+      if (activeIdentity !== undefined) {
+        const assignment = assignmentStore.fenceLease(activeIdentity, 'worker_shutdown');
+        if (assignment !== undefined) {
+          projectAssignmentActivity(assignment.assignmentId);
+          flushPendingEvents();
+        }
+        await runtimeSupervisor?.interrupt(activeIdentity, 'worker_shutdown');
+      }
       await controlServer?.close();
       clearHeartbeat();
       clearInterval(leaseSweepTimer);
@@ -400,6 +476,7 @@ export const startAgentTeamsWorker = async (
       }
       updateStatus({ state: 'stopped' });
       await persistStatus();
+      await runtimeSupervisor?.close();
       assignmentStore.close();
       outboxStore.close();
       inboxStore.close();

@@ -15,6 +15,7 @@ import {
   readCodexMcpRegistrationState,
   removeCodexMcpRegistration,
 } from './codexMcpRegistration';
+import { CodexAppServerProcessFactory } from './codexAppServerClient';
 import { startAgentTeamsWorker } from './workerDaemon';
 import { diagnoseAgentTeamsWorker } from './workerDiagnostics';
 
@@ -58,10 +59,7 @@ const runSetup = async (): Promise<void> => {
   const explicitArgs = valuesAfter('--bridge-arg');
   const result = await installCodexMcpRegistration(defaultCodexConfigPath(), {
     command: valueAfter('--bridge-command', process.execPath)!,
-    args:
-      explicitArgs.length > 0
-        ? explicitArgs
-        : [bridgeScript, '--socket', controlSocketPath],
+    args: explicitArgs.length > 0 ? explicitArgs : [bridgeScript, '--socket', controlSocketPath],
   });
   printJson({ command: 'setup', controlSocketPath, ...result });
   if (result.state.status === 'conflict' || result.state.status === 'invalid') {
@@ -94,7 +92,10 @@ const runDiagnose = async (): Promise<void> => {
 };
 
 const runMcpRemove = async (): Promise<void> => {
-  printJson({ command: 'mcp-remove', ...(await removeCodexMcpRegistration(defaultCodexConfigPath())) });
+  printJson({
+    command: 'mcp-remove',
+    ...(await removeCodexMcpRegistration(defaultCodexConfigPath())),
+  });
 };
 
 const runWorker = async (): Promise<void> => {
@@ -102,14 +103,13 @@ const runWorker = async (): Promise<void> => {
   const dataDir = defaultDataDir();
   const label = valueAfter('--label', 'Local Worker')!;
   const controlSocketPath = defaultControlSocketPath(dataDir);
-  const organizationId = organizationIdSchema.parse(
-    valueAfter('--organization-id', randomUUID())
-  );
+  const organizationId = organizationIdSchema.parse(valueAfter('--organization-id', randomUUID()));
   const personId = personIdSchema.parse(valueAfter('--person-id', randomUUID()));
   const nodeId = nodeIdSchema.parse(valueAfter('--node-id', randomUUID()));
   const workerInstanceId = workerInstanceIdSchema.parse(
     valueAfter('--worker-instance-id', randomUUID())
   );
+  const runtimeCwd = valueAfter('--runtime-cwd');
 
   const worker = await startAgentTeamsWorker({
     relayUrl,
@@ -122,6 +122,19 @@ const runWorker = async (): Promise<void> => {
     workerInstanceId,
     workerGeneration: 1,
     reconnectDelayMs: 1_000,
+    ...(runtimeCwd === undefined
+      ? {}
+      : {
+          codexRuntime: {
+            cwd: resolve(runtimeCwd),
+            sessionFactory: new CodexAppServerProcessFactory({
+              binaryPath: valueAfter('--codex-binary', 'codex')!,
+            }),
+            ...(valueAfter('--runtime-model') === undefined
+              ? {}
+              : { model: valueAfter('--runtime-model') }),
+          },
+        }),
   });
   await worker.ready;
   printJson({ event: 'worker.connected', ...worker.getStatus(), dataDir, controlSocketPath });
