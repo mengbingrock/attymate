@@ -16,6 +16,7 @@
   },
   "scripts": {
     "control:mcp": "tsx src/controlMcpCli.ts",
+    "runtime:mcp": "tsx src/runtimeMcpCli.ts",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit"
   },

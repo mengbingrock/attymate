@@ -29,6 +29,12 @@ export interface WorkerControlSnapshotProvider {
   readonly acceptAssignment: (input: AssignmentMutationInput) => WorkerAssignment;
   readonly rejectAssignment: (input: AssignmentMutationInput) => WorkerAssignment;
   readonly deferAssignment: (input: AssignmentDeferInput) => WorkerAssignment;
+  readonly executeRuntimeTool?: (input: {
+    readonly token: string;
+    readonly toolName: string;
+    readonly arguments: Readonly<Record<string, unknown>>;
+    readonly idempotencyKey: string;
+  }) => unknown;
 }
 
 export interface StartedWorkerControlServer {
@@ -127,6 +133,10 @@ const normalizeMutationInput = (
 
 const errorStatus = (error: unknown): number => {
   if (!(error instanceof Error)) return 500;
+  if (error.name === 'ZodError') return 400;
+  if ('code' in error && error.code === 'RUNTIME_MCP_SESSION_DENIED') return 401;
+  if ('code' in error && error.code === 'MCP_CAPABILITY_DENIED') return 403;
+  if ('code' in error && error.code === 'RUNTIME_AUTHORITY_ARGUMENT_REJECTED') return 400;
   if ('code' in error && error.code === 'WORKER_ASSIGNMENT_NOT_FOUND') return 404;
   if (
     'code' in error &&
@@ -136,6 +146,16 @@ const errorStatus = (error: unknown): number => {
     return 409;
   }
   return error instanceof TypeError ? 400 : 500;
+};
+
+const bearerToken = (request: IncomingMessage): string => {
+  const authorization = request.headers.authorization;
+  if (authorization === undefined || !authorization.startsWith('Bearer ')) {
+    throw Object.assign(new Error('Runtime MCP bearer token is required'), {
+      code: 'RUNTIME_MCP_SESSION_DENIED',
+    });
+  }
+  return authorization.slice('Bearer '.length);
 };
 
 const handleControlRequest = async (
@@ -176,6 +196,35 @@ const handleControlRequest = async (
       events: provider.listAssignmentActivity(assignmentId),
       commands: provider.listInboxCommands(),
     });
+    return;
+  }
+
+  const runtimeToolMatch = /^\/v2\/runtime-tools\/([a-z][a-z0-9_.-]*)$/.exec(url.pathname);
+  if (request.method === 'POST' && runtimeToolMatch !== null) {
+    if (provider.executeRuntimeTool === undefined) {
+      throw Object.assign(new Error('Runtime MCP is not enabled'), {
+        code: 'RUNTIME_MCP_SESSION_DENIED',
+      });
+    }
+    const token = bearerToken(request);
+    const body = await readJsonBody(request);
+    const idempotencyKey = body.idempotencyKey;
+    const toolArguments = body.arguments;
+    if (typeof idempotencyKey !== 'string' || !/^[A-Za-z0-9._:-]{1,200}$/.test(idempotencyKey)) {
+      throw new TypeError('Runtime MCP idempotencyKey is invalid');
+    }
+    if (typeof toolArguments !== 'object' || toolArguments === null || Array.isArray(toolArguments)) {
+      throw new TypeError('Runtime MCP arguments must be an object');
+    }
+    jsonResponse(
+      response,
+      provider.executeRuntimeTool({
+        token,
+        toolName: runtimeToolMatch[1]!,
+        arguments: toolArguments as Readonly<Record<string, unknown>>,
+        idempotencyKey,
+      })
+    );
     return;
   }
 
@@ -275,9 +324,14 @@ export const requestWorkerControl = async <T>(
     | '/v2/worker-status'
     | '/v2/assignments'
     | '/v2/assignment-activity'
+    | `/v2/runtime-tools/${string}`
     | `/v2/assignments/${string}`
     | `/v2/assignments/${string}/${'accept' | 'reject' | 'defer'}`,
-  options?: { readonly method?: 'GET' | 'POST'; readonly body?: unknown }
+  options?: {
+    readonly method?: 'GET' | 'POST';
+    readonly body?: unknown;
+    readonly bearerToken?: string;
+  }
 ): Promise<T> =>
   await new Promise<T>((resolve, reject) => {
     const request = httpRequest(
@@ -287,6 +341,9 @@ export const requestWorkerControl = async <T>(
         method: options?.method ?? 'GET',
         headers: {
           host: 'localhost',
+          ...(options?.bearerToken === undefined
+            ? {}
+            : { authorization: `Bearer ${options.bearerToken}` }),
           ...(options?.body === undefined ? {} : { 'content-type': 'application/json' }),
         },
       },

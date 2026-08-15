@@ -110,6 +110,7 @@ const runWorker = async (): Promise<void> => {
     valueAfter('--worker-instance-id', randomUUID())
   );
   const runtimeCwd = valueAfter('--runtime-cwd');
+  const runtimeBridgeScript = fileURLToPath(new URL('./runtimeMcpCli.js', import.meta.url));
 
   const worker = await startAgentTeamsWorker({
     relayUrl,
@@ -130,6 +131,10 @@ const runWorker = async (): Promise<void> => {
             sessionFactory: new CodexAppServerProcessFactory({
               binaryPath: valueAfter('--codex-binary', 'codex')!,
             }),
+            runtimeMcp: {
+              command: valueAfter('--runtime-mcp-command', process.execPath)!,
+              args: [runtimeBridgeScript, '--socket', controlSocketPath],
+            },
             ...(valueAfter('--runtime-model') === undefined
               ? {}
               : { model: valueAfter('--runtime-model') }),

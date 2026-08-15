@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import {
   relayToWorkerMessageSchema,
+  type PublicMcpToolName,
   type NodeId,
   type OrganizationId,
   type PersonId,
@@ -11,7 +12,10 @@ import {
 import WebSocket from 'ws';
 
 import type { WorkerCodexAppServerSessionFactory } from './codexAppServerClient';
+import type { CodexRuntimeMcpLaunchSpec } from './codexRuntimeMcpProfile';
 import { WorkerCodexRuntimeSupervisor } from './codexRuntimeSupervisor';
+import { authorizeWorkerToolInvocation } from './mcpSessionGateway';
+import { parseRuntimeMcpToolArguments } from './runtimeMcpServer';
 import { startWorkerControlServer, type StartedWorkerControlServer } from './workerControlServer';
 import {
   type AssignmentDeferInput,
@@ -38,6 +42,7 @@ export interface AgentTeamsWorkerOptions {
     readonly cwd: string;
     readonly model?: string;
     readonly sessionFactory: WorkerCodexAppServerSessionFactory;
+    readonly runtimeMcp?: CodexRuntimeMcpLaunchSpec;
   };
 }
 
@@ -145,6 +150,17 @@ export const startAgentTeamsWorker = async (
             ? {}
             : { model: options.codexRuntime.model }),
           sessionFactory: options.codexRuntime.sessionFactory,
+          ...(options.codexRuntime.runtimeMcp === undefined
+            ? {}
+            : {
+                runtimeIdentity: {
+                  organizationId: options.organizationId,
+                  personId: options.personId,
+                  nodeId: options.nodeId,
+                  workerInstanceId: options.workerInstanceId,
+                },
+                runtimeMcp: options.codexRuntime.runtimeMcp,
+              }),
           onStarted: (binding) => {
             const assignment = assignmentStore.markRuntimeRunning(binding);
             if (assignment !== undefined) projectAssignmentActivity(assignment.assignmentId);
@@ -258,6 +274,45 @@ export const startAgentTeamsWorker = async (
         })
       );
     }
+  };
+
+  const executeRuntimeTool = (input: {
+    readonly token: string;
+    readonly toolName: string;
+    readonly arguments: Readonly<Record<string, unknown>>;
+    readonly idempotencyKey: string;
+  }): unknown => {
+    if (runtimeSupervisor === undefined) {
+      throw Object.assign(new Error('Codex runtime is not enabled'), {
+        code: 'RUNTIME_MCP_SESSION_DENIED',
+      });
+    }
+    const context = runtimeSupervisor.authorizeRuntimeSession(input.token);
+    const parsedArguments = parseRuntimeMcpToolArguments(input.toolName, input.arguments);
+    const invocation = authorizeWorkerToolInvocation(
+      context,
+      input.toolName,
+      parsedArguments
+    );
+    if (input.toolName === 'runtime_context') return { context: invocation.context };
+    const eventTypeByTool: Partial<
+      Record<PublicMcpToolName, 'assignment.progress' | 'assignment.result_submitted' | 'team.message'>
+    > = {
+      progress_report: 'assignment.progress',
+      result_submit: 'assignment.result_submitted',
+      message_send: 'team.message',
+    };
+    const eventType = eventTypeByTool[input.toolName as PublicMcpToolName];
+    if (eventType === undefined) {
+      throw new Error(`Runtime MCP tool ${input.toolName} is not implemented by this Worker`);
+    }
+    const event = outboxStore.projectRuntimeEvent(context, {
+      idempotencyKey: input.idempotencyKey,
+      type: eventType,
+      payload: invocation.arguments,
+    });
+    flushPendingEvents();
+    return { context: invocation.context, event };
   };
 
   const acceptAssignment = (input: AssignmentMutationInput) => {
@@ -406,10 +461,16 @@ export const startAgentTeamsWorker = async (
         return;
       }
       if (message.leaseReconciliation.action === 'renewed') {
-        assignmentStore.renewLease(
+        const renewed = assignmentStore.renewLease(
           message.leaseReconciliation,
           message.leaseReconciliation.expiresAt
         );
+        if (renewed) {
+          runtimeSupervisor?.renewRuntimeSession(
+            message.leaseReconciliation.attemptId,
+            message.leaseReconciliation.expiresAt
+          );
+        }
         maybeStartRuntime(message.leaseReconciliation.assignmentId);
       } else if (message.leaseReconciliation.action === 'fence') {
         const activeIdentity = assignmentStore.activeLeaseIdentity();
@@ -459,6 +520,7 @@ export const startAgentTeamsWorker = async (
       acceptAssignment,
       rejectAssignment,
       deferAssignment,
+      executeRuntimeTool,
     });
   }
   sweepExpiredLeases();

@@ -142,6 +142,8 @@ export class RelayHttpAdapter implements DistributedRelayPort {
         assignmentId,
         title: request.title,
         ...(request.description === undefined ? {} : { description: request.description }),
+        ...(request.membershipId === undefined ? {} : { membershipId: request.membershipId }),
+        ...(request.workspaceId === undefined ? {} : { workspaceId: request.workspaceId }),
       },
     });
     const payload = asRecord(

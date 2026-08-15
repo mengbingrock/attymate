@@ -25,6 +25,8 @@ export interface CreateRemoteAssignmentRequest {
   title: string;
   description?: string;
   teamId?: string;
+  membershipId?: string;
+  workspaceId?: string;
 }
 
 export interface RemoteAssignmentReceiptDto {

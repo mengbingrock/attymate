@@ -9,6 +9,7 @@ import {
   type EventEnvelope,
   type EventId,
   type NodeId,
+  type RuntimeSessionContext,
   type WorkerInstanceId,
 } from '@claude-teams/agent-teams-protocol';
 
@@ -130,6 +131,60 @@ export class WorkerOutboxStore {
             ? { leaseExpiresAt: assignment.leaseExpiresAt }
             : {}),
         }),
+      });
+      this.database
+        .prepare('UPDATE outbox_events SET envelope_json = ? WHERE sequence = ?')
+        .run(JSON.stringify(envelope), sequence);
+      this.database.exec('COMMIT;');
+      return this.requireByIdempotencyKey(idempotencyKey);
+    } catch (error) {
+      this.database.exec('ROLLBACK;');
+      throw error;
+    }
+  }
+
+  projectRuntimeEvent(
+    context: RuntimeSessionContext,
+    input: {
+      readonly idempotencyKey: string;
+      readonly type: 'assignment.progress' | 'assignment.result_submitted' | 'team.message';
+      readonly payload: Readonly<Record<string, unknown>>;
+    }
+  ): WorkerOutboxEvent {
+    const idempotencyKey = `runtime:${context.attemptId}:${input.idempotencyKey}`;
+    if (idempotencyKey.length > 512) throw new TypeError('Runtime idempotency key is too long');
+    const existing = this.getByIdempotencyKey(idempotencyKey);
+    if (existing !== undefined) return existing;
+    const eventId = eventIdSchema.parse(randomUUID());
+    const createdAt = new Date().toISOString();
+    this.database.exec('BEGIN IMMEDIATE;');
+    try {
+      const insert = this.database
+        .prepare(
+          `INSERT INTO outbox_events
+            (event_id, idempotency_key, envelope_json, created_at)
+           VALUES (?, ?, '{}', ?)`
+        )
+        .run(eventId, idempotencyKey, createdAt);
+      const sequence = Number(insert.lastInsertRowid);
+      const envelope = eventEnvelopeSchema.parse({
+        protocolVersion: 2,
+        eventId,
+        sequence,
+        occurredAt: createdAt,
+        sourceNodeId: context.nodeId,
+        workerInstanceId: context.workerInstanceId,
+        teamId: context.teamId,
+        assignmentId: context.assignmentId,
+        attemptId: context.attemptId,
+        leaseEpoch: context.leaseEpoch,
+        type: input.type,
+        payload: {
+          ...input.payload,
+          membershipId: context.membershipId,
+          workspaceId: context.workspaceId,
+          turnId: context.turnId,
+        },
       });
       this.database
         .prepare('UPDATE outbox_events SET envelope_json = ? WHERE sequence = ?')

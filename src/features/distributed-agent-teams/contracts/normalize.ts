@@ -38,10 +38,22 @@ export const normalizeCreateRemoteAssignmentRequest = (
   if (record === null) throw new TypeError('Remote assignment request must be an object');
   const description = optionalTrimmedString(record.description, 'description', 20_000);
   const teamId = record.teamId === undefined ? undefined : uuid(record.teamId, 'teamId');
+  const membershipId =
+    record.membershipId === undefined ? undefined : uuid(record.membershipId, 'membershipId');
+  const workspaceId =
+    record.workspaceId === undefined ? undefined : uuid(record.workspaceId, 'workspaceId');
+  if ((membershipId === undefined) !== (workspaceId === undefined)) {
+    throw new TypeError('membershipId and workspaceId must be supplied together');
+  }
+  if (membershipId !== undefined && teamId === undefined) {
+    throw new TypeError('teamId is required for a team membership assignment');
+  }
   return {
     targetNodeId: uuid(record.targetNodeId, 'targetNodeId'),
     title: requiredTrimmedString(record.title, 'title', 240),
     ...(description === undefined ? {} : { description }),
     ...(teamId === undefined ? {} : { teamId }),
+    ...(membershipId === undefined ? {} : { membershipId }),
+    ...(workspaceId === undefined ? {} : { workspaceId }),
   };
 };

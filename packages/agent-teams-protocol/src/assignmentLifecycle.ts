@@ -1,14 +1,29 @@
 import { z } from 'zod';
 
-import { assignmentIdSchema, leaseIdSchema } from './ids';
+import {
+  assignmentIdSchema,
+  leaseIdSchema,
+  membershipIdSchema,
+  workspaceIdSchema,
+} from './ids';
 
 export const assignmentOfferPayloadSchema = z
   .object({
     assignmentId: assignmentIdSchema,
+    membershipId: membershipIdSchema.optional(),
+    workspaceId: workspaceIdSchema.optional(),
     title: z.string().trim().min(1).max(240),
     description: z.string().trim().min(1).max(20_000).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.membershipId === undefined) !== (value.workspaceId === undefined)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'membershipId and workspaceId must be supplied together',
+      });
+    }
+  });
 
 export type AssignmentOfferPayload = z.infer<typeof assignmentOfferPayloadSchema>;
 

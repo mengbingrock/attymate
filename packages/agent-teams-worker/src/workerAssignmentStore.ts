@@ -11,7 +11,9 @@ import {
   commandIdSchema,
   nodeIdSchema,
   leaseIdSchema,
+  membershipIdSchema,
   teamIdSchema,
+  workspaceIdSchema,
   type AssignmentExecutionState,
   type AssignmentId,
   type AttemptId,
@@ -19,7 +21,9 @@ import {
   type ExecutionLeaseIdentity,
   type NodeId,
   type LeaseId,
+  type MembershipId,
   type TeamId,
+  type WorkspaceId,
 } from '@claude-teams/agent-teams-protocol';
 
 import type { WorkerInboxCommand } from './workerInboxStore';
@@ -28,6 +32,8 @@ export interface WorkerAssignment {
   readonly assignmentId: AssignmentId;
   readonly offerCommandId: CommandId;
   readonly teamId?: TeamId;
+  readonly membershipId?: MembershipId;
+  readonly workspaceId?: WorkspaceId;
   readonly targetNodeId: NodeId;
   readonly title: string;
   readonly description?: string;
@@ -75,6 +81,8 @@ interface AssignmentRow {
   assignment_id: string;
   offer_command_id: string;
   team_id: string | null;
+  membership_id: string | null;
+  workspace_id: string | null;
   target_node_id: string;
   title: string;
   description: string | null;
@@ -104,6 +112,12 @@ const mapAssignment = (row: AssignmentRow): WorkerAssignment => ({
   assignmentId: assignmentIdSchema.parse(row.assignment_id),
   offerCommandId: commandIdSchema.parse(row.offer_command_id),
   ...(row.team_id === null ? {} : { teamId: teamIdSchema.parse(row.team_id) }),
+  ...(row.membership_id === null
+    ? {}
+    : { membershipId: membershipIdSchema.parse(row.membership_id) }),
+  ...(row.workspace_id === null
+    ? {}
+    : { workspaceId: workspaceIdSchema.parse(row.workspace_id) }),
   targetNodeId: nodeIdSchema.parse(row.target_node_id),
   title: row.title,
   ...(row.description === null ? {} : { description: row.description }),
@@ -213,6 +227,8 @@ export class WorkerAssignmentStore {
         assignment_id TEXT PRIMARY KEY,
         offer_command_id TEXT NOT NULL UNIQUE,
         team_id TEXT,
+        membership_id TEXT,
+        workspace_id TEXT,
         target_node_id TEXT NOT NULL,
         title TEXT NOT NULL,
         description TEXT,
@@ -240,6 +256,8 @@ export class WorkerAssignmentStore {
         ON assignment_activity (assignment_id, id);
     `);
     this.ensureAssignmentColumn('attempt_id', 'TEXT');
+    this.ensureAssignmentColumn('membership_id', 'TEXT');
+    this.ensureAssignmentColumn('workspace_id', 'TEXT');
     this.ensureAssignmentColumn('lease_id', 'TEXT');
     this.ensureAssignmentColumn('lease_epoch', 'INTEGER');
     this.ensureAssignmentColumn('lease_expires_at', 'TEXT');
@@ -248,6 +266,9 @@ export class WorkerAssignmentStore {
   projectOffer(command: WorkerInboxCommand): WorkerAssignment | undefined {
     if (command.envelope.type !== 'assignment.offer') return undefined;
     const payload = assignmentOfferPayloadSchema.parse(command.envelope.payload);
+    if (payload.membershipId !== undefined && command.envelope.teamId === undefined) {
+      throw new WorkerAssignmentOfferConflictError(payload.assignmentId);
+    }
     if (
       command.envelope.assignmentId !== undefined &&
       command.envelope.assignmentId !== payload.assignmentId
@@ -260,6 +281,8 @@ export class WorkerAssignmentStore {
         existing.offerCommandId === command.commandId &&
         existing.targetNodeId === command.envelope.targetNodeId &&
         existing.teamId === command.envelope.teamId &&
+        existing.membershipId === payload.membershipId &&
+        existing.workspaceId === payload.workspaceId &&
         existing.title === payload.title &&
         existing.description === payload.description;
       if (!sameOffer) throw new WorkerAssignmentOfferConflictError(payload.assignmentId);
@@ -272,14 +295,17 @@ export class WorkerAssignmentStore {
       this.database
         .prepare(
           `INSERT INTO assignments
-            (assignment_id, offer_command_id, team_id, target_node_id, title, description,
+            (assignment_id, offer_command_id, team_id, membership_id, workspace_id,
+             target_node_id, title, description,
              state, revision, offered_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, 'proposed', 0, ?, ?)`
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'proposed', 0, ?, ?)`
         )
         .run(
           payload.assignmentId,
           command.commandId,
           command.envelope.teamId ?? null,
+          payload.membershipId ?? null,
+          payload.workspaceId ?? null,
           command.envelope.targetNodeId,
           payload.title,
           payload.description ?? null,
@@ -425,10 +451,10 @@ export class WorkerAssignmentStore {
       readonly leaseEpoch: number;
     },
     expiresAtInput: string
-  ): void {
+  ): boolean {
     const assignment = this.get(identity.assignmentId);
-    if (assignment === undefined || !this.matchesLeaseIdentity(assignment, identity)) return;
-    if (!activeLeaseStates.has(assignment.state)) return;
+    if (assignment === undefined || !this.matchesLeaseIdentity(assignment, identity)) return false;
+    if (!activeLeaseStates.has(assignment.state)) return false;
     const expiresAt = new Date(expiresAtInput);
     if (!Number.isFinite(expiresAt.getTime())) throw new TypeError('expiresAt must be a timestamp');
     this.database
@@ -442,6 +468,7 @@ export class WorkerAssignmentStore {
         assignment.assignmentId,
         assignment.revision
       );
+    return true;
   }
 
   fenceLease(
