@@ -812,6 +812,9 @@ importers:
       '@claude-teams/agent-teams-protocol':
         specifier: workspace:*
         version: link:../agent-teams-protocol
+      fastmcp:
+        specifier: ^3.35.0
+        version: 3.35.0(patch_hash=7175182f509e3d149c517648f2b8e6d04a023a3c8fe126ca4ec58426b9d606df)
       ws:
         specifier: 8.21.0
         version: 8.21.0

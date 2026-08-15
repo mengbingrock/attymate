@@ -15,11 +15,13 @@
     }
   },
   "scripts": {
+    "control:mcp": "tsx src/controlMcpCli.ts",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@claude-teams/agent-teams-protocol": "workspace:*",
+    "fastmcp": "^3.35.0",
     "ws": "^8.21.0",
     "zod": "^4.3.6"
   },

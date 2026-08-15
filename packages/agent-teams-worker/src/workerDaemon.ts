@@ -10,6 +10,7 @@ import {
 } from '@claude-teams/agent-teams-protocol';
 import WebSocket from 'ws';
 
+import { startWorkerControlServer, type StartedWorkerControlServer } from './workerControlServer';
 import { WorkerInboxStore, type WorkerInboxCommand } from './workerInboxStore';
 
 export interface AgentTeamsWorkerOptions {
@@ -21,6 +22,7 @@ export interface AgentTeamsWorkerOptions {
   readonly workerInstanceId: WorkerInstanceId;
   readonly workerGeneration: number;
   readonly label: string;
+  readonly controlSocketPath?: string;
   readonly reconnectDelayMs?: number;
 }
 
@@ -62,6 +64,7 @@ export const startAgentTeamsWorker = async (
 ): Promise<StartedAgentTeamsWorker> => {
   await mkdir(options.dataDir, { recursive: true });
   const inboxStore = new WorkerInboxStore(options.dataDir);
+  let controlServer: StartedWorkerControlServer | undefined;
   let socket: WebSocket | undefined;
   let heartbeatTimer: NodeJS.Timeout | undefined;
   let reconnectTimer: NodeJS.Timeout | undefined;
@@ -207,6 +210,12 @@ export const startAgentTeamsWorker = async (
   };
 
   await persistStatus();
+  if (options.controlSocketPath !== undefined) {
+    controlServer = await startWorkerControlServer(options.controlSocketPath, {
+      getStatus: () => status,
+      listInboxCommands: () => inboxStore.list(),
+    });
+  }
   connect();
 
   return {
@@ -215,6 +224,7 @@ export const startAgentTeamsWorker = async (
     listInboxCommands: () => inboxStore.list(),
     stop: async () => {
       stopped = true;
+      await controlServer?.close();
       clearHeartbeat();
       if (reconnectTimer !== undefined) clearTimeout(reconnectTimer);
       if (socket !== undefined && socket.readyState < WebSocket.CLOSING) {
