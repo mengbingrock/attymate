@@ -1,6 +1,7 @@
 import { createAppCloseCoordinationBridge } from '@features/app-close-coordination/preload';
 import { createCodexAccountBridge } from '@features/codex-account/preload';
 import { createCodexRuntimeInstallerBridge } from '@features/codex-runtime-installer/preload';
+import { createDistributedAgentTeamsBridge } from '@features/distributed-agent-teams/preload';
 import { createInteractiveTeamRuntimeBridge } from '@features/interactive-team-runtime/preload';
 import { createMatterBridge } from '@features/matter-dashboard/preload';
 import { createMemberLogStreamBridge } from '@features/member-log-stream/preload';
@@ -589,6 +590,7 @@ const electronAPI: ElectronAPI = {
     ipcRenderer,
   }),
   ...createRecentProjectsBridge(),
+  distributedAgentTeams: createDistributedAgentTeamsBridge(ipcRenderer),
   teamImport: createTeamImportBridge(ipcRenderer),
   teamExport: createTeamExportBridge(ipcRenderer),
   memberWorkSync: createMemberWorkSyncBridge(ipcRenderer),

@@ -124,6 +124,7 @@ import type {
 } from '@features/change-review-history/contracts';
 import type { CodexAccountElectronApi } from '@features/codex-account/contracts';
 import type { CodexRuntimeAPI } from '@features/codex-runtime-installer/contracts';
+import type { DistributedAgentTeamsElectronApi } from '@features/distributed-agent-teams/contracts';
 import type { InteractiveTeamRuntimeElectronApi } from '@features/interactive-team-runtime/contracts';
 import type { MatterElectronApi } from '@features/matter-dashboard/contracts';
 import type { MemberLogStreamApi } from '@features/member-log-stream/contracts';
@@ -1122,6 +1123,9 @@ export interface ElectronAPI
 
   // Organization map API
   organizations: OrganizationsElectronApi;
+
+  // Relay-backed remote personal Workers and assignments
+  distributedAgentTeams: DistributedAgentTeamsElectronApi;
 
   // tmux runtime diagnostics API
   tmux: TmuxAPI;

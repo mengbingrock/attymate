@@ -57,6 +57,7 @@ import type {
   CodexStartChatgptLoginOptions,
 } from '@features/codex-account/contracts';
 import type { CodexRuntimeAPI } from '@features/codex-runtime-installer/contracts';
+import type { DistributedAgentTeamsElectronApi } from '@features/distributed-agent-teams/contracts';
 import type { InteractiveTeamRuntimeElectronApi } from '@features/interactive-team-runtime/contracts';
 import type { MemberLogStreamApi } from '@features/member-log-stream/contracts';
 import type { DashboardRecentProjectsPayload } from '@features/recent-projects/contracts';
@@ -459,6 +460,20 @@ export class HttpAPIClient implements ElectronAPI {
       request: DeleteOrganizationRelationRequest
     ): Promise<OrganizationStructurePayload> =>
       this.del<OrganizationStructurePayload>(ORGANIZATIONS_RELATIONS_ROUTE, request),
+  };
+
+  distributedAgentTeams: DistributedAgentTeamsElectronApi = {
+    getTopology: async () => ({
+      relayUrl: '',
+      insecureLanMode: true,
+      workers: [],
+      fetchedAt: new Date().toISOString(),
+      degraded: true,
+      warning: 'Distributed Agent Teams is only available in the desktop app',
+    }),
+    createRemoteAssignment: async () => {
+      throw new Error('Remote assignments are only available in the desktop app');
+    },
   };
 
   memberLogStream: MemberLogStreamApi = {

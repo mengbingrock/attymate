@@ -41,6 +41,12 @@ import {
   createCodexModelCatalogFeature,
 } from '@features/codex-model-catalog/main';
 import {
+  createDistributedAgentTeamsFeature,
+  type DistributedAgentTeamsFeatureFacade,
+  registerDistributedAgentTeamsIpc,
+  removeDistributedAgentTeamsIpc,
+} from '@features/distributed-agent-teams/main';
+import {
   createMemberLogStreamFeature,
   registerMemberLogStreamIpc,
   removeMemberLogStreamIpc,
@@ -743,6 +749,7 @@ let updaterService: UpdaterService;
 let sshConnectionManager: SshConnectionManager;
 let codexAccountFeature: CodexAccountFeatureFacade | null = null;
 let codexModelCatalogFeature: CodexModelCatalogFeatureFacade | null = null;
+let distributedAgentTeamsFeature: DistributedAgentTeamsFeatureFacade;
 let recentProjectsFeature: RecentProjectsFeatureFacade;
 let teamImportFeature: TeamImportFeatureFacade;
 let teamExportFeature: TeamExportFeatureFacade;
@@ -1902,6 +1909,17 @@ async function initializeServices(): Promise<void> {
     getLocalContext: () => contextRegistry.get('local'),
     logger: createLogger('Feature:RecentProjects'),
   });
+  const configuredRelayUrl = process.env.AGENT_TEAMS_RELAY_URL?.trim() || 'http://127.0.0.1:43170';
+  try {
+    distributedAgentTeamsFeature = createDistributedAgentTeamsFeature({
+      relayUrl: configuredRelayUrl,
+    });
+  } catch (error) {
+    logger.error('Invalid AGENT_TEAMS_RELAY_URL; using the loopback Relay default', error);
+    distributedAgentTeamsFeature = createDistributedAgentTeamsFeature({
+      relayUrl: 'http://127.0.0.1:43170',
+    });
+  }
   teamImportFeature = createTeamImportFeature({ teamDataService });
   teamExportFeature = createTeamExportFeature({ teamsBasePath: getTeamsBasePath() });
   organizationsFeature = createOrganizationsFeature({
@@ -2509,6 +2527,7 @@ async function initializeServices(): Promise<void> {
   );
   registerCodexAccountIpc(ipcMain, codexAccountFeature);
   registerRecentProjectsIpc(ipcMain, recentProjectsFeature);
+  registerDistributedAgentTeamsIpc(ipcMain, distributedAgentTeamsFeature);
   registerTeamImportIpc(ipcMain, teamImportFeature);
   registerTeamExportIpc(ipcMain, teamExportFeature);
   registerOrganizationsIpc(ipcMain, organizationsFeature);
@@ -2719,6 +2738,7 @@ async function shutdownServices(): Promise<void> {
       removeIpcHandlers();
       removeCodexAccountIpc(ipcMain);
       removeRecentProjectsIpc(ipcMain);
+      removeDistributedAgentTeamsIpc(ipcMain);
       removeTeamImportIpc(ipcMain);
       removeTeamExportIpc(ipcMain);
       removeOrganizationsIpc(ipcMain);
