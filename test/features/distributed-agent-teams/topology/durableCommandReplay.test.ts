@@ -9,10 +9,7 @@ import {
   personIdSchema,
   workerInstanceIdSchema,
 } from '@claude-teams/agent-teams-protocol';
-import {
-  RelayCommandConflictError,
-  startAgentTeamsRelay,
-} from '@claude-teams/agent-teams-relay';
+import { RelayCommandConflictError, startAgentTeamsRelay } from '@claude-teams/agent-teams-relay';
 import {
   type AgentTeamsWorkerOptions,
   startAgentTeamsWorker,
@@ -30,7 +27,10 @@ const commandFor = (commandId: string, sequence: number) =>
     sequence,
     targetNodeId: nodeId,
     type: 'assignment.offer',
-    payload: { title: `Assignment ${sequence}` },
+    payload: {
+      assignmentId: `00000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`,
+      title: `Assignment ${sequence}`,
+    },
   });
 
 describe('durable Relay to Worker command delivery', () => {
@@ -118,9 +118,7 @@ describe('durable Relay to Worker command delivery', () => {
         dataDir: relayDataDir,
       });
       expect(relay.listCommands()).toHaveLength(2);
-      expect(relay.listCommands().every((command) => command.status === 'acknowledged')).toBe(
-        true
-      );
+      expect(relay.listCommands().every((command) => command.status === 'acknowledged')).toBe(true);
     } finally {
       await worker?.stop();
       await relay.close();

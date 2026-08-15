@@ -11,6 +11,11 @@ import {
 import WebSocket from 'ws';
 
 import { startWorkerControlServer, type StartedWorkerControlServer } from './workerControlServer';
+import {
+  type AssignmentDeferInput,
+  type AssignmentMutationInput,
+  WorkerAssignmentStore,
+} from './workerAssignmentStore';
 import { WorkerInboxStore, type WorkerInboxCommand } from './workerInboxStore';
 
 export interface AgentTeamsWorkerOptions {
@@ -56,6 +61,16 @@ export interface StartedAgentTeamsWorker {
   readonly ready: Promise<void>;
   readonly getStatus: () => AgentTeamsWorkerStatus;
   readonly listInboxCommands: () => readonly WorkerInboxCommand[];
+  readonly listAssignments: () => ReturnType<WorkerAssignmentStore['list']>;
+  readonly acceptAssignment: (
+    input: AssignmentMutationInput
+  ) => ReturnType<WorkerAssignmentStore['accept']>;
+  readonly rejectAssignment: (
+    input: AssignmentMutationInput
+  ) => ReturnType<WorkerAssignmentStore['reject']>;
+  readonly deferAssignment: (
+    input: AssignmentDeferInput
+  ) => ReturnType<WorkerAssignmentStore['defer']>;
   readonly stop: () => Promise<void>;
 }
 
@@ -64,6 +79,14 @@ export const startAgentTeamsWorker = async (
 ): Promise<StartedAgentTeamsWorker> => {
   await mkdir(options.dataDir, { recursive: true });
   const inboxStore = new WorkerInboxStore(options.dataDir);
+  const assignmentStore = new WorkerAssignmentStore(options.dataDir);
+  for (const command of inboxStore.list()) {
+    try {
+      assignmentStore.projectOffer(command);
+    } catch {
+      // A malformed historical offer remains visible in raw activity but cannot enter the queue.
+    }
+  }
   let controlServer: StartedWorkerControlServer | undefined;
   let socket: WebSocket | undefined;
   let heartbeatTimer: NodeJS.Timeout | undefined;
@@ -175,8 +198,25 @@ export const startAgentTeamsWorker = async (
           );
           return;
         }
-        inboxStore.accept(message.cursor, message.envelope);
+        const inboxCommand = inboxStore.accept(message.cursor, message.envelope);
         updateStatus({ lastInboundCursor: inboxStore.lastInboundCursor() });
+        try {
+          assignmentStore.projectOffer(inboxCommand);
+        } catch (error) {
+          socket?.send(
+            JSON.stringify({
+              type: 'worker.command_ack',
+              protocolVersion: 2,
+              commandId: message.envelope.commandId,
+              cursor: message.cursor,
+              status: 'rejected',
+              receivedAt: new Date().toISOString(),
+              error:
+                error instanceof Error ? error.message.slice(0, 512) : 'Invalid assignment offer',
+            })
+          );
+          return;
+        }
         socket?.send(
           JSON.stringify({
             type: 'worker.command_ack',
@@ -214,6 +254,12 @@ export const startAgentTeamsWorker = async (
     controlServer = await startWorkerControlServer(options.controlSocketPath, {
       getStatus: () => status,
       listInboxCommands: () => inboxStore.list(),
+      listAssignments: () => assignmentStore.list(),
+      getAssignment: (assignmentId) => assignmentStore.get(assignmentId),
+      listAssignmentActivity: (assignmentId) => assignmentStore.listActivity(assignmentId),
+      acceptAssignment: (input) => assignmentStore.accept(input),
+      rejectAssignment: (input) => assignmentStore.reject(input),
+      deferAssignment: (input) => assignmentStore.defer(input),
     });
   }
   connect();
@@ -222,6 +268,10 @@ export const startAgentTeamsWorker = async (
     ready,
     getStatus: () => status,
     listInboxCommands: () => inboxStore.list(),
+    listAssignments: () => assignmentStore.list(),
+    acceptAssignment: (input) => assignmentStore.accept(input),
+    rejectAssignment: (input) => assignmentStore.reject(input),
+    deferAssignment: (input) => assignmentStore.defer(input),
     stop: async () => {
       stopped = true;
       await controlServer?.close();
@@ -235,6 +285,7 @@ export const startAgentTeamsWorker = async (
       }
       updateStatus({ state: 'stopped' });
       await persistStatus();
+      assignmentStore.close();
       inboxStore.close();
     },
   };

@@ -77,6 +77,13 @@ describe('Manager, Relay, and headless Workers', () => {
         type: 'assignment.offer',
         payload: { title: 'Review the distributed Manager slice' },
       });
+      expect(workers[1]?.listAssignments()).toEqual([
+        expect.objectContaining({
+          title: 'Review the distributed Manager slice',
+          state: 'proposed',
+          revision: 0,
+        }),
+      ]);
       expect(workers[0]?.listInboxCommands()).toHaveLength(0);
     } finally {
       await Promise.all(workers.map((worker) => worker.stop()));

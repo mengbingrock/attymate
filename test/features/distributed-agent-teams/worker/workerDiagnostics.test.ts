@@ -29,9 +29,7 @@ describe('Worker diagnostics', () => {
       organizationId: organizationIdSchema.parse('00000000-0000-4000-8000-000000000001'),
       personId: personIdSchema.parse('00000000-0000-4000-8000-000000000002'),
       nodeId: nodeIdSchema.parse('00000000-0000-4000-8000-000000000003'),
-      workerInstanceId: workerInstanceIdSchema.parse(
-        '00000000-0000-4000-8000-000000000004'
-      ),
+      workerInstanceId: workerInstanceIdSchema.parse('00000000-0000-4000-8000-000000000004'),
       workerGeneration: 1,
       relayUrl: 'ws://127.0.0.1:43170/v2/worker-stream',
       state: 'connected',
@@ -47,6 +45,18 @@ describe('Worker diagnostics', () => {
     const control = await startWorkerControlServer(socketPath, {
       getStatus: () => status,
       listInboxCommands: () => [],
+      listAssignments: () => [],
+      getAssignment: () => undefined,
+      listAssignmentActivity: () => [],
+      acceptAssignment: () => {
+        throw new Error('No assignments in this fixture');
+      },
+      rejectAssignment: () => {
+        throw new Error('No assignments in this fixture');
+      },
+      deferAssignment: () => {
+        throw new Error('No assignments in this fixture');
+      },
     });
 
     try {

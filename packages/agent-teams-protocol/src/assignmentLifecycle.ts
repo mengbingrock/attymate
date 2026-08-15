@@ -1,5 +1,17 @@
 import { z } from 'zod';
 
+import { assignmentIdSchema } from './ids';
+
+export const assignmentOfferPayloadSchema = z
+  .object({
+    assignmentId: assignmentIdSchema,
+    title: z.string().trim().min(1).max(240),
+    description: z.string().trim().min(1).max(20_000).optional(),
+  })
+  .strict();
+
+export type AssignmentOfferPayload = z.infer<typeof assignmentOfferPayloadSchema>;
+
 export const assignmentExecutionStateSchema = z.enum([
   'proposed',
   'accepted',
@@ -41,13 +53,7 @@ const allowedTransitions: Readonly<
   queued: new Set(['leased', 'cancelled']),
   leased: new Set(['preparing_workspace', 'cancelled', 'failed', 'fenced']),
   preparing_workspace: new Set(['running', 'cancelled', 'failed', 'fenced']),
-  running: new Set([
-    'waiting_local_approval',
-    'verifying',
-    'cancelled',
-    'failed',
-    'fenced',
-  ]),
+  running: new Set(['waiting_local_approval', 'verifying', 'cancelled', 'failed', 'fenced']),
   waiting_local_approval: new Set(['running', 'cancelled', 'failed', 'fenced']),
   verifying: new Set(['running', 'committing', 'cancelled', 'failed', 'fenced']),
   committing: new Set(['awaiting_push', 'cancelled', 'failed', 'fenced']),

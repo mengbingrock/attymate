@@ -1,15 +1,34 @@
 import { chmod, lstat, mkdir, unlink } from 'node:fs/promises';
-import { createServer, request as httpRequest, type Server } from 'node:http';
+import {
+  createServer,
+  type IncomingMessage,
+  request as httpRequest,
+  type Server,
+  type ServerResponse,
+} from 'node:http';
 import { dirname } from 'node:path';
 
 import type { AgentTeamsWorkerStatus } from './workerDaemon';
+import type {
+  AssignmentDeferInput,
+  AssignmentMutationInput,
+  WorkerAssignment,
+  WorkerAssignmentActivity,
+} from './workerAssignmentStore';
 import type { WorkerInboxCommand } from './workerInboxStore';
 
 const MAX_CONTROL_RESPONSE_BYTES = 2 * 1024 * 1024;
+const MAX_CONTROL_REQUEST_BYTES = 64 * 1024;
 
 export interface WorkerControlSnapshotProvider {
   readonly getStatus: () => AgentTeamsWorkerStatus;
   readonly listInboxCommands: () => readonly WorkerInboxCommand[];
+  readonly listAssignments: () => readonly WorkerAssignment[];
+  readonly getAssignment: (assignmentId: string) => WorkerAssignment | undefined;
+  readonly listAssignmentActivity: (assignmentId?: string) => readonly WorkerAssignmentActivity[];
+  readonly acceptAssignment: (input: AssignmentMutationInput) => WorkerAssignment;
+  readonly rejectAssignment: (input: AssignmentMutationInput) => WorkerAssignment;
+  readonly deferAssignment: (input: AssignmentDeferInput) => WorkerAssignment;
 }
 
 export interface StartedWorkerControlServer {
@@ -43,10 +62,157 @@ const removeStaleSocket = async (socketPath: string): Promise<void> => {
   }
 };
 
-const jsonResponse = (response: import('node:http').ServerResponse, body: unknown): void => {
-  response.statusCode = 200;
+const jsonResponse = (response: ServerResponse, body: unknown, statusCode = 200): void => {
+  response.statusCode = statusCode;
   response.setHeader('content-type', 'application/json; charset=utf-8');
   response.end(JSON.stringify(body));
+};
+
+const asRecord = (value: unknown): Record<string, unknown> => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError('Worker control request body must be an object');
+  }
+  return value as Record<string, unknown>;
+};
+
+const readJsonBody = async (request: IncomingMessage): Promise<Record<string, unknown>> => {
+  const chunks: Buffer[] = [];
+  let receivedBytes = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    receivedBytes += buffer.length;
+    if (receivedBytes > MAX_CONTROL_REQUEST_BYTES) {
+      throw new Error('Worker control request exceeded size limit');
+    }
+    chunks.push(buffer);
+  }
+  if (chunks.length === 0) return {};
+  return asRecord(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+};
+
+const normalizeMutationInput = (
+  assignmentId: string,
+  body: Record<string, unknown>,
+  allowDeferredUntil: boolean
+): AssignmentDeferInput => {
+  const allowed = new Set([
+    'expectedRevision',
+    'reason',
+    ...(allowDeferredUntil ? ['deferredUntil'] : []),
+  ]);
+  for (const field of Object.keys(body)) {
+    if (!allowed.has(field)) throw new TypeError(`Unknown Worker control field ${field}`);
+  }
+  if (
+    body.expectedRevision !== undefined &&
+    (!Number.isInteger(body.expectedRevision) || (body.expectedRevision as number) < 0)
+  ) {
+    throw new TypeError('expectedRevision must be a non-negative integer');
+  }
+  if (body.reason !== undefined && typeof body.reason !== 'string') {
+    throw new TypeError('reason must be a string');
+  }
+  if (body.deferredUntil !== undefined && typeof body.deferredUntil !== 'string') {
+    throw new TypeError('deferredUntil must be a string');
+  }
+  return {
+    assignmentId,
+    ...(body.expectedRevision === undefined
+      ? {}
+      : { expectedRevision: body.expectedRevision as number }),
+    ...(body.reason === undefined ? {} : { reason: body.reason as string }),
+    ...(body.deferredUntil === undefined ? {} : { deferredUntil: body.deferredUntil as string }),
+  };
+};
+
+const errorStatus = (error: unknown): number => {
+  if (!(error instanceof Error)) return 500;
+  if ('code' in error && error.code === 'WORKER_ASSIGNMENT_NOT_FOUND') return 404;
+  if (
+    'code' in error &&
+    (error.code === 'WORKER_ASSIGNMENT_REVISION_CONFLICT' ||
+      error.code === 'INVALID_ASSIGNMENT_TRANSITION')
+  ) {
+    return 409;
+  }
+  return error instanceof TypeError ? 400 : 500;
+};
+
+const handleControlRequest = async (
+  request: IncomingMessage,
+  response: ServerResponse,
+  provider: WorkerControlSnapshotProvider
+): Promise<void> => {
+  const url = new URL(request.url ?? '/', 'http://worker.local');
+  const status = provider.getStatus();
+
+  if (request.method === 'GET' && url.pathname === '/v2/agent-context') {
+    const context: WorkerAgentContextProjection = {
+      protocolVersion: 2,
+      coordinationMode: 'lan_relay_v2',
+      profile: 'agent-teams-control',
+      insecureLanMode: true,
+      organizationId: status.organizationId,
+      personId: status.personId,
+      nodeId: status.nodeId,
+      workerInstanceId: status.workerInstanceId,
+      workerState: status.state,
+    };
+    jsonResponse(response, context);
+    return;
+  }
+  if (request.method === 'GET' && url.pathname === '/v2/worker-status') {
+    jsonResponse(response, status);
+    return;
+  }
+  if (request.method === 'GET' && url.pathname === '/v2/assignments') {
+    jsonResponse(response, { assignments: provider.listAssignments() });
+    return;
+  }
+  if (request.method === 'GET' && url.pathname === '/v2/assignment-activity') {
+    const assignmentId = url.searchParams.get('assignmentId') ?? undefined;
+    jsonResponse(response, {
+      assignments: provider.listAssignments(),
+      events: provider.listAssignmentActivity(assignmentId),
+      commands: provider.listInboxCommands(),
+    });
+    return;
+  }
+
+  const detailMatch = /^\/v2\/assignments\/([^/]+)$/.exec(url.pathname);
+  if (request.method === 'GET' && detailMatch !== null) {
+    const assignment = provider.getAssignment(decodeURIComponent(detailMatch[1] ?? ''));
+    if (assignment === undefined) {
+      jsonResponse(response, { error: 'assignment_not_found' }, 404);
+      return;
+    }
+    jsonResponse(response, { assignment });
+    return;
+  }
+
+  const mutationMatch = /^\/v2\/assignments\/([^/]+)\/(accept|reject|defer)$/.exec(url.pathname);
+  if (request.method === 'POST' && mutationMatch !== null) {
+    const assignmentId = decodeURIComponent(mutationMatch[1] ?? '');
+    const action = mutationMatch[2];
+    const input = normalizeMutationInput(
+      assignmentId,
+      await readJsonBody(request),
+      action === 'defer'
+    );
+    const assignment =
+      action === 'accept'
+        ? provider.acceptAssignment(input)
+        : action === 'reject'
+          ? provider.rejectAssignment(input)
+          : provider.deferAssignment(input);
+    jsonResponse(response, { assignment });
+    return;
+  }
+
+  response.statusCode = request.method === 'GET' || request.method === 'POST' ? 404 : 405;
+  response.end(
+    JSON.stringify({ error: response.statusCode === 404 ? 'not_found' : 'method_not_allowed' })
+  );
 };
 
 export const startWorkerControlServer = async (
@@ -61,39 +227,13 @@ export const startWorkerControlServer = async (
   }
 
   const server = createServer((request, response) => {
-    if (request.method !== 'GET') {
-      response.statusCode = 405;
-      response.end();
-      return;
-    }
-
-    const status = provider.getStatus();
-    if (request.url === '/v2/agent-context') {
-      const context: WorkerAgentContextProjection = {
-        protocolVersion: 2,
-        coordinationMode: 'lan_relay_v2',
-        profile: 'agent-teams-control',
-        insecureLanMode: true,
-        organizationId: status.organizationId,
-        personId: status.personId,
-        nodeId: status.nodeId,
-        workerInstanceId: status.workerInstanceId,
-        workerState: status.state,
-      };
-      jsonResponse(response, context);
-      return;
-    }
-    if (request.url === '/v2/worker-status') {
-      jsonResponse(response, status);
-      return;
-    }
-    if (request.url === '/v2/assignment-activity') {
-      jsonResponse(response, { commands: provider.listInboxCommands() });
-      return;
-    }
-
-    response.statusCode = 404;
-    response.end(JSON.stringify({ error: 'not_found' }));
+    void handleControlRequest(request, response, provider).catch((error: unknown) => {
+      jsonResponse(
+        response,
+        { error: error instanceof Error ? error.message : 'Worker control request failed' },
+        errorStatus(error)
+      );
+    });
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -130,15 +270,25 @@ const closeServer = async (server: Server): Promise<void> => {
 
 export const requestWorkerControl = async <T>(
   socketPath: string,
-  path: '/v2/agent-context' | '/v2/worker-status' | '/v2/assignment-activity'
+  path:
+    | '/v2/agent-context'
+    | '/v2/worker-status'
+    | '/v2/assignments'
+    | '/v2/assignment-activity'
+    | `/v2/assignments/${string}`
+    | `/v2/assignments/${string}/${'accept' | 'reject' | 'defer'}`,
+  options?: { readonly method?: 'GET' | 'POST'; readonly body?: unknown }
 ): Promise<T> =>
   await new Promise<T>((resolve, reject) => {
     const request = httpRequest(
       {
         socketPath,
         path,
-        method: 'GET',
-        headers: { host: 'localhost' },
+        method: options?.method ?? 'GET',
+        headers: {
+          host: 'localhost',
+          ...(options?.body === undefined ? {} : { 'content-type': 'application/json' }),
+        },
       },
       (response) => {
         const chunks: Buffer[] = [];
@@ -168,5 +318,5 @@ export const requestWorkerControl = async <T>(
     request.setTimeout(5_000, () => {
       request.destroy(new Error('Worker control request timed out'));
     });
-    request.end();
+    request.end(options?.body === undefined ? undefined : JSON.stringify(options.body));
   });

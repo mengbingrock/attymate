@@ -4,4 +4,5 @@ export * from './mcpSessionGateway';
 export * from './workerControlServer';
 export * from './workerDaemon';
 export * from './workerDiagnostics';
+export * from './workerAssignmentStore';
 export * from './workerInboxStore';

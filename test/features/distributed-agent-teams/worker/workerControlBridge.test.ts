@@ -1,7 +1,4 @@
-import {
-  type ChildProcessWithoutNullStreams,
-  spawn,
-} from 'node:child_process';
+import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { mkdtemp, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,6 +17,7 @@ import {
   requestWorkerControl,
   startWorkerControlServer,
   type WorkerAgentContextProjection,
+  WorkerAssignmentStore,
   type WorkerInboxCommand,
 } from '@claude-teams/agent-teams-worker';
 
@@ -36,13 +34,7 @@ class TestMcpClient {
     const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
     this.child = spawn(
       pnpm,
-      [
-        'exec',
-        'tsx',
-        'packages/agent-teams-worker/src/controlMcpCli.ts',
-        '--socket',
-        socketPath,
-      ],
+      ['exec', 'tsx', 'packages/agent-teams-worker/src/controlMcpCli.ts', '--socket', socketPath],
       { cwd: process.cwd(), stdio: ['pipe', 'pipe', 'pipe'] }
     );
     this.child.stdout.setEncoding('utf8');
@@ -75,8 +67,8 @@ class TestMcpClient {
     return this.request(2, 'tools/list', {});
   }
 
-  callTool(name: string): Promise<unknown> {
-    return this.request(3, 'tools/call', { name, arguments: {} });
+  callTool(name: string, arguments_: Record<string, unknown> = {}): Promise<unknown> {
+    return this.request(3, 'tools/call', { name, arguments: arguments_ });
   }
 
   async close(): Promise<void> {
@@ -141,9 +133,7 @@ describe('Worker owner-control bridge', () => {
       organizationId: organizationIdSchema.parse('00000000-0000-4000-8000-000000000001'),
       personId: personIdSchema.parse('00000000-0000-4000-8000-000000000002'),
       nodeId: nodeIdSchema.parse('00000000-0000-4000-8000-000000000003'),
-      workerInstanceId: workerInstanceIdSchema.parse(
-        '00000000-0000-4000-8000-000000000004'
-      ),
+      workerInstanceId: workerInstanceIdSchema.parse('00000000-0000-4000-8000-000000000004'),
       workerGeneration: 1,
       relayUrl: 'ws://127.0.0.1:43170/v2/worker-stream',
       state: 'connected',
@@ -157,7 +147,10 @@ describe('Worker owner-control bridge', () => {
       sequence: 1,
       targetNodeId: status.nodeId,
       type: 'assignment.offer',
-      payload: { title: 'Review local control bridge' },
+      payload: {
+        assignmentId: '00000000-0000-4000-8000-000000000006',
+        title: 'Review local control bridge',
+      },
     });
     const inbox: readonly WorkerInboxCommand[] = [
       {
@@ -167,9 +160,17 @@ describe('Worker owner-control bridge', () => {
         receivedAt: '2026-08-14T20:00:01.000Z',
       },
     ];
+    const assignmentStore = new WorkerAssignmentStore(testDir);
+    assignmentStore.projectOffer(inbox[0]!);
     const control = await startWorkerControlServer(socketPath, {
       getStatus: () => status,
       listInboxCommands: () => inbox,
+      listAssignments: () => assignmentStore.list(),
+      getAssignment: (assignmentId) => assignmentStore.get(assignmentId),
+      listAssignmentActivity: (assignmentId) => assignmentStore.listActivity(assignmentId),
+      acceptAssignment: (input) => assignmentStore.accept(input),
+      rejectAssignment: (input) => assignmentStore.reject(input),
+      deferAssignment: (input) => assignmentStore.defer(input),
     });
     const mcp = new TestMcpClient(socketPath);
 
@@ -207,9 +208,17 @@ describe('Worker owner-control bridge', () => {
         service: 'agent-teams-worker',
         nodeId: status.nodeId,
       });
+      const accepted = (await mcp.callTool('assignment_accept', {
+        assignmentId: '00000000-0000-4000-8000-000000000006',
+        expectedRevision: 0,
+      })) as { content: Array<{ text: string }> };
+      expect(JSON.parse(accepted.content[0]?.text ?? '{}')).toMatchObject({
+        assignment: { state: 'queued', revision: 2 },
+      });
     } finally {
       await mcp.close();
       await control.close();
+      assignmentStore.close();
     }
   });
 });
