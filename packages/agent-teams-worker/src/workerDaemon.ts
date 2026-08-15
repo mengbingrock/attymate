@@ -163,6 +163,25 @@ export const startAgentTeamsWorker = async (
             if (assignment !== undefined) projectAssignmentActivity(assignment.assignmentId);
             flushPendingEvents();
           },
+          canRecover: (binding) => {
+            const assignment = assignmentStore.get(binding.assignmentId);
+            return (
+              assignment?.attemptId === binding.attemptId &&
+              assignment.leaseId === binding.leaseId &&
+              assignment.leaseEpoch === binding.leaseEpoch &&
+              assignment.leaseExpiresAt !== undefined &&
+              new Date(assignment.leaseExpiresAt).getTime() > Date.now() &&
+              ['preparing_workspace', 'running'].includes(assignment.state)
+            );
+          },
+          onReconciliationRequired: (binding, error) => {
+            const assignment = assignmentStore.markRuntimeFailed(
+              binding,
+              `codex_runtime_needs_reconciliation: ${error.message}`
+            );
+            if (assignment !== undefined) projectAssignmentActivity(assignment.assignmentId);
+            flushPendingEvents();
+          },
         });
   let controlServer: StartedWorkerControlServer | undefined;
   let socket: WebSocket | undefined;
@@ -264,18 +283,21 @@ export const startAgentTeamsWorker = async (
 
   const maybeStartRuntime = (assignmentId: string): void => {
     if (runtimeSupervisor === undefined) return;
-    const assignment = assignmentStore.get(assignmentId);
-    if (assignment === undefined || assignment.state !== 'leased') return;
-    const preparing = assignmentStore.prepareRuntime({
-      assignmentId: assignment.assignmentId,
-      attemptId: assignment.attemptId!,
-      leaseId: assignment.leaseId!,
-      leaseEpoch: assignment.leaseEpoch!,
-    });
-    if (preparing === undefined) return;
-    projectAssignmentActivity(preparing.assignmentId);
-    flushPendingEvents();
-    void runtimeSupervisor.start(preparing).catch(() => undefined);
+    let assignment = assignmentStore.get(assignmentId);
+    if (assignment === undefined) return;
+    if (assignment.state === 'leased') {
+      assignment = assignmentStore.prepareRuntime({
+        assignmentId: assignment.assignmentId,
+        attemptId: assignment.attemptId!,
+        leaseId: assignment.leaseId!,
+        leaseEpoch: assignment.leaseEpoch!,
+      });
+      if (assignment === undefined) return;
+      projectAssignmentActivity(assignment.assignmentId);
+      flushPendingEvents();
+    }
+    if (!['preparing_workspace', 'running'].includes(assignment.state)) return;
+    void runtimeSupervisor.start(assignment).catch(() => undefined);
   };
 
   const sweepExpiredLeases = (): void => {

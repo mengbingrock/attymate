@@ -1,3 +1,5 @@
+/* global process, setTimeout */
+
 import readline from 'node:readline';
 
 const reader = readline.createInterface({ input: process.stdin });
@@ -25,5 +27,9 @@ reader.on('line', (line) => {
   }
   if (message.method === 'thread/start') {
     send({ id: message.id, result: { thread: { id: 'thr_fixture' } } });
+    return;
+  }
+  if (message.method === 'fixture/crash') {
+    process.exit(17);
   }
 });

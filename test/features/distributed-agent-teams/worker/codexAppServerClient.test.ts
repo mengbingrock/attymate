@@ -32,6 +32,15 @@ describe('CodexAppServerProcessFactory', () => {
       });
       expect(serverRequests).toEqual(['item/commandExecution/requestApproval']);
       expect(response).toMatchObject({ id: 900, result: { decision: 'decline' } });
+      const closed = new Promise<Error>((resolve) => {
+        session.onClose((event) => resolve(event.error));
+      });
+      await expect(session.request('fixture/crash')).rejects.toThrow(
+        'Codex app-server exited (code=17'
+      );
+      await expect(closed).resolves.toMatchObject({
+        message: expect.stringContaining('Codex app-server exited (code=17'),
+      });
     } finally {
       await session.close();
     }

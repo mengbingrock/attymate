@@ -11,6 +11,7 @@ import {
 } from '@claude-teams/agent-teams-protocol';
 
 export type WorkerRuntimeState = 'starting' | 'active' | 'completed' | 'interrupted' | 'failed';
+export type WorkerRuntimeReconciliationState = 'recovering' | 'needs_reconciliation';
 
 export interface WorkerRuntimeBinding {
   readonly assignmentId: AssignmentId;
@@ -19,6 +20,7 @@ export interface WorkerRuntimeBinding {
   readonly leaseEpoch: number;
   readonly appServerGeneration: number;
   readonly state: WorkerRuntimeState;
+  readonly reconciliationState?: WorkerRuntimeReconciliationState;
   readonly threadId?: string;
   readonly turnId?: string;
   readonly turnStatus?: string;
@@ -34,6 +36,7 @@ interface RuntimeRow {
   lease_epoch: number;
   app_server_generation: number;
   state: WorkerRuntimeState;
+  reconciliation_state: WorkerRuntimeReconciliationState | null;
   thread_id: string | null;
   turn_id: string | null;
   turn_status: string | null;
@@ -49,6 +52,9 @@ const mapRow = (row: RuntimeRow): WorkerRuntimeBinding => ({
   leaseEpoch: row.lease_epoch,
   appServerGeneration: row.app_server_generation,
   state: row.state,
+  ...(row.reconciliation_state === null
+    ? {}
+    : { reconciliationState: row.reconciliation_state }),
   ...(row.thread_id === null ? {} : { threadId: row.thread_id }),
   ...(row.turn_id === null ? {} : { turnId: row.turn_id }),
   ...(row.turn_status === null ? {} : { turnStatus: row.turn_status }),
@@ -79,6 +85,7 @@ export class WorkerRuntimeStore {
         lease_epoch INTEGER NOT NULL,
         app_server_generation INTEGER NOT NULL,
         state TEXT NOT NULL CHECK (state IN ('starting', 'active', 'completed', 'interrupted', 'failed')),
+        reconciliation_state TEXT CHECK (reconciliation_state IN ('recovering', 'needs_reconciliation')),
         thread_id TEXT,
         turn_id TEXT,
         turn_status TEXT,
@@ -93,6 +100,10 @@ export class WorkerRuntimeStore {
         value INTEGER NOT NULL
       );
     `);
+    this.ensureRuntimeBindingColumn(
+      'reconciliation_state',
+      "TEXT CHECK (reconciliation_state IN ('recovering', 'needs_reconciliation'))"
+    );
   }
 
   nextAppServerGeneration(): number {
@@ -180,6 +191,49 @@ export class WorkerRuntimeStore {
     return this.require(attemptId);
   }
 
+  markRecovering(
+    attemptIdInput: string,
+    appServerGeneration: number
+  ): WorkerRuntimeBinding {
+    const attemptId = attemptIdSchema.parse(attemptIdInput);
+    if (!Number.isInteger(appServerGeneration) || appServerGeneration <= 0) {
+      throw new TypeError('appServerGeneration must be a positive integer');
+    }
+    this.database
+      .prepare(
+        `UPDATE runtime_bindings
+         SET app_server_generation = ?, reconciliation_state = 'recovering', error = NULL,
+             updated_at = ?
+         WHERE attempt_id = ? AND state IN ('starting', 'active')`
+      )
+      .run(appServerGeneration, new Date().toISOString(), attemptId);
+    return this.require(attemptId);
+  }
+
+  clearReconciliation(attemptIdInput: string): WorkerRuntimeBinding {
+    const attemptId = attemptIdSchema.parse(attemptIdInput);
+    this.database
+      .prepare(
+        `UPDATE runtime_bindings SET reconciliation_state = NULL, error = NULL, updated_at = ?
+         WHERE attempt_id = ? AND state IN ('starting', 'active')`
+      )
+      .run(new Date().toISOString(), attemptId);
+    return this.require(attemptId);
+  }
+
+  markNeedsReconciliation(attemptIdInput: string, error: string): WorkerRuntimeBinding {
+    const attemptId = attemptIdSchema.parse(attemptIdInput);
+    this.database
+      .prepare(
+        `UPDATE runtime_bindings
+         SET state = 'failed', reconciliation_state = 'needs_reconciliation',
+             turn_status = 'needsReconciliation', error = ?, updated_at = ?
+         WHERE attempt_id = ? AND state IN ('starting', 'active')`
+      )
+      .run(error.slice(0, 2_000), new Date().toISOString(), attemptId);
+    return this.require(attemptId);
+  }
+
   settle(
     attemptIdInput: string,
     state: Exclude<WorkerRuntimeState, 'starting' | 'active'>,
@@ -191,7 +245,7 @@ export class WorkerRuntimeStore {
     this.database
       .prepare(
         `UPDATE runtime_bindings
-         SET state = ?, turn_status = ?, error = ?, updated_at = ?
+         SET state = ?, reconciliation_state = NULL, turn_status = ?, error = ?, updated_at = ?
          WHERE attempt_id = ? AND state IN ('starting', 'active')`
       )
       .run(state, status, error?.slice(0, 2_000) ?? null, new Date().toISOString(), attemptId);
@@ -222,6 +276,14 @@ export class WorkerRuntimeStore {
 
   close(): void {
     this.database.close();
+  }
+
+  private ensureRuntimeBindingColumn(name: string, definition: string): void {
+    const columns = this.database.prepare('PRAGMA table_info(runtime_bindings)').all() as Array<{
+      name: string;
+    }>;
+    if (columns.some((column) => column.name === name)) return;
+    this.database.exec(`ALTER TABLE runtime_bindings ADD COLUMN ${name} ${definition}`);
   }
 
   private require(attemptId: AttemptId): WorkerRuntimeBinding {

@@ -12,12 +12,17 @@ export interface CodexAppServerRequest {
   readonly params: unknown;
 }
 
+export interface CodexAppServerSessionClosed {
+  readonly error: Error;
+}
+
 export interface WorkerCodexAppServerSession {
   readonly request: <T>(method: string, params?: unknown, timeoutMs?: number) => Promise<T>;
   readonly notify: (method: string, params?: unknown) => void;
   readonly onNotification: (
     listener: (notification: CodexAppServerNotification) => void
   ) => () => void;
+  readonly onClose: (listener: (event: CodexAppServerSessionClosed) => void) => () => void;
   readonly close: () => Promise<void>;
 }
 
@@ -109,9 +114,12 @@ export class CodexAppServerProcessFactory implements WorkerCodexAppServerSession
   private createSession(child: ChildProcessWithoutNullStreams): WorkerCodexAppServerSession {
     const pending = new Map<number, PendingRequest>();
     const listeners = new Set<(notification: CodexAppServerNotification) => void>();
+    const closeListeners = new Set<(event: CodexAppServerSessionClosed) => void>();
     const reader = readline.createInterface({ input: child.stdout });
     let requestId = 0;
     let closed = false;
+    let closeNotified = false;
+    let unexpectedClose: CodexAppServerSessionClosed | undefined;
 
     child.stderr.resume();
 
@@ -128,6 +136,16 @@ export class CodexAppServerProcessFactory implements WorkerCodexAppServerSession
         entry.reject(error);
         pending.delete(id);
       }
+    };
+
+    const notifyUnexpectedClose = (error: Error): void => {
+      if (closeNotified) return;
+      closeNotified = true;
+      closed = true;
+      unexpectedClose = { error };
+      rejectAll(error);
+      reader.close();
+      for (const listener of closeListeners) listener(unexpectedClose);
     };
 
     const handleServerRequest = async (message: JsonRpcMessage): Promise<void> => {
@@ -186,9 +204,10 @@ export class CodexAppServerProcessFactory implements WorkerCodexAppServerSession
         listener({ method: message.method, params: message.params });
     });
 
-    child.once('error', (error) => rejectAll(error));
+    child.once('error', (error) => notifyUnexpectedClose(error));
     child.once('exit', (code, signal) => {
-      rejectAll(
+      if (closed) return;
+      notifyUnexpectedClose(
         new Error(`Codex app-server exited (code=${code ?? 'null'} signal=${signal ?? 'null'})`)
       );
     });
@@ -224,6 +243,15 @@ export class CodexAppServerProcessFactory implements WorkerCodexAppServerSession
       onNotification: (listener) => {
         listeners.add(listener);
         return () => listeners.delete(listener);
+      },
+      onClose: (listener) => {
+        if (unexpectedClose !== undefined) {
+          const event = unexpectedClose;
+          queueMicrotask(() => listener(event));
+          return () => undefined;
+        }
+        closeListeners.add(listener);
+        return () => closeListeners.delete(listener);
       },
       close: async () => {
         if (closed) return;

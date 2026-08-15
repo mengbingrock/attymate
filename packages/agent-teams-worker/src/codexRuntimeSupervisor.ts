@@ -2,6 +2,7 @@ import type { ExecutionLeaseIdentity } from '@claude-teams/agent-teams-protocol'
 
 import type {
   CodexAppServerNotification,
+  CodexAppServerSessionClosed,
   WorkerCodexAppServerSession,
   WorkerCodexAppServerSessionFactory,
 } from './codexAppServerClient';
@@ -16,6 +17,8 @@ export interface WorkerCodexRuntimeOptions {
   readonly onStarted?: (binding: WorkerRuntimeBinding) => void;
   readonly onCompleted?: (binding: WorkerRuntimeBinding) => void;
   readonly onFailed?: (binding: WorkerRuntimeBinding, error: Error) => void;
+  readonly canRecover?: (binding: WorkerRuntimeBinding) => boolean;
+  readonly onReconciliationRequired?: (binding: WorkerRuntimeBinding, error: Error) => void;
 }
 
 interface ThreadStartResponse {
@@ -24,6 +27,22 @@ interface ThreadStartResponse {
 
 interface TurnStartResponse {
   readonly turn?: { readonly id?: unknown; readonly status?: unknown };
+}
+
+interface PersistedTurn {
+  readonly id?: unknown;
+  readonly status?: unknown;
+  readonly error?: unknown;
+}
+
+interface PersistedThread {
+  readonly id?: unknown;
+  readonly status?: unknown;
+  readonly turns?: unknown;
+}
+
+interface ThreadReadResponse {
+  readonly thread?: PersistedThread;
 }
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
@@ -69,6 +88,8 @@ export class WorkerCodexRuntimeSupervisor {
   private appServerGeneration: number | undefined;
   private launchPromise: Promise<WorkerRuntimeBinding> | undefined;
   private unsubscribe: (() => void) | undefined;
+  private unsubscribeClose: (() => void) | undefined;
+  private closing = false;
 
   constructor(private readonly options: WorkerCodexRuntimeOptions) {
     this.store = new WorkerRuntimeStore(options.dataDir);
@@ -82,8 +103,16 @@ export class WorkerCodexRuntimeSupervisor {
         throw new Error(`Codex runtime slot is occupied by assignment ${active.assignmentId}`);
       }
       if (this.launchPromise !== undefined) return this.launchPromise;
+      if (this.session === undefined || active.reconciliationState !== undefined) {
+        this.launchPromise = this.recover(active).finally(() => {
+          this.launchPromise = undefined;
+        });
+        return this.launchPromise;
+      }
       return active;
     }
+    const persisted = this.store.get(identity.attemptId);
+    if (persisted !== undefined) return persisted;
     if (this.launchPromise !== undefined) return this.launchPromise;
     this.launchPromise = this.launch(assignment, identity).finally(() => {
       this.launchPromise = undefined;
@@ -111,6 +140,7 @@ export class WorkerCodexRuntimeSupervisor {
   }
 
   async close(): Promise<void> {
+    this.closing = true;
     const active = this.store.active();
     if (active !== undefined) {
       await this.interrupt(
@@ -124,6 +154,7 @@ export class WorkerCodexRuntimeSupervisor {
       );
     }
     this.unsubscribe?.();
+    this.unsubscribeClose?.();
     await this.session?.close();
     this.store.close();
   }
@@ -193,8 +224,161 @@ export class WorkerCodexRuntimeSupervisor {
     this.unsubscribe = session.onNotification((notification) => {
       this.handleNotification(notification);
     });
+    this.unsubscribeClose = session.onClose((event) => {
+      this.handleSessionClose(session, event);
+    });
     this.session = session;
     return session;
+  }
+
+  private handleSessionClose(
+    closedSession: WorkerCodexAppServerSession,
+    event: CodexAppServerSessionClosed
+  ): void {
+    if (this.session !== closedSession) return;
+    this.unsubscribe?.();
+    this.unsubscribeClose?.();
+    this.unsubscribe = undefined;
+    this.unsubscribeClose = undefined;
+    this.session = undefined;
+    if (this.closing) return;
+    if (this.launchPromise !== undefined) {
+      const inFlight = this.launchPromise;
+      void inFlight
+        .finally(() => this.scheduleRecovery(event.error))
+        .catch(() => undefined);
+      return;
+    }
+    this.scheduleRecovery(event.error);
+  }
+
+  private scheduleRecovery(closeError: Error): void {
+    if (this.closing || this.launchPromise !== undefined) return;
+    const active = this.store.active();
+    if (
+      active === undefined ||
+      this.options.canRecover?.(active) === false
+    ) {
+      return;
+    }
+    this.launchPromise = this.recover(active, closeError).finally(() => {
+      this.launchPromise = undefined;
+    });
+    void this.launchPromise.catch(() => undefined);
+  }
+
+  private async recover(
+    binding: WorkerRuntimeBinding,
+    closeError?: Error
+  ): Promise<WorkerRuntimeBinding> {
+    if (this.options.canRecover?.(binding) === false) return binding;
+    try {
+      const session = await this.ensureSession();
+      const recovering = this.store.markRecovering(
+        binding.attemptId,
+        this.appServerGeneration!
+      );
+      if (recovering.threadId === undefined || recovering.turnId === undefined) {
+        return this.requireReconciliation(
+          recovering,
+          new Error(
+            closeError === undefined
+              ? 'Codex runtime stopped before its thread and turn identity were durably bound'
+              : `Codex app-server crashed before runtime identity was durably bound: ${closeError.message}`
+          )
+        );
+      }
+
+      const readResponse = await session.request<ThreadReadResponse>('thread/read', {
+        threadId: recovering.threadId,
+        includeTurns: true,
+      });
+      const readTurn = this.findPersistedTurn(readResponse.thread, recovering.turnId);
+      const terminal = this.projectTerminalTurn(recovering, readTurn);
+      if (terminal !== undefined) return terminal;
+      if (readTurn?.status !== 'inProgress') {
+        return this.requireReconciliation(
+          recovering,
+          new Error(`Persisted Codex turn ${recovering.turnId} could not be reconciled`)
+        );
+      }
+
+      const resumeResponse = await session.request<ThreadReadResponse>('thread/resume', {
+        threadId: recovering.threadId,
+        cwd: this.options.cwd,
+        approvalPolicy: 'never',
+        sandbox: 'workspaceWrite',
+        ...(this.options.model === undefined ? {} : { model: this.options.model }),
+      });
+      const resumedTurn = this.findPersistedTurn(resumeResponse.thread, recovering.turnId);
+      const resumedTerminal = this.projectTerminalTurn(recovering, resumedTurn);
+      if (resumedTerminal !== undefined) return resumedTerminal;
+      const threadStatus = asRecord(resumeResponse.thread?.status)?.type;
+      if (resumedTurn?.status === 'inProgress' && threadStatus === 'active') {
+        return this.store.clearReconciliation(recovering.attemptId);
+      }
+      return this.requireReconciliation(
+        recovering,
+        new Error(
+          `Codex thread ${recovering.threadId} did not rejoin active turn ${recovering.turnId}`
+        )
+      );
+    } catch (error) {
+      const normalized = error instanceof Error ? error : new Error(String(error));
+      const current = this.store.get(binding.attemptId);
+      if (current === undefined || !['starting', 'active'].includes(current.state)) {
+        throw normalized;
+      }
+      return this.requireReconciliation(current, normalized);
+    }
+  }
+
+  private findPersistedTurn(
+    thread: PersistedThread | undefined,
+    turnId: string
+  ): PersistedTurn | undefined {
+    if (!Array.isArray(thread?.turns)) return undefined;
+    return thread.turns
+      .map((turn) => asRecord(turn))
+      .find((turn) => turn?.id === turnId) as PersistedTurn | undefined;
+  }
+
+  private projectTerminalTurn(
+    binding: WorkerRuntimeBinding,
+    turn: PersistedTurn | undefined
+  ): WorkerRuntimeBinding | undefined {
+    if (turn?.status === 'completed') {
+      const completed = this.store.settle(binding.attemptId, 'completed', 'completed');
+      this.options.onCompleted?.(completed);
+      return completed;
+    }
+    if (turn?.status === 'interrupted') {
+      const interrupted = this.store.settle(binding.attemptId, 'interrupted', 'interrupted');
+      this.options.onFailed?.(
+        interrupted,
+        new Error(`Codex turn ${binding.turnId ?? 'unknown'} was interrupted before recovery`)
+      );
+      return interrupted;
+    }
+    if (turn?.status !== 'failed') return undefined;
+    const turnError = asRecord(turn.error);
+    const failure = new Error(
+      typeof turnError?.message === 'string'
+        ? turnError.message
+        : `Codex turn ${binding.turnId ?? 'unknown'} failed before recovery`
+    );
+    const failed = this.store.settle(binding.attemptId, 'failed', 'failed', failure.message);
+    this.options.onFailed?.(failed, failure);
+    return failed;
+  }
+
+  private requireReconciliation(
+    binding: WorkerRuntimeBinding,
+    error: Error
+  ): WorkerRuntimeBinding {
+    const failed = this.store.markNeedsReconciliation(binding.attemptId, error.message);
+    this.options.onReconciliationRequired?.(failed, error);
+    return failed;
   }
 
   private handleNotification(notification: CodexAppServerNotification): void {
