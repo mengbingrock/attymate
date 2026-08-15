@@ -83,7 +83,24 @@ describe('WorkerAssignmentStore', () => {
         leaseExpiresAt: '2026-08-14T20:05:00.000Z',
       });
       expect(store.grantLease(leaseGrant)).toMatchObject({ state: 'leased', revision: 3 });
-      expect(store.fenceExpired(new Date('2026-08-14T20:05:01.000Z'))).toEqual([
+      expect(store.activeLeaseIdentity()).toEqual({
+        assignmentId,
+        attemptId: leaseGrant.attemptId,
+        leaseId: leaseGrant.payload.leaseId,
+        leaseEpoch: 1,
+      });
+      store.renewLease(store.activeLeaseIdentity()!, '2026-08-14T20:06:00.000Z');
+      expect(store.get(assignmentId)?.leaseExpiresAt).toBe('2026-08-14T20:06:00.000Z');
+      expect(
+        store.fenceLease(
+          {
+            ...store.activeLeaseIdentity()!,
+            leaseId: '00000000-0000-4000-8000-000000000099',
+          },
+          'relay_lease_identity_mismatch'
+        )
+      ).toBeUndefined();
+      expect(store.fenceExpired(new Date('2026-08-14T20:06:01.000Z'))).toEqual([
         expect.objectContaining({ state: 'fenced', revision: 4 }),
       ]);
     } finally {

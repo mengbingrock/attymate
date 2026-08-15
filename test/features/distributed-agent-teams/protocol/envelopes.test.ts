@@ -4,6 +4,8 @@ import {
   eventEnvelopeSchema,
   InvalidAssignmentTransitionError,
   isTerminalAssignmentState,
+  relayHeartbeatAckMessageSchema,
+  workerHeartbeatMessageSchema,
 } from '@claude-teams/agent-teams-protocol';
 
 const ids = {
@@ -13,6 +15,7 @@ const ids = {
   workerInstanceId: '00000000-0000-4000-8000-000000000004',
   assignmentId: '00000000-0000-4000-8000-000000000005',
   attemptId: '00000000-0000-4000-8000-000000000006',
+  leaseId: '00000000-0000-4000-8000-000000000007',
 };
 
 describe('distributed protocol envelopes', () => {
@@ -58,6 +61,46 @@ describe('distributed protocol envelopes', () => {
 
     expect(command.success).toBe(true);
     expect(event.success).toBe(false);
+  });
+
+  it('requires exact lease identity for heartbeat renewal and fencing', () => {
+    const activeLease = {
+      assignmentId: ids.assignmentId,
+      attemptId: ids.attemptId,
+      leaseId: ids.leaseId,
+      leaseEpoch: 2,
+    };
+    expect(
+      workerHeartbeatMessageSchema.parse({
+        type: 'worker.heartbeat',
+        protocolVersion: 2,
+        sequence: 9,
+        sentAt: '2026-08-14T20:00:00.000Z',
+        activeLease,
+      })
+    ).toMatchObject({ activeLease });
+    expect(
+      relayHeartbeatAckMessageSchema.parse({
+        type: 'relay.heartbeat_ack',
+        protocolVersion: 2,
+        sequence: 9,
+        receivedAt: '2026-08-14T20:00:00.010Z',
+        leaseReconciliation: {
+          action: 'renewed',
+          ...activeLease,
+          expiresAt: '2026-08-14T20:01:30.000Z',
+        },
+      })
+    ).toMatchObject({ leaseReconciliation: { action: 'renewed', ...activeLease } });
+    expect(
+      workerHeartbeatMessageSchema.safeParse({
+        type: 'worker.heartbeat',
+        protocolVersion: 2,
+        sequence: 10,
+        sentAt: '2026-08-14T20:00:01.000Z',
+        activeLease: { assignmentId: ids.assignmentId, leaseId: ids.leaseId },
+      }).success
+    ).toBe(false);
   });
 });
 

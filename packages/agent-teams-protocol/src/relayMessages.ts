@@ -1,8 +1,11 @@
 import { z } from 'zod';
 
 import {
+  assignmentIdSchema,
+  attemptIdSchema,
   commandIdSchema,
   eventIdSchema,
+  leaseIdSchema,
   nodeIdSchema,
   organizationIdSchema,
   personIdSchema,
@@ -11,6 +14,31 @@ import {
 import { commandEnvelopeSchema, eventEnvelopeSchema } from './envelopes';
 
 const timestampSchema = z.iso.datetime({ offset: true });
+
+export const executionLeaseIdentitySchema = z
+  .object({
+    assignmentId: assignmentIdSchema,
+    attemptId: attemptIdSchema,
+    leaseId: leaseIdSchema,
+    leaseEpoch: z.number().int().positive(),
+  })
+  .strict();
+
+export const leaseReconciliationSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('none') }).strict(),
+  executionLeaseIdentitySchema
+    .extend({
+      action: z.literal('renewed'),
+      expiresAt: timestampSchema,
+    })
+    .strict(),
+  executionLeaseIdentitySchema
+    .extend({
+      action: z.literal('fence'),
+      reason: z.enum(['lease_expired', 'lease_released', 'lease_identity_mismatch']),
+    })
+    .strict(),
+]);
 
 export const workerHelloMessageSchema = z
   .object({
@@ -33,6 +61,7 @@ export const workerHeartbeatMessageSchema = z
     protocolVersion: z.literal(2),
     sequence: z.number().int().nonnegative(),
     sentAt: timestampSchema,
+    activeLease: executionLeaseIdentitySchema.optional(),
   })
   .strict();
 
@@ -52,6 +81,7 @@ export const relayHeartbeatAckMessageSchema = z
     protocolVersion: z.literal(2),
     sequence: z.number().int().nonnegative(),
     receivedAt: timestampSchema,
+    leaseReconciliation: leaseReconciliationSchema,
   })
   .strict();
 
@@ -119,6 +149,8 @@ export const relayToWorkerMessageSchema = z.discriminatedUnion('type', [
 ]);
 
 export type WorkerHelloMessage = z.infer<typeof workerHelloMessageSchema>;
+export type ExecutionLeaseIdentity = z.infer<typeof executionLeaseIdentitySchema>;
+export type LeaseReconciliation = z.infer<typeof leaseReconciliationSchema>;
 export type WorkerHeartbeatMessage = z.infer<typeof workerHeartbeatMessageSchema>;
 export type WorkerCommandAckMessage = z.infer<typeof workerCommandAckMessageSchema>;
 export type WorkerEventMessage = z.infer<typeof workerEventMessageSchema>;

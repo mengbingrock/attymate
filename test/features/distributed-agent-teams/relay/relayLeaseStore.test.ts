@@ -38,7 +38,41 @@ describe('RelayLeaseStore', () => {
 
       store.markActive(firstAssignmentId, first!.lease.attemptId, 1);
       expect(store.listAll()[0]?.status).toBe('active');
+      const renewed = store.reconcileHeartbeatLease(
+        nodeId,
+        {
+          assignmentId: firstAssignmentId,
+          attemptId: first!.lease.attemptId,
+          leaseId: first!.lease.leaseId,
+          leaseEpoch: 1,
+        },
+        new Date(Date.parse(first!.lease.issuedAt) + 1_000)
+      );
+      expect(renewed).toMatchObject({
+        action: 'renewed',
+        assignmentId: firstAssignmentId,
+        leaseId: first!.lease.leaseId,
+      });
+      expect(store.get(first!.lease.leaseId)?.expiresAt).toBe(
+        renewed.action === 'renewed' ? renewed.expiresAt : undefined
+      );
+      expect(
+        store.reconcileHeartbeatLease(nodeId, {
+          assignmentId: firstAssignmentId,
+          attemptId: first!.lease.attemptId,
+          leaseId: '00000000-0000-4000-8000-000000000099',
+          leaseEpoch: 1,
+        })
+      ).toMatchObject({ action: 'fence', reason: 'lease_identity_mismatch' });
       store.release(firstAssignmentId, first!.lease.attemptId, 1);
+      expect(
+        store.reconcileHeartbeatLease(nodeId, {
+          assignmentId: firstAssignmentId,
+          attemptId: first!.lease.attemptId,
+          leaseId: first!.lease.leaseId,
+          leaseEpoch: 1,
+        })
+      ).toMatchObject({ action: 'fence', reason: 'lease_released' });
       const second = store.grantIfCapacity({
         assignmentId: secondAssignmentId,
         assignmentRevision: 4,
@@ -56,6 +90,18 @@ describe('RelayLeaseStore', () => {
         nodeId,
       });
       expect(retry?.lease.leaseEpoch).toBe(2);
+      expect(
+        store.reconcileHeartbeatLease(
+          nodeId,
+          {
+            assignmentId: secondAssignmentId,
+            attemptId: retry!.lease.attemptId,
+            leaseId: retry!.lease.leaseId,
+            leaseEpoch: 2,
+          },
+          new Date(Date.parse(retry!.lease.expiresAt) + 1)
+        )
+      ).toMatchObject({ action: 'fence', reason: 'lease_expired' });
     } finally {
       store.close();
     }

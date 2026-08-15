@@ -16,6 +16,7 @@ import {
   type AssignmentId,
   type AttemptId,
   type CommandId,
+  type ExecutionLeaseIdentity,
   type NodeId,
   type LeaseId,
   type TeamId,
@@ -156,6 +157,17 @@ const validateDeferredUntil = (value: string | undefined): string | undefined =>
   if (!Number.isFinite(parsed.getTime())) throw new TypeError('deferredUntil must be a timestamp');
   return parsed.toISOString();
 };
+
+const activeLeaseStates = new Set<AssignmentExecutionState>([
+  'leased',
+  'preparing_workspace',
+  'running',
+  'waiting_local_approval',
+  'verifying',
+  'committing',
+  'awaiting_push',
+  'reporting',
+]);
 
 export class WorkerAssignmentNotFoundError extends Error {
   readonly code = 'WORKER_ASSIGNMENT_NOT_FOUND';
@@ -358,6 +370,10 @@ export class WorkerAssignmentStore {
     ) {
       return existing;
     }
+    const activeLease = this.activeLeaseIdentity();
+    if (activeLease !== undefined && activeLease.assignmentId !== assignmentId) {
+      throw new Error(`Worker execution slot is already leased to ${activeLease.assignmentId}`);
+    }
     return this.mutate(assignmentId, payload.assignmentRevision, (current, occurredAt) => {
       assertAssignmentTransition(current.state, 'leased');
       const leased = this.transition(current, 'leased', 'relay_lease_granted', occurredAt);
@@ -376,6 +392,74 @@ export class WorkerAssignmentStore {
           leased.revision
         );
       return this.require(assignmentId);
+    });
+  }
+
+  activeLeaseIdentity(): ExecutionLeaseIdentity | undefined {
+    const active = this.list().filter((assignment) => activeLeaseStates.has(assignment.state));
+    if (active.length > 1) {
+      throw new Error('Worker has more than one active execution lease');
+    }
+    const assignment = active[0];
+    if (assignment === undefined) return undefined;
+    if (
+      assignment.attemptId === undefined ||
+      assignment.leaseId === undefined ||
+      assignment.leaseEpoch === undefined
+    ) {
+      throw new Error(`Active assignment ${assignment.assignmentId} is missing lease identity`);
+    }
+    return {
+      assignmentId: assignment.assignmentId,
+      attemptId: assignment.attemptId,
+      leaseId: assignment.leaseId,
+      leaseEpoch: assignment.leaseEpoch,
+    };
+  }
+
+  renewLease(
+    identity: {
+      readonly assignmentId: string;
+      readonly attemptId: string;
+      readonly leaseId: string;
+      readonly leaseEpoch: number;
+    },
+    expiresAtInput: string
+  ): void {
+    const assignment = this.get(identity.assignmentId);
+    if (assignment === undefined || !this.matchesLeaseIdentity(assignment, identity)) return;
+    if (!activeLeaseStates.has(assignment.state)) return;
+    const expiresAt = new Date(expiresAtInput);
+    if (!Number.isFinite(expiresAt.getTime())) throw new TypeError('expiresAt must be a timestamp');
+    this.database
+      .prepare(
+        `UPDATE assignments SET lease_expires_at = ?, updated_at = ?
+         WHERE assignment_id = ? AND revision = ?`
+      )
+      .run(
+        expiresAt.toISOString(),
+        new Date().toISOString(),
+        assignment.assignmentId,
+        assignment.revision
+      );
+  }
+
+  fenceLease(
+    identity: {
+      readonly assignmentId: string;
+      readonly attemptId: string;
+      readonly leaseId: string;
+      readonly leaseEpoch: number;
+    },
+    reason: string
+  ): WorkerAssignment | undefined {
+    const assignment = this.get(identity.assignmentId);
+    if (assignment === undefined || !this.matchesLeaseIdentity(assignment, identity))
+      return undefined;
+    if (!activeLeaseStates.has(assignment.state)) return undefined;
+    return this.mutate(assignment.assignmentId, assignment.revision, (current, occurredAt) => {
+      assertAssignmentTransition(current.state, 'fenced');
+      return this.transition(current, 'fenced', reason, occurredAt);
     });
   }
 
@@ -488,5 +572,20 @@ export class WorkerAssignmentStore {
     }>;
     if (columns.some((column) => column.name === name)) return;
     this.database.exec(`ALTER TABLE assignments ADD COLUMN ${name} ${definition}`);
+  }
+
+  private matchesLeaseIdentity(
+    assignment: WorkerAssignment,
+    identity: {
+      readonly attemptId: string;
+      readonly leaseId: string;
+      readonly leaseEpoch: number;
+    }
+  ): boolean {
+    return (
+      assignment.attemptId === identity.attemptId &&
+      assignment.leaseId === identity.leaseId &&
+      assignment.leaseEpoch === identity.leaseEpoch
+    );
   }
 }

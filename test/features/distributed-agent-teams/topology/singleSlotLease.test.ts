@@ -16,7 +16,7 @@ import { startAgentTeamsWorker } from '@claude-teams/agent-teams-worker';
 import { describe, expect, it, vi } from 'vitest';
 
 describe('single-slot Worker execution leases', () => {
-  it('leases one queued assignment and fences it before starting the next', async () => {
+  it('renews one active assignment and fences it without starting queued work offline', async () => {
     const dataRoot = await mkdtemp(join(tmpdir(), 'agent-teams-single-slot-'));
     const nodeId = nodeIdSchema.parse('00000000-0000-4000-8000-000000000001');
     const relay = await startAgentTeamsRelay({
@@ -24,7 +24,7 @@ describe('single-slot Worker execution leases', () => {
       port: 0,
       dataDir: join(dataRoot, 'relay'),
       heartbeatIntervalMs: 20,
-      leaseDurationMs: 300,
+      leaseDurationMs: 160,
     });
     const worker = await startAgentTeamsWorker({
       relayUrl: relay.wsUrl,
@@ -35,7 +35,7 @@ describe('single-slot Worker execution leases', () => {
       workerInstanceId: workerInstanceIdSchema.parse('00000000-0000-4000-8000-000000000004'),
       workerGeneration: 1,
       label: 'Single Slot Worker',
-      reconnectDelayMs: 20,
+      reconnectDelayMs: 1_000,
       leaseSweepIntervalMs: 10,
     });
     const assignmentIds = [
@@ -43,6 +43,7 @@ describe('single-slot Worker execution leases', () => {
       '00000000-0000-4000-8000-000000000006',
     ];
 
+    let relayClosed = false;
     try {
       await worker.ready;
       assignmentIds.forEach((assignmentId, index) => {
@@ -65,21 +66,28 @@ describe('single-slot Worker execution leases', () => {
         expect(worker.listAssignments()[0]).toMatchObject({ state: 'leased', leaseEpoch: 1 });
         expect(relay.listLeases()).toHaveLength(1);
       });
+      const originalExpiry = relay.listLeases()[0]!.expiresAt;
       worker.acceptAssignment({ assignmentId: assignmentIds[1]!, expectedRevision: 0 });
       expect(worker.listAssignments()[1]).toMatchObject({ state: 'queued', revision: 2 });
       expect(relay.listLeases()).toHaveLength(1);
 
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(worker.listAssignments()[0]).toMatchObject({ state: 'leased', leaseEpoch: 1 });
+      expect(worker.listAssignments()[1]).toMatchObject({ state: 'queued', revision: 2 });
+      expect(Date.parse(relay.listLeases()[0]!.expiresAt)).toBeGreaterThan(
+        Date.parse(originalExpiry)
+      );
+
+      await relay.close();
+      relayClosed = true;
       await vi.waitFor(
-        () => {
-          expect(worker.listAssignments()[0]).toMatchObject({ state: 'fenced' });
-          expect(worker.listAssignments()[1]).toMatchObject({ state: 'leased', leaseEpoch: 1 });
-          expect(relay.listLeases()).toHaveLength(2);
-        },
+        () => expect(worker.listAssignments()[0]).toMatchObject({ state: 'fenced' }),
         { timeout: 2_000 }
       );
+      expect(worker.listAssignments()[1]).toMatchObject({ state: 'queued', revision: 2 });
     } finally {
       await worker.stop();
-      await relay.close();
+      if (!relayClosed) await relay.close();
     }
   });
 });

@@ -129,6 +129,7 @@ export const startAgentTeamsWorker = async (
   let controlServer: StartedWorkerControlServer | undefined;
   let socket: WebSocket | undefined;
   let heartbeatTimer: NodeJS.Timeout | undefined;
+  let heartbeatSequence = 0;
   let reconnectTimer: NodeJS.Timeout | undefined;
   let stopped = false;
   let readyResolved = false;
@@ -172,6 +173,21 @@ export const startAgentTeamsWorker = async (
   const clearHeartbeat = (): void => {
     if (heartbeatTimer !== undefined) clearInterval(heartbeatTimer);
     heartbeatTimer = undefined;
+  };
+
+  const sendHeartbeat = (): void => {
+    if (socket?.readyState !== WebSocket.OPEN) return;
+    heartbeatSequence += 1;
+    const activeLease = assignmentStore.activeLeaseIdentity();
+    socket.send(
+      JSON.stringify({
+        type: 'worker.heartbeat',
+        protocolVersion: 2,
+        sequence: heartbeatSequence,
+        sentAt: new Date().toISOString(),
+        ...(activeLease === undefined ? {} : { activeLease }),
+      })
+    );
   };
 
   const flushPendingEvents = (): void => {
@@ -251,17 +267,8 @@ export const startAgentTeamsWorker = async (
           resolveReady();
         }
         clearHeartbeat();
-        heartbeatTimer = setInterval(() => {
-          const sequence = status.lastHeartbeatSequence + 1;
-          socket?.send(
-            JSON.stringify({
-              type: 'worker.heartbeat',
-              protocolVersion: 2,
-              sequence,
-              sentAt: new Date().toISOString(),
-            })
-          );
-        }, message.heartbeatIntervalMs);
+        sendHeartbeat();
+        heartbeatTimer = setInterval(sendHeartbeat, message.heartbeatIntervalMs);
         flushPendingEvents();
         return;
       }
@@ -317,6 +324,21 @@ export const startAgentTeamsWorker = async (
         );
         flushPendingEvents();
         return;
+      }
+      if (message.leaseReconciliation.action === 'renewed') {
+        assignmentStore.renewLease(
+          message.leaseReconciliation,
+          message.leaseReconciliation.expiresAt
+        );
+      } else if (message.leaseReconciliation.action === 'fence') {
+        const assignment = assignmentStore.fenceLease(
+          message.leaseReconciliation,
+          `relay_${message.leaseReconciliation.reason}`
+        );
+        if (assignment !== undefined) {
+          projectAssignmentActivity(assignment.assignmentId);
+          flushPendingEvents();
+        }
       }
       updateStatus({
         lastHeartbeatAckAt: message.receivedAt,

@@ -12,6 +12,7 @@ import {
   type AssignmentId,
   type AttemptId,
   type CommandEnvelope,
+  type LeaseReconciliation,
   type LeaseId,
   type NodeId,
   type TeamId,
@@ -192,6 +193,60 @@ export class RelayLeaseStore {
         attemptIdSchema.parse(attemptId),
         leaseEpoch
       );
+  }
+
+  reconcileHeartbeatLease(
+    nodeIdInput: string,
+    identity: {
+      readonly assignmentId: string;
+      readonly attemptId: string;
+      readonly leaseId: string;
+      readonly leaseEpoch: number;
+    },
+    now = new Date()
+  ): LeaseReconciliation {
+    const nodeId = nodeIdSchema.parse(nodeIdInput);
+    const assignmentId = assignmentIdSchema.parse(identity.assignmentId);
+    const attemptId = attemptIdSchema.parse(identity.attemptId);
+    const leaseId = leaseIdSchema.parse(identity.leaseId);
+    if (!Number.isInteger(identity.leaseEpoch) || identity.leaseEpoch <= 0) {
+      throw new TypeError('leaseEpoch must be a positive integer');
+    }
+    this.expireThrough(now);
+    const row = this.database
+      .prepare('SELECT * FROM relay_execution_leases WHERE lease_id = ?')
+      .get(leaseId) as RelayLeaseRow | undefined;
+    const responseIdentity = {
+      assignmentId,
+      attemptId,
+      leaseId,
+      leaseEpoch: identity.leaseEpoch,
+    };
+    if (
+      row === undefined ||
+      row.node_id !== nodeId ||
+      row.assignment_id !== assignmentId ||
+      row.attempt_id !== attemptId ||
+      row.lease_epoch !== identity.leaseEpoch
+    ) {
+      return { action: 'fence', ...responseIdentity, reason: 'lease_identity_mismatch' };
+    }
+    if (row.status === 'expired') {
+      return { action: 'fence', ...responseIdentity, reason: 'lease_expired' };
+    }
+    if (row.status === 'released') {
+      return { action: 'fence', ...responseIdentity, reason: 'lease_released' };
+    }
+
+    const expiresAt = new Date(now.getTime() + this.leaseDurationMs).toISOString();
+    this.database
+      .prepare(
+        `UPDATE relay_execution_leases
+         SET expires_at = ?, updated_at = ?
+         WHERE lease_id = ? AND status IN ('granted', 'active')`
+      )
+      .run(expiresAt, now.toISOString(), leaseId);
+    return { action: 'renewed', ...responseIdentity, expiresAt };
   }
 
   release(assignmentId: string, attemptId?: string, leaseEpoch?: number): void {

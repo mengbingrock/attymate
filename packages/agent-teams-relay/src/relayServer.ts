@@ -331,12 +331,21 @@ export const startAgentTeamsRelay = async (
         }
         session.lastHeartbeatAt = new Date().toISOString();
         session.lastHeartbeatSequence = heartbeat.sequence;
+        const leaseReconciliation =
+          heartbeat.activeLease === undefined
+            ? ({ action: 'none' } as const)
+            : leaseStore.reconcileHeartbeatLease(
+                boundNodeId,
+                heartbeat.activeLease,
+                new Date(session.lastHeartbeatAt)
+              );
         socket.send(
           JSON.stringify({
             type: 'relay.heartbeat_ack',
             protocolVersion: 2,
             sequence: heartbeat.sequence,
             receivedAt: session.lastHeartbeatAt,
+            leaseReconciliation,
           })
         );
         void persistProjection();
