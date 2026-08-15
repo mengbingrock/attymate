@@ -22,6 +22,7 @@
   "dependencies": {
     "@claude-teams/agent-teams-protocol": "workspace:*",
     "fastmcp": "^3.35.0",
+    "smol-toml": "^1.6.1",
     "ws": "^8.21.0",
     "zod": "^4.3.6"
   },
