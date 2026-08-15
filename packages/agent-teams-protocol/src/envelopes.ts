@@ -10,7 +10,12 @@ import {
   workerInstanceIdSchema,
 } from './ids';
 
-const envelopeTypeSchema = z.string().trim().min(1).max(128).regex(/^[a-z][a-z0-9_.-]*$/);
+const envelopeTypeSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(128)
+  .regex(/^[a-z][a-z0-9_.-]*$/);
 const sequenceSchema = z.number().int().nonnegative();
 const revisionSchema = z.number().int().nonnegative();
 const leaseEpochSchema = z.number().int().nonnegative();
@@ -33,12 +38,16 @@ export const commandEnvelopeSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    const executionFields = [value.assignmentId, value.attemptId, value.leaseEpoch];
-    const populated = executionFields.filter((field) => field !== undefined).length;
-    if (populated !== 0 && populated !== executionFields.length) {
+    const hasAttemptIdentity = value.attemptId !== undefined || value.leaseEpoch !== undefined;
+    if (
+      hasAttemptIdentity &&
+      (value.assignmentId === undefined ||
+        value.attemptId === undefined ||
+        value.leaseEpoch === undefined)
+    ) {
       context.addIssue({
         code: 'custom',
-        message: 'assignmentId, attemptId, and leaseEpoch must be supplied together',
+        message: 'attemptId and leaseEpoch require the full assignment execution identity',
       });
     }
   });
@@ -60,12 +69,16 @@ export const eventEnvelopeSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    const executionFields = [value.assignmentId, value.attemptId, value.leaseEpoch];
-    const populated = executionFields.filter((field) => field !== undefined).length;
-    if (populated !== 0 && populated !== executionFields.length) {
+    const hasAttemptIdentity = value.attemptId !== undefined || value.leaseEpoch !== undefined;
+    if (
+      hasAttemptIdentity &&
+      (value.assignmentId === undefined ||
+        value.attemptId === undefined ||
+        value.leaseEpoch === undefined)
+    ) {
       context.addIssue({
         code: 'custom',
-        message: 'assignmentId, attemptId, and leaseEpoch must be supplied together',
+        message: 'attemptId and leaseEpoch require the full assignment execution identity',
       });
     }
   });

@@ -1,5 +1,6 @@
 import type {
   CreateRemoteAssignmentRequest,
+  DistributedAssignmentEventDto,
   DistributedWorkerDto,
   RemoteAssignmentReceiptDto,
 } from '../../../contracts';
@@ -7,6 +8,7 @@ import type {
 export interface DistributedRelayPort {
   readonly relayUrl: string;
   listWorkers(): Promise<readonly DistributedWorkerDto[]>;
+  listAssignmentEvents(): Promise<readonly DistributedAssignmentEventDto[]>;
   createRemoteAssignment(
     request: CreateRemoteAssignmentRequest
   ): Promise<RemoteAssignmentReceiptDto>;

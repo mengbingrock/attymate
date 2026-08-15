@@ -1,5 +1,6 @@
 import {
   DISTRIBUTED_AGENT_TEAMS_CREATE_ASSIGNMENT,
+  DISTRIBUTED_AGENT_TEAMS_GET_ASSIGNMENT_EVENTS,
   DISTRIBUTED_AGENT_TEAMS_GET_TOPOLOGY,
 } from '@features/distributed-agent-teams/contracts';
 import {
@@ -29,6 +30,11 @@ const createHarness = () => {
       fetchedAt: '2026-08-14T10:00:00.000Z',
       degraded: false,
     })),
+    getAssignmentEvents: vi.fn(async () => ({
+      events: [],
+      fetchedAt: '2026-08-14T10:00:00.000Z',
+      degraded: false,
+    })),
     createRemoteAssignment: vi.fn(async (request) => ({
       commandId: '22222222-2222-4222-8222-222222222222',
       targetNodeId: request.targetNodeId,
@@ -45,9 +51,12 @@ describe('distributed Agent Teams IPC', () => {
     const { feature, handlers, ipcMain } = createHarness();
     registerDistributedAgentTeamsIpc(ipcMain, feature);
 
+    await expect(handlers.get(DISTRIBUTED_AGENT_TEAMS_GET_TOPOLOGY)?.({})).resolves.toMatchObject({
+      degraded: false,
+    });
     await expect(
-      handlers.get(DISTRIBUTED_AGENT_TEAMS_GET_TOPOLOGY)?.({})
-    ).resolves.toMatchObject({ degraded: false });
+      handlers.get(DISTRIBUTED_AGENT_TEAMS_GET_ASSIGNMENT_EVENTS)?.({})
+    ).resolves.toMatchObject({ events: [], degraded: false });
     await expect(
       handlers.get(DISTRIBUTED_AGENT_TEAMS_CREATE_ASSIGNMENT)?.(
         {},
@@ -65,13 +74,15 @@ describe('distributed Agent Teams IPC', () => {
     registerDistributedAgentTeamsIpc(ipcMain, feature);
 
     expect(() =>
-      handlers
-        .get(DISTRIBUTED_AGENT_TEAMS_CREATE_ASSIGNMENT)?.({}, { targetNodeId: '../x', title: '' })
+      handlers.get(DISTRIBUTED_AGENT_TEAMS_CREATE_ASSIGNMENT)?.(
+        {},
+        { targetNodeId: '../x', title: '' }
+      )
     ).toThrow();
     expect(feature.createRemoteAssignment).not.toHaveBeenCalled();
   });
 
-  it('removes only its two handlers', () => {
+  it('removes only its three handlers', () => {
     const { feature, handlers, ipcMain } = createHarness();
     registerDistributedAgentTeamsIpc(ipcMain, feature);
     handlers.set('unrelated', vi.fn());

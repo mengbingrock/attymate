@@ -84,6 +84,18 @@ describe('Manager, Relay, and headless Workers', () => {
           revision: 0,
         }),
       ]);
+      await vi.waitFor(async () => {
+        await expect(manager.getAssignmentEvents()).resolves.toMatchObject({
+          degraded: false,
+          events: [
+            {
+              sourceNodeId: '66666666-6666-4666-8666-666666666666',
+              state: 'proposed',
+              revision: 0,
+            },
+          ],
+        });
+      });
       expect(workers[0]?.listInboxCommands()).toHaveLength(0);
     } finally {
       await Promise.all(workers.map((worker) => worker.stop()));

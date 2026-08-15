@@ -6,3 +6,4 @@ export * from './workerDaemon';
 export * from './workerDiagnostics';
 export * from './workerAssignmentStore';
 export * from './workerInboxStore';
+export * from './workerOutboxStore';

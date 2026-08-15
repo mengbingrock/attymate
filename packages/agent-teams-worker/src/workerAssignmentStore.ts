@@ -203,6 +203,12 @@ export class WorkerAssignmentStore {
   projectOffer(command: WorkerInboxCommand): WorkerAssignment | undefined {
     if (command.envelope.type !== 'assignment.offer') return undefined;
     const payload = assignmentOfferPayloadSchema.parse(command.envelope.payload);
+    if (
+      command.envelope.assignmentId !== undefined &&
+      command.envelope.assignmentId !== payload.assignmentId
+    ) {
+      throw new WorkerAssignmentOfferConflictError(payload.assignmentId);
+    }
     const existing = this.get(payload.assignmentId);
     if (existing !== undefined) {
       const sameOffer =

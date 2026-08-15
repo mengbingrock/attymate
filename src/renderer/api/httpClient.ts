@@ -471,6 +471,12 @@ export class HttpAPIClient implements ElectronAPI {
       degraded: true,
       warning: 'Distributed Agent Teams is only available in the desktop app',
     }),
+    getAssignmentEvents: async () => ({
+      events: [],
+      fetchedAt: new Date().toISOString(),
+      degraded: true,
+      warning: 'Distributed Agent Teams is only available in the desktop app',
+    }),
     createRemoteAssignment: async () => {
       throw new Error('Remote assignments are only available in the desktop app');
     },

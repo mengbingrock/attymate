@@ -17,6 +17,7 @@ import {
   WorkerAssignmentStore,
 } from './workerAssignmentStore';
 import { WorkerInboxStore, type WorkerInboxCommand } from './workerInboxStore';
+import { WorkerOutboxStore, type WorkerOutboxEvent } from './workerOutboxStore';
 
 export interface AgentTeamsWorkerOptions {
   readonly relayUrl: string;
@@ -54,6 +55,7 @@ export interface AgentTeamsWorkerStatus {
   readonly lastHeartbeatAckAt?: string;
   readonly lastHeartbeatSequence: number;
   readonly lastInboundCursor: number;
+  readonly lastAckedOutboxSequence: number;
   readonly updatedAt: string;
 }
 
@@ -62,6 +64,7 @@ export interface StartedAgentTeamsWorker {
   readonly getStatus: () => AgentTeamsWorkerStatus;
   readonly listInboxCommands: () => readonly WorkerInboxCommand[];
   readonly listAssignments: () => ReturnType<WorkerAssignmentStore['list']>;
+  readonly listOutboxEvents: () => readonly WorkerOutboxEvent[];
   readonly acceptAssignment: (
     input: AssignmentMutationInput
   ) => ReturnType<WorkerAssignmentStore['accept']>;
@@ -80,12 +83,26 @@ export const startAgentTeamsWorker = async (
   await mkdir(options.dataDir, { recursive: true });
   const inboxStore = new WorkerInboxStore(options.dataDir);
   const assignmentStore = new WorkerAssignmentStore(options.dataDir);
+  const outboxStore = new WorkerOutboxStore(options.dataDir, {
+    nodeId: options.nodeId,
+    workerInstanceId: options.workerInstanceId,
+  });
   for (const command of inboxStore.list()) {
     try {
       assignmentStore.projectOffer(command);
     } catch {
       // A malformed historical offer remains visible in raw activity but cannot enter the queue.
     }
+  }
+  const projectAssignmentActivity = (assignmentId: string): void => {
+    const assignment = assignmentStore.get(assignmentId);
+    if (assignment === undefined) return;
+    for (const activity of assignmentStore.listActivity(assignmentId)) {
+      outboxStore.projectAssignmentActivity(assignment, activity);
+    }
+  };
+  for (const assignment of assignmentStore.list()) {
+    projectAssignmentActivity(assignment.assignmentId);
   }
   let controlServer: StartedWorkerControlServer | undefined;
   let socket: WebSocket | undefined;
@@ -113,6 +130,7 @@ export const startAgentTeamsWorker = async (
     state: 'starting',
     lastHeartbeatSequence: 0,
     lastInboundCursor: inboxStore.lastInboundCursor(),
+    lastAckedOutboxSequence: outboxStore.lastAcknowledgedSequence(),
     updatedAt: new Date().toISOString(),
   };
 
@@ -132,6 +150,40 @@ export const startAgentTeamsWorker = async (
   const clearHeartbeat = (): void => {
     if (heartbeatTimer !== undefined) clearInterval(heartbeatTimer);
     heartbeatTimer = undefined;
+  };
+
+  const flushPendingEvents = (): void => {
+    if (socket?.readyState !== WebSocket.OPEN) return;
+    for (const event of outboxStore.listPending()) {
+      socket.send(
+        JSON.stringify({
+          type: 'worker.event',
+          protocolVersion: 2,
+          envelope: event.envelope,
+        })
+      );
+    }
+  };
+
+  const acceptAssignment = (input: AssignmentMutationInput) => {
+    const assignment = assignmentStore.accept(input);
+    projectAssignmentActivity(assignment.assignmentId);
+    flushPendingEvents();
+    return assignment;
+  };
+
+  const rejectAssignment = (input: AssignmentMutationInput) => {
+    const assignment = assignmentStore.reject(input);
+    projectAssignmentActivity(assignment.assignmentId);
+    flushPendingEvents();
+    return assignment;
+  };
+
+  const deferAssignment = (input: AssignmentDeferInput) => {
+    const assignment = assignmentStore.defer(input);
+    projectAssignmentActivity(assignment.assignmentId);
+    flushPendingEvents();
+    return assignment;
   };
 
   const connect = (): void => {
@@ -181,6 +233,12 @@ export const startAgentTeamsWorker = async (
             })
           );
         }, message.heartbeatIntervalMs);
+        flushPendingEvents();
+        return;
+      }
+      if (message.type === 'relay.event_ack') {
+        const event = outboxStore.acknowledge(message.eventId, message.sequence);
+        updateStatus({ lastAckedOutboxSequence: event.sequence });
         return;
       }
       if (message.type === 'relay.command') {
@@ -202,6 +260,13 @@ export const startAgentTeamsWorker = async (
         updateStatus({ lastInboundCursor: inboxStore.lastInboundCursor() });
         try {
           assignmentStore.projectOffer(inboxCommand);
+          const assignmentId =
+            typeof inboxCommand.envelope.payload === 'object' &&
+            inboxCommand.envelope.payload !== null &&
+            'assignmentId' in inboxCommand.envelope.payload
+              ? inboxCommand.envelope.payload.assignmentId
+              : undefined;
+          if (typeof assignmentId === 'string') projectAssignmentActivity(assignmentId);
         } catch (error) {
           socket?.send(
             JSON.stringify({
@@ -227,6 +292,7 @@ export const startAgentTeamsWorker = async (
             receivedAt: new Date().toISOString(),
           })
         );
+        flushPendingEvents();
         return;
       }
       updateStatus({
@@ -257,9 +323,9 @@ export const startAgentTeamsWorker = async (
       listAssignments: () => assignmentStore.list(),
       getAssignment: (assignmentId) => assignmentStore.get(assignmentId),
       listAssignmentActivity: (assignmentId) => assignmentStore.listActivity(assignmentId),
-      acceptAssignment: (input) => assignmentStore.accept(input),
-      rejectAssignment: (input) => assignmentStore.reject(input),
-      deferAssignment: (input) => assignmentStore.defer(input),
+      acceptAssignment,
+      rejectAssignment,
+      deferAssignment,
     });
   }
   connect();
@@ -269,9 +335,10 @@ export const startAgentTeamsWorker = async (
     getStatus: () => status,
     listInboxCommands: () => inboxStore.list(),
     listAssignments: () => assignmentStore.list(),
-    acceptAssignment: (input) => assignmentStore.accept(input),
-    rejectAssignment: (input) => assignmentStore.reject(input),
-    deferAssignment: (input) => assignmentStore.defer(input),
+    listOutboxEvents: () => outboxStore.listAll(),
+    acceptAssignment,
+    rejectAssignment,
+    deferAssignment,
     stop: async () => {
       stopped = true;
       await controlServer?.close();
@@ -286,6 +353,7 @@ export const startAgentTeamsWorker = async (
       updateStatus({ state: 'stopped' });
       await persistStatus();
       assignmentStore.close();
+      outboxStore.close();
       inboxStore.close();
     },
   };

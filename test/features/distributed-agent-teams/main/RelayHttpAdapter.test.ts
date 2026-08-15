@@ -76,9 +76,56 @@ describe('RelayHttpAdapter', () => {
       },
     });
     expect(postedBody?.commandId).toEqual(expect.any(String));
+    expect(postedBody?.assignmentId).toBe(
+      (postedBody?.payload as Record<string, unknown>).assignmentId
+    );
     expect((postedBody?.payload as Record<string, unknown>).assignmentId).toEqual(
       expect.any(String)
     );
+  });
+
+  it('maps validated Relay assignment events into renderer DTOs', async () => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        events: [
+          {
+            cursor: 3,
+            eventId: '33333333-3333-4333-8333-333333333333',
+            sourceNodeId: NODE_ID,
+            receivedAt: '2026-08-14T10:00:02.000Z',
+            envelope: {
+              protocolVersion: 2,
+              eventId: '33333333-3333-4333-8333-333333333333',
+              sequence: 2,
+              occurredAt: '2026-08-14T10:00:01.000Z',
+              sourceNodeId: NODE_ID,
+              workerInstanceId: '44444444-4444-4444-8444-444444444444',
+              teamId: TEAM_ID,
+              assignmentId: '55555555-5555-4555-8555-555555555555',
+              type: 'assignment.state_changed',
+              payload: {
+                revision: 1,
+                fromState: 'proposed',
+                state: 'deferred',
+                reason: 'Owner is in a meeting',
+                deferredUntil: '2026-08-14T11:00:00.000Z',
+              },
+            },
+          },
+        ],
+      })
+    );
+    const adapter = new RelayHttpAdapter('http://127.0.0.1:43170', fetchImpl as typeof fetch);
+
+    await expect(adapter.listAssignmentEvents()).resolves.toEqual([
+      expect.objectContaining({
+        cursor: 3,
+        state: 'deferred',
+        revision: 1,
+        sourceNodeId: NODE_ID,
+        teamId: TEAM_ID,
+      }),
+    ]);
   });
 
   it.each([

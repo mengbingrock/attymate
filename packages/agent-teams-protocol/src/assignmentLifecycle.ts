@@ -35,6 +35,18 @@ export const assignmentExecutionStateSchema = z.enum([
 
 export type AssignmentExecutionState = z.infer<typeof assignmentExecutionStateSchema>;
 
+export const assignmentStateChangedPayloadSchema = z
+  .object({
+    revision: z.number().int().nonnegative(),
+    fromState: assignmentExecutionStateSchema.nullable(),
+    state: assignmentExecutionStateSchema,
+    reason: z.string().trim().min(1).max(2_000),
+    deferredUntil: z.iso.datetime({ offset: true }).optional(),
+  })
+  .strict();
+
+export type AssignmentStateChangedPayload = z.infer<typeof assignmentStateChangedPayloadSchema>;
+
 const terminalStates = new Set<AssignmentExecutionState>([
   'rejected',
   'completed',

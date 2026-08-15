@@ -139,6 +139,7 @@ describe('Worker owner-control bridge', () => {
       state: 'connected',
       lastHeartbeatSequence: 5,
       lastInboundCursor: 1,
+      lastAckedOutboxSequence: 0,
       updatedAt: '2026-08-14T20:00:00.000Z',
     };
     const envelope = commandEnvelopeSchema.parse({

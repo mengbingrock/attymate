@@ -33,14 +33,14 @@ describe('distributed protocol envelopes', () => {
     expect(command.leaseEpoch).toBe(7);
   });
 
-  it('rejects partial attempt identity on commands and events', () => {
+  it('allows pre-execution assignment identity but rejects partial attempt identity', () => {
     const command = commandEnvelopeSchema.safeParse({
       protocolVersion: 2,
       commandId: ids.commandId,
       sequence: 42,
       targetNodeId: ids.nodeId,
       assignmentId: ids.assignmentId,
-      type: 'assignment.cancel',
+      type: 'assignment.offer',
       payload: {},
     });
     const event = eventEnvelopeSchema.safeParse({
@@ -56,7 +56,7 @@ describe('distributed protocol envelopes', () => {
       payload: {},
     });
 
-    expect(command.success).toBe(false);
+    expect(command.success).toBe(true);
     expect(event.success).toBe(false);
   });
 });

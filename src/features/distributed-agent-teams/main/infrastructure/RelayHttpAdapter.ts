@@ -1,13 +1,17 @@
 import { randomUUID } from 'node:crypto';
 
 import {
+  assignmentStateChangedPayloadSchema,
   commandEnvelopeSchema,
+  eventEnvelopeSchema,
+  eventIdSchema,
   nodeIdSchema,
   teamIdSchema,
 } from '@claude-teams/agent-teams-protocol';
 
 import type {
   CreateRemoteAssignmentRequest,
+  DistributedAssignmentEventDto,
   DistributedWorkerDto,
   RemoteAssignmentReceiptDto,
 } from '../../contracts';
@@ -30,6 +34,12 @@ const requiredString = (value: unknown, field: string): string => {
 const requiredNumber = (value: unknown, field: string): number => {
   if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`Invalid ${field}`);
   return value;
+};
+
+const requiredPositiveInteger = (value: unknown, field: string): number => {
+  const parsed = requiredNumber(value, field);
+  if (!Number.isInteger(parsed) || parsed <= 0) throw new Error(`Invalid ${field}`);
+  return parsed;
 };
 
 const parseWorker = (input: unknown): DistributedWorkerDto => {
@@ -79,19 +89,57 @@ export class RelayHttpAdapter implements DistributedRelayPort {
     return payload.workers.map(parseWorker);
   }
 
+  async listAssignmentEvents(): Promise<readonly DistributedAssignmentEventDto[]> {
+    const payload = asRecord(await this.request('/v2/events'), 'Relay events response');
+    if (!Array.isArray(payload.events)) throw new Error('Relay events response is invalid');
+    return payload.events.flatMap((input): DistributedAssignmentEventDto[] => {
+      const record = asRecord(input, 'Relay event');
+      const envelope = eventEnvelopeSchema.parse(record.envelope);
+      if (envelope.type !== 'assignment.state_changed') return [];
+      if (envelope.assignmentId === undefined) {
+        throw new Error('Relay assignment event is missing assignmentId');
+      }
+      const eventId = eventIdSchema.parse(record.eventId);
+      const sourceNodeId = nodeIdSchema.parse(record.sourceNodeId);
+      if (eventId !== envelope.eventId || sourceNodeId !== envelope.sourceNodeId) {
+        throw new Error('Relay assignment event identity is inconsistent');
+      }
+      const event = assignmentStateChangedPayloadSchema.parse(envelope.payload);
+      return [
+        {
+          cursor: requiredPositiveInteger(record.cursor, 'cursor'),
+          eventId,
+          assignmentId: envelope.assignmentId,
+          sourceNodeId,
+          workerInstanceId: envelope.workerInstanceId,
+          ...(envelope.teamId === undefined ? {} : { teamId: envelope.teamId }),
+          occurredAt: envelope.occurredAt,
+          receivedAt: requiredString(record.receivedAt, 'receivedAt'),
+          revision: event.revision,
+          fromState: event.fromState,
+          state: event.state,
+          reason: event.reason,
+          ...(event.deferredUntil === undefined ? {} : { deferredUntil: event.deferredUntil }),
+        },
+      ];
+    });
+  }
+
   async createRemoteAssignment(
     request: CreateRemoteAssignmentRequest
   ): Promise<RemoteAssignmentReceiptDto> {
     this.lastSequence = Math.max(this.lastSequence + 1, Date.now());
+    const assignmentId = randomUUID();
     const command = commandEnvelopeSchema.parse({
       protocolVersion: 2,
       commandId: randomUUID(),
       sequence: this.lastSequence,
       targetNodeId: nodeIdSchema.parse(request.targetNodeId),
       ...(request.teamId === undefined ? {} : { teamId: teamIdSchema.parse(request.teamId) }),
+      assignmentId,
       type: 'assignment.offer',
       payload: {
-        assignmentId: randomUUID(),
+        assignmentId,
         title: request.title,
         ...(request.description === undefined ? {} : { description: request.description }),
       },

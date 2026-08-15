@@ -35,6 +35,7 @@ describe('Worker diagnostics', () => {
       state: 'connected',
       lastHeartbeatSequence: 2,
       lastInboundCursor: 0,
+      lastAckedOutboxSequence: 0,
       updatedAt: '2026-08-14T20:00:00.000Z',
     };
     await installCodexMcpRegistration(configPath, {

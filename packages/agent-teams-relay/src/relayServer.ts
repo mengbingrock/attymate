@@ -2,7 +2,9 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
+  assignmentStateChangedPayloadSchema,
   commandIdSchema,
+  workerEventMessageSchema,
   workerCommandAckMessageSchema,
   workerHeartbeatMessageSchema,
   workerHelloMessageSchema,
@@ -15,6 +17,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { type RawData, WebSocket, WebSocketServer } from 'ws';
 
 import { RelayCommandStore, type RelayCommandRecord } from './relayCommandStore';
+import { RelayEventStore, type RelayEventRecord } from './relayEventStore';
 
 export interface AgentTeamsRelayOptions {
   readonly host: string;
@@ -44,6 +47,7 @@ interface MutableWorkerSession {
   connectedAt: string;
   lastHeartbeatAt: string;
   lastHeartbeatSequence: number;
+  lastEventSequence: number;
 }
 
 export interface StartedAgentTeamsRelay {
@@ -53,6 +57,7 @@ export interface StartedAgentTeamsRelay {
   readonly listWorkers: () => readonly ConnectedWorkerProjection[];
   readonly enqueueCommand: (input: unknown) => RelayCommandRecord;
   readonly listCommands: () => readonly RelayCommandRecord[];
+  readonly listEvents: () => readonly RelayEventRecord[];
   readonly close: () => Promise<void>;
 }
 
@@ -68,6 +73,7 @@ export const startAgentTeamsRelay = async (
   const app = Fastify({ logger: options.logger ?? false });
   const webSocketServer = new WebSocketServer({ noServer: true });
   const commandStore = new RelayCommandStore(options.dataDir);
+  const eventStore = new RelayEventStore(options.dataDir);
 
   const sendCommand = (session: MutableWorkerSession, record: RelayCommandRecord): void => {
     session.socket.send(
@@ -100,19 +106,20 @@ export const startAgentTeamsRelay = async (
   const listWorkers = (): readonly ConnectedWorkerProjection[] => {
     const now = Date.now();
     return [...sessions.values()]
-      .map((session): ConnectedWorkerProjection => ({
-        organizationId: session.hello.organizationId,
-        personId: session.hello.personId,
-        nodeId: session.hello.nodeId,
-        workerInstanceId: session.hello.workerInstanceId,
-        workerGeneration: session.hello.workerGeneration,
-        label: session.hello.label,
-        connectedAt: session.connectedAt,
-        lastHeartbeatAt: session.lastHeartbeatAt,
-        lastHeartbeatSequence: session.lastHeartbeatSequence,
-        status:
-          now - Date.parse(session.lastHeartbeatAt) <= staleAfterMs ? 'connected' : 'stale',
-      }))
+      .map(
+        (session): ConnectedWorkerProjection => ({
+          organizationId: session.hello.organizationId,
+          personId: session.hello.personId,
+          nodeId: session.hello.nodeId,
+          workerInstanceId: session.hello.workerInstanceId,
+          workerGeneration: session.hello.workerGeneration,
+          label: session.hello.label,
+          connectedAt: session.connectedAt,
+          lastHeartbeatAt: session.lastHeartbeatAt,
+          lastHeartbeatSequence: session.lastHeartbeatSequence,
+          status: now - Date.parse(session.lastHeartbeatAt) <= staleAfterMs ? 'connected' : 'stale',
+        })
+      )
       .sort((left, right) => left.label.localeCompare(right.label));
   };
 
@@ -136,6 +143,7 @@ export const startAgentTeamsRelay = async (
     workers: listWorkers(),
   }));
   app.get('/v2/commands', async () => ({ commands: commandStore.listAll() }));
+  app.get('/v2/events', async () => ({ events: eventStore.listAll() }));
   app.get('/v2/commands/:commandId', async (request, reply) => {
     const rawCommandId = (request.params as { commandId?: unknown }).commandId;
     const commandId = commandIdSchema.parse(rawCommandId);
@@ -180,6 +188,7 @@ export const startAgentTeamsRelay = async (
             connectedAt,
             lastHeartbeatAt: connectedAt,
             lastHeartbeatSequence: 0,
+            lastEventSequence: eventStore.lastSequenceForNode(hello.nodeId),
           });
           commandStore.acknowledgeThrough(hello.nodeId, hello.lastInboundCursor);
           socket.send(
@@ -222,6 +231,43 @@ export const startAgentTeamsRelay = async (
             boundNodeId,
             acknowledgement.status,
             acknowledgement.error
+          );
+          return;
+        }
+        if (inputType === 'worker.event') {
+          const message = workerEventMessageSchema.parse(input);
+          if (message.envelope.sourceNodeId !== boundNodeId) {
+            socket.close(4005, 'Worker event node does not match the current session');
+            return;
+          }
+          if (message.envelope.type === 'assignment.state_changed') {
+            if (message.envelope.assignmentId === undefined) {
+              socket.close(4007, 'Assignment state event is missing assignment identity');
+              return;
+            }
+            assignmentStateChangedPayloadSchema.parse(message.envelope.payload);
+          }
+          const existing = eventStore.get(message.envelope.eventId);
+          if (
+            existing === undefined &&
+            message.envelope.sequence !== session.lastEventSequence + 1
+          ) {
+            socket.close(4006, 'Worker event sequence is not contiguous');
+            return;
+          }
+          eventStore.accept(message.envelope);
+          session.lastEventSequence = Math.max(
+            session.lastEventSequence,
+            message.envelope.sequence
+          );
+          socket.send(
+            JSON.stringify({
+              type: 'relay.event_ack',
+              protocolVersion: 2,
+              eventId: message.envelope.eventId,
+              sequence: message.envelope.sequence,
+              receivedAt: new Date().toISOString(),
+            })
           );
           return;
         }
@@ -282,6 +328,7 @@ export const startAgentTeamsRelay = async (
     listWorkers,
     enqueueCommand,
     listCommands: () => commandStore.listAll(),
+    listEvents: () => eventStore.listAll(),
     close: async () => {
       for (const session of sessions.values()) {
         session.socket.close(1001, 'Relay shutting down');
@@ -290,6 +337,7 @@ export const startAgentTeamsRelay = async (
       webSocketServer.close();
       await app.close();
       commandStore.close();
+      eventStore.close();
     },
   };
 };
