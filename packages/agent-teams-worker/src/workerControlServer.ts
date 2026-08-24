@@ -25,6 +25,7 @@ export interface WorkerControlSnapshotProvider {
   readonly getStatus: () => AgentTeamsWorkerStatus;
   readonly listInboxCommands: () => readonly WorkerInboxCommand[];
   readonly listMessages: () => readonly WorkerTeamMessage[];
+  readonly markMessageRead: (messageId: string) => WorkerTeamMessage;
   readonly listAssignments: () => readonly WorkerAssignment[];
   readonly getAssignment: (assignmentId: string) => WorkerAssignment | undefined;
   readonly listAssignmentActivity: (assignmentId?: string) => readonly WorkerAssignmentActivity[];
@@ -140,6 +141,7 @@ const errorStatus = (error: unknown): number => {
   if ('code' in error && error.code === 'MCP_CAPABILITY_DENIED') return 403;
   if ('code' in error && error.code === 'RUNTIME_AUTHORITY_ARGUMENT_REJECTED') return 400;
   if ('code' in error && error.code === 'WORKER_ASSIGNMENT_NOT_FOUND') return 404;
+  if ('code' in error && error.code === 'WORKER_MESSAGE_NOT_FOUND') return 404;
   if (
     'code' in error &&
     (error.code === 'WORKER_ASSIGNMENT_REVISION_CONFLICT' ||
@@ -193,6 +195,13 @@ const handleControlRequest = async (
   }
   if (request.method === 'GET' && url.pathname === '/v2/messages') {
     jsonResponse(response, { messages: provider.listMessages() });
+    return;
+  }
+  const messageReadMatch = /^\/v2\/messages\/([^/]+)\/read$/.exec(url.pathname);
+  if (request.method === 'POST' && messageReadMatch !== null) {
+    jsonResponse(response, {
+      message: provider.markMessageRead(decodeURIComponent(messageReadMatch[1] ?? '')),
+    });
     return;
   }
   if (request.method === 'GET' && url.pathname === '/v2/assignment-activity') {
@@ -330,6 +339,7 @@ export const requestWorkerControl = async <T>(
     | '/v2/worker-status'
     | '/v2/assignments'
     | '/v2/messages'
+    | `/v2/messages/${string}/read`
     | '/v2/assignment-activity'
     | `/v2/runtime-tools/${string}`
     | `/v2/assignments/${string}`

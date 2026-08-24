@@ -21,6 +21,7 @@ const ownerControlTools = [
   'progress_get',
   'result_get',
   'message_list',
+  'message_mark_read',
   'message_send',
   'support_request',
   'review_request',

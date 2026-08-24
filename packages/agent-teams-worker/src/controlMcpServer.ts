@@ -19,6 +19,7 @@ export const OWNER_CONTROL_BRIDGE_TOOL_NAMES = [
   'assignment_defer',
   'assignment_activity_get',
   'message_list',
+  'message_mark_read',
 ] as const satisfies readonly PublicMcpToolName[];
 
 const jsonContent = (value: unknown) => ({
@@ -42,6 +43,7 @@ const assignmentDecisionParameters = assignmentReferenceParameters.extend({
 const assignmentDeferParameters = assignmentDecisionParameters.extend({
   deferredUntil: z.iso.datetime({ offset: true }).optional(),
 });
+const messageReferenceParameters = z.object({ messageId: z.uuid() }).strict();
 
 export const createOwnerControlToolDefinitions = (
   socketPath: string
@@ -166,6 +168,21 @@ export const createOwnerControlToolDefinitions = (
             '/v2/messages'
           )
         ),
+    },
+    {
+      name: 'message_mark_read',
+      description: 'Mark one durable peer message as read without steering it into Codex',
+      parameters: messageReferenceParameters,
+      execute: async (input) => {
+        const parsed = messageReferenceParameters.parse(input);
+        return jsonContent(
+          await requestWorkerControl<{ message: WorkerTeamMessage }>(
+            socketPath,
+            `/v2/messages/${encodeURIComponent(parsed.messageId)}/read`,
+            { method: 'POST' }
+          )
+        );
+      },
     },
   ];
 

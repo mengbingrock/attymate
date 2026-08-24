@@ -219,20 +219,40 @@ export const startAgentTeamsRelay = async (
       ) {
         continue;
       }
+      const deliveryCommandId = commandIdSchema.parse(
+        peerDeliveryCommandId(event.eventId, payload.recipientMembershipId)
+      );
+      if (commandStore.get(deliveryCommandId) !== undefined) continue;
+      leaseStore.expireThrough();
+      const recipientLease = leaseStore
+        .listAll()
+        .find(
+          (lease) =>
+            lease.nodeId === recipientRoute.nodeId &&
+            lease.teamId === event.envelope.teamId &&
+            ['granted', 'active'].includes(lease.status)
+        );
       enqueueCommand({
         protocolVersion: 2,
-        commandId: peerDeliveryCommandId(event.eventId, payload.recipientMembershipId),
+        commandId: deliveryCommandId,
         sequence: event.cursor,
         teamId: event.envelope.teamId,
         targetNodeId: recipientRoute.nodeId,
-        assignmentId: event.envelope.assignmentId,
-        attemptId: event.envelope.attemptId,
-        leaseEpoch: event.envelope.leaseEpoch,
+        ...(recipientLease === undefined
+          ? {}
+          : {
+              assignmentId: recipientLease.assignmentId,
+              attemptId: recipientLease.attemptId,
+              leaseEpoch: recipientLease.leaseEpoch,
+            }),
         type: 'team.message.deliver',
         payload: teamMessageDeliveryPayloadSchema.parse({
           ...payload,
           messageId: event.eventId,
           recipientWorkspaceId: recipientRoute.workspaceId,
+          sourceAssignmentId: event.envelope.assignmentId,
+          sourceAttemptId: event.envelope.attemptId,
+          sourceLeaseEpoch: event.envelope.leaseEpoch,
           sentAt: event.envelope.occurredAt,
         }),
       });

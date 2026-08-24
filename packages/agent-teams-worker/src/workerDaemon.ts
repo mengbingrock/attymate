@@ -83,6 +83,7 @@ export interface StartedAgentTeamsWorker {
   readonly getStatus: () => AgentTeamsWorkerStatus;
   readonly listInboxCommands: () => readonly WorkerInboxCommand[];
   readonly listMessages: () => readonly WorkerTeamMessage[];
+  readonly markMessageRead: (messageId: string) => WorkerTeamMessage;
   readonly listAssignments: () => ReturnType<WorkerAssignmentStore['list']>;
   readonly listOutboxEvents: () => readonly WorkerOutboxEvent[];
   readonly listRuntimeBindings: () => readonly WorkerRuntimeBinding[];
@@ -174,6 +175,7 @@ export const startAgentTeamsWorker = async (
   for (const assignment of assignmentStore.list()) {
     projectAssignmentActivity(assignment.assignmentId);
   }
+  let scheduleMessageDelivery: () => void = () => undefined;
   const runtimeSupervisor =
     options.codexRuntime === undefined
       ? undefined
@@ -199,6 +201,10 @@ export const startAgentTeamsWorker = async (
             const assignment = assignmentStore.markRuntimeRunning(binding);
             if (assignment !== undefined) projectAssignmentActivity(assignment.assignmentId);
             flushPendingEvents();
+            scheduleMessageDelivery();
+          },
+          onRecovered: () => {
+            scheduleMessageDelivery();
           },
           onCompleted: (binding) => {
             const assignment = assignmentStore.markRuntimeCompleted(binding);
@@ -308,6 +314,70 @@ export const startAgentTeamsWorker = async (
         })
       );
     }
+  };
+
+  let messageDeliveryPromise: Promise<void> | undefined;
+  let messageDeliveryRequested = false;
+  const deliverPendingMessages = async (): Promise<void> => {
+    if (runtimeSupervisor === undefined || stopped) return;
+    const scope = activeMessageScope();
+    const leaseIdentity = assignmentStore.activeLeaseIdentity();
+    if (scope === undefined || leaseIdentity === undefined) return;
+    const binding = runtimeSupervisor
+      .listBindings()
+      .find(
+        (candidate) =>
+          candidate.assignmentId === scope.assignmentId &&
+          candidate.attemptId === scope.attemptId &&
+          candidate.leaseEpoch === scope.leaseEpoch &&
+          candidate.state === 'active' &&
+          candidate.reconciliationState === undefined
+      );
+    if (binding?.threadId === undefined || binding.turnId === undefined) return;
+    const steerIdentity = {
+      threadId: binding.threadId,
+      turnId: binding.turnId,
+      appServerGeneration: binding.appServerGeneration,
+    };
+    for (const message of messageStore.reconcileActiveScope(scope)) {
+      if (stopped) return;
+      const claimed = messageStore.beginSteer(message.messageId, scope, steerIdentity);
+      if (claimed === undefined) continue;
+      try {
+        await runtimeSupervisor.steer({
+          ...leaseIdentity,
+          threadId: steerIdentity.threadId,
+          expectedTurnId: steerIdentity.turnId,
+          appServerGeneration: steerIdentity.appServerGeneration,
+          message: [
+            `Agent Teams peer message from membership ${message.payload.senderMembershipId}:`,
+            message.payload.message,
+          ].join('\n\n'),
+        });
+        messageStore.markSteered(message.messageId, steerIdentity);
+      } catch (error) {
+        messageStore.markSteerFailed(
+          message.messageId,
+          steerIdentity,
+          error instanceof Error ? error.message : 'Codex runtime steer failed'
+        );
+      }
+    }
+  };
+  scheduleMessageDelivery = () => {
+    if (stopped) return;
+    if (messageDeliveryPromise !== undefined) {
+      messageDeliveryRequested = true;
+      return;
+    }
+    messageDeliveryPromise = deliverPendingMessages().finally(() => {
+      messageDeliveryPromise = undefined;
+      if (messageDeliveryRequested) {
+        messageDeliveryRequested = false;
+        scheduleMessageDelivery();
+      }
+    });
+    void messageDeliveryPromise.catch(() => undefined);
   };
 
   const executeRuntimeTool = (input: {
@@ -466,6 +536,7 @@ export const startAgentTeamsWorker = async (
         try {
           const assignment = applyAssignmentCommand(inboxCommand);
           if (assignment !== undefined) projectAssignmentActivity(assignment.assignmentId);
+          if (message.envelope.type === 'team.message.deliver') scheduleMessageDelivery();
         } catch (error) {
           socket?.send(
             JSON.stringify({
@@ -549,6 +620,7 @@ export const startAgentTeamsWorker = async (
       getStatus: () => status,
       listInboxCommands: () => inboxStore.list(),
       listMessages: () => messageStore.listAll(),
+      markMessageRead: (messageId) => messageStore.markRead(messageId),
       listAssignments: () => assignmentStore.list(),
       getAssignment: (assignmentId) => assignmentStore.get(assignmentId),
       listAssignmentActivity: (assignmentId) => assignmentStore.listActivity(assignmentId),
@@ -567,6 +639,7 @@ export const startAgentTeamsWorker = async (
     getStatus: () => status,
     listInboxCommands: () => inboxStore.list(),
     listMessages: () => messageStore.listAll(),
+    markMessageRead: (messageId) => messageStore.markRead(messageId),
     listAssignments: () => assignmentStore.list(),
     listOutboxEvents: () => outboxStore.listAll(),
     listRuntimeBindings: () => runtimeSupervisor?.listBindings() ?? [],
@@ -597,6 +670,7 @@ export const startAgentTeamsWorker = async (
       updateStatus({ state: 'stopped' });
       await persistStatus();
       await runtimeSupervisor?.close();
+      await messageDeliveryPromise?.catch(() => undefined);
       assignmentStore.close();
       outboxStore.close();
       messageStore.close();

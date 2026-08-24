@@ -35,6 +35,7 @@ export interface WorkerCodexRuntimeOptions {
   };
   readonly runtimeMcp?: CodexRuntimeMcpLaunchSpec;
   readonly onStarted?: (binding: WorkerRuntimeBinding) => void;
+  readonly onRecovered?: (binding: WorkerRuntimeBinding) => void;
   readonly onCompleted?: (binding: WorkerRuntimeBinding) => void;
   readonly onFailed?: (binding: WorkerRuntimeBinding, error: Error) => void;
   readonly canRecover?: (binding: WorkerRuntimeBinding) => boolean;
@@ -47,6 +48,17 @@ interface ThreadStartResponse {
 
 interface TurnStartResponse {
   readonly turn?: { readonly id?: unknown; readonly status?: unknown };
+}
+
+interface TurnSteerResponse {
+  readonly turnId?: unknown;
+}
+
+export interface WorkerRuntimeSteerInput extends ExecutionLeaseIdentity {
+  readonly threadId: string;
+  readonly expectedTurnId: string;
+  readonly appServerGeneration: number;
+  readonly message: string;
 }
 
 interface PersistedTurn {
@@ -171,6 +183,33 @@ export class WorkerCodexRuntimeSupervisor {
 
   listBindings(): readonly WorkerRuntimeBinding[] {
     return this.store.list();
+  }
+
+  async steer(input: WorkerRuntimeSteerInput): Promise<void> {
+    const active = this.store.active();
+    if (
+      active === undefined ||
+      !matchesIdentity(active, input) ||
+      active.state !== 'active' ||
+      active.reconciliationState !== undefined ||
+      active.threadId !== input.threadId ||
+      active.turnId !== input.expectedTurnId ||
+      active.appServerGeneration !== input.appServerGeneration ||
+      this.session === undefined
+    ) {
+      throw new Error('Codex runtime steer precondition does not match the active turn');
+    }
+    const response = await this.session.request<TurnSteerResponse>('turn/steer', {
+      threadId: input.threadId,
+      input: [{ type: 'text', text: input.message }],
+      expectedTurnId: input.expectedTurnId,
+    });
+    const steeredTurnId = requireRuntimeId(response.turnId, 'turn/steer');
+    if (steeredTurnId !== input.expectedTurnId) {
+      throw new Error(
+        `Codex app-server steered unexpected turn ${steeredTurnId}; expected ${input.expectedTurnId}`
+      );
+    }
   }
 
   async close(): Promise<void> {
@@ -368,7 +407,9 @@ export class WorkerCodexRuntimeSupervisor {
       if (resumedTerminal !== undefined) return resumedTerminal;
       const threadStatus = asRecord(resumeResponse.thread?.status)?.type;
       if (resumedTurn?.status === 'inProgress' && threadStatus === 'active') {
-        return this.store.clearReconciliation(recovering.attemptId);
+        const recovered = this.store.clearReconciliation(recovering.attemptId);
+        this.options.onRecovered?.(recovered);
+        return recovered;
       }
       return this.requireReconciliation(
         recovering,

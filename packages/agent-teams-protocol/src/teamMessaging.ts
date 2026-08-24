@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 import {
+  assignmentIdSchema,
+  attemptIdSchema,
   eventIdSchema,
   membershipIdSchema,
   turnIdSchema,
@@ -30,6 +32,9 @@ export type TeamMessageEventPayload = z.infer<typeof teamMessageEventPayloadSche
 export const teamMessageDeliveryPayloadSchema = teamMessageEventPayloadSchema.extend({
   messageId: eventIdSchema,
   recipientWorkspaceId: workspaceIdSchema,
+  sourceAssignmentId: assignmentIdSchema,
+  sourceAttemptId: attemptIdSchema,
+  sourceLeaseEpoch: z.number().int().positive(),
   sentAt: z.iso.datetime({ offset: true }),
 });
 

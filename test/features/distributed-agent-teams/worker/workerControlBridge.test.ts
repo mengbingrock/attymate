@@ -19,6 +19,7 @@ import {
   type WorkerAgentContextProjection,
   WorkerAssignmentStore,
   type WorkerInboxCommand,
+  type WorkerTeamMessage,
 } from '@claude-teams/agent-teams-worker';
 
 class TestMcpClient {
@@ -163,10 +164,18 @@ describe('Worker owner-control bridge', () => {
     ];
     const assignmentStore = new WorkerAssignmentStore(testDir);
     assignmentStore.projectOffer(inbox[0]!);
+    const markMessageRead = vi.fn(
+      (messageId: string) =>
+        ({
+          messageId,
+          readAt: '2026-08-14T20:00:02.000Z',
+        }) as WorkerTeamMessage
+    );
     const control = await startWorkerControlServer(socketPath, {
       getStatus: () => status,
       listInboxCommands: () => inbox,
       listMessages: () => [],
+      markMessageRead,
       listAssignments: () => assignmentStore.list(),
       getAssignment: (assignmentId) => assignmentStore.get(assignmentId),
       listAssignmentActivity: (assignmentId) => assignmentStore.listActivity(assignmentId),
@@ -217,6 +226,14 @@ describe('Worker owner-control bridge', () => {
       expect(JSON.parse(accepted.content[0]?.text ?? '{}')).toMatchObject({
         assignment: { state: 'queued', revision: 2 },
       });
+      const messageId = '00000000-0000-4000-8000-000000000007';
+      const markedRead = (await mcp.callTool('message_mark_read', { messageId })) as {
+        content: Array<{ text: string }>;
+      };
+      expect(JSON.parse(markedRead.content[0]?.text ?? '{}')).toMatchObject({
+        message: { messageId, readAt: '2026-08-14T20:00:02.000Z' },
+      });
+      expect(markMessageRead).toHaveBeenCalledWith(messageId);
     } finally {
       await mcp.close();
       await control.close();

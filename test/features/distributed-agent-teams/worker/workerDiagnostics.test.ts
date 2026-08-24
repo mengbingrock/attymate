@@ -47,6 +47,9 @@ describe('Worker diagnostics', () => {
       getStatus: () => status,
       listInboxCommands: () => [],
       listMessages: () => [],
+      markMessageRead: () => {
+        throw new Error('No messages in this fixture');
+      },
       listAssignments: () => [],
       getAssignment: () => undefined,
       listAssignmentActivity: () => [],

@@ -45,6 +45,7 @@ describe('distributed MCP capability profiles', () => {
 
   it('keeps manager lifecycle tools out of teammate control sessions', () => {
     expect(canProfileInvokeTool('agent-teams-control', 'approval_respond')).toBe(true);
+    expect(canProfileInvokeTool('agent-teams-control', 'message_mark_read')).toBe(true);
     expect(canProfileInvokeTool('agent-teams-control', 'team_launch')).toBe(false);
     expect(canProfileInvokeTool('agent-teams-manager', 'team_launch')).toBe(true);
   });

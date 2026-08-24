@@ -51,6 +51,9 @@ class MessagingCodexSession implements WorkerCodexAppServerSession {
         turn: { id: '00000000-0000-7000-8000-000000000042', status: 'inProgress' },
       } as T;
     }
+    if (method === 'turn/steer') {
+      return { turnId: '00000000-0000-7000-8000-000000000042' } as T;
+    }
     return {} as T;
   };
 
@@ -88,6 +91,7 @@ describe('durable peer messaging', () => {
     const senderAssignmentId = '00000000-0000-4000-8000-000000000009';
     const recipientAssignmentId = '00000000-0000-4000-8000-000000000010';
     const senderControlSocket = join(dataRoot, 'sender', 'control.sock');
+    const recipientControlSocket = join(dataRoot, 'recipient', 'control.sock');
     const recipientDataDir = join(dataRoot, 'recipient');
     const relay = await startAgentTeamsRelay({
       host: '127.0.0.1',
@@ -97,6 +101,7 @@ describe('durable peer messaging', () => {
       leaseDurationMs: 2_000,
     });
     const codex = new MessagingCodexSession();
+    const recipientCodex = new MessagingCodexSession();
     const sender = await startAgentTeamsWorker({
       relayUrl: relay.wsUrl,
       dataDir: join(dataRoot, 'sender'),
@@ -224,15 +229,24 @@ describe('durable peer messaging', () => {
         workerGeneration: 2,
         label: 'Recipient',
         reconnectDelayMs: 25,
+        controlSocketPath: recipientControlSocket,
+        codexRuntime: {
+          cwd: join(dataRoot, 'recipient-workspace'),
+          sessionFactory: { open: async () => recipientCodex },
+          runtimeMcp: {
+            command: process.execPath,
+            args: ['/fixture/runtimeMcpCli.js', '--socket', recipientControlSocket],
+          },
+        },
       });
       await recipient.ready;
       await vi.waitFor(() => {
         expect(recipient?.listMessages()).toEqual([
           expect.objectContaining({
             teamId,
-            assignmentId: senderAssignmentId,
             routingState: 'queued',
             payload: expect.objectContaining({
+              sourceAssignmentId: senderAssignmentId,
               senderMembershipId,
               recipientMembershipId,
               recipientWorkspaceId,
@@ -245,6 +259,59 @@ describe('durable peer messaging', () => {
             .listCommands()
             .find(({ envelope }) => envelope.type === 'team.message.deliver')?.status
         ).toBe('acknowledged');
+      });
+
+      recipient.acceptAssignment({ assignmentId: recipientAssignmentId, expectedRevision: 0 });
+      await vi.waitFor(() =>
+        expect(recipient?.listAssignments()[0]).toMatchObject({ state: 'running' })
+      );
+      await requestWorkerControl(senderControlSocket, '/v2/runtime-tools/message_send', {
+        method: 'POST',
+        bearerToken: token,
+        body: {
+          idempotencyKey: 'peer-message-2',
+          arguments: {
+            recipientMembershipId,
+            message: 'The follow-up is scoped to your active assignment.',
+          },
+        },
+      });
+      await vi.waitFor(() => {
+        expect(
+          relay.listEvents().filter(({ envelope }) => envelope.type === 'team.message')
+        ).toHaveLength(2);
+        const deliveries = relay
+          .listCommands()
+          .filter(({ envelope }) => envelope.type === 'team.message.deliver');
+        expect(deliveries).toHaveLength(2);
+        expect(deliveries[1]?.status).not.toBe('rejected');
+        expect(recipient?.listMessages()).toHaveLength(2);
+        expect(recipient?.listMessages()[0]).toMatchObject({
+          routingState: 'queued',
+          steerState: 'pending',
+        });
+        expect(recipient?.listMessages()[0]?.readAt).toBeUndefined();
+        expect(recipient?.listMessages()[1]).toMatchObject({
+          targetAssignmentId: recipientAssignmentId,
+          routingState: 'available_active',
+          steerState: 'delivered',
+          readAt: expect.any(String),
+        });
+        expect(
+          recipientCodex.requests.filter(({ method }) => method === 'turn/steer')
+        ).toHaveLength(1);
+        expect(
+          recipientCodex.requests.find(({ method }) => method === 'turn/steer')?.params
+        ).toEqual({
+          threadId: '00000000-0000-7000-8000-000000000041',
+          input: [
+            {
+              type: 'text',
+              text: `Agent Teams peer message from membership ${senderMembershipId}:\n\nThe follow-up is scoped to your active assignment.`,
+            },
+          ],
+          expectedTurnId: '00000000-0000-7000-8000-000000000042',
+        });
       });
     } finally {
       await recipient?.stop();
