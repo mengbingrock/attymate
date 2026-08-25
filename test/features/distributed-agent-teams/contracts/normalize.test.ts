@@ -1,4 +1,7 @@
-import { normalizeCreateRemoteAssignmentRequest } from '@features/distributed-agent-teams/contracts';
+import {
+  normalizeCreateRemoteAssignmentRequest,
+  normalizeStartDistributedTeamRequest,
+} from '@features/distributed-agent-teams/contracts';
 import { describe, expect, it } from 'vitest';
 
 const NODE_ID = '11111111-1111-4111-8111-111111111111';
@@ -43,5 +46,17 @@ describe('normalizeCreateRemoteAssignmentRequest', () => {
     },
   ])('rejects malformed boundary input %#', (input) => {
     expect(() => normalizeCreateRemoteAssignmentRequest(input)).toThrow();
+  });
+});
+
+describe('normalizeStartDistributedTeamRequest', () => {
+  it('canonicalizes the team identity', () => {
+    expect(normalizeStartDistributedTeamRequest({ teamId: ` ${TEAM_ID.toUpperCase()} ` })).toEqual({
+      teamId: TEAM_ID,
+    });
+  });
+
+  it.each([null, {}, { teamId: '../team' }])('rejects malformed input %#', (input) => {
+    expect(() => normalizeStartDistributedTeamRequest(input)).toThrow();
   });
 });

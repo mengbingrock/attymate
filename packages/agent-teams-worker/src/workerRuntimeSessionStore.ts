@@ -179,7 +179,7 @@ export class WorkerRuntimeSessionStore {
     }
   }
 
-  rotateAttempt(attemptIdInput: string): CreatedRuntimeMcpSession {
+  rotateAttempt(attemptIdInput: string, expiresAtInput?: string): CreatedRuntimeMcpSession {
     const attemptId = attemptIdSchema.parse(attemptIdInput);
     const row = this.database
       .prepare(
@@ -200,7 +200,7 @@ export class WorkerRuntimeSessionStore {
       workspaceId: row.workspace_id,
       leaseEpoch: row.lease_epoch,
       leaseId: row.lease_id,
-      expiresAt: row.expires_at,
+      expiresAt: expiresAtInput === undefined ? row.expires_at : normalizeExpiry(expiresAtInput),
     });
   }
 

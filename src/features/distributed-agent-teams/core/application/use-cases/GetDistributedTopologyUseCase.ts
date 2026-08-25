@@ -8,7 +8,7 @@ export class GetDistributedTopologyUseCase {
     try {
       return {
         relayUrl: this.relay.relayUrl,
-        insecureLanMode: true,
+        insecureLanMode: this.relay.insecureLanMode,
         workers: [...(await this.relay.listWorkers())],
         fetchedAt: new Date().toISOString(),
         degraded: false,
@@ -16,7 +16,7 @@ export class GetDistributedTopologyUseCase {
     } catch (error) {
       return {
         relayUrl: this.relay.relayUrl,
-        insecureLanMode: true,
+        insecureLanMode: this.relay.insecureLanMode,
         workers: [],
         fetchedAt: new Date().toISOString(),
         degraded: true,

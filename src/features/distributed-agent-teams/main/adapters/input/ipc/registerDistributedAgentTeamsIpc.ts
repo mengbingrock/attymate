@@ -1,8 +1,15 @@
 import {
   DISTRIBUTED_AGENT_TEAMS_CREATE_ASSIGNMENT,
   DISTRIBUTED_AGENT_TEAMS_GET_ASSIGNMENT_EVENTS,
+  DISTRIBUTED_AGENT_TEAMS_GET_DEBUG_SNAPSHOT,
+  DISTRIBUTED_AGENT_TEAMS_GET_RUNTIME_SESSION,
   DISTRIBUTED_AGENT_TEAMS_GET_TOPOLOGY,
+  DISTRIBUTED_AGENT_TEAMS_SEND_RUNTIME_CONTROL,
+  DISTRIBUTED_AGENT_TEAMS_START_TEAM,
   normalizeCreateRemoteAssignmentRequest,
+  normalizeGetDistributedRuntimeSessionRequest,
+  normalizeSendDistributedRuntimeControlRequest,
+  normalizeStartDistributedTeamRequest,
 } from '../../../../contracts';
 
 import type { DistributedAgentTeamsFeatureFacade } from '../../../composition/createDistributedAgentTeamsFeature';
@@ -16,13 +23,27 @@ export const registerDistributedAgentTeamsIpc = (
   ipcMain.handle(DISTRIBUTED_AGENT_TEAMS_GET_ASSIGNMENT_EVENTS, () =>
     feature.getAssignmentEvents()
   );
+  ipcMain.handle(DISTRIBUTED_AGENT_TEAMS_GET_DEBUG_SNAPSHOT, () => feature.getDebugSnapshot());
+  ipcMain.handle(DISTRIBUTED_AGENT_TEAMS_GET_RUNTIME_SESSION, (_event, input: unknown) =>
+    feature.getRuntimeSession(normalizeGetDistributedRuntimeSessionRequest(input))
+  );
+  ipcMain.handle(DISTRIBUTED_AGENT_TEAMS_SEND_RUNTIME_CONTROL, (_event, input: unknown) =>
+    feature.sendRuntimeControl(normalizeSendDistributedRuntimeControlRequest(input))
+  );
   ipcMain.handle(DISTRIBUTED_AGENT_TEAMS_CREATE_ASSIGNMENT, (_event, input: unknown) =>
     feature.createRemoteAssignment(normalizeCreateRemoteAssignmentRequest(input))
+  );
+  ipcMain.handle(DISTRIBUTED_AGENT_TEAMS_START_TEAM, (_event, input: unknown) =>
+    feature.startTeam(normalizeStartDistributedTeamRequest(input))
   );
 };
 
 export const removeDistributedAgentTeamsIpc = (ipcMain: IpcMain): void => {
   ipcMain.removeHandler(DISTRIBUTED_AGENT_TEAMS_GET_TOPOLOGY);
   ipcMain.removeHandler(DISTRIBUTED_AGENT_TEAMS_GET_ASSIGNMENT_EVENTS);
+  ipcMain.removeHandler(DISTRIBUTED_AGENT_TEAMS_GET_DEBUG_SNAPSHOT);
+  ipcMain.removeHandler(DISTRIBUTED_AGENT_TEAMS_GET_RUNTIME_SESSION);
+  ipcMain.removeHandler(DISTRIBUTED_AGENT_TEAMS_SEND_RUNTIME_CONTROL);
   ipcMain.removeHandler(DISTRIBUTED_AGENT_TEAMS_CREATE_ASSIGNMENT);
+  ipcMain.removeHandler(DISTRIBUTED_AGENT_TEAMS_START_TEAM);
 };

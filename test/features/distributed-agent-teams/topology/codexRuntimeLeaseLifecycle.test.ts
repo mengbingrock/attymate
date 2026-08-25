@@ -50,6 +50,10 @@ class FakeCodexSession implements WorkerCodexAppServerSession {
     return () => this.listeners.delete(listener);
   };
 
+  onRequest = (): (() => void) => () => undefined;
+
+  respondToRequest = (): void => undefined;
+
   onClose = (listener: (event: CodexAppServerSessionClosed) => void): (() => void) => {
     this.closeListeners.add(listener);
     return () => this.closeListeners.delete(listener);
@@ -147,8 +151,8 @@ describe('Worker-owned Codex runtime lease lifecycle', () => {
           method: 'thread/start',
           params: expect.objectContaining({
             cwd: runtimeCwd,
-            approvalPolicy: 'never',
-            sandbox: 'workspaceWrite',
+            approvalPolicy: 'on-request',
+            sandbox: 'workspace-write',
           }),
         }),
         expect.objectContaining({
@@ -318,6 +322,12 @@ describe('Worker-owned Codex runtime lease lifecycle', () => {
         'thread/read',
         'thread/resume',
       ]);
+      expect(recoveredSession.requests).toContainEqual(
+        expect.objectContaining({
+          method: 'thread/resume',
+          params: expect.objectContaining({ sandbox: 'workspace-write' }),
+        })
+      );
       expect(recoveredSession.requests).not.toContainEqual(
         expect.objectContaining({ method: 'turn/start' })
       );

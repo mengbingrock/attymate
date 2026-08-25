@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -21,6 +21,7 @@ describe('Worker diagnostics', () => {
     const configPath = join(testDir, 'codex', 'config.toml');
     const statusPath = join(testDir, 'worker-status.json');
     const socketPath = join(testDir, 'control.sock');
+    const codexHomePath = join(testDir, 'worker', 'codex-home');
     const status: AgentTeamsWorkerStatus = {
       service: 'agent-teams-worker',
       protocolVersion: 2,
@@ -37,11 +38,15 @@ describe('Worker diagnostics', () => {
       lastInboundCursor: 0,
       lastAckedOutboxSequence: 0,
       updatedAt: '2026-08-14T20:00:00.000Z',
+      runtimeCapabilities: [],
     };
     await installCodexMcpRegistration(configPath, {
       command: 'agent-teams-worker',
       args: ['control-mcp', '--socket', socketPath],
     });
+    await mkdir(codexHomePath, { recursive: true, mode: 0o700 });
+    if (process.platform !== 'win32') await chmod(codexHomePath, 0o700);
+    await writeFile(join(codexHomePath, 'auth.json'), '{}', { mode: 0o600 });
     await writeFile(statusPath, JSON.stringify(status), 'utf8');
     const control = await startWorkerControlServer(socketPath, {
       getStatus: () => status,
@@ -69,9 +74,16 @@ describe('Worker diagnostics', () => {
         codexConfigPath: configPath,
         statusPath,
         controlSocketPath: socketPath,
+        codexHomePath,
       });
       expect(report).toMatchObject({
         ok: true,
+        codexRuntime: {
+          homePath: codexHomePath,
+          state: 'ready',
+          private: true,
+          authJsonPresent: true,
+        },
         codexMcp: { state: { status: 'managed' } },
         persistedStatus: { available: true, status: { nodeId: status.nodeId } },
         controlSocket: { reachable: true, status: { nodeId: status.nodeId } },
@@ -84,6 +96,7 @@ describe('Worker diagnostics', () => {
       codexConfigPath: configPath,
       statusPath,
       controlSocketPath: socketPath,
+      codexHomePath,
     });
     expect(stoppedReport.ok).toBe(false);
     expect(stoppedReport.controlSocket).toMatchObject({ reachable: false });

@@ -50,6 +50,9 @@ class RuntimeMcpCodexSession implements WorkerCodexAppServerSession {
             github: { enabled: true },
             'agent-teams-control': { enabled: true },
           },
+          plugins: {
+            'browser@openai-bundled': { enabled: true },
+          },
         },
       } as T;
     }
@@ -64,7 +67,14 @@ class RuntimeMcpCodexSession implements WorkerCodexAppServerSession {
             tools: Object.fromEntries(RUNTIME_BRIDGE_TOOL_NAMES.map((name) => [name, {}])),
           },
           ...(this.options.leakGlobalServer
-            ? [{ name: 'github', tools: { issue_write: {} } }]
+            ? [
+                {
+                  name: 'github',
+                  tools: { issue_write: {} },
+                  resources: [],
+                  resourceTemplates: [],
+                },
+              ]
             : []),
         ],
         nextCursor: null,
@@ -101,6 +111,10 @@ class RuntimeMcpCodexSession implements WorkerCodexAppServerSession {
     this.notifications.add(listener);
     return () => this.notifications.delete(listener);
   };
+
+  onRequest = (): (() => void) => () => undefined;
+
+  respondToRequest = (): void => undefined;
 
   onClose = (listener: (event: CodexAppServerSessionClosed) => void): (() => void) => {
     this.closeListeners.add(listener);
@@ -202,6 +216,9 @@ describe('assignment-scoped runtime MCP isolation', () => {
         enabled: true,
         required: true,
         enabled_tools: RUNTIME_BRIDGE_TOOL_NAMES,
+      });
+      expect(params.config).toMatchObject({
+        plugins: { 'browser@openai-bundled': { enabled: false } },
       });
       const token = (servers['agent-teams-runtime']?.env as Record<string, string>)
         .AGENT_TEAMS_RUNTIME_SESSION_TOKEN;
@@ -314,7 +331,7 @@ describe('assignment-scoped runtime MCP isolation', () => {
     };
 
     try {
-      await expect(supervisor.start(assignment)).rejects.toThrow('leaked servers');
+      await expect(supervisor.start(assignment)).rejects.toThrow('leaked capabilities');
       expect(codex.requests.map(({ method }) => method)).toEqual([
         'config/read',
         'thread/start',

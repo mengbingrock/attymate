@@ -142,6 +142,7 @@ describe('Worker owner-control bridge', () => {
       lastInboundCursor: 1,
       lastAckedOutboxSequence: 0,
       updatedAt: '2026-08-14T20:00:00.000Z',
+      runtimeCapabilities: [],
     };
     const envelope = commandEnvelopeSchema.parse({
       protocolVersion: 2,

@@ -89,6 +89,7 @@ export interface Tab {
     | 'schedules'
     | 'graph'
     | 'token-usage'
+    | 'distributed-team'
     | 'matter';
 
   /** Session ID (required when type === 'session') */
@@ -99,6 +100,9 @@ export interface Tab {
 
   /** Team name (required when type === 'team'; optional for graph/token-usage deep links) */
   teamName?: string;
+
+  /** Relay team ID when a team tab renders a distributed team. */
+  distributedTeamId?: string;
 
   /** Display name for the tab (max 50 chars) */
   label: string;

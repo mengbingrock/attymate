@@ -1,4 +1,14 @@
-import type { CreateRemoteAssignmentRequest } from './dto';
+import {
+  runtimeControlSchema,
+  runtimeSessionCreateRequestSchema,
+} from '@claude-teams/agent-teams-protocol';
+
+import type {
+  CreateRemoteAssignmentRequest,
+  GetDistributedRuntimeSessionRequest,
+  SendDistributedRuntimeControlRequest,
+  StartDistributedTeamRequest,
+} from './dto';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -55,5 +65,48 @@ export const normalizeCreateRemoteAssignmentRequest = (
     ...(teamId === undefined ? {} : { teamId }),
     ...(membershipId === undefined ? {} : { membershipId }),
     ...(workspaceId === undefined ? {} : { workspaceId }),
+  };
+};
+
+export const normalizeStartDistributedTeamRequest = (
+  input: unknown
+): StartDistributedTeamRequest => {
+  const record = asRecord(input);
+  if (record === null) throw new TypeError('Start distributed team request must be an object');
+  return { teamId: uuid(record.teamId, 'teamId') };
+};
+
+export const normalizeGetDistributedRuntimeSessionRequest = (
+  input: unknown
+): GetDistributedRuntimeSessionRequest => {
+  const record = asRecord(input);
+  if (record === null) throw new TypeError('Runtime session request must be an object');
+  const scope = runtimeSessionCreateRequestSchema.parse({
+    teamId: record.teamId,
+    nodeId: record.nodeId,
+    assignmentId: record.assignmentId,
+    attemptId: record.attemptId,
+    leaseEpoch: record.leaseEpoch,
+  });
+  if (
+    record.afterCursor !== undefined &&
+    (!Number.isInteger(record.afterCursor) || (record.afterCursor as number) < 0)
+  ) {
+    throw new TypeError('afterCursor must be a non-negative integer');
+  }
+  return {
+    ...scope,
+    ...(record.afterCursor === undefined ? {} : { afterCursor: record.afterCursor as number }),
+  };
+};
+
+export const normalizeSendDistributedRuntimeControlRequest = (
+  input: unknown
+): SendDistributedRuntimeControlRequest => {
+  const record = asRecord(input);
+  if (record === null) throw new TypeError('Runtime control request must be an object');
+  return {
+    session: normalizeGetDistributedRuntimeSessionRequest(record.session),
+    control: runtimeControlSchema.parse(record.control),
   };
 };

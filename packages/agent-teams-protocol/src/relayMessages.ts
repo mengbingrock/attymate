@@ -12,6 +12,11 @@ import {
   workerInstanceIdSchema,
 } from './ids';
 import { commandEnvelopeSchema, eventEnvelopeSchema } from './envelopes';
+import {
+  relayRuntimeControlMessageSchema,
+  runtimeSessionCapabilitySchema,
+  workerRuntimeEventMessageSchema,
+} from './runtimeSession';
 
 const timestampSchema = z.iso.datetime({ offset: true });
 
@@ -50,6 +55,7 @@ export const workerHelloMessageSchema = z
     workerInstanceId: workerInstanceIdSchema,
     workerGeneration: z.number().int().positive(),
     label: z.string().trim().min(1).max(128),
+    runtimeCapabilities: z.array(runtimeSessionCapabilitySchema).max(32).optional(),
     lastInboundCursor: z.number().int().nonnegative(),
     sentAt: timestampSchema,
   })
@@ -69,7 +75,7 @@ export const relayWelcomeMessageSchema = z
   .object({
     type: z.literal('relay.welcome'),
     protocolVersion: z.literal(2),
-    insecureLanMode: z.literal(true),
+    insecureLanMode: z.boolean(),
     heartbeatIntervalMs: z.number().int().positive(),
     connectedAt: timestampSchema,
   })
@@ -138,6 +144,7 @@ export const workerToRelayMessageSchema = z.discriminatedUnion('type', [
   workerHeartbeatMessageSchema,
   workerCommandAckMessageSchema,
   workerEventMessageSchema,
+  workerRuntimeEventMessageSchema,
 ]);
 
 export const relayToWorkerMessageSchema = z.discriminatedUnion('type', [
@@ -146,6 +153,7 @@ export const relayToWorkerMessageSchema = z.discriminatedUnion('type', [
   relayCommandMessageSchema,
   relayEventAckMessageSchema,
   relayErrorMessageSchema,
+  relayRuntimeControlMessageSchema,
 ]);
 
 export type WorkerHelloMessage = z.infer<typeof workerHelloMessageSchema>;

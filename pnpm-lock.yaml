@@ -120,6 +120,9 @@ importers:
       '@claude-teams/agent-graph':
         specifier: workspace:*
         version: link:packages/agent-graph
+      '@claude-teams/agent-teams-protocol':
+        specifier: workspace:*
+        version: link:packages/agent-teams-protocol
       '@codemirror/autocomplete':
         specifier: ^6.20.0
         version: 6.20.0

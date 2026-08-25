@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import {
   nodeIdSchema,
@@ -17,6 +16,8 @@ import {
 } from './codexMcpRegistration';
 import { CodexAppServerProcessFactory } from './codexAppServerClient';
 import { startAgentTeamsWorker } from './workerDaemon';
+import { resolveWorkerBridgeLaunch } from './workerBridgeLaunch';
+import { prepareWorkerCodexHome, resolveWorkerCodexHomePath } from './workerCodexHome';
 import { diagnoseAgentTeamsWorker } from './workerDiagnostics';
 
 const valueAfter = (name: string, fallback?: string): string | undefined => {
@@ -52,14 +53,20 @@ const defaultCodexConfigPath = (): string => {
 const defaultControlSocketPath = (dataDir: string): string =>
   resolveSocketPath(valueAfter('--control-socket', join(dataDir, 'control.sock'))!);
 
+const configuredCodexHome = (dataDir: string): string =>
+  resolveWorkerCodexHomePath(dataDir, valueAfter('--codex-home'));
+
 const runSetup = async (): Promise<void> => {
   const dataDir = defaultDataDir();
   const controlSocketPath = defaultControlSocketPath(dataDir);
-  const bridgeScript = fileURLToPath(new URL('./controlMcpCli.js', import.meta.url));
+  const bridgeLaunch = resolveWorkerBridgeLaunch(import.meta.url, 'controlMcpCli');
   const explicitArgs = valuesAfter('--bridge-arg');
   const result = await installCodexMcpRegistration(defaultCodexConfigPath(), {
-    command: valueAfter('--bridge-command', process.execPath)!,
-    args: explicitArgs.length > 0 ? explicitArgs : [bridgeScript, '--socket', controlSocketPath],
+    command: valueAfter('--bridge-command', bridgeLaunch.command)!,
+    args:
+      explicitArgs.length > 0
+        ? explicitArgs
+        : [...bridgeLaunch.args, '--socket', controlSocketPath],
   });
   printJson({ command: 'setup', controlSocketPath, ...result });
   if (result.state.status === 'conflict' || result.state.status === 'invalid') {
@@ -72,6 +79,7 @@ const runStatus = async (): Promise<void> => {
   printJson({
     command: 'status',
     dataDir,
+    codexHome: configuredCodexHome(dataDir),
     controlSocketPath: defaultControlSocketPath(dataDir),
     codexMcp: {
       configPath: defaultCodexConfigPath(),
@@ -86,6 +94,7 @@ const runDiagnose = async (): Promise<void> => {
     codexConfigPath: defaultCodexConfigPath(),
     statusPath: join(dataDir, 'worker-status.json'),
     controlSocketPath: defaultControlSocketPath(dataDir),
+    codexHomePath: configuredCodexHome(dataDir),
   });
   printJson({ command: 'diagnose', ...report });
   if (!report.ok) process.exitCode = 1;
@@ -100,9 +109,14 @@ const runMcpRemove = async (): Promise<void> => {
 
 const runWorker = async (): Promise<void> => {
   const relayUrl = valueAfter('--relay', 'ws://127.0.0.1:43170/v2/worker-stream')!;
+  const relayToken = valueAfter('--relay-token', process.env.AGENT_TEAMS_RELAY_WORKER_TOKEN);
   const dataDir = defaultDataDir();
   const label = valueAfter('--label', 'Local Worker')!;
   const controlSocketPath = defaultControlSocketPath(dataDir);
+  const workerCodexHome = await prepareWorkerCodexHome({
+    dataDir,
+    codexHome: valueAfter('--codex-home'),
+  });
   const organizationId = organizationIdSchema.parse(valueAfter('--organization-id', randomUUID()));
   const personId = personIdSchema.parse(valueAfter('--person-id', randomUUID()));
   const nodeId = nodeIdSchema.parse(valueAfter('--node-id', randomUUID()));
@@ -110,10 +124,12 @@ const runWorker = async (): Promise<void> => {
     valueAfter('--worker-instance-id', randomUUID())
   );
   const runtimeCwd = valueAfter('--runtime-cwd');
-  const runtimeBridgeScript = fileURLToPath(new URL('./runtimeMcpCli.js', import.meta.url));
+  const runtimeBridgeLaunch = resolveWorkerBridgeLaunch(import.meta.url, 'runtimeMcpCli');
+  const runtimeMcpCommand = valueAfter('--runtime-mcp-command');
 
   const worker = await startAgentTeamsWorker({
     relayUrl,
+    ...(relayToken === undefined ? {} : { relayToken }),
     dataDir,
     label,
     controlSocketPath,
@@ -130,10 +146,17 @@ const runWorker = async (): Promise<void> => {
             cwd: resolve(runtimeCwd),
             sessionFactory: new CodexAppServerProcessFactory({
               binaryPath: valueAfter('--codex-binary', 'codex')!,
+              env: workerCodexHome.env,
             }),
             runtimeMcp: {
-              command: valueAfter('--runtime-mcp-command', process.execPath)!,
-              args: [runtimeBridgeScript, '--socket', controlSocketPath],
+              command: runtimeMcpCommand ?? runtimeBridgeLaunch.command,
+              args: [
+                ...(runtimeMcpCommand === undefined
+                  ? runtimeBridgeLaunch.args
+                  : [runtimeBridgeLaunch.entryPath]),
+                '--socket',
+                controlSocketPath,
+              ],
             },
             ...(valueAfter('--runtime-model') === undefined
               ? {}
@@ -142,7 +165,13 @@ const runWorker = async (): Promise<void> => {
         }),
   });
   await worker.ready;
-  printJson({ event: 'worker.connected', ...worker.getStatus(), dataDir, controlSocketPath });
+  printJson({
+    event: 'worker.connected',
+    ...worker.getStatus(),
+    dataDir,
+    codexHome: workerCodexHome.codexHome,
+    controlSocketPath,
+  });
 
   let stopping = false;
   const stop = async (signal: string): Promise<void> => {

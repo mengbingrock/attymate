@@ -7,7 +7,7 @@ export interface CodexAppServerNotification {
 }
 
 export interface CodexAppServerRequest {
-  readonly id: number;
+  readonly id: number | string;
   readonly method: string;
   readonly params: unknown;
 }
@@ -22,6 +22,8 @@ export interface WorkerCodexAppServerSession {
   readonly onNotification: (
     listener: (notification: CodexAppServerNotification) => void
   ) => () => void;
+  readonly onRequest: (listener: (request: CodexAppServerRequest) => void) => () => void;
+  readonly respondToRequest: (id: number | string, result: unknown) => void;
   readonly onClose: (listener: (event: CodexAppServerSessionClosed) => void) => () => void;
   readonly close: () => Promise<void>;
 }
@@ -36,11 +38,12 @@ export interface CodexAppServerProcessFactoryOptions {
   readonly env?: NodeJS.ProcessEnv;
   readonly requestTimeoutMs?: number;
   readonly initializeTimeoutMs?: number;
+  readonly disableRemotePlugins?: boolean;
   readonly onServerRequest?: (request: CodexAppServerRequest) => Promise<unknown>;
 }
 
 interface JsonRpcMessage {
-  readonly id?: number;
+  readonly id?: number | string;
   readonly method?: string;
   readonly params?: unknown;
   readonly result?: unknown;
@@ -75,7 +78,15 @@ export class CodexAppServerProcessFactory implements WorkerCodexAppServerSession
   async open(): Promise<WorkerCodexAppServerSession> {
     const child = spawn(
       this.options.binaryPath,
-      [...(this.options.launcherArgs ?? []), 'app-server'],
+      [
+        ...(this.options.launcherArgs ?? []),
+        '--disable',
+        'apps',
+        '--disable',
+        'plugins',
+        ...(this.options.disableRemotePlugins === false ? [] : ['--disable', 'remote_plugin']),
+        'app-server',
+      ],
       {
         env: this.options.env,
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -95,9 +106,7 @@ export class CodexAppServerProcessFactory implements WorkerCodexAppServerSession
           capabilities: {
             experimentalApi: false,
             optOutNotificationMethods: [
-              'item/agentMessage/delta',
               'item/agentReasoning/delta',
-              'item/execCommandOutputDelta',
             ],
           },
         },
@@ -114,6 +123,8 @@ export class CodexAppServerProcessFactory implements WorkerCodexAppServerSession
   private createSession(child: ChildProcessWithoutNullStreams): WorkerCodexAppServerSession {
     const pending = new Map<number, PendingRequest>();
     const listeners = new Set<(notification: CodexAppServerNotification) => void>();
+    const requestListeners = new Set<(request: CodexAppServerRequest) => void>();
+    const pendingServerRequests = new Map<number | string, CodexAppServerRequest>();
     const closeListeners = new Set<(event: CodexAppServerSessionClosed) => void>();
     const reader = readline.createInterface({ input: child.stdout });
     let requestId = 0;
@@ -154,12 +165,12 @@ export class CodexAppServerProcessFactory implements WorkerCodexAppServerSession
         method: message.method!,
         params: message.params,
       };
+      if (this.options.onServerRequest === undefined) {
+        pendingServerRequests.set(request.id, request);
+        for (const listener of requestListeners) listener(request);
+        return;
+      }
       try {
-        if (this.options.onServerRequest === undefined) {
-          throw new Error(
-            'Owner approval or input is required, but no local handler is configured'
-          );
-        }
         send({ id: request.id, result: await this.options.onServerRequest(request) });
       } catch (error) {
         send({
@@ -176,7 +187,10 @@ export class CodexAppServerProcessFactory implements WorkerCodexAppServerSession
       } catch {
         return;
       }
-      if (typeof message.id === 'number' && typeof message.method === 'string') {
+      if (
+        (typeof message.id === 'number' || typeof message.id === 'string') &&
+        typeof message.method === 'string'
+      ) {
         void handleServerRequest(message);
         return;
       }
@@ -244,6 +258,17 @@ export class CodexAppServerProcessFactory implements WorkerCodexAppServerSession
         listeners.add(listener);
         return () => listeners.delete(listener);
       },
+      onRequest: (listener) => {
+        requestListeners.add(listener);
+        for (const request of pendingServerRequests.values()) queueMicrotask(() => listener(request));
+        return () => requestListeners.delete(listener);
+      },
+      respondToRequest: (id, result) => {
+        if (!pendingServerRequests.delete(id)) {
+          throw new Error(`Codex app-server request ${id} is not pending`);
+        }
+        send({ id, result });
+      },
       onClose: (listener) => {
         if (unexpectedClose !== undefined) {
           const event = unexpectedClose;
@@ -257,6 +282,7 @@ export class CodexAppServerProcessFactory implements WorkerCodexAppServerSession
         if (closed) return;
         closed = true;
         rejectAll(new Error('Codex app-server session closed'));
+        pendingServerRequests.clear();
         reader.close();
         child.stdin.end();
         if (child.exitCode === null && child.signalCode === null) {

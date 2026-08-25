@@ -1,4 +1,5 @@
-import { readFile } from 'node:fs/promises';
+import { lstat, readFile, stat } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import {
   readCodexMcpRegistrationState,
@@ -9,6 +10,13 @@ import type { AgentTeamsWorkerStatus } from './workerDaemon';
 
 export interface WorkerDiagnosticReport {
   readonly ok: boolean;
+  readonly codexRuntime: {
+    readonly homePath: string;
+    readonly state: 'ready' | 'missing' | 'invalid';
+    readonly private: boolean;
+    readonly authJsonPresent: boolean;
+    readonly error?: string;
+  };
   readonly codexMcp: {
     readonly configPath: string;
     readonly state: CodexMcpRegistrationState;
@@ -24,12 +32,56 @@ export interface WorkerDiagnosticReport {
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
+const inspectCodexRuntimeHome = async (
+  homePath: string
+): Promise<WorkerDiagnosticReport['codexRuntime']> => {
+  try {
+    const homeStat = await lstat(homePath);
+    const isPrivate = process.platform === 'win32' || (homeStat.mode & 0o077) === 0;
+    if (!homeStat.isDirectory() || homeStat.isSymbolicLink() || !isPrivate) {
+      return {
+        homePath,
+        state: 'invalid',
+        private: isPrivate,
+        authJsonPresent: false,
+        error: 'Worker Codex home must be a private, non-symbolic-link directory',
+      };
+    }
+
+    let authJsonPresent = false;
+    try {
+      authJsonPresent = (await stat(join(homePath, 'auth.json'))).isFile();
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    return { homePath, state: 'ready', private: true, authJsonPresent };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return {
+        homePath,
+        state: 'missing',
+        private: false,
+        authJsonPresent: false,
+      };
+    }
+    return {
+      homePath,
+      state: 'invalid',
+      private: false,
+      authJsonPresent: false,
+      error: errorMessage(error),
+    };
+  }
+};
+
 export const diagnoseAgentTeamsWorker = async (input: {
   readonly codexConfigPath: string;
   readonly statusPath: string;
   readonly controlSocketPath: string;
+  readonly codexHomePath: string;
 }): Promise<WorkerDiagnosticReport> => {
   const codexState = await readCodexMcpRegistrationState(input.codexConfigPath);
+  const codexRuntime = await inspectCodexRuntimeHome(input.codexHomePath);
   let persistedStatus: WorkerDiagnosticReport['persistedStatus'];
   try {
     persistedStatus = {
@@ -60,6 +112,7 @@ export const diagnoseAgentTeamsWorker = async (input: {
 
   return {
     ok: codexState.status === 'managed' && controlSocket.reachable,
+    codexRuntime,
     codexMcp: { configPath: input.codexConfigPath, state: codexState },
     persistedStatus,
     controlSocket,

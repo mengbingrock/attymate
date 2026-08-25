@@ -60,6 +60,7 @@ const TAB_ICONS = {
   schedules: Calendar,
   graph: Network,
   'token-usage': Gauge,
+  'distributed-team': Network,
   matter: Scale,
 } as const;
 

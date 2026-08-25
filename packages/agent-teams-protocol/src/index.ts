@@ -3,5 +3,6 @@ export * from './envelopes';
 export * from './ids';
 export * from './mcpCapabilities';
 export * from './relayMessages';
+export * from './runtimeSession';
 export * from './sessionContext';
 export * from './teamMessaging';

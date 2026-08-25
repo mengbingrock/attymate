@@ -49,7 +49,7 @@ export interface WorkerAgentContextProjection {
   readonly protocolVersion: 2;
   readonly coordinationMode: 'lan_relay_v2';
   readonly profile: 'agent-teams-control';
-  readonly insecureLanMode: true;
+  readonly insecureLanMode: boolean;
   readonly organizationId: AgentTeamsWorkerStatus['organizationId'];
   readonly personId: AgentTeamsWorkerStatus['personId'];
   readonly nodeId: AgentTeamsWorkerStatus['nodeId'];
@@ -175,7 +175,7 @@ const handleControlRequest = async (
       protocolVersion: 2,
       coordinationMode: 'lan_relay_v2',
       profile: 'agent-teams-control',
-      insecureLanMode: true,
+      insecureLanMode: status.insecureLanMode,
       organizationId: status.organizationId,
       personId: status.personId,
       nodeId: status.nodeId,

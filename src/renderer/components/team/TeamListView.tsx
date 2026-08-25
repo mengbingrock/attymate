@@ -1,5 +1,10 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 
+import {
+  buildDistributedTeamSummaries,
+  DistributedTeamsSection,
+  useDistributedAgentTeams,
+} from '@features/distributed-agent-teams/renderer';
 import { useAppTranslation } from '@features/localization/renderer';
 import { recordRecentProjectOpenPaths } from '@features/recent-projects/renderer';
 import { classifyAnalyticsError, recordTeamStop } from '@renderer/analytics/productAnalytics';
@@ -536,6 +541,8 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
     teamsError,
     fetchTeams,
     openTab,
+    getAllPaneTabs,
+    setActiveTab,
     openTeamTab,
     deleteTeam,
     restoreTeam,
@@ -557,6 +564,8 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
       teamsError: s.teamsError,
       fetchTeams: s.fetchTeams,
       openTab: s.openTab,
+      getAllPaneTabs: s.getAllPaneTabs,
+      setActiveTab: s.setActiveTab,
       openTeamTab: s.openTeamTab,
       deleteTeam: s.deleteTeam,
       restoreTeam: s.restoreTeam,
@@ -595,6 +604,12 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
     }))
   );
   const canCreate = electronMode && connectionMode === 'local';
+  const distributedState = useDistributedAgentTeams(electronMode);
+  const distributedTeams = useMemo(
+    () =>
+      buildDistributedTeamSummaries(distributedState.topology, distributedState.assignmentEvents),
+    [distributedState.assignmentEvents, distributedState.topology]
+  );
   const provisioningState = useMemo(
     () => ({ currentProvisioningRunIdByTeam, provisioningRuns }),
     [currentProvisioningRunIdByTeam, provisioningRuns]
@@ -786,6 +801,30 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
     leadActivityByTeam,
   ]);
 
+  const filteredDistributedTeams = useMemo(() => {
+    let result = distributedTeams;
+    const query = searchQuery.trim().toLowerCase();
+    if (query) {
+      result = result.filter(
+        (team) =>
+          team.teamId.toLowerCase().includes(query) ||
+          team.displayName.toLowerCase().includes(query) ||
+          team.workers.some((worker) => worker.label.toLowerCase().includes(query))
+      );
+    }
+
+    if (filter.selectedStatuses.size > 0) {
+      result = result.filter((team) => {
+        const running = team.connectedWorkerCount > 0;
+        return running
+          ? filter.selectedStatuses.has('running')
+          : filter.selectedStatuses.has('offline');
+      });
+    }
+
+    return result;
+  }, [distributedTeams, filter.selectedStatuses, searchQuery]);
+
   const handleProjectSelectionChange = useCallback(
     (projectPath: string | null): void => {
       useStore.setState({ teamsProjectNavigationIntent: null });
@@ -812,6 +851,27 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
       recordRecentProjectOpenPaths([projectPath]);
     },
     [projects, repositoryGroups]
+  );
+
+  const handleOpenDistributedTeam = useCallback(
+    (teamId: string): void => {
+      const existing = getAllPaneTabs().find(
+        (tab) => tab.type === 'team' && tab.distributedTeamId === teamId
+      );
+      if (existing) {
+        setActiveTab(existing.id);
+        return;
+      }
+
+      const team = distributedTeams.find((candidate) => candidate.teamId === teamId);
+      openTab({
+        type: 'team',
+        teamName: `distributed:${teamId}`,
+        distributedTeamId: teamId,
+        label: team?.displayName ?? 'Distributed Team',
+      });
+    },
+    [distributedTeams, getAllPaneTabs, openTab, setActiveTab]
   );
 
   // Fetch branches once for all visible team project paths (no live polling)
@@ -1237,7 +1297,7 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
         <p className="mt-2 text-xs text-[var(--color-text-muted)]">{t('list.localOnly')}</p>
       ) : null}
 
-      {teamsWithProvisioning.length > 0 ? (
+      {teamsWithProvisioning.length > 0 || distributedTeams.length > 0 ? (
         <div className="mt-3 flex items-center gap-2">
           <div className="relative flex-1">
             <Search
@@ -1266,7 +1326,7 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
   );
 
   const renderContent = (): React.JSX.Element => {
-    if (teamsLoading) {
+    if (teamsLoading || (distributedState.loading && teamsWithProvisioning.length === 0)) {
       return (
         <div className="flex size-full items-center justify-center text-sm text-[var(--color-text-muted)]">
           {t('list.loading')}
@@ -1274,7 +1334,7 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
       );
     }
 
-    if (teamsError) {
+    if (teamsError && distributedTeams.length === 0) {
       return (
         <div className="flex size-full items-center justify-center p-6">
           <div className="text-center">
@@ -1295,7 +1355,7 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
       );
     }
 
-    if (teamsWithProvisioning.length === 0) {
+    if (teamsWithProvisioning.length === 0 && distributedTeams.length === 0) {
       return (
         <TeamEmptyState
           canCreate={canCreate}
@@ -1306,7 +1366,11 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
     }
 
     const hasActiveFilters = filter.selectedStatuses.size > 0;
-    if (filteredTeams.length === 0 && (searchQuery.trim() || hasActiveFilters)) {
+    if (
+      filteredTeams.length === 0 &&
+      filteredDistributedTeams.length === 0 &&
+      (searchQuery.trim() || hasActiveFilters)
+    ) {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-[var(--color-text-muted)]">
           {t('list.noMatches')}
@@ -1342,18 +1406,27 @@ export const TeamListView = memo(function TeamListView(): React.JSX.Element {
             ),
           },
         ].filter((section) => section.teams.length > 0)
-      : [
-          {
-            key: 'all',
-            title: null,
-            teams: activeFiltered,
-          },
-        ];
+      : activeFiltered.length > 0
+        ? [
+            {
+              key: 'all',
+              title: null,
+              teams: activeFiltered,
+            },
+          ]
+        : [];
 
     return (
       <>
+        <DistributedTeamsSection
+          teams={filteredDistributedTeams}
+          onOpenTeam={handleOpenDistributedTeam}
+        />
         {activeSections.map((section, sectionIndex) => (
-          <section key={section.key} className={sectionIndex > 0 ? 'mt-6' : undefined}>
+          <section
+            key={section.key}
+            className={sectionIndex > 0 || filteredDistributedTeams.length > 0 ? 'mt-6' : undefined}
+          >
             {(() => {
               const paged =
                 shouldPageTeamSections && section.teams.length > TEAM_SECTION_INITIAL_VISIBLE_COUNT;

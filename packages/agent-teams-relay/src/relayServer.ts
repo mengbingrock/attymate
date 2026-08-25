@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -7,8 +7,12 @@ import {
   assignmentStateChangedPayloadSchema,
   commandEnvelopeSchema,
   commandIdSchema,
+  runtimeControlSchema,
+  runtimeSessionCreateRequestSchema,
+  runtimeSessionIdSchema,
   teamMessageDeliveryPayloadSchema,
   teamMessageEventPayloadSchema,
+  workerRuntimeEventMessageSchema,
   workerEventMessageSchema,
   workerCommandAckMessageSchema,
   workerHeartbeatMessageSchema,
@@ -28,6 +32,10 @@ import {
   RelayMembershipRouteStore,
   type RelayMembershipRoute,
 } from './relayMembershipRouteStore';
+import {
+  RelayRuntimeSessionAuthorizationError,
+  RelayRuntimeSessionStore,
+} from './relayRuntimeSessionStore';
 
 export interface AgentTeamsRelayOptions {
   readonly host: string;
@@ -37,6 +45,10 @@ export interface AgentTeamsRelayOptions {
   readonly staleAfterMs?: number;
   readonly leaseDurationMs?: number;
   readonly logger?: boolean;
+  readonly auth?: {
+    readonly managerToken: string;
+    readonly workerToken: string;
+  };
 }
 
 export interface ConnectedWorkerProjection {
@@ -49,6 +61,9 @@ export interface ConnectedWorkerProjection {
   readonly connectedAt: string;
   readonly lastHeartbeatAt: string;
   readonly lastHeartbeatSequence: number;
+  readonly runtimeCapabilities: NonNullable<
+    ReturnType<typeof workerHelloMessageSchema.parse>['runtimeCapabilities']
+  >;
   readonly status: 'connected' | 'stale';
 }
 
@@ -76,6 +91,27 @@ export interface StartedAgentTeamsRelay {
 
 const parseJsonMessage = (data: RawData): unknown => JSON.parse(data.toString('utf8'));
 
+const normalizeToken = (value: string, label: string): string => {
+  const token = value.trim();
+  if (token.length < 32 || token.length > 512) {
+    throw new TypeError(`${label} must contain 32-512 characters`);
+  }
+  return token;
+};
+
+const tokenMatches = (authorization: string | undefined, expected: string): boolean => {
+  if (authorization === undefined || !authorization.startsWith('Bearer ')) return false;
+  const supplied = Buffer.from(authorization.slice('Bearer '.length), 'utf8');
+  const required = Buffer.from(expected, 'utf8');
+  return supplied.length === required.length && timingSafeEqual(supplied, required);
+};
+
+const bearerValue = (authorization: string | undefined): string | undefined =>
+  authorization?.startsWith('Bearer ') ? authorization.slice('Bearer '.length) : undefined;
+
+const isRuntimeCapabilityPath = (url: string): boolean =>
+  /^\/v2\/runtime-sessions\/[^/?]+\/(events|controls)(?:[?]|$)/.test(url);
+
 const peerDeliveryCommandId = (eventId: string, recipientMembershipId: string): string => {
   const bytes = createHash('sha256')
     .update(`agent-teams-peer-delivery:${eventId}:${recipientMembershipId}`)
@@ -100,6 +136,28 @@ export const startAgentTeamsRelay = async (
   const eventStore = new RelayEventStore(options.dataDir);
   const leaseStore = new RelayLeaseStore(options.dataDir, options.leaseDurationMs);
   const membershipRouteStore = new RelayMembershipRouteStore(options.dataDir);
+  const runtimeSessionStore = new RelayRuntimeSessionStore();
+  const auth =
+    options.auth === undefined
+      ? undefined
+      : {
+          managerToken: normalizeToken(options.auth.managerToken, 'managerToken'),
+          workerToken: normalizeToken(options.auth.workerToken, 'workerToken'),
+        };
+  const insecureLanMode = auth === undefined;
+
+  app.addHook('onRequest', async (request, reply) => {
+    if (
+      !request.url.startsWith('/v2/') ||
+      isRuntimeCapabilityPath(request.url) ||
+      auth === undefined
+    ) {
+      return;
+    }
+    if (!tokenMatches(request.headers.authorization, auth.managerToken)) {
+      await reply.code(401).send({ error: 'manager_authentication_required' });
+    }
+  });
 
   const sendCommand = (session: MutableWorkerSession, record: RelayCommandRecord): void => {
     session.socket.send(
@@ -291,6 +349,7 @@ export const startAgentTeamsRelay = async (
           connectedAt: session.connectedAt,
           lastHeartbeatAt: session.lastHeartbeatAt,
           lastHeartbeatSequence: session.lastHeartbeatSequence,
+          runtimeCapabilities: session.hello.runtimeCapabilities ?? [],
           status: now - Date.parse(session.lastHeartbeatAt) <= staleAfterMs ? 'connected' : 'stale',
         })
       )
@@ -309,11 +368,11 @@ export const startAgentTeamsRelay = async (
     ok: true,
     service: 'agent-teams-relay',
     protocolVersion: 2,
-    insecureLanMode: true,
+    insecureLanMode,
   }));
   app.get('/ready', async () => ({ ok: true }));
   app.get('/v2/workers', async () => ({
-    insecureLanMode: true,
+    insecureLanMode,
     workers: listWorkers(),
   }));
   app.get('/v2/commands', async () => ({ commands: commandStore.listAll() }));
@@ -331,10 +390,139 @@ export const startAgentTeamsRelay = async (
     const command = enqueueCommand(request.body);
     return reply.code(201).send({ command });
   });
+  app.post('/v2/runtime-sessions', async (request, reply) => {
+    if (auth === undefined) {
+      return reply.code(409).send({ error: 'authenticated_runtime_sessions_required' });
+    }
+    const requested = runtimeSessionCreateRequestSchema.parse(request.body);
+    leaseStore.expireThrough();
+    const lease = leaseStore
+      .listAll()
+      .find(
+        (candidate) =>
+          candidate.teamId === requested.teamId &&
+          candidate.nodeId === requested.nodeId &&
+          candidate.assignmentId === requested.assignmentId &&
+          candidate.attemptId === requested.attemptId &&
+          candidate.leaseEpoch === requested.leaseEpoch &&
+          ['granted', 'active'].includes(candidate.status)
+      );
+    const workerSession = sessions.get(requested.nodeId);
+    if (
+      lease === undefined ||
+      workerSession === undefined ||
+      !workerSession.hello.runtimeCapabilities?.includes('events.read')
+    ) {
+      return reply.code(409).send({ error: 'runtime_lease_not_active' });
+    }
+    const created = runtimeSessionStore.create(
+      { ...requested, leaseId: lease.leaseId },
+      lease.expiresAt,
+      workerSession.hello.runtimeCapabilities
+    );
+    workerSession.socket.send(
+      JSON.stringify({
+        type: 'relay.runtime_control',
+        protocolVersion: 2,
+        sessionId: created.sessionId,
+        scope: created.scope,
+        control: {
+          controlId: randomUUID(),
+          type: 'runtime.snapshot',
+          payload: {},
+        },
+      })
+    );
+    return reply.code(201).send(created);
+  });
+  app.get('/v2/runtime-sessions/:sessionId/events', async (request, reply) => {
+    try {
+      const sessionId = runtimeSessionIdSchema.parse(
+        (request.params as { sessionId?: unknown }).sessionId
+      );
+      const token = bearerValue(request.headers.authorization);
+      if (token === undefined) throw new RelayRuntimeSessionAuthorizationError();
+      const scope = runtimeSessionStore.authorizeRead(sessionId, token);
+      leaseStore.expireThrough();
+      const readableLease = leaseStore
+        .listAll()
+        .some(
+          (lease) =>
+            lease.assignmentId === scope.assignmentId &&
+            lease.attemptId === scope.attemptId &&
+            lease.leaseId === scope.leaseId &&
+            lease.leaseEpoch === scope.leaseEpoch &&
+            lease.nodeId === scope.nodeId &&
+            lease.teamId === scope.teamId &&
+            ['granted', 'active'].includes(lease.status)
+        );
+      if (!readableLease) {
+        runtimeSessionStore.revokeScope(scope);
+        throw new RelayRuntimeSessionAuthorizationError();
+      }
+      const rawAfter = (request.query as { after?: unknown }).after ?? '0';
+      const after = typeof rawAfter === 'string' && /^\d+$/.test(rawAfter) ? Number(rawAfter) : NaN;
+      return runtimeSessionStore.listEvents(sessionId, token, after);
+    } catch (error) {
+      if (error instanceof RelayRuntimeSessionAuthorizationError) {
+        return reply.code(401).send({ error: error.code });
+      }
+      throw error;
+    }
+  });
+  app.post('/v2/runtime-sessions/:sessionId/controls', async (request, reply) => {
+    try {
+      const sessionId = runtimeSessionIdSchema.parse(
+        (request.params as { sessionId?: unknown }).sessionId
+      );
+      const token = bearerValue(request.headers.authorization);
+      if (token === undefined) throw new RelayRuntimeSessionAuthorizationError();
+      const control = runtimeControlSchema.parse(request.body);
+      const scope = runtimeSessionStore.authorizeControl(sessionId, token, control);
+      leaseStore.expireThrough();
+      const currentLease = leaseStore
+        .listAll()
+        .find(
+          (lease) =>
+            lease.assignmentId === scope.assignmentId &&
+            lease.attemptId === scope.attemptId &&
+            lease.leaseId === scope.leaseId &&
+            lease.leaseEpoch === scope.leaseEpoch &&
+            lease.nodeId === scope.nodeId &&
+            lease.teamId === scope.teamId &&
+            ['granted', 'active'].includes(lease.status)
+        );
+      const workerSession = sessions.get(scope.nodeId);
+      if (currentLease === undefined || workerSession === undefined) {
+        runtimeSessionStore.revokeScope(scope);
+        return reply.code(409).send({ error: 'runtime_lease_not_active' });
+      }
+      workerSession.socket.send(
+        JSON.stringify({
+          type: 'relay.runtime_control',
+          protocolVersion: 2,
+          sessionId,
+          scope,
+          control,
+        })
+      );
+      return reply.code(202).send({ accepted: true, controlId: control.controlId });
+    } catch (error) {
+      if (error instanceof RelayRuntimeSessionAuthorizationError) {
+        return reply.code(401).send({ error: error.code });
+      }
+      throw error;
+    }
+  });
 
   app.server.on('upgrade', (request, socket, head) => {
     const requestUrl = new URL(request.url ?? '/', 'http://relay.local');
     if (requestUrl.pathname !== '/v2/worker-stream') {
+      socket.destroy();
+      return;
+    }
+    if (auth !== undefined && !tokenMatches(request.headers.authorization, auth.workerToken)) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
       socket.destroy();
       return;
     }
@@ -371,7 +559,7 @@ export const startAgentTeamsRelay = async (
             JSON.stringify({
               type: 'relay.welcome',
               protocolVersion: 2,
-              insecureLanMode: true,
+              insecureLanMode,
               heartbeatIntervalMs,
               connectedAt,
             })
@@ -409,6 +597,33 @@ export const startAgentTeamsRelay = async (
             acknowledgement.status,
             acknowledgement.error
           );
+          return;
+        }
+        if (inputType === 'worker.runtime_event') {
+          const message = workerRuntimeEventMessageSchema.parse(input);
+          if (message.scope.nodeId !== boundNodeId) {
+            socket.close(4008, 'Runtime event node does not match the current session');
+            return;
+          }
+          leaseStore.expireThrough();
+          const currentLease = leaseStore
+            .listAll()
+            .find(
+              (lease) =>
+                lease.assignmentId === message.scope.assignmentId &&
+                lease.attemptId === message.scope.attemptId &&
+                lease.leaseId === message.scope.leaseId &&
+                lease.leaseEpoch === message.scope.leaseEpoch &&
+                lease.nodeId === boundNodeId &&
+                lease.teamId === message.scope.teamId &&
+                ['granted', 'active'].includes(lease.status)
+            );
+          if (currentLease === undefined) {
+            runtimeSessionStore.revokeScope(message.scope);
+            socket.close(4009, 'Runtime event does not match an active execution lease');
+            return;
+          }
+          runtimeSessionStore.acceptEvent(message);
           return;
         }
         if (inputType === 'worker.event') {

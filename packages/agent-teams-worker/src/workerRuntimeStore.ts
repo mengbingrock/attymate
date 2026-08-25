@@ -191,6 +191,35 @@ export class WorkerRuntimeStore {
     return this.require(attemptId);
   }
 
+  continueTurn(
+    attemptIdInput: string,
+    turnIdInput: string,
+    appServerGeneration: number
+  ): WorkerRuntimeBinding {
+    const attemptId = attemptIdSchema.parse(attemptIdInput);
+    const turnId = validateRuntimeId(turnIdInput, 'turnId');
+    if (!Number.isInteger(appServerGeneration) || appServerGeneration <= 0) {
+      throw new TypeError('appServerGeneration must be a positive integer');
+    }
+    const result = this.database
+      .prepare(
+        `UPDATE runtime_bindings
+         SET turn_id = ?, app_server_generation = ?, state = 'active',
+             turn_status = 'inProgress', error = NULL, updated_at = ?
+         WHERE attempt_id = ? AND state = 'completed' AND thread_id IS NOT NULL`
+      )
+      .run(
+        turnId,
+        appServerGeneration,
+        new Date().toISOString(),
+        attemptId
+      );
+    if (result.changes !== 1) {
+      throw new Error(`Runtime attempt ${attemptId} is not ready for a continuation turn`);
+    }
+    return this.require(attemptId);
+  }
+
   markRecovering(
     attemptIdInput: string,
     appServerGeneration: number

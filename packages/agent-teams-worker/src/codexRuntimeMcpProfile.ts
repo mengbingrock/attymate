@@ -19,17 +19,30 @@ export const readConfiguredMcpServerNames = (response: unknown): readonly string
   return Object.keys(servers).sort();
 };
 
+export const readConfiguredPluginNames = (response: unknown): readonly string[] => {
+  if (typeof response !== 'object' || response === null || Array.isArray(response)) return [];
+  const config = (response as Record<string, unknown>).config;
+  if (typeof config !== 'object' || config === null || Array.isArray(config)) return [];
+  const plugins = (config as Record<string, unknown>).plugins;
+  if (typeof plugins !== 'object' || plugins === null || Array.isArray(plugins)) return [];
+  return Object.keys(plugins).sort();
+};
+
 export const buildRestrictedRuntimeMcpConfig = (
   spec: CodexRuntimeMcpLaunchSpec,
   token: string,
-  configuredServerNames: readonly string[]
+  configuredServerNames: readonly string[],
+  configuredPluginNames: readonly string[] = []
 ): Readonly<Record<string, unknown>> => {
   const disabled = Object.fromEntries(
-    [...new Set([...configuredServerNames, OWNER_CONTROL_MCP_SERVER_NAME])]
+    [...new Set(configuredServerNames)]
       .filter((name) => name !== RUNTIME_MCP_SERVER_NAME)
       .map((name) => [name, { enabled: false }])
   );
   return {
+    plugins: Object.fromEntries(
+      [...new Set(configuredPluginNames)].map((name) => [name, { enabled: false }])
+    ),
     mcp_servers: {
       ...disabled,
       [RUNTIME_MCP_SERVER_NAME]: {
@@ -44,7 +57,7 @@ export const buildRestrictedRuntimeMcpConfig = (
         required: true,
         startup_timeout_sec: 10,
         tool_timeout_sec: 30,
-        default_tools_approval_mode: 'auto',
+        default_tools_approval_mode: 'approve',
         enabled_tools: [...RUNTIME_BRIDGE_TOOL_NAMES],
       },
     },
@@ -66,11 +79,28 @@ export const assertRestrictedRuntimeMcpInventory = (response: unknown): void => 
     }
     return entry as Record<string, unknown>;
   });
-  const names = servers.map(({ name }) => name).sort();
-  if (names.length !== 1 || names[0] !== RUNTIME_MCP_SERVER_NAME) {
-    throw new Error(`Codex runtime MCP inventory leaked servers: ${names.join(', ') || '(none)'}`);
+  const runtimeServers = servers.filter(({ name }) => name === RUNTIME_MCP_SERVER_NAME);
+  if (runtimeServers.length !== 1) {
+    throw new Error(`Codex runtime MCP inventory is missing ${RUNTIME_MCP_SERVER_NAME}`);
   }
-  const tools = servers[0]?.tools;
+  const leakedServers = servers.filter((server) => {
+    if (server.name === RUNTIME_MCP_SERVER_NAME) return false;
+    return (
+      typeof server.tools !== 'object' ||
+      server.tools === null ||
+      Array.isArray(server.tools) ||
+      Object.keys(server.tools).length > 0
+    );
+  });
+  if (leakedServers.length > 0) {
+    throw new Error(
+      `Codex runtime MCP inventory leaked capabilities: ${leakedServers
+        .map(({ name }) => String(name))
+        .sort()
+        .join(', ')}`
+    );
+  }
+  const tools = runtimeServers[0]?.tools;
   if (typeof tools !== 'object' || tools === null || Array.isArray(tools)) {
     throw new Error('Codex runtime MCP inventory is missing tools');
   }

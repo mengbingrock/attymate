@@ -61,6 +61,8 @@ class MessagingCodexSession implements WorkerCodexAppServerSession {
   onNotification = (
     _listener: (notification: CodexAppServerNotification) => void
   ): (() => void) => () => undefined;
+  onRequest = (): (() => void) => () => undefined;
+  respondToRequest = (): void => undefined;
   onClose = (
     _listener: (event: CodexAppServerSessionClosed) => void
   ): (() => void) => () => undefined;

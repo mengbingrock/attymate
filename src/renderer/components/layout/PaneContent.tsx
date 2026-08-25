@@ -79,6 +79,16 @@ const MatterDashboardView = lazy(() =>
     default: module.MatterDashboardView,
   }))
 );
+const DistributedAgentTeamsScreen = lazy(() =>
+  import('@features/distributed-agent-teams/renderer').then((module) => ({
+    default: module.DistributedAgentTeamsScreen,
+  }))
+);
+const DistributedTeamDetailScreen = lazy(() =>
+  import('@features/distributed-agent-teams/renderer').then((module) => ({
+    default: module.DistributedTeamDetailScreen,
+  }))
+);
 
 interface PaneContentProps {
   pane: Pane;
@@ -174,11 +184,15 @@ const PaneTabSlot = ({ tab, isActive, isPaneFocused }: PaneTabSlotProps): React.
           )}
           {tab.type === 'team' && (
             <TabUIProvider tabId={tab.id}>
-              <TeamDetailView
-                teamName={tab.teamName ?? ''}
-                isActive={isActive}
-                isPaneFocused={isPaneFocused}
-              />
+              {tab.distributedTeamId ? (
+                <DistributedTeamDetailScreen teamId={tab.distributedTeamId} isActive={isActive} />
+              ) : (
+                <TeamDetailView
+                  teamName={tab.teamName ?? ''}
+                  isActive={isActive}
+                  isPaneFocused={isPaneFocused}
+                />
+              )}
             </TabUIProvider>
           )}
           {tab.type === 'session' && (
@@ -194,6 +208,7 @@ const PaneTabSlot = ({ tab, isActive, isPaneFocused }: PaneTabSlotProps): React.
           )}
           {tab.type === 'schedules' && <SchedulesView />}
           {tab.type === 'token-usage' && <TokenUsageDashboard initialTeamName={tab.teamName} />}
+          {tab.type === 'distributed-team' && <DistributedAgentTeamsScreen isActive={isActive} />}
           {tab.type === 'matter' && (
             <div className="size-full overflow-auto p-4">
               <MatterDashboardView teamName={tab.teamName} />

@@ -2,6 +2,7 @@ import {
   assertRestrictedRuntimeMcpInventory,
   buildRestrictedRuntimeMcpConfig,
   readConfiguredMcpServerNames,
+  readConfiguredPluginNames,
   RUNTIME_BRIDGE_TOOL_NAMES,
 } from '@claude-teams/agent-teams-worker';
 import { describe, expect, it } from 'vitest';
@@ -16,13 +17,26 @@ describe('Codex runtime MCP profile', () => {
         },
       },
     });
+    const plugins = readConfiguredPluginNames({
+      config: {
+        plugins: {
+          'browser@openai-bundled': { enabled: true },
+          'documents@openai-primary-runtime': { enabled: true },
+        },
+      },
+    });
     const config = buildRestrictedRuntimeMcpConfig(
       { command: '/usr/bin/node', args: ['/worker/runtimeMcpCli.js', '--socket', '/tmp/w.sock'] },
       'secret-token',
-      configured
+      configured,
+      plugins
     );
 
     expect(config).toEqual({
+      plugins: {
+        'browser@openai-bundled': { enabled: false },
+        'documents@openai-primary-runtime': { enabled: false },
+      },
       mcp_servers: {
         'agent-teams-control': { enabled: false },
         github: { enabled: false },
@@ -30,7 +44,26 @@ describe('Codex runtime MCP profile', () => {
           command: '/usr/bin/node',
           required: true,
           enabled_tools: RUNTIME_BRIDGE_TOOL_NAMES,
+          default_tools_approval_mode: 'approve',
           env: { AGENT_TEAMS_RUNTIME_SESSION_TOKEN: 'secret-token' },
+        }),
+      },
+    });
+  });
+
+  it('does not invent an incomplete owner-control server when none is configured', () => {
+    const config = buildRestrictedRuntimeMcpConfig(
+      { command: '/usr/bin/node', args: ['/worker/runtimeMcpCli.js', '--socket', '/tmp/w.sock'] },
+      'secret-token',
+      []
+    );
+
+    expect(config).toEqual({
+      plugins: {},
+      mcp_servers: {
+        'agent-teams-runtime': expect.objectContaining({
+          command: '/usr/bin/node',
+          required: true,
         }),
       },
     });
@@ -46,10 +79,27 @@ describe('Codex runtime MCP profile', () => {
     ).not.toThrow();
     expect(() =>
       assertRestrictedRuntimeMcpInventory({
-        data: [runtime, { name: 'github', tools: {} }],
+        data: [
+          runtime,
+          { name: 'github', tools: {}, resources: [], resourceTemplates: [] },
+        ],
         nextCursor: null,
       })
-    ).toThrow('leaked servers');
+    ).not.toThrow();
+    expect(() =>
+      assertRestrictedRuntimeMcpInventory({
+        data: [
+          runtime,
+          {
+            name: 'github',
+            tools: { issue_write: {} },
+            resources: [],
+            resourceTemplates: [],
+          },
+        ],
+        nextCursor: null,
+      })
+    ).toThrow('leaked capabilities');
     expect(() =>
       assertRestrictedRuntimeMcpInventory({
         data: [{ ...runtime, tools: { ...runtime.tools, approval_respond: {} } }],

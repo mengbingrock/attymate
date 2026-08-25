@@ -502,6 +502,10 @@ export class WorkerAssignmentStore {
     return this.transitionRuntime(identity, 'running', 'verifying', 'codex_turn_completed');
   }
 
+  markRuntimeContinued(identity: ExecutionLeaseIdentity): WorkerAssignment | undefined {
+    return this.transitionRuntime(identity, 'verifying', 'running', 'codex_turn_continued');
+  }
+
   markRuntimeFailed(
     identity: ExecutionLeaseIdentity,
     reason: string

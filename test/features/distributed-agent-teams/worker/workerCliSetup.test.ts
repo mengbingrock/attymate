@@ -55,7 +55,8 @@ describe('agent-teams-worker setup CLI', () => {
         '--control-socket',
         socketPath,
       ])
-    ) as { codexMcp: { state: { status: string } } };
+    ) as { codexHome: string; codexMcp: { state: { status: string } } };
+    expect(statusOutput.codexHome).toBe(join(dataDir, 'codex-home'));
     expect(statusOutput.codexMcp.state.status).toBe('managed');
 
     const removeOutput = JSON.parse(

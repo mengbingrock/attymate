@@ -27,6 +27,16 @@ export const assignmentOfferPayloadSchema = z
 
 export type AssignmentOfferPayload = z.infer<typeof assignmentOfferPayloadSchema>;
 
+export const assignmentAcceptPayloadSchema = z
+  .object({
+    assignmentId: assignmentIdSchema,
+    expectedRevision: z.number().int().nonnegative(),
+    reason: z.string().trim().min(1).max(2_000),
+  })
+  .strict();
+
+export type AssignmentAcceptPayload = z.infer<typeof assignmentAcceptPayloadSchema>;
+
 export const assignmentLeaseGrantPayloadSchema = z
   .object({
     leaseId: leaseIdSchema,

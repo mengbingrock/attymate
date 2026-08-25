@@ -477,8 +477,27 @@ export class HttpAPIClient implements ElectronAPI {
       degraded: true,
       warning: 'Distributed Agent Teams is only available in the desktop app',
     }),
+    getDebugSnapshot: async () => ({
+      relayUrl: '',
+      commands: [],
+      events: [],
+      leases: [],
+      membershipRoutes: [],
+      fetchedAt: new Date().toISOString(),
+      degraded: true,
+      warning: 'Distributed Agent Teams is only available in the desktop app',
+    }),
+    getRuntimeSession: async () => {
+      throw new Error('Remote runtime sessions are only available in the desktop app');
+    },
+    sendRuntimeControl: async () => {
+      throw new Error('Remote runtime controls are only available in the desktop app');
+    },
     createRemoteAssignment: async () => {
       throw new Error('Remote assignments are only available in the desktop app');
+    },
+    startTeam: async () => {
+      throw new Error('Distributed team start is only available in the desktop app');
     },
   };
 
