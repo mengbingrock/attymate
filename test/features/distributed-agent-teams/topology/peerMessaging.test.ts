@@ -28,6 +28,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 class MessagingCodexSession implements WorkerCodexAppServerSession {
   readonly requests: Array<{ method: string; params: unknown }> = [];
+  readonly notificationListeners = new Set<
+    (notification: CodexAppServerNotification) => void
+  >();
+  private turnStartCount = 0;
 
   request = async <T>(method: string, params?: unknown): Promise<T> => {
     this.requests.push({ method, params });
@@ -47,8 +51,15 @@ class MessagingCodexSession implements WorkerCodexAppServerSession {
       } as T;
     }
     if (method === 'turn/start') {
+      this.turnStartCount += 1;
       return {
-        turn: { id: '00000000-0000-7000-8000-000000000042', status: 'inProgress' },
+        turn: {
+          id:
+            this.turnStartCount === 1
+              ? '00000000-0000-7000-8000-000000000042'
+              : '00000000-0000-7000-8000-000000000043',
+          status: 'inProgress',
+        },
       } as T;
     }
     if (method === 'turn/steer') {
@@ -59,14 +70,21 @@ class MessagingCodexSession implements WorkerCodexAppServerSession {
 
   notify = (): void => undefined;
   onNotification = (
-    _listener: (notification: CodexAppServerNotification) => void
-  ): (() => void) => () => undefined;
+    listener: (notification: CodexAppServerNotification) => void
+  ): (() => void) => {
+    this.notificationListeners.add(listener);
+    return () => this.notificationListeners.delete(listener);
+  };
   onRequest = (): (() => void) => () => undefined;
   respondToRequest = (): void => undefined;
   onClose = (
     _listener: (event: CodexAppServerSessionClosed) => void
   ): (() => void) => () => undefined;
   close = async (): Promise<void> => undefined;
+
+  emit(method: string, params: unknown): void {
+    for (const listener of this.notificationListeners) listener({ method, params });
+  }
 }
 
 describe('durable peer messaging', () => {
@@ -313,6 +331,58 @@ describe('durable peer messaging', () => {
             },
           ],
           expectedTurnId: '00000000-0000-7000-8000-000000000042',
+        });
+      });
+
+      recipientCodex.emit('turn/completed', {
+        turn: {
+          id: '00000000-0000-7000-8000-000000000042',
+          status: 'completed',
+          items: [],
+          error: null,
+        },
+      });
+      await vi.waitFor(() =>
+        expect(recipient?.listRuntimeBindings()[0]).toMatchObject({ state: 'completed' })
+      );
+      await requestWorkerControl(senderControlSocket, '/v2/runtime-tools/message_send', {
+        method: 'POST',
+        bearerToken: token,
+        body: {
+          idempotencyKey: 'peer-message-3',
+          arguments: {
+            recipientMembershipId,
+            message: 'Wake up and answer this follow-up.',
+          },
+        },
+      });
+      await vi.waitFor(() => {
+        expect(recipient?.listMessages()).toHaveLength(3);
+        expect(recipient?.listMessages()[2]).toMatchObject({
+          routingState: 'available_active',
+          steerState: 'delivered',
+          readAt: expect.any(String),
+        });
+        expect(recipient?.listRuntimeBindings()[0]).toMatchObject({
+          state: 'active',
+          turnId: '00000000-0000-7000-8000-000000000043',
+        });
+        expect(
+          recipientCodex.requests.filter(({ method }) => method === 'turn/steer')
+        ).toHaveLength(1);
+        expect(
+          recipientCodex.requests.filter(({ method }) => method === 'turn/start')
+        ).toHaveLength(2);
+        expect(
+          recipientCodex.requests.filter(({ method }) => method === 'turn/start')[1]?.params
+        ).toMatchObject({
+          threadId: '00000000-0000-7000-8000-000000000041',
+          input: [
+            {
+              type: 'text',
+              text: `Agent Teams peer message from membership ${senderMembershipId}:\n\nWake up and answer this follow-up.`,
+            },
+          ],
         });
       });
     } finally {

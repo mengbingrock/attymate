@@ -64,6 +64,11 @@ interface TurnSteerResponse {
   readonly turnId?: unknown;
 }
 
+interface ConfiguredRuntimeMcpSession extends CreatedRuntimeMcpSession {
+  readonly attemptId: string;
+  readonly config: Readonly<Record<string, unknown>>;
+}
+
 export interface WorkerRuntimeSteerInput extends ExecutionLeaseIdentity {
   readonly threadId: string;
   readonly expectedTurnId: string;
@@ -141,6 +146,7 @@ export class WorkerCodexRuntimeSupervisor {
   private unsubscribeRequest: (() => void) | undefined;
   private unsubscribeClose: (() => void) | undefined;
   private readonly pendingRequests = new Map<number | string, CodexAppServerRequest>();
+  private runtimeMcpSession: ConfiguredRuntimeMcpSession | undefined;
   private closing = false;
 
   constructor(private readonly options: WorkerCodexRuntimeOptions) {
@@ -179,7 +185,7 @@ export class WorkerCodexRuntimeSupervisor {
   async interrupt(identity: ExecutionLeaseIdentity, reason: string): Promise<void> {
     const active = this.store.active();
     if (active === undefined || !matchesIdentity(active, identity)) return;
-    this.runtimeSessions.revokeAttempt(active.attemptId);
+    this.revokeRuntimeMcpAttempt(active.attemptId);
     if (
       this.session !== undefined &&
       active.threadId !== undefined &&
@@ -244,7 +250,7 @@ export class WorkerCodexRuntimeSupervisor {
       throw new Error('Codex runtime start precondition does not match the completed turn');
     }
     const session = await this.ensureSession();
-    const runtimeMcpSession = await this.rotateRuntimeMcpSession(
+    const runtimeMcpSession = await this.runtimeMcpSessionForContinuation(
       session,
       completed,
       input.leaseExpiresAt
@@ -340,6 +346,8 @@ export class WorkerCodexRuntimeSupervisor {
         },
         'worker_shutdown'
       );
+    } else if (this.runtimeMcpSession !== undefined) {
+      this.revokeRuntimeMcpAttempt(this.runtimeMcpSession.attemptId);
     }
     this.unsubscribe?.();
     this.unsubscribeRequest?.();
@@ -411,7 +419,7 @@ export class WorkerCodexRuntimeSupervisor {
           normalized.message
         );
         this.options.onFailed?.(failed, normalized);
-        this.runtimeSessions.revokeAttempt(identity.attemptId);
+        this.revokeRuntimeMcpAttempt(identity.attemptId);
       }
       throw normalized;
     }
@@ -448,6 +456,7 @@ export class WorkerCodexRuntimeSupervisor {
     this.unsubscribeRequest = undefined;
     this.unsubscribeClose = undefined;
     this.session = undefined;
+    this.runtimeMcpSession = undefined;
     if (this.closing) return;
     if (this.launchPromise !== undefined) {
       const inFlight = this.launchPromise;
@@ -567,13 +576,13 @@ export class WorkerCodexRuntimeSupervisor {
   ): WorkerRuntimeBinding | undefined {
     if (turn?.status === 'completed') {
       const completed = this.store.settle(binding.attemptId, 'completed', 'completed');
-      this.runtimeSessions.revokeAttempt(binding.attemptId);
+      this.revokeRuntimeMcpAttempt(binding.attemptId);
       this.options.onCompleted?.(completed);
       return completed;
     }
     if (turn?.status === 'interrupted') {
       const interrupted = this.store.settle(binding.attemptId, 'interrupted', 'interrupted');
-      this.runtimeSessions.revokeAttempt(binding.attemptId);
+      this.revokeRuntimeMcpAttempt(binding.attemptId);
       this.options.onFailed?.(
         interrupted,
         new Error(`Codex turn ${binding.turnId ?? 'unknown'} was interrupted before recovery`)
@@ -588,7 +597,7 @@ export class WorkerCodexRuntimeSupervisor {
         : `Codex turn ${binding.turnId ?? 'unknown'} failed before recovery`
     );
     const failed = this.store.settle(binding.attemptId, 'failed', 'failed', failure.message);
-    this.runtimeSessions.revokeAttempt(binding.attemptId);
+    this.revokeRuntimeMcpAttempt(binding.attemptId);
     this.options.onFailed?.(failed, failure);
     return failed;
   }
@@ -598,7 +607,7 @@ export class WorkerCodexRuntimeSupervisor {
     error: Error
   ): WorkerRuntimeBinding {
     const failed = this.store.markNeedsReconciliation(binding.attemptId, error.message);
-    this.runtimeSessions.revokeAttempt(binding.attemptId);
+    this.revokeRuntimeMcpAttempt(binding.attemptId);
     this.options.onReconciliationRequired?.(failed, error);
     return failed;
   }
@@ -615,13 +624,12 @@ export class WorkerCodexRuntimeSupervisor {
     if (active === undefined || active.turnId !== turnId || status === undefined) return;
     if (status === 'completed') {
       const completed = this.store.settle(active.attemptId, 'completed', status);
-      this.runtimeSessions.revokeAttempt(active.attemptId);
       this.options.onCompleted?.(completed);
       return;
     }
     if (status === 'interrupted') {
       this.store.settle(active.attemptId, 'interrupted', status);
-      this.runtimeSessions.revokeAttempt(active.attemptId);
+      this.revokeRuntimeMcpAttempt(active.attemptId);
       return;
     }
     const error = asRecord(turn?.error);
@@ -629,17 +637,14 @@ export class WorkerCodexRuntimeSupervisor {
       typeof error?.message === 'string' ? error.message : `Codex turn ended with ${status}`
     );
     const failed = this.store.settle(active.attemptId, 'failed', status, failure.message);
-    this.runtimeSessions.revokeAttempt(active.attemptId);
+    this.revokeRuntimeMcpAttempt(active.attemptId);
     this.options.onFailed?.(failed, failure);
   }
 
   private async createRuntimeMcpSession(
     session: WorkerCodexAppServerSession,
     assignment: WorkerAssignment
-  ): Promise<
-    | (CreatedRuntimeMcpSession & { readonly config: Readonly<Record<string, unknown>> })
-    | undefined
-  > {
+  ): Promise<ConfiguredRuntimeMcpSession | undefined> {
     if (this.options.runtimeMcp === undefined || this.options.runtimeIdentity === undefined) {
       return undefined;
     }
@@ -667,26 +672,49 @@ export class WorkerCodexRuntimeSupervisor {
       leaseId: assignment.leaseId,
       expiresAt: assignment.leaseExpiresAt,
     });
-    return {
+    const configured = {
       ...created,
+      attemptId: assignment.attemptId,
       config: await this.buildRuntimeMcpConfig(session, created.token),
     };
+    this.runtimeMcpSession = configured;
+    return configured;
   }
 
   private async rotateRuntimeMcpSession(
     session: WorkerCodexAppServerSession,
     binding: WorkerRuntimeBinding,
     expiresAt?: string
-  ): Promise<
-    | (CreatedRuntimeMcpSession & { readonly config: Readonly<Record<string, unknown>> })
-    | undefined
-  > {
+  ): Promise<ConfiguredRuntimeMcpSession | undefined> {
     if (this.options.runtimeMcp === undefined) return undefined;
     const created = this.runtimeSessions.rotateAttempt(binding.attemptId, expiresAt);
-    return {
+    const configured = {
       ...created,
+      attemptId: binding.attemptId,
       config: await this.buildRuntimeMcpConfig(session, created.token),
     };
+    this.runtimeMcpSession = configured;
+    return configured;
+  }
+
+  private async runtimeMcpSessionForContinuation(
+    session: WorkerCodexAppServerSession,
+    binding: WorkerRuntimeBinding,
+    expiresAt: string
+  ): Promise<ConfiguredRuntimeMcpSession | undefined> {
+    if (this.options.runtimeMcp === undefined) return undefined;
+    if (this.runtimeMcpSession?.attemptId === binding.attemptId) {
+      this.runtimeSessions.renewAttempt(binding.attemptId, expiresAt);
+      return this.runtimeMcpSession;
+    }
+    return await this.rotateRuntimeMcpSession(session, binding, expiresAt);
+  }
+
+  private revokeRuntimeMcpAttempt(attemptId: string): void {
+    this.runtimeSessions.revokeAttempt(attemptId);
+    if (this.runtimeMcpSession?.attemptId === attemptId) {
+      this.runtimeMcpSession = undefined;
+    }
   }
 
   private async buildRuntimeMcpConfig(

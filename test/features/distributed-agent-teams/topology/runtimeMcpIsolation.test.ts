@@ -36,6 +36,7 @@ class RuntimeMcpCodexSession implements WorkerCodexAppServerSession {
   readonly requests: Array<{ method: string; params: unknown }> = [];
   readonly notifications = new Set<(notification: CodexAppServerNotification) => void>();
   readonly closeListeners = new Set<(event: CodexAppServerSessionClosed) => void>();
+  private turnStartCount = 0;
 
   constructor(
     private readonly options: { readonly leakGlobalServer?: boolean; readonly recovery?: boolean } = {}
@@ -81,8 +82,15 @@ class RuntimeMcpCodexSession implements WorkerCodexAppServerSession {
       } as T;
     }
     if (method === 'turn/start') {
+      this.turnStartCount += 1;
       return {
-        turn: { id: '00000000-0000-7000-8000-000000000022', status: 'inProgress' },
+        turn: {
+          id:
+            this.turnStartCount === 1
+              ? '00000000-0000-7000-8000-000000000022'
+              : '00000000-0000-7000-8000-000000000023',
+          status: 'inProgress',
+        },
       } as T;
     }
     if (this.options.recovery && (method === 'thread/read' || method === 'thread/resume')) {
@@ -122,6 +130,10 @@ class RuntimeMcpCodexSession implements WorkerCodexAppServerSession {
   };
 
   close = async (): Promise<void> => undefined;
+
+  emit(method: string, params: unknown): void {
+    for (const listener of this.notifications) listener({ method, params });
+  }
 
   crash(): void {
     for (const listener of this.closeListeners) {
@@ -291,6 +303,93 @@ describe('assignment-scoped runtime MCP isolation', () => {
     } finally {
       await worker.stop();
       await relay.close();
+    }
+  });
+
+  it('reuses the App Server MCP credential across consecutive turns in one thread', async () => {
+    const dataRoot = await mkdtemp(join(tmpdir(), 'agent-teams-runtime-mcp-continuation-'));
+    const codex = new RuntimeMcpCodexSession();
+    const supervisor = new WorkerCodexRuntimeSupervisor({
+      dataDir: dataRoot,
+      cwd: join(dataRoot, 'workspace'),
+      sessionFactory: { open: async () => codex },
+      runtimeIdentity: {
+        organizationId: ids.organizationId,
+        personId: ids.personId,
+        nodeId: ids.nodeId,
+        workerInstanceId: ids.workerInstanceId,
+      },
+      runtimeMcp: {
+        command: process.execPath,
+        args: ['/fixture/runtimeMcpCli.js', '--socket', join(dataRoot, 'control.sock')],
+      },
+    });
+    const assignment: WorkerAssignment = {
+      assignmentId: ids.assignmentId,
+      offerCommandId: ids.commandId,
+      teamId: ids.teamId,
+      membershipId: ids.membershipId,
+      workspaceId: ids.workspaceId,
+      targetNodeId: ids.nodeId,
+      title: 'Keep MCP authorized across turns',
+      state: 'preparing_workspace',
+      revision: 3,
+      offeredAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      attemptId: attemptIdSchema.parse('00000000-0000-4000-8000-000000000050'),
+      leaseId: leaseIdSchema.parse('00000000-0000-4000-8000-000000000051'),
+      leaseEpoch: 1,
+      leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+    };
+
+    try {
+      const first = await supervisor.start(assignment);
+      const threadStart = codex.requests.find(({ method }) => method === 'thread/start')
+        ?.params as Record<string, unknown>;
+      const firstServers = (threadStart.config as Record<string, unknown>)
+        .mcp_servers as Record<string, Record<string, unknown>>;
+      const firstToken = (firstServers['agent-teams-runtime']?.env as Record<string, string>)
+        .AGENT_TEAMS_RUNTIME_SESSION_TOKEN;
+
+      codex.emit('turn/completed', {
+        turn: {
+          id: '00000000-0000-7000-8000-000000000022',
+          status: 'completed',
+          items: [],
+          error: null,
+        },
+      });
+      expect(supervisor.listBindings()[0]).toMatchObject({ state: 'completed' });
+      expect(() => supervisor.authorizeRuntimeSession(firstToken)).toThrow();
+
+      const continued = await supervisor.startTurn({
+        assignmentId: assignment.assignmentId,
+        attemptId: assignment.attemptId!,
+        leaseId: assignment.leaseId!,
+        leaseEpoch: assignment.leaseEpoch!,
+        threadId: first.threadId!,
+        appServerGeneration: first.appServerGeneration,
+        leaseExpiresAt: new Date(Date.now() + 120_000).toISOString(),
+        message: 'Run another MCP-authored turn.',
+      });
+      expect(continued).toMatchObject({
+        state: 'active',
+        turnId: '00000000-0000-7000-8000-000000000023',
+      });
+      const resume = codex.requests.find(({ method }) => method === 'thread/resume')
+        ?.params as Record<string, unknown>;
+      const resumedServers = (resume.config as Record<string, unknown>)
+        .mcp_servers as Record<string, Record<string, unknown>>;
+      const resumedToken = (resumedServers['agent-teams-runtime']?.env as Record<string, string>)
+        .AGENT_TEAMS_RUNTIME_SESSION_TOKEN;
+      expect(resumedToken).toBe(firstToken);
+      expect(codex.requests.filter(({ method }) => method === 'config/read')).toHaveLength(1);
+      expect(supervisor.authorizeRuntimeSession(firstToken)).toMatchObject({
+        attemptId: assignment.attemptId,
+        turnId: '00000000-0000-7000-8000-000000000023',
+      });
+    } finally {
+      await supervisor.close();
     }
   });
 

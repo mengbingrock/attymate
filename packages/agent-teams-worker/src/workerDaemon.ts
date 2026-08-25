@@ -578,16 +578,51 @@ export const startAgentTeamsWorker = async (
           candidate.assignmentId === scope.assignmentId &&
           candidate.attemptId === scope.attemptId &&
           candidate.leaseEpoch === scope.leaseEpoch &&
-          candidate.state === 'active' &&
+          ['active', 'completed'].includes(candidate.state) &&
           candidate.reconciliationState === undefined
       );
     if (binding?.threadId === undefined || binding.turnId === undefined) return;
+    const pendingMessages = messageStore.reconcileActiveScope(scope);
+    if (pendingMessages.length === 0) return;
+    const messageText = (message: (typeof pendingMessages)[number]): string =>
+      [
+        `Agent Teams peer message from membership ${message.payload.senderMembershipId}:`,
+        message.payload.message,
+      ].join('\n\n');
+
+    if (binding.state === 'completed') {
+      const assignment = assignmentStore.get(scope.assignmentId);
+      if (assignment?.leaseExpiresAt === undefined) return;
+      const continued = await runtimeSupervisor.startTurn({
+        ...leaseIdentity,
+        threadId: binding.threadId,
+        appServerGeneration: binding.appServerGeneration,
+        leaseExpiresAt: assignment.leaseExpiresAt,
+        message: pendingMessages.map(messageText).join('\n\n---\n\n'),
+      });
+      if (continued.threadId === undefined || continued.turnId === undefined) return;
+      const continuedIdentity = {
+        threadId: continued.threadId,
+        turnId: continued.turnId,
+        appServerGeneration: continued.appServerGeneration,
+      };
+      for (const message of pendingMessages) {
+        const claimed = messageStore.beginSteer(
+          message.messageId,
+          scope,
+          continuedIdentity
+        );
+        if (claimed !== undefined) messageStore.markSteered(message.messageId, continuedIdentity);
+      }
+      return;
+    }
+
     const steerIdentity = {
       threadId: binding.threadId,
       turnId: binding.turnId,
       appServerGeneration: binding.appServerGeneration,
     };
-    for (const message of messageStore.reconcileActiveScope(scope)) {
+    for (const message of pendingMessages) {
       if (stopped) return;
       const claimed = messageStore.beginSteer(message.messageId, scope, steerIdentity);
       if (claimed === undefined) continue;
@@ -597,10 +632,7 @@ export const startAgentTeamsWorker = async (
           threadId: steerIdentity.threadId,
           expectedTurnId: steerIdentity.turnId,
           appServerGeneration: steerIdentity.appServerGeneration,
-          message: [
-            `Agent Teams peer message from membership ${message.payload.senderMembershipId}:`,
-            message.payload.message,
-          ].join('\n\n'),
+          message: messageText(message),
         });
         messageStore.markSteered(message.messageId, steerIdentity);
       } catch (error) {
