@@ -128,6 +128,31 @@ describe('RemoteRuntimeConsole', () => {
     host.remove();
   });
 
+  it('identifies a specifically selected worker that has no active runtime lease', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(
+        <RemoteRuntimeConsole
+          session={null}
+          insecureLanMode={false}
+          inactiveDescription="mengbing-device has no active execution lease."
+          loading={false}
+          sending={false}
+          error={null}
+          onRefresh={vi.fn()}
+          onControl={vi.fn()}
+        />
+      );
+    });
+
+    expect(host.textContent).toContain('mengbing-device has no active execution lease.');
+    expect(host.textContent).not.toContain('Start the team to accept its assignments');
+    await act(async () => root.unmount());
+    host.remove();
+  });
+
   it('renders a Codex transcript without protocol noise and sends lease-bound controls', async () => {
     const host = document.createElement('div');
     document.body.appendChild(host);

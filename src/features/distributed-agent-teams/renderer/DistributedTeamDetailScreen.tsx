@@ -6,6 +6,7 @@ import { buildDistributedTeamDetail } from './adapters/buildDistributedTeamDetai
 import { useDistributedAgentTeams } from './hooks/useDistributedAgentTeams';
 import { useDistributedRuntimeSession } from './hooks/useDistributedRuntimeSession';
 import { DistributedTeamDetailView } from './ui/DistributedTeamDetailView';
+import { selectDistributedRuntimeAssignment } from './utils/selectDistributedRuntimeAssignment';
 
 import type { CreateRemoteAssignmentRequest } from '../contracts';
 
@@ -36,27 +37,7 @@ export const DistributedTeamDetailScreen = ({
   );
   const activeRuntimeAssignment = useMemo(
     () =>
-      model.assignments.find(
-        (assignment) =>
-          assignment.targetNodeId === selectedRuntimeNodeId &&
-          assignment.attemptId !== undefined &&
-          assignment.leaseEpoch !== undefined &&
-          model.leases.some(
-            (lease) =>
-              lease.assignmentId === assignment.assignmentId &&
-              ['granted', 'active'].includes(lease.status)
-          )
-      ) ??
-      model.assignments.find(
-        (assignment) =>
-          assignment.attemptId !== undefined &&
-          assignment.leaseEpoch !== undefined &&
-          model.leases.some(
-            (lease) =>
-              lease.assignmentId === assignment.assignmentId &&
-              ['granted', 'active'].includes(lease.status)
-          )
-      ),
+      selectDistributedRuntimeAssignment(model.assignments, model.leases, selectedRuntimeNodeId),
     [model.assignments, model.leases, selectedRuntimeNodeId]
   );
   useEffect(() => {
@@ -79,6 +60,12 @@ export const DistributedTeamDetailScreen = ({
           },
     [activeRuntimeAssignment, state.topology?.insecureLanMode, teamId]
   );
+  const runtimeUnavailableDescription = useMemo(() => {
+    if (selectedRuntimeNodeId === null || activeRuntimeAssignment !== undefined) return undefined;
+    const worker = model.workers.find((candidate) => candidate.nodeId === selectedRuntimeNodeId);
+    const workerLabel = worker?.label ?? selectedRuntimeNodeId;
+    return `${workerLabel} has no active execution lease. Select a worker with an active lease, or create and start an assignment for this worker.`;
+  }, [activeRuntimeAssignment, model.workers, selectedRuntimeNodeId]);
   const runtime = useDistributedRuntimeSession(runtimeRequest, isActive);
 
   const createAssignment = useCallback(
@@ -125,6 +112,7 @@ export const DistributedTeamDetailScreen = ({
       startingTeam={startingTeam}
       insecureLanMode={state.topology?.insecureLanMode ?? true}
       selectedRuntimeNodeId={selectedRuntimeNodeId}
+      runtimeUnavailableDescription={runtimeUnavailableDescription}
       runtimeSession={runtime.session}
       runtimeLoading={runtime.loading}
       runtimeSending={runtime.sending}

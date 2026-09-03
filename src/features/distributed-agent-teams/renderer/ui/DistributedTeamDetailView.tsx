@@ -63,6 +63,7 @@ interface DistributedTeamDetailViewProps {
   startingTeam: boolean;
   insecureLanMode: boolean;
   selectedRuntimeNodeId: string | null;
+  runtimeUnavailableDescription?: string;
   runtimeSession: DistributedRuntimeSessionDto | null;
   runtimeLoading: boolean;
   runtimeSending: boolean;
@@ -361,6 +362,7 @@ export const DistributedTeamDetailView = ({
   startingTeam,
   insecureLanMode,
   selectedRuntimeNodeId,
+  runtimeUnavailableDescription,
   runtimeSession,
   runtimeLoading,
   runtimeSending,
@@ -631,6 +633,7 @@ export const DistributedTeamDetailView = ({
             <RemoteRuntimeConsole
               session={runtimeSession}
               insecureLanMode={insecureLanMode}
+              inactiveDescription={runtimeUnavailableDescription}
               loading={runtimeLoading}
               sending={runtimeSending}
               error={runtimeError}

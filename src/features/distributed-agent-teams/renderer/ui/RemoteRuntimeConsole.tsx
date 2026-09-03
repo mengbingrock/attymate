@@ -33,6 +33,7 @@ import type {
 interface RemoteRuntimeConsoleProps {
   session: DistributedRuntimeSessionDto | null;
   insecureLanMode: boolean;
+  inactiveDescription?: string;
   loading: boolean;
   sending: boolean;
   error: string | null;
@@ -432,6 +433,7 @@ const approvalDescription = (method: string, value: unknown): { title: string; d
 export const RemoteRuntimeConsole = ({
   session,
   insecureLanMode,
+  inactiveDescription,
   loading,
   sending,
   error,
@@ -481,7 +483,6 @@ export const RemoteRuntimeConsole = ({
     : null;
 
   useEffect(() => {
-    if (runtimeScopeKey === null) return;
     if (runtimeScopeRef.current !== null && runtimeScopeRef.current !== runtimeScopeKey) {
       for (const timeout of submissionTimeoutsRef.current.values()) window.clearTimeout(timeout);
       submissionTimeoutsRef.current.clear();
@@ -489,6 +490,13 @@ export const RemoteRuntimeConsole = ({
       setMessageHistory([]);
       setSubmittedMessages([]);
       setHistoryIndex(null);
+      setDirectoryPath('');
+      setListingControlId(null);
+      setFileControlId(null);
+      setSaveControlId(null);
+      setOpenedFile(null);
+      setEditorContent('');
+      setResolvedApprovals(new Set());
     }
     runtimeScopeRef.current = runtimeScopeKey;
   }, [runtimeScopeKey]);
@@ -781,8 +789,8 @@ export const RemoteRuntimeConsole = ({
         <div className="flex-1">
           <p className="font-medium">Worker runtime is not active yet</p>
           <p className="mt-1 text-xs text-neutral-500">
-            Start the team to accept its assignments, acquire execution leases, and launch an
-            authenticated Codex App Server thread and turn.
+            {inactiveDescription ??
+              'Start the team to accept its assignments, acquire execution leases, and launch an authenticated Codex App Server thread and turn.'}
           </p>
         </div>
         <Button variant="ghost" size="sm" disabled={loading} onClick={onRefresh}>
