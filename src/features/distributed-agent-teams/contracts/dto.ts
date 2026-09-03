@@ -9,6 +9,7 @@ export interface DistributedWorkerDto {
   lastHeartbeatAt: string;
   lastHeartbeatSequence: number;
   status: 'connected' | 'stale';
+  autoJoinTeamId?: string;
   runtimeCapabilities?: RuntimeSessionCapability[];
 }
 
@@ -16,6 +17,7 @@ export interface DistributedTopologyDto {
   relayUrl: string;
   insecureLanMode: boolean;
   workers: DistributedWorkerDto[];
+  membershipRoutes?: DistributedMembershipRouteDto[];
   fetchedAt: string;
   degraded: boolean;
   warning?: string;
@@ -28,6 +30,7 @@ export interface CreateRemoteAssignmentRequest {
   teamId?: string;
   membershipId?: string;
   workspaceId?: string;
+  teamRole?: 'lead' | 'member';
 }
 
 export interface RemoteAssignmentReceiptDto {
@@ -46,6 +49,17 @@ export interface StartDistributedTeamReceiptDto {
   teamId: string;
   status: 'starting' | 'already-active';
   assignmentCommandIds: string[];
+  requestedAt: string;
+}
+
+export interface ReconnectDistributedLeadRequest {
+  teamId: string;
+}
+
+export interface ReconnectDistributedLeadReceiptDto {
+  teamId: string;
+  nodeId: string;
+  status: 'already-connected' | 'already-running' | 'started';
   requestedAt: string;
 }
 
@@ -145,8 +159,42 @@ export interface DistributedMembershipRouteDto {
   teamId: string;
   nodeId: string;
   workspaceId: string;
+  label: string;
+  role: 'lead' | 'member';
+  status: 'active' | 'left';
+  revision: number;
   createdAt: string;
   updatedAt: string;
+  leftAt?: string;
+}
+
+export interface JoinDistributedTeamMemberRequest {
+  teamId: string;
+  targetNodeId: string;
+  membershipId?: string;
+  workspaceId?: string;
+  role?: 'lead' | 'member';
+  title?: string;
+  description?: string;
+}
+
+export interface JoinDistributedTeamMemberReceiptDto {
+  membership: DistributedMembershipRouteDto;
+  assignmentId: string;
+  commandIds: string[];
+}
+
+export interface LeaveDistributedTeamMemberRequest {
+  teamId: string;
+  membershipId: string;
+  expectedRevision?: number;
+  successorMembershipId?: string;
+  reason?: string;
+}
+
+export interface LeaveDistributedTeamMemberReceiptDto {
+  membership: DistributedMembershipRouteDto;
+  releasedAssignmentIds: string[];
 }
 
 export interface DistributedDebugSnapshotDto {

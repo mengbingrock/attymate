@@ -16,6 +16,10 @@ const socketPath = rawSocketPath.startsWith('\\\\.\\pipe\\')
   : resolve(rawSocketPath);
 const token = process.env.AGENT_TEAMS_RUNTIME_SESSION_TOKEN;
 if (token === undefined) throw new Error('AGENT_TEAMS_RUNTIME_SESSION_TOKEN is required');
+const teamRole = process.env.AGENT_TEAMS_RUNTIME_TEAM_ROLE;
+if (teamRole !== 'lead' && teamRole !== 'member') {
+  throw new Error('AGENT_TEAMS_RUNTIME_TEAM_ROLE must be lead or member');
+}
 
-const server = createAgentTeamsRuntimeMcpServer(socketPath, token);
+const server = createAgentTeamsRuntimeMcpServer(socketPath, token, teamRole);
 await server.start({ transportType: 'stdio' });

@@ -264,7 +264,11 @@ export class WorkerCodexRuntimeSupervisor {
       ...(this.options.model === undefined ? {} : { model: this.options.model }),
     });
     if (runtimeMcpSession !== undefined) {
-      await this.assertRuntimeMcpInventory(session, completed.threadId);
+      await this.assertRuntimeMcpInventory(
+        session,
+        completed.threadId,
+        runtimeMcpSession.teamRole
+      );
     }
     const turnResponse = await session.request<TurnStartResponse>('turn/start', {
       threadId: completed.threadId,
@@ -380,7 +384,7 @@ export class WorkerCodexRuntimeSupervisor {
       const threadId = requireRuntimeId(threadResponse.thread?.id, 'thread/start');
       this.store.bindThread(identity.attemptId, threadId);
       if (runtimeMcpSession !== undefined) {
-        await this.assertRuntimeMcpInventory(session, threadId);
+        await this.assertRuntimeMcpInventory(session, threadId, runtimeMcpSession.teamRole);
       }
       const prompt = [
         `Complete the leased Agent Teams assignment: ${assignment.title}`,
@@ -533,7 +537,11 @@ export class WorkerCodexRuntimeSupervisor {
         ...(this.options.model === undefined ? {} : { model: this.options.model }),
       });
       if (runtimeMcpSession !== undefined) {
-        await this.assertRuntimeMcpInventory(session, recovering.threadId);
+        await this.assertRuntimeMcpInventory(
+          session,
+          recovering.threadId,
+          runtimeMcpSession.teamRole
+        );
       }
       const resumedTurn = this.findPersistedTurn(resumeResponse.thread, recovering.turnId);
       const resumedTerminal = this.projectTerminalTurn(recovering, resumedTurn);
@@ -668,6 +676,7 @@ export class WorkerCodexRuntimeSupervisor {
       assignmentId: assignment.assignmentId,
       attemptId: assignment.attemptId,
       workspaceId: assignment.workspaceId,
+      teamRole: assignment.teamRole ?? 'member',
       leaseEpoch: assignment.leaseEpoch,
       leaseId: assignment.leaseId,
       expiresAt: assignment.leaseExpiresAt,
@@ -675,7 +684,7 @@ export class WorkerCodexRuntimeSupervisor {
     const configured = {
       ...created,
       attemptId: assignment.attemptId,
-      config: await this.buildRuntimeMcpConfig(session, created.token),
+      config: await this.buildRuntimeMcpConfig(session, created.token, created.teamRole),
     };
     this.runtimeMcpSession = configured;
     return configured;
@@ -691,7 +700,7 @@ export class WorkerCodexRuntimeSupervisor {
     const configured = {
       ...created,
       attemptId: binding.attemptId,
-      config: await this.buildRuntimeMcpConfig(session, created.token),
+      config: await this.buildRuntimeMcpConfig(session, created.token, created.teamRole),
     };
     this.runtimeMcpSession = configured;
     return configured;
@@ -719,7 +728,8 @@ export class WorkerCodexRuntimeSupervisor {
 
   private async buildRuntimeMcpConfig(
     session: WorkerCodexAppServerSession,
-    token: string
+    token: string,
+    teamRole: RuntimeSessionContext['teamRole']
   ): Promise<Readonly<Record<string, unknown>>> {
     const runtimeMcp = this.options.runtimeMcp;
     if (runtimeMcp === undefined) throw new Error('Runtime MCP is not configured');
@@ -731,19 +741,21 @@ export class WorkerCodexRuntimeSupervisor {
       runtimeMcp,
       token,
       readConfiguredMcpServerNames(response),
-      readConfiguredPluginNames(response)
+      readConfiguredPluginNames(response),
+      teamRole
     );
   }
 
   private async assertRuntimeMcpInventory(
     session: WorkerCodexAppServerSession,
-    threadId: string
+    threadId: string,
+    teamRole: RuntimeSessionContext['teamRole']
   ): Promise<void> {
     const response = await session.request<unknown>('mcpServerStatus/list', {
       threadId,
       limit: 100,
       detail: 'toolsAndAuthOnly',
     });
-    assertRestrictedRuntimeMcpInventory(response);
+    assertRestrictedRuntimeMcpInventory(response, teamRole);
   }
 }

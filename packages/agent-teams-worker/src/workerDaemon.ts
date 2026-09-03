@@ -15,6 +15,7 @@ import {
   type NodeId,
   type OrganizationId,
   type PersonId,
+  type TeamId,
   type WorkerInstanceId,
 } from '@claude-teams/agent-teams-protocol';
 import WebSocket from 'ws';
@@ -38,6 +39,10 @@ import {
 } from './workerMessageStore';
 import { WorkerOutboxStore, type WorkerOutboxEvent } from './workerOutboxStore';
 import type { WorkerRuntimeBinding } from './workerRuntimeStore';
+import {
+  WorkerTeamMembershipStore,
+  type WorkerTeamMembershipSnapshot,
+} from './workerTeamMembershipStore';
 import { WorkspaceFileBroker } from './workspaceFileBroker';
 
 export interface AgentTeamsWorkerOptions {
@@ -50,6 +55,7 @@ export interface AgentTeamsWorkerOptions {
   readonly workerInstanceId: WorkerInstanceId;
   readonly workerGeneration: number;
   readonly label: string;
+  readonly autoJoinTeamId?: TeamId;
   readonly controlSocketPath?: string;
   readonly reconnectDelayMs?: number;
   readonly leaseSweepIntervalMs?: number;
@@ -78,6 +84,7 @@ export interface AgentTeamsWorkerStatus {
   readonly nodeId: NodeId;
   readonly workerInstanceId: WorkerInstanceId;
   readonly workerGeneration: number;
+  readonly autoJoinTeamId?: TeamId;
   readonly relayUrl: string;
   readonly state: WorkerConnectionState;
   readonly connectedAt?: string;
@@ -98,6 +105,7 @@ export interface StartedAgentTeamsWorker {
   readonly listAssignments: () => ReturnType<WorkerAssignmentStore['list']>;
   readonly listOutboxEvents: () => readonly WorkerOutboxEvent[];
   readonly listRuntimeBindings: () => readonly WorkerRuntimeBinding[];
+  readonly listTeamMemberships: () => readonly WorkerTeamMembershipSnapshot[];
   readonly acceptAssignment: (
     input: AssignmentMutationInput
   ) => ReturnType<WorkerAssignmentStore['accept']>;
@@ -117,6 +125,7 @@ export const startAgentTeamsWorker = async (
   const inboxStore = new WorkerInboxStore(options.dataDir);
   const assignmentStore = new WorkerAssignmentStore(options.dataDir);
   const messageStore = new WorkerMessageStore(options.dataDir);
+  const membershipStore = new WorkerTeamMembershipStore(options.dataDir);
   const activeMessageScope = (): WorkerMessageExecutionScope | undefined => {
     const identity = assignmentStore.activeLeaseIdentity();
     if (identity === undefined) return undefined;
@@ -138,6 +147,10 @@ export const startAgentTeamsWorker = async (
     };
   };
   const applyAssignmentCommand = (command: WorkerInboxCommand) => {
+    if (command.envelope.type === 'team.membership.snapshot') {
+      membershipStore.accept(command);
+      return undefined;
+    }
     if (command.envelope.type === 'team.message.deliver') {
       messageStore.acceptDelivery(command, activeMessageScope());
       return undefined;
@@ -302,6 +315,7 @@ export const startAgentTeamsWorker = async (
     nodeId: options.nodeId,
     workerInstanceId: options.workerInstanceId,
     workerGeneration: options.workerGeneration,
+    ...(options.autoJoinTeamId === undefined ? {} : { autoJoinTeamId: options.autoJoinTeamId }),
     relayUrl: options.relayUrl,
     state: 'starting',
     lastHeartbeatSequence: 0,
@@ -588,6 +602,7 @@ export const startAgentTeamsWorker = async (
       [
         `Agent Teams peer message from membership ${message.payload.senderMembershipId}:`,
         message.payload.message,
+        `Reply routing: send any response through agent-teams-runtime.message_send with recipientMembershipId ${message.payload.senderMembershipId}. Plain assistant text stays only in this Worker console and is not delivered to the sender.`,
       ].join('\n\n');
 
     if (binding.state === 'completed') {
@@ -678,22 +693,53 @@ export const startAgentTeamsWorker = async (
       input.toolName,
       parsedArguments
     );
-    if (input.toolName === 'runtime_context') return { context: invocation.context };
+    if (input.toolName === 'runtime_context') {
+      return { context: invocation.context, team: membershipStore.get(context.teamId) };
+    }
+    if (input.toolName === 'team_membership_list') {
+      return {
+        context: invocation.context,
+        team: membershipStore.get(context.teamId) ?? {
+          teamId: context.teamId,
+          members: [],
+          generatedAt: new Date(0).toISOString(),
+        },
+      };
+    }
     const eventTypeByTool: Partial<
-      Record<PublicMcpToolName, 'assignment.progress' | 'assignment.result_submitted' | 'team.message'>
+      Record<
+        PublicMcpToolName,
+        | 'assignment.progress'
+        | 'assignment.result_submitted'
+        | 'team.message'
+        | 'team.member.join_requested'
+        | 'team.member.leave_requested'
+      >
     > = {
       progress_report: 'assignment.progress',
       result_submit: 'assignment.result_submitted',
       message_send: 'team.message',
+      team_leave: 'team.member.leave_requested',
+      team_member_join: 'team.member.join_requested',
+      team_member_leave: 'team.member.leave_requested',
     };
     const eventType = eventTypeByTool[input.toolName as PublicMcpToolName];
     if (eventType === undefined) {
       throw new Error(`Runtime MCP tool ${input.toolName} is not implemented by this Worker`);
     }
+    const projectedArguments =
+      input.toolName === 'team_leave'
+        ? { ...invocation.arguments, membershipId: context.membershipId }
+        : input.toolName === 'team_member_leave'
+          ? (() => {
+              const { targetMembershipId, ...argumentsWithoutTarget } = invocation.arguments;
+              return { ...argumentsWithoutTarget, membershipId: targetMembershipId };
+            })()
+          : invocation.arguments;
     const event = outboxStore.projectRuntimeEvent(context, {
       idempotencyKey: input.idempotencyKey,
       type: eventType,
-      payload: invocation.arguments,
+      payload: projectedArguments,
     });
     flushPendingEvents();
     return { context: invocation.context, event };
@@ -770,6 +816,9 @@ export const startAgentTeamsWorker = async (
           workerInstanceId: options.workerInstanceId,
           workerGeneration: options.workerGeneration,
           label: options.label,
+          ...(options.autoJoinTeamId === undefined
+            ? {}
+            : { autoJoinTeamId: options.autoJoinTeamId }),
           runtimeCapabilities:
             options.codexRuntime === undefined ? [] : [...DISTRIBUTED_RUNTIME_CAPABILITIES],
           lastInboundCursor: inboxStore.lastInboundCursor(),
@@ -938,6 +987,7 @@ export const startAgentTeamsWorker = async (
     listAssignments: () => assignmentStore.list(),
     listOutboxEvents: () => outboxStore.listAll(),
     listRuntimeBindings: () => runtimeSupervisor?.listBindings() ?? [],
+    listTeamMemberships: () => membershipStore.list(),
     acceptAssignment,
     rejectAssignment,
     deferAssignment,
@@ -969,6 +1019,7 @@ export const startAgentTeamsWorker = async (
       assignmentStore.close();
       outboxStore.close();
       messageStore.close();
+      membershipStore.close();
       inboxStore.close();
     },
   };

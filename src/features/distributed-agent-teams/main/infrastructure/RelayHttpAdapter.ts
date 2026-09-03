@@ -6,6 +6,7 @@ import {
   assignmentStateChangedPayloadSchema,
   attemptIdSchema,
   commandEnvelopeSchema,
+  commandIdSchema,
   eventEnvelopeSchema,
   eventIdSchema,
   leaseIdSchema,
@@ -30,12 +31,26 @@ import type {
   DistributedRuntimeSessionDto,
   DistributedWorkerDto,
   GetDistributedRuntimeSessionRequest,
+  JoinDistributedTeamMemberReceiptDto,
+  JoinDistributedTeamMemberRequest,
+  LeaveDistributedTeamMemberReceiptDto,
+  LeaveDistributedTeamMemberRequest,
   RemoteAssignmentReceiptDto,
   SendDistributedRuntimeControlRequest,
 } from '../../contracts';
 import type { DistributedRelayPort } from '../../core/application/ports/DistributedRelayPort';
 
-const REQUEST_TIMEOUT_MS = 5_000;
+// Remote Relays may need several seconds to serialize accumulated command and event history.
+// Keep the timeout bounded, but long enough that detail-view polling does not degrade on WAN links.
+const REQUEST_TIMEOUT_MS = 15_000;
+
+type CachedRuntimeSession = {
+  readonly sessionId: string;
+  readonly sessionToken: string;
+  readonly scope: DistributedRuntimeSessionDto['scope'];
+  readonly capabilities: DistributedRuntimeSessionDto['capabilities'];
+  readonly expiresAt: string;
+};
 
 class RelayHttpError extends Error {
   constructor(readonly status: number) {
@@ -91,11 +106,37 @@ const parseWorker = (input: unknown): DistributedWorkerDto => {
     lastHeartbeatAt: requiredString(value.lastHeartbeatAt, 'lastHeartbeatAt'),
     lastHeartbeatSequence: requiredNumber(value.lastHeartbeatSequence, 'lastHeartbeatSequence'),
     status,
+    ...(optionalString(value.autoJoinTeamId, 'autoJoinTeamId') === undefined
+      ? {}
+      : { autoJoinTeamId: teamIdSchema.parse(value.autoJoinTeamId) }),
     runtimeCapabilities: Array.isArray(value.runtimeCapabilities)
       ? value.runtimeCapabilities.map((capability) =>
           runtimeSessionCapabilitySchema.parse(capability)
         )
       : [],
+  };
+};
+
+const parseMembershipRoute = (input: unknown): DistributedMembershipRouteDto => {
+  const record = asRecord(input, 'Relay membership route');
+  const role = record.role;
+  const status = record.status;
+  if (role !== 'lead' && role !== 'member') throw new Error('Invalid membership role');
+  if (status !== 'active' && status !== 'left') throw new Error('Invalid membership status');
+  return {
+    membershipId: membershipIdSchema.parse(record.membershipId),
+    teamId: teamIdSchema.parse(record.teamId),
+    nodeId: nodeIdSchema.parse(record.nodeId),
+    workspaceId: workspaceIdSchema.parse(record.workspaceId),
+    label: requiredString(record.label, 'label'),
+    role,
+    status,
+    revision: requiredPositiveInteger(record.revision, 'revision'),
+    createdAt: requiredString(record.createdAt, 'createdAt'),
+    updatedAt: requiredString(record.updatedAt, 'updatedAt'),
+    ...(optionalString(record.leftAt, 'leftAt') === undefined
+      ? {}
+      : { leftAt: requiredString(record.leftAt, 'leftAt') }),
   };
 };
 
@@ -115,16 +156,8 @@ export class RelayHttpAdapter implements DistributedRelayPort {
   readonly relayUrl: string;
   readonly insecureLanMode: boolean;
   private lastSequence = Date.now();
-  private readonly runtimeSessions = new Map<
-    string,
-    {
-      readonly sessionId: string;
-      readonly sessionToken: string;
-      readonly scope: DistributedRuntimeSessionDto['scope'];
-      readonly capabilities: DistributedRuntimeSessionDto['capabilities'];
-      readonly expiresAt: string;
-    }
-  >();
+  private readonly runtimeSessions = new Map<string, CachedRuntimeSession>();
+  private readonly pendingRuntimeSessions = new Map<string, Promise<CachedRuntimeSession>>();
 
   constructor(
     relayUrl: string,
@@ -283,72 +316,131 @@ export class RelayHttpAdapter implements DistributedRelayPort {
     if (!Array.isArray(payload.routes)) {
       throw new Error('Relay membership routes response is invalid');
     }
-    return payload.routes.map((input): DistributedMembershipRouteDto => {
-      const record = asRecord(input, 'Relay membership route');
-      return {
-        membershipId: membershipIdSchema.parse(record.membershipId),
-        teamId: teamIdSchema.parse(record.teamId),
-        nodeId: nodeIdSchema.parse(record.nodeId),
-        workspaceId: workspaceIdSchema.parse(record.workspaceId),
-        createdAt: requiredString(record.createdAt, 'createdAt'),
-        updatedAt: requiredString(record.updatedAt, 'updatedAt'),
-      };
-    });
+    return payload.routes.map(parseMembershipRoute);
+  }
+
+  async joinTeamMember(
+    request: JoinDistributedTeamMemberRequest
+  ): Promise<JoinDistributedTeamMemberReceiptDto> {
+    const payload = asRecord(
+      await this.request(`/v2/teams/${encodeURIComponent(request.teamId)}/members`, {
+        method: 'POST',
+        body: JSON.stringify({
+          targetNodeId: request.targetNodeId,
+          ...(request.membershipId === undefined ? {} : { membershipId: request.membershipId }),
+          ...(request.workspaceId === undefined ? {} : { workspaceId: request.workspaceId }),
+          ...(request.role === undefined ? {} : { role: request.role }),
+          ...(request.title === undefined ? {} : { title: request.title }),
+          ...(request.description === undefined ? {} : { description: request.description }),
+        }),
+      }),
+      'Join team member response'
+    );
+    if (!Array.isArray(payload.commandIds)) {
+      throw new Error('Join team member response commandIds are invalid');
+    }
+    return {
+      membership: parseMembershipRoute(payload.membership),
+      assignmentId: assignmentIdSchema.parse(payload.assignmentId),
+      commandIds: payload.commandIds.map((commandId) => commandIdSchema.parse(commandId)),
+    };
+  }
+
+  async leaveTeamMember(
+    request: LeaveDistributedTeamMemberRequest
+  ): Promise<LeaveDistributedTeamMemberReceiptDto> {
+    const payload = asRecord(
+      await this.request(
+        `/v2/teams/${encodeURIComponent(request.teamId)}/members/${encodeURIComponent(request.membershipId)}`,
+        {
+          method: 'DELETE',
+          body: JSON.stringify({
+            ...(request.expectedRevision === undefined
+              ? {}
+              : { expectedRevision: request.expectedRevision }),
+            ...(request.successorMembershipId === undefined
+              ? {}
+              : { successorMembershipId: request.successorMembershipId }),
+            ...(request.reason === undefined ? {} : { reason: request.reason }),
+          }),
+        }
+      ),
+      'Leave team member response'
+    );
+    if (!Array.isArray(payload.releasedAssignmentIds)) {
+      throw new Error('Leave team member response assignment list is invalid');
+    }
+    return {
+      membership: parseMembershipRoute(payload.membership),
+      releasedAssignmentIds: payload.releasedAssignmentIds.map((assignmentId) =>
+        assignmentIdSchema.parse(assignmentId)
+      ),
+    };
   }
 
   async getRuntimeSession(
     request: GetDistributedRuntimeSessionRequest
   ): Promise<DistributedRuntimeSessionDto> {
-    const session = await this.ensureRuntimeSession(request);
-    let response: unknown;
-    try {
-      response = await this.request(
-        `/v2/runtime-sessions/${encodeURIComponent(session.sessionId)}/events?after=${request.afterCursor ?? 0}`,
-        { headers: { authorization: `Bearer ${session.sessionToken}` } }
-      );
-    } catch (error) {
-      this.discardDeniedRuntimeSession(request, error);
-      throw error;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const session = await this.ensureRuntimeSession(request);
+      try {
+        const payload = asRecord(
+          await this.request(
+            `/v2/runtime-sessions/${encodeURIComponent(session.sessionId)}/events?after=${request.afterCursor ?? 0}`,
+            { headers: { authorization: `Bearer ${session.sessionToken}` } }
+          ),
+          'Runtime session events response'
+        );
+        if (!Array.isArray(payload.events)) {
+          throw new Error('Runtime session events response is invalid');
+        }
+        return {
+          sessionId: session.sessionId,
+          scope: session.scope,
+          capabilities: [...session.capabilities],
+          expiresAt: session.expiresAt,
+          events: payload.events.map((event) => runtimeSessionEventRecordSchema.parse(event)),
+          truncated: payload.truncated === true,
+          nextCursor: requiredNonnegativeInteger(payload.nextCursor, 'nextCursor'),
+        };
+      } catch (error) {
+        this.discardDeniedRuntimeSession(request, session.sessionId, error);
+        if (attempt === 0 && this.isRevokedRuntimeSession(error)) continue;
+        throw error;
+      }
     }
-    const payload = asRecord(response, 'Runtime session events response');
-    if (!Array.isArray(payload.events)) {
-      throw new Error('Runtime session events response is invalid');
-    }
-    return {
-      sessionId: session.sessionId,
-      scope: session.scope,
-      capabilities: [...session.capabilities],
-      expiresAt: session.expiresAt,
-      events: payload.events.map((event) => runtimeSessionEventRecordSchema.parse(event)),
-      truncated: payload.truncated === true,
-      nextCursor: requiredNonnegativeInteger(payload.nextCursor, 'nextCursor'),
-    };
+    throw new Error('Runtime session retry was exhausted');
   }
 
   async sendRuntimeControl(
     request: SendDistributedRuntimeControlRequest
   ): Promise<DistributedRuntimeControlReceiptDto> {
-    const session = await this.ensureRuntimeSession(request.session);
     const control = runtimeControlSchema.parse(request.control);
-    let response: unknown;
-    try {
-      response = await this.request(
-        `/v2/runtime-sessions/${encodeURIComponent(session.sessionId)}/controls`,
-        {
-          method: 'POST',
-          headers: { authorization: `Bearer ${session.sessionToken}` },
-          body: JSON.stringify(control),
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const session = await this.ensureRuntimeSession(request.session);
+      try {
+        const payload = asRecord(
+          await this.request(
+            `/v2/runtime-sessions/${encodeURIComponent(session.sessionId)}/controls`,
+            {
+              method: 'POST',
+              headers: { authorization: `Bearer ${session.sessionToken}` },
+              body: JSON.stringify(control),
+            }
+          ),
+          'Runtime control response'
+        );
+        if (payload.accepted !== true || payload.controlId !== control.controlId) {
+          throw new Error('Runtime control response is invalid');
         }
-      );
-    } catch (error) {
-      this.discardDeniedRuntimeSession(request.session, error);
-      throw error;
+        return { accepted: true, controlId: control.controlId };
+      } catch (error) {
+        this.discardDeniedRuntimeSession(request.session, session.sessionId, error);
+        if (attempt === 0 && this.isRevokedRuntimeSession(error)) continue;
+        throw error;
+      }
     }
-    const payload = asRecord(response, 'Runtime control response');
-    if (payload.accepted !== true || payload.controlId !== control.controlId) {
-      throw new Error('Runtime control response is invalid');
-    }
-    return { accepted: true, controlId: control.controlId };
+    throw new Error('Runtime control retry was exhausted');
   }
 
   async createRemoteAssignment(
@@ -370,6 +462,7 @@ export class RelayHttpAdapter implements DistributedRelayPort {
         ...(request.description === undefined ? {} : { description: request.description }),
         ...(request.membershipId === undefined ? {} : { membershipId: request.membershipId }),
         ...(request.workspaceId === undefined ? {} : { workspaceId: request.workspaceId }),
+        ...(request.teamRole === undefined ? {} : { teamRole: request.teamRole }),
       },
     });
     const payload = asRecord(
@@ -462,39 +555,56 @@ export class RelayHttpAdapter implements DistributedRelayPort {
     }
   }
 
-  private async ensureRuntimeSession(request: GetDistributedRuntimeSessionRequest): Promise<{
-    readonly sessionId: string;
-    readonly sessionToken: string;
-    readonly scope: DistributedRuntimeSessionDto['scope'];
-    readonly capabilities: DistributedRuntimeSessionDto['capabilities'];
-    readonly expiresAt: string;
-  }> {
+  private async ensureRuntimeSession(
+    request: GetDistributedRuntimeSessionRequest
+  ): Promise<CachedRuntimeSession> {
     const key = this.runtimeSessionKey(request);
     const existing = this.runtimeSessions.get(key);
     if (existing !== undefined && Date.parse(existing.expiresAt) > Date.now()) return existing;
-    const created = runtimeSessionCreatedSchema.parse(
-      await this.request('/v2/runtime-sessions', {
-        method: 'POST',
-        body: JSON.stringify({
-          teamId: request.teamId,
-          nodeId: request.nodeId,
-          assignmentId: request.assignmentId,
-          attemptId: request.attemptId,
-          leaseEpoch: request.leaseEpoch,
-        }),
-      })
-    );
-    this.runtimeSessions.set(key, created);
-    return created;
+    const pending = this.pendingRuntimeSessions.get(key);
+    if (pending !== undefined) return await pending;
+
+    const creation = (async (): Promise<CachedRuntimeSession> => {
+      const created = runtimeSessionCreatedSchema.parse(
+        await this.request('/v2/runtime-sessions', {
+          method: 'POST',
+          body: JSON.stringify({
+            teamId: request.teamId,
+            nodeId: request.nodeId,
+            assignmentId: request.assignmentId,
+            attemptId: request.attemptId,
+            leaseEpoch: request.leaseEpoch,
+          }),
+        })
+      );
+      this.runtimeSessions.set(key, created);
+      return created;
+    })();
+    this.pendingRuntimeSessions.set(key, creation);
+    try {
+      return await creation;
+    } finally {
+      if (this.pendingRuntimeSessions.get(key) === creation) {
+        this.pendingRuntimeSessions.delete(key);
+      }
+    }
   }
 
   private discardDeniedRuntimeSession(
     request: GetDistributedRuntimeSessionRequest,
+    deniedSessionId: string,
     error: unknown
   ): void {
     if (error instanceof RelayHttpError && [401, 409].includes(error.status)) {
-      this.runtimeSessions.delete(this.runtimeSessionKey(request));
+      const key = this.runtimeSessionKey(request);
+      if (this.runtimeSessions.get(key)?.sessionId === deniedSessionId) {
+        this.runtimeSessions.delete(key);
+      }
     }
+  }
+
+  private isRevokedRuntimeSession(error: unknown): boolean {
+    return error instanceof RelayHttpError && error.status === 401;
   }
 
   private runtimeSessionKey(request: GetDistributedRuntimeSessionRequest): string {

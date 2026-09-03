@@ -9,6 +9,7 @@ import {
   nodeIdSchema,
   organizationIdSchema,
   personIdSchema,
+  teamIdSchema,
   workerInstanceIdSchema,
 } from './ids';
 import { commandEnvelopeSchema, eventEnvelopeSchema } from './envelopes';
@@ -55,6 +56,7 @@ export const workerHelloMessageSchema = z
     workerInstanceId: workerInstanceIdSchema,
     workerGeneration: z.number().int().positive(),
     label: z.string().trim().min(1).max(128),
+    autoJoinTeamId: teamIdSchema.optional(),
     runtimeCapabilities: z.array(runtimeSessionCapabilitySchema).max(32).optional(),
     lastInboundCursor: z.number().int().nonnegative(),
     sentAt: timestampSchema,

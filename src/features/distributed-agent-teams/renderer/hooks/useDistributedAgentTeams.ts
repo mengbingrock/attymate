@@ -68,11 +68,17 @@ export function useDistributedAgentTeams(
   useEffect(() => {
     if (!isActive) return;
 
-    void refresh();
-    const interval = window.setInterval(() => void refresh(), POLL_INTERVAL_MS);
+    let cancelled = false;
+    let timeout: number | undefined;
+    const poll = async (): Promise<void> => {
+      await refresh();
+      if (!cancelled) timeout = window.setTimeout(() => void poll(), POLL_INTERVAL_MS);
+    };
+    void poll();
 
     return () => {
-      window.clearInterval(interval);
+      cancelled = true;
+      if (timeout !== undefined) window.clearTimeout(timeout);
       requestSequenceRef.current += 1;
       setRefreshing(false);
     };

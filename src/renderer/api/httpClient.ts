@@ -499,6 +499,15 @@ export class HttpAPIClient implements ElectronAPI {
     startTeam: async () => {
       throw new Error('Distributed team start is only available in the desktop app');
     },
+    reconnectLead: async () => {
+      throw new Error('Distributed lead recovery is only available in the desktop app');
+    },
+    joinTeamMember: async () => {
+      throw new Error('Distributed team membership is only available in the desktop app');
+    },
+    leaveTeamMember: async () => {
+      throw new Error('Distributed team membership is only available in the desktop app');
+    },
   };
 
   memberLogStream: MemberLogStreamApi = {

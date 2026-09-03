@@ -6,6 +6,7 @@ import {
   nodeIdSchema,
   organizationIdSchema,
   personIdSchema,
+  teamIdSchema,
   workerInstanceIdSchema,
 } from '@claude-teams/agent-teams-protocol';
 
@@ -124,6 +125,12 @@ const runWorker = async (): Promise<void> => {
     valueAfter('--worker-instance-id', randomUUID())
   );
   const runtimeCwd = valueAfter('--runtime-cwd');
+  const autoJoinTeamIdValue = valueAfter(
+    '--auto-join-team',
+    process.env.AGENT_TEAMS_AUTO_JOIN_TEAM_ID
+  );
+  const autoJoinTeamId =
+    autoJoinTeamIdValue === undefined ? undefined : teamIdSchema.parse(autoJoinTeamIdValue);
   const runtimeBridgeLaunch = resolveWorkerBridgeLaunch(import.meta.url, 'runtimeMcpCli');
   const runtimeMcpCommand = valueAfter('--runtime-mcp-command');
 
@@ -138,6 +145,7 @@ const runWorker = async (): Promise<void> => {
     nodeId,
     workerInstanceId,
     workerGeneration: 1,
+    ...(autoJoinTeamId === undefined ? {} : { autoJoinTeamId }),
     reconnectDelayMs: 1_000,
     ...(runtimeCwd === undefined
       ? {}

@@ -10,3 +10,7 @@ export const DISTRIBUTED_AGENT_TEAMS_SEND_RUNTIME_CONTROL =
 export const DISTRIBUTED_AGENT_TEAMS_CREATE_ASSIGNMENT =
   'distributed-agent-teams:create-assignment';
 export const DISTRIBUTED_AGENT_TEAMS_START_TEAM = 'distributed-agent-teams:start-team';
+export const DISTRIBUTED_AGENT_TEAMS_RECONNECT_LEAD = 'distributed-agent-teams:reconnect-lead';
+export const DISTRIBUTED_AGENT_TEAMS_JOIN_TEAM_MEMBER = 'distributed-agent-teams:join-team-member';
+export const DISTRIBUTED_AGENT_TEAMS_LEAVE_TEAM_MEMBER =
+  'distributed-agent-teams:leave-team-member';

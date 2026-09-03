@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
-import { canProfileInvokeTool, type PublicMcpToolName } from '@claude-teams/agent-teams-protocol';
+import {
+  canRuntimeRoleInvokeTool,
+  type PublicMcpToolName,
+  type TeamMembershipRole,
+} from '@claude-teams/agent-teams-protocol';
 import { FastMCP } from 'fastmcp';
 import { z } from 'zod';
 
@@ -10,8 +14,22 @@ export const RUNTIME_BRIDGE_TOOL_NAMES = [
   'runtime_context',
   'progress_report',
   'message_send',
+  'team_leave',
   'result_submit',
 ] as const satisfies readonly PublicMcpToolName[];
+
+export const LEAD_RUNTIME_BRIDGE_TOOL_NAMES = [
+  'team_membership_list',
+  'team_member_join',
+  'team_member_leave',
+] as const satisfies readonly PublicMcpToolName[];
+
+export const runtimeBridgeToolNames = (
+  role: TeamMembershipRole
+): readonly PublicMcpToolName[] =>
+  role === 'lead'
+    ? [...RUNTIME_BRIDGE_TOOL_NAMES, ...LEAD_RUNTIME_BRIDGE_TOOL_NAMES]
+    : RUNTIME_BRIDGE_TOOL_NAMES;
 
 const jsonContent = (value: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
@@ -39,6 +57,21 @@ const resultParameters = z
     tests: z.array(z.string().trim().min(1).max(2_000)).max(100).optional(),
   })
   .strict();
+const joinMemberParameters = z
+  .object({
+    targetNodeId: z.uuid(),
+    title: z.string().trim().min(1).max(240).optional(),
+    description: z.string().trim().min(1).max(20_000).optional(),
+  })
+  .strict();
+const leaveMemberParameters = z
+  .object({
+    targetMembershipId: z.uuid(),
+    successorMembershipId: z.uuid().optional(),
+    reason: z.string().trim().min(1).max(2_000).optional(),
+  })
+  .strict();
+const leaveTeamParameters = leaveMemberParameters.omit({ targetMembershipId: true });
 
 export const parseRuntimeMcpToolArguments = (
   toolName: string,
@@ -53,13 +86,23 @@ export const parseRuntimeMcpToolArguments = (
       return messageParameters.parse(input);
     case 'result_submit':
       return resultParameters.parse(input);
+    case 'team_membership_list':
+      return emptyParameters.parse(input);
+    case 'team_member_join':
+      return joinMemberParameters.parse(input);
+    case 'team_member_leave':
+      return leaveMemberParameters.parse(input);
+    case 'team_leave':
+      return leaveTeamParameters.parse(input);
     default:
       throw new TypeError(`Runtime MCP tool ${toolName} is not implemented by this Worker`);
   }
 };
 
 export interface RuntimeMcpToolDefinition {
-  readonly name: (typeof RUNTIME_BRIDGE_TOOL_NAMES)[number];
+  readonly name:
+    | (typeof RUNTIME_BRIDGE_TOOL_NAMES)[number]
+    | (typeof LEAD_RUNTIME_BRIDGE_TOOL_NAMES)[number];
   readonly description: string;
   readonly parameters: z.ZodType;
   readonly execute: (input: unknown) => Promise<ReturnType<typeof jsonContent>>;
@@ -67,7 +110,8 @@ export interface RuntimeMcpToolDefinition {
 
 export const createRuntimeMcpToolDefinitions = (
   socketPath: string,
-  token: string
+  token: string,
+  teamRole: TeamMembershipRole = 'member'
 ): readonly RuntimeMcpToolDefinition[] => {
   const call = async (toolName: string, input: unknown) =>
     await requestWorkerControl<unknown>(socketPath, `/v2/runtime-tools/${toolName}`, {
@@ -98,24 +142,62 @@ export const createRuntimeMcpToolDefinitions = (
         jsonContent(await call('message_send', messageParameters.parse(input))),
     },
     {
+      name: 'team_leave',
+      description:
+        'Leave the current team and fence this runtime; an active lead must name a successor',
+      parameters: leaveTeamParameters,
+      execute: async (input) =>
+        jsonContent(await call('team_leave', leaveTeamParameters.parse(input))),
+    },
+    {
       name: 'result_submit',
       description: 'Submit a candidate result for Worker-side verification and publication',
       parameters: resultParameters,
       execute: async (input) =>
         jsonContent(await call('result_submit', resultParameters.parse(input))),
     },
+    ...(teamRole === 'lead'
+      ? [
+          {
+            name: 'team_membership_list' as const,
+            description: 'List the current active team roster and membership identifiers',
+            parameters: emptyParameters,
+            execute: async (input: unknown) =>
+              jsonContent(await call('team_membership_list', emptyParameters.parse(input))),
+          },
+          {
+            name: 'team_member_join' as const,
+            description: 'Invite a connected Worker node to join this team and start its runtime',
+            parameters: joinMemberParameters,
+            execute: async (input: unknown) =>
+              jsonContent(await call('team_member_join', joinMemberParameters.parse(input))),
+          },
+          {
+            name: 'team_member_leave' as const,
+            description:
+              'Remove a team membership, fencing its active execution lease; a departing lead must name a successor',
+            parameters: leaveMemberParameters,
+            execute: async (input: unknown) =>
+              jsonContent(await call('team_member_leave', leaveMemberParameters.parse(input))),
+          },
+        ]
+      : []),
   ];
   for (const definition of definitions) {
-    if (!canProfileInvokeTool('agent-teams-runtime', definition.name)) {
-      throw new Error(`Tool ${definition.name} is not allowed in agent-teams-runtime`);
+    if (!canRuntimeRoleInvokeTool(teamRole, definition.name)) {
+      throw new Error(`Tool ${definition.name} is not allowed for a ${teamRole} runtime`);
     }
   }
   return definitions;
 };
 
-export const createAgentTeamsRuntimeMcpServer = (socketPath: string, token: string): FastMCP => {
+export const createAgentTeamsRuntimeMcpServer = (
+  socketPath: string,
+  token: string,
+  teamRole: TeamMembershipRole = 'member'
+): FastMCP => {
   const server = new FastMCP({ name: 'agent-teams-runtime', version: '2.0.0' });
-  for (const definition of createRuntimeMcpToolDefinitions(socketPath, token)) {
+  for (const definition of createRuntimeMcpToolDefinitions(socketPath, token, teamRole)) {
     server.addTool({
       name: definition.name,
       description: definition.description,

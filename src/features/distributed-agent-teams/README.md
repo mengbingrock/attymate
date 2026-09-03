@@ -24,3 +24,24 @@ the Worker `status`/`diagnose` commands expose its non-secret state.
 
 The implementation follows
 [the distributed Codex runtime ADR](../../../docs/team-management/distributed-codex-runtime.md).
+
+## Persistent local leads
+
+Desktop recovery is deliberately limited to lead installations provisioned under:
+
+```text
+~/.local/share/agent-teams/distributed-leads/<team UUID>/
+├── lead.json
+├── start-worker.sh
+├── worker.pid
+├── config/worker.env
+├── data/
+├── workspace/
+└── worker/
+```
+
+`lead.json` binds the directory to the Relay team and lead node IDs. The **Reconnect lead** button
+sends only the team ID over IPC. Electron main verifies that the Relay's active lead matches this
+manifest, refuses symbolic links or a non-executable launcher, avoids a duplicate live PID, and
+starts the fixed launcher detached. Relay and Worker credentials remain in the protected
+`config/worker.env`; they are never returned to the renderer.

@@ -6,6 +6,9 @@ import {
 import type {
   CreateRemoteAssignmentRequest,
   GetDistributedRuntimeSessionRequest,
+  JoinDistributedTeamMemberRequest,
+  LeaveDistributedTeamMemberRequest,
+  ReconnectDistributedLeadRequest,
   SendDistributedRuntimeControlRequest,
   StartDistributedTeamRequest,
 } from './dto';
@@ -58,6 +61,9 @@ export const normalizeCreateRemoteAssignmentRequest = (
   if (membershipId !== undefined && teamId === undefined) {
     throw new TypeError('teamId is required for a team membership assignment');
   }
+  if (record.teamRole !== undefined && record.teamRole !== 'lead' && record.teamRole !== 'member') {
+    throw new TypeError('teamRole must be lead or member');
+  }
   return {
     targetNodeId: uuid(record.targetNodeId, 'targetNodeId'),
     title: requiredTrimmedString(record.title, 'title', 240),
@@ -65,6 +71,62 @@ export const normalizeCreateRemoteAssignmentRequest = (
     ...(teamId === undefined ? {} : { teamId }),
     ...(membershipId === undefined ? {} : { membershipId }),
     ...(workspaceId === undefined ? {} : { workspaceId }),
+    ...(record.teamRole === undefined ? {} : { teamRole: record.teamRole as 'lead' | 'member' }),
+  };
+};
+
+export const normalizeJoinDistributedTeamMemberRequest = (
+  input: unknown
+): JoinDistributedTeamMemberRequest => {
+  const record = asRecord(input);
+  if (record === null) throw new TypeError('Join team member request must be an object');
+  const membershipId =
+    record.membershipId === undefined ? undefined : uuid(record.membershipId, 'membershipId');
+  const workspaceId =
+    record.workspaceId === undefined ? undefined : uuid(record.workspaceId, 'workspaceId');
+  if ((membershipId === undefined) !== (workspaceId === undefined)) {
+    throw new TypeError('membershipId and workspaceId must be supplied together');
+  }
+  if (record.role !== undefined && record.role !== 'lead' && record.role !== 'member') {
+    throw new TypeError('role must be lead or member');
+  }
+  const title = optionalTrimmedString(record.title, 'title', 240);
+  const description = optionalTrimmedString(record.description, 'description', 20_000);
+  return {
+    teamId: uuid(record.teamId, 'teamId'),
+    targetNodeId: uuid(record.targetNodeId, 'targetNodeId'),
+    ...(membershipId === undefined ? {} : { membershipId }),
+    ...(workspaceId === undefined ? {} : { workspaceId }),
+    ...(record.role === undefined ? {} : { role: record.role as 'lead' | 'member' }),
+    ...(title === undefined ? {} : { title }),
+    ...(description === undefined ? {} : { description }),
+  };
+};
+
+export const normalizeLeaveDistributedTeamMemberRequest = (
+  input: unknown
+): LeaveDistributedTeamMemberRequest => {
+  const record = asRecord(input);
+  if (record === null) throw new TypeError('Leave team member request must be an object');
+  if (
+    record.expectedRevision !== undefined &&
+    (!Number.isInteger(record.expectedRevision) || (record.expectedRevision as number) <= 0)
+  ) {
+    throw new TypeError('expectedRevision must be a positive integer');
+  }
+  const successorMembershipId =
+    record.successorMembershipId === undefined
+      ? undefined
+      : uuid(record.successorMembershipId, 'successorMembershipId');
+  const reason = optionalTrimmedString(record.reason, 'reason', 2_000);
+  return {
+    teamId: uuid(record.teamId, 'teamId'),
+    membershipId: uuid(record.membershipId, 'membershipId'),
+    ...(record.expectedRevision === undefined
+      ? {}
+      : { expectedRevision: record.expectedRevision as number }),
+    ...(successorMembershipId === undefined ? {} : { successorMembershipId }),
+    ...(reason === undefined ? {} : { reason }),
   };
 };
 
@@ -73,6 +135,14 @@ export const normalizeStartDistributedTeamRequest = (
 ): StartDistributedTeamRequest => {
   const record = asRecord(input);
   if (record === null) throw new TypeError('Start distributed team request must be an object');
+  return { teamId: uuid(record.teamId, 'teamId') };
+};
+
+export const normalizeReconnectDistributedLeadRequest = (
+  input: unknown
+): ReconnectDistributedLeadRequest => {
+  const record = asRecord(input);
+  if (record === null) throw new TypeError('Reconnect distributed lead request must be an object');
   return { teamId: uuid(record.teamId, 'teamId') };
 };
 

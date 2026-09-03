@@ -15,10 +15,11 @@ export class StartDistributedTeamUseCase {
       throw new Error('Starting a distributed team requires authenticated Relay credentials');
     }
 
-    const [workers, events, commands] = await Promise.all([
+    const [workers, events, commands, membershipRoutes] = await Promise.all([
       this.relay.listWorkers(),
       this.relay.listAssignmentEvents(),
       this.relay.listCommands(),
+      this.relay.listMembershipRoutes(),
     ]);
     const connectedWorkers = new Map(
       workers
@@ -26,6 +27,11 @@ export class StartDistributedTeamUseCase {
         .map((worker) => [worker.nodeId, worker] as const)
     );
     const latestByAssignment = new Map<string, DistributedAssignmentEventDto>();
+    const activeMembershipIds = new Set(
+      membershipRoutes
+        .filter((route) => route.teamId === request.teamId && route.status === 'active')
+        .map((route) => route.membershipId)
+    );
     for (const event of events) {
       if (event.teamId !== request.teamId) continue;
       const previous = latestByAssignment.get(event.assignmentId);
@@ -44,6 +50,18 @@ export class StartDistributedTeamUseCase {
       }
       const event = latestByAssignment.get(command.assignmentId);
       if (event === undefined || !STARTABLE_STATES.has(event.state)) return [];
+      const payload =
+        typeof command.payload === 'object' &&
+        command.payload !== null &&
+        !Array.isArray(command.payload)
+          ? (command.payload as Record<string, unknown>)
+          : {};
+      if (
+        typeof payload.membershipId === 'string' &&
+        !activeMembershipIds.has(payload.membershipId)
+      ) {
+        return [];
+      }
       const worker = connectedWorkers.get(command.targetNodeId);
       if (worker === undefined) {
         throw new Error(`Worker ${command.targetNodeId} is not connected`);

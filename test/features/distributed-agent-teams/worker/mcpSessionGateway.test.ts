@@ -55,4 +55,35 @@ describe('headless Worker MCP session gateway', () => {
       })
     ).toThrow(RuntimeAuthorityArgumentError);
   });
+
+  it('only exposes and authorizes team management tools for the lead runtime', () => {
+    const definitions = [
+      { name: 'progress_report' },
+      { name: 'team_membership_list' },
+      { name: 'team_member_join' },
+      { name: 'team_member_leave' },
+    ];
+
+    expect(filterMcpToolsForSession({ ...runtimeContext, teamRole: 'member' }, definitions)).toEqual([
+      definitions[0],
+    ]);
+    expect(() =>
+      authorizeWorkerToolInvocation(
+        { ...runtimeContext, teamRole: 'member' },
+        'team_member_join',
+        { targetNodeId: '00000000-0000-4000-8000-000000000011' }
+      )
+    ).toThrow('cannot invoke team_member_join');
+
+    expect(filterMcpToolsForSession({ ...runtimeContext, teamRole: 'lead' }, definitions)).toEqual(
+      definitions
+    );
+    expect(
+      authorizeWorkerToolInvocation(
+        { ...runtimeContext, teamRole: 'lead' },
+        'team_member_join',
+        { targetNodeId: '00000000-0000-4000-8000-000000000011' }
+      ).toolName
+    ).toBe('team_member_join');
+  });
 });

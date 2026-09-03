@@ -60,6 +60,12 @@ export function buildDistributedTeamSummaries(
     events.push(event);
     eventsByTeam.set(event.teamId, events);
   }
+  const activeRoutes = (topology?.membershipRoutes ?? []).filter(
+    (route) => route.status === 'active'
+  );
+  for (const route of activeRoutes) {
+    if (!eventsByTeam.has(route.teamId)) eventsByTeam.set(route.teamId, []);
+  }
 
   const workerByNodeId = new Map(
     (topology?.workers ?? []).map((worker) => [worker.nodeId.toLowerCase(), worker] as const)
@@ -69,20 +75,32 @@ export function buildDistributedTeamSummaries(
   return [...eventsByTeam.entries()]
     .map(([teamId, events]): DistributedTeamSummary => {
       const latestAssignments = latestDistributedAssignments(events);
-      const workerNodeIds = [...new Set(events.map((event) => event.sourceNodeId.toLowerCase()))];
+      const teamRoutes = activeRoutes.filter((route) => route.teamId === teamId);
+      const workerNodeIds = [
+        ...new Set([
+          ...teamRoutes.map((route) => route.nodeId.toLowerCase()),
+          ...events.map((event) => event.sourceNodeId.toLowerCase()),
+        ]),
+      ];
       const workers = workerNodeIds
         .map((nodeId): DistributedTeamWorkerSummary => {
           const worker = workerByNodeId.get(nodeId);
           return {
             nodeId,
-            label: worker?.label ?? `Worker ${nodeId.slice(0, 8)}`,
+            label:
+              worker?.label ??
+              teamRoutes.find((route) => route.nodeId.toLowerCase() === nodeId)?.label ??
+              `Worker ${nodeId.slice(0, 8)}`,
             status: worker?.status ?? 'offline',
           };
         })
         .sort((left, right) => left.label.localeCompare(right.label));
-      const newestEvent = events.reduce((newest, event) =>
-        event.cursor > newest.cursor ? event : newest
-      );
+      const lastActivityAt =
+        [
+          ...events.map((event) => event.receivedAt),
+          ...teamRoutes.map((route) => route.updatedAt),
+        ].sort((left, right) => Date.parse(right) - Date.parse(left))[0] ??
+        new Date(0).toISOString();
 
       return {
         teamId,
@@ -94,7 +112,7 @@ export function buildDistributedTeamSummaries(
         activeAssignmentCount: latestAssignments.filter((event) =>
           ACTIVE_ASSIGNMENT_STATES.has(event.state)
         ).length,
-        lastActivityAt: newestEvent.receivedAt,
+        lastActivityAt,
       };
     })
     .sort((left, right) => Date.parse(right.lastActivityAt) - Date.parse(left.lastActivityAt));

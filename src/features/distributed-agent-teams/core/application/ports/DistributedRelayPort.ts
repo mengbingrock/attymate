@@ -9,6 +9,10 @@ import type {
   DistributedRuntimeSessionDto,
   DistributedWorkerDto,
   GetDistributedRuntimeSessionRequest,
+  JoinDistributedTeamMemberReceiptDto,
+  JoinDistributedTeamMemberRequest,
+  LeaveDistributedTeamMemberReceiptDto,
+  LeaveDistributedTeamMemberRequest,
   RemoteAssignmentReceiptDto,
   SendDistributedRuntimeControlRequest,
 } from '../../../contracts';
@@ -37,4 +41,10 @@ export interface DistributedRelayPort {
     assignmentId: string;
     expectedRevision: number;
   }): Promise<RemoteAssignmentReceiptDto>;
+  joinTeamMember(
+    request: JoinDistributedTeamMemberRequest
+  ): Promise<JoinDistributedTeamMemberReceiptDto>;
+  leaveTeamMember(
+    request: LeaveDistributedTeamMemberRequest
+  ): Promise<LeaveDistributedTeamMemberReceiptDto>;
 }

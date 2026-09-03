@@ -147,7 +147,12 @@ export class WorkerOutboxStore {
     context: RuntimeSessionContext,
     input: {
       readonly idempotencyKey: string;
-      readonly type: 'assignment.progress' | 'assignment.result_submitted' | 'team.message';
+      readonly type:
+        | 'assignment.progress'
+        | 'assignment.result_submitted'
+        | 'team.message'
+        | 'team.member.join_requested'
+        | 'team.member.leave_requested';
       readonly payload: Readonly<Record<string, unknown>>;
     }
   ): WorkerOutboxEvent {
@@ -187,7 +192,14 @@ export class WorkerOutboxStore {
                 senderWorkspaceId: context.workspaceId,
                 turnId: context.turnId,
               }
-            : {
+            : input.type === 'team.member.join_requested' ||
+                input.type === 'team.member.leave_requested'
+              ? {
+                  ...input.payload,
+                  actorMembershipId: context.membershipId,
+                  turnId: context.turnId,
+                }
+              : {
                 ...input.payload,
                 membershipId: context.membershipId,
                 workspaceId: context.workspaceId,

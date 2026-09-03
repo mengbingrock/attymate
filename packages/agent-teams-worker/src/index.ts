@@ -15,5 +15,6 @@ export * from './workerInboxStore';
 export * from './workerMessageStore';
 export * from './workerOutboxStore';
 export * from './workerRuntimeStore';
+export * from './workerTeamMembershipStore';
 export * from './workerRuntimeSessionStore';
 export * from './workspaceFileBroker';

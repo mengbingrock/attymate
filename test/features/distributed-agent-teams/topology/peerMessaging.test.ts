@@ -327,7 +327,11 @@ describe('durable peer messaging', () => {
           input: [
             {
               type: 'text',
-              text: `Agent Teams peer message from membership ${senderMembershipId}:\n\nThe follow-up is scoped to your active assignment.`,
+              text: [
+                `Agent Teams peer message from membership ${senderMembershipId}:`,
+                'The follow-up is scoped to your active assignment.',
+                `Reply routing: send any response through agent-teams-runtime.message_send with recipientMembershipId ${senderMembershipId}. Plain assistant text stays only in this Worker console and is not delivered to the sender.`,
+              ].join('\n\n'),
             },
           ],
           expectedTurnId: '00000000-0000-7000-8000-000000000042',
@@ -380,7 +384,11 @@ describe('durable peer messaging', () => {
           input: [
             {
               type: 'text',
-              text: `Agent Teams peer message from membership ${senderMembershipId}:\n\nWake up and answer this follow-up.`,
+              text: [
+                `Agent Teams peer message from membership ${senderMembershipId}:`,
+                'Wake up and answer this follow-up.',
+                `Reply routing: send any response through agent-teams-runtime.message_send with recipientMembershipId ${senderMembershipId}. Plain assistant text stays only in this Worker console and is not delivered to the sender.`,
+              ].join('\n\n'),
             },
           ],
         });

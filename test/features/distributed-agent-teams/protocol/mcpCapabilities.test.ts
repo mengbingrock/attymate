@@ -2,6 +2,7 @@ import {
   assertSessionCanInvokeTool,
   canProfileInvokeTool,
   isInternalProtocolOperation,
+  listRuntimeToolsForRole,
   listToolsForProfile,
   McpCapabilityError,
   mcpSessionContextSchema,
@@ -48,6 +49,25 @@ describe('distributed MCP capability profiles', () => {
     expect(canProfileInvokeTool('agent-teams-control', 'message_mark_read')).toBe(true);
     expect(canProfileInvokeTool('agent-teams-control', 'team_launch')).toBe(false);
     expect(canProfileInvokeTool('agent-teams-manager', 'team_launch')).toBe(true);
+  });
+
+  it('reserves dynamic roster management for the active lead role', () => {
+    const member = mcpSessionContextSchema.parse({
+      protocolVersion: 2,
+      coordinationMode: 'lan_relay_v2',
+      profile: 'agent-teams-runtime',
+      ...ids,
+      teamRole: 'member',
+      leaseEpoch: 3,
+    });
+    const lead = mcpSessionContextSchema.parse({ ...member, teamRole: 'lead' });
+
+    expect(listRuntimeToolsForRole('member')).not.toContain('team_member_join');
+    expect(listRuntimeToolsForRole('lead')).toContain('team_member_join');
+    expect(() => assertSessionCanInvokeTool(member, 'team_member_leave')).toThrow(
+      McpCapabilityError
+    );
+    expect(() => assertSessionCanInvokeTool(lead, 'team_member_leave')).not.toThrow();
   });
 
   it('does not expose worker-relay protocol operations as MCP tools', () => {

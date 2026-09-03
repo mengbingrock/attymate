@@ -69,6 +69,20 @@ The Teams view exposes:
 Traditional local teams keep their tmux consoles. A distributed console represents the Codex
 thread and turn rather than pretending the remote Worker has an app-owned tmux pane.
 
+### Local lead recovery
+
+A manager-hosted distributed lead keeps its stable identity, Worker SQLite state, isolated
+`CODEX_HOME`, approved workspace, Worker bundle, and protected environment beneath
+`~/.local/share/agent-teams/distributed-leads/<team UUID>/`. This avoids depending on temporary
+directories that disappear at reboot.
+
+The desktop **Reconnect lead** action is a narrow recovery operation, not a general process
+launcher. The renderer supplies only a validated team UUID. Electron main reads the active lead
+membership from the authenticated Relay, requires a matching local `lead.json`, and launches only
+that team's fixed `start-worker.sh`. A connected Relay worker or a live PID is never duplicated.
+This is manual recovery after the manager host or Worker stops; it does not elect a new lead or
+start remote members.
+
 ## Configuration
 
 Generate two independent high-entropy values and provide them through process environment or CLI
@@ -82,6 +96,20 @@ AGENT_TEAMS_RELAY_WORKER_TOKEN=<worker secret>
 The Relay requires both values together. Electron reads only the manager value. Workers read only
 the Worker value. Omitting both preserves diagnostics-only insecure LAN mode and the UI disables
 all interactive runtime and filesystem controls.
+
+To let an authenticated Worker advertise itself and join an existing team without a lead-side
+command, configure its target team:
+
+```text
+AGENT_TEAMS_AUTO_JOIN_TEAM_ID=<team UUID>
+```
+
+The equivalent CLI option is `--auto-join-team <team UUID>`. Auto-discovery only enrolls the
+Worker as a `member`; it cannot claim leadership, and the team must already have an active lead.
+The Relay derives a stable enrollment identity from the team and Worker node, so reconnects are
+idempotent. If the lead removes that membership, its tombstone suppresses automatic re-enrollment
+on later reconnects. Re-enrollment then requires an explicit lead action or a deliberately new
+Worker node identity.
 
 Authenticate the isolated execution home explicitly once before accepting runtime assignments:
 

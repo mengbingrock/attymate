@@ -63,10 +63,17 @@ export interface DistributedTeamActivityEntry {
   payload: unknown;
 }
 
+export interface DistributedTeamMemberDetail {
+  route: DistributedMembershipRouteDto;
+  worker?: DistributedWorkerDto;
+}
+
 export interface DistributedTeamDetailModel {
   teamId: string;
   summary: DistributedTeamSummary | null;
   workers: DistributedWorkerDto[];
+  availableWorkers: DistributedWorkerDto[];
+  members: DistributedTeamMemberDetail[];
   assignments: DistributedTeamAssignmentDetail[];
   messages: DistributedTeamMessageDetail[];
   activity: DistributedTeamActivityEntry[];
@@ -99,18 +106,35 @@ export function buildDistributedTeamDetail(
   const membershipRoutes = (debugSnapshot?.membershipRoutes ?? []).filter(
     (route) => route.teamId.toLowerCase() === normalizedTeamId
   );
+  const activeMembershipRoutes = membershipRoutes.filter((route) => route.status === 'active');
   const workerByNodeId = new Map(
     (topology?.workers ?? []).map((worker) => [worker.nodeId.toLowerCase(), worker] as const)
   );
-  const workerNodeIds = new Set([
-    ...membershipRoutes.map((route) => route.nodeId.toLowerCase()),
-    ...events.map((event) => event.sourceNodeId.toLowerCase()),
-    ...commands.map((command) => command.targetNodeId.toLowerCase()),
-  ]);
+  const workerNodeIds = new Set(
+    membershipRoutes.length > 0
+      ? activeMembershipRoutes.map((route) => route.nodeId.toLowerCase())
+      : [
+          ...events.map((event) => event.sourceNodeId.toLowerCase()),
+          ...commands.map((command) => command.targetNodeId.toLowerCase()),
+        ]
+  );
   const workers = [...workerNodeIds]
     .map((nodeId) => workerByNodeId.get(nodeId))
     .filter((worker): worker is DistributedWorkerDto => Boolean(worker))
     .sort((left, right) => left.label.localeCompare(right.label));
+  const members = activeMembershipRoutes
+    .map((route): DistributedTeamMemberDetail => {
+      const worker = workerByNodeId.get(route.nodeId.toLowerCase());
+      return worker === undefined ? { route } : { route, worker };
+    })
+    .sort((left, right) => {
+      if (left.route.role !== right.route.role) return left.route.role === 'lead' ? -1 : 1;
+      return left.route.label.localeCompare(right.route.label);
+    });
+  const activeNodeIds = new Set(activeMembershipRoutes.map((route) => route.nodeId.toLowerCase()));
+  const availableWorkers = (topology?.workers ?? []).filter(
+    (worker) => !activeNodeIds.has(worker.nodeId.toLowerCase())
+  );
 
   const latestEvents = new Map(
     latestDistributedAssignments(
@@ -224,6 +248,8 @@ export function buildDistributedTeamDetail(
     teamId,
     summary,
     workers,
+    availableWorkers,
+    members,
     assignments,
     messages,
     activity,

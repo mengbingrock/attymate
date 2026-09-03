@@ -45,7 +45,10 @@ describe('Codex runtime MCP profile', () => {
           required: true,
           enabled_tools: RUNTIME_BRIDGE_TOOL_NAMES,
           default_tools_approval_mode: 'approve',
-          env: { AGENT_TEAMS_RUNTIME_SESSION_TOKEN: 'secret-token' },
+          env: {
+            AGENT_TEAMS_RUNTIME_SESSION_TOKEN: 'secret-token',
+            AGENT_TEAMS_RUNTIME_TEAM_ROLE: 'member',
+          },
         }),
       },
     });

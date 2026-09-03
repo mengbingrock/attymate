@@ -377,7 +377,12 @@ export const requestWorkerControl = async <T>(
         });
         response.on('end', () => {
           if (response.statusCode !== 200) {
-            reject(new Error(`Worker control request failed with HTTP ${response.statusCode}`));
+            const detail = Buffer.concat(chunks).toString('utf8').slice(0, 512).trim();
+            reject(
+              new Error(
+                `Worker control request failed with HTTP ${response.statusCode}${detail.length === 0 ? '' : `: ${detail}`}`
+              )
+            );
             return;
           }
           try {

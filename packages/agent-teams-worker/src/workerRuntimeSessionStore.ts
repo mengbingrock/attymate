@@ -15,6 +15,7 @@ import {
   workerInstanceIdSchema,
   workspaceIdSchema,
   type RuntimeSessionContext,
+  type TeamMembershipRole,
 } from '@claude-teams/agent-teams-protocol';
 
 export interface RuntimeMcpSessionIdentity {
@@ -27,6 +28,7 @@ export interface RuntimeMcpSessionIdentity {
   readonly assignmentId: string;
   readonly attemptId: string;
   readonly workspaceId: string;
+  readonly teamRole?: TeamMembershipRole;
   readonly leaseEpoch: number;
   readonly leaseId: string;
   readonly expiresAt: string;
@@ -35,6 +37,7 @@ export interface RuntimeMcpSessionIdentity {
 export interface CreatedRuntimeMcpSession {
   readonly token: string;
   readonly expiresAt: string;
+  readonly teamRole: TeamMembershipRole;
 }
 
 interface RuntimeSessionRow {
@@ -48,6 +51,7 @@ interface RuntimeSessionRow {
   assignment_id: string;
   attempt_id: string;
   workspace_id: string;
+  team_role: string;
   lease_epoch: number;
   lease_id: string;
   turn_id: string | null;
@@ -81,6 +85,7 @@ const validateIdentity = (input: RuntimeMcpSessionIdentity): RuntimeMcpSessionId
   assignmentId: assignmentIdSchema.parse(input.assignmentId),
   attemptId: attemptIdSchema.parse(input.attemptId),
   workspaceId: workspaceIdSchema.parse(input.workspaceId),
+  teamRole: input.teamRole ?? 'member',
   leaseEpoch: input.leaseEpoch,
   leaseId: leaseIdSchema.parse(input.leaseId),
   expiresAt: normalizeExpiry(input.expiresAt),
@@ -113,6 +118,7 @@ export class WorkerRuntimeSessionStore {
         assignment_id TEXT NOT NULL,
         attempt_id TEXT NOT NULL,
         workspace_id TEXT NOT NULL,
+        team_role TEXT NOT NULL DEFAULT 'member',
         lease_epoch INTEGER NOT NULL,
         lease_id TEXT NOT NULL,
         turn_id TEXT,
@@ -124,6 +130,7 @@ export class WorkerRuntimeSessionStore {
       CREATE UNIQUE INDEX IF NOT EXISTS runtime_mcp_sessions_one_active_attempt
         ON runtime_mcp_sessions(attempt_id) WHERE revoked_at IS NULL;
     `);
+    this.ensureColumn('team_role', "TEXT NOT NULL DEFAULT 'member'");
   }
 
   create(input: RuntimeMcpSessionIdentity): CreatedRuntimeMcpSession {
@@ -136,6 +143,7 @@ export class WorkerRuntimeSessionStore {
     }
     const token = randomBytes(32).toString('base64url');
     const hash = tokenHash(token);
+    const teamRole = identity.teamRole ?? 'member';
     const now = new Date().toISOString();
     this.database.exec('BEGIN IMMEDIATE;');
     try {
@@ -149,10 +157,10 @@ export class WorkerRuntimeSessionStore {
         .prepare(
           `INSERT INTO runtime_mcp_sessions
             (token_hash, organization_id, person_id, node_id, worker_instance_id, team_id,
-             membership_id, assignment_id, attempt_id, workspace_id, lease_epoch, lease_id,
+             membership_id, assignment_id, attempt_id, workspace_id, team_role, lease_epoch, lease_id,
              expires_at,
              created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           hash,
@@ -165,6 +173,7 @@ export class WorkerRuntimeSessionStore {
           identity.assignmentId,
           identity.attemptId,
           identity.workspaceId,
+          teamRole,
           identity.leaseEpoch,
           identity.leaseId,
           identity.expiresAt,
@@ -172,7 +181,7 @@ export class WorkerRuntimeSessionStore {
           now
         );
       this.database.exec('COMMIT;');
-      return { token, expiresAt: identity.expiresAt };
+      return { token, expiresAt: identity.expiresAt, teamRole };
     } catch (error) {
       this.database.exec('ROLLBACK;');
       throw error;
@@ -198,6 +207,7 @@ export class WorkerRuntimeSessionStore {
       assignmentId: row.assignment_id,
       attemptId: row.attempt_id,
       workspaceId: row.workspace_id,
+      teamRole: row.team_role as TeamMembershipRole,
       leaseEpoch: row.lease_epoch,
       leaseId: row.lease_id,
       expiresAt: expiresAtInput === undefined ? row.expires_at : normalizeExpiry(expiresAtInput),
@@ -283,6 +293,7 @@ export class WorkerRuntimeSessionStore {
       assignmentId: row.assignment_id,
       attemptId: row.attempt_id,
       workspaceId: row.workspace_id,
+      teamRole: row.team_role,
       leaseEpoch: row.lease_epoch,
       turnId: row.turn_id,
     }) as RuntimeSessionContext;
@@ -290,5 +301,13 @@ export class WorkerRuntimeSessionStore {
 
   close(): void {
     this.database.close();
+  }
+
+  private ensureColumn(name: string, definition: string): void {
+    const columns = this.database.prepare('PRAGMA table_info(runtime_mcp_sessions)').all() as Array<{
+      name: string;
+    }>;
+    if (columns.some((column) => column.name === name)) return;
+    this.database.exec(`ALTER TABLE runtime_mcp_sessions ADD COLUMN ${name} ${definition}`);
   }
 }

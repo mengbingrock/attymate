@@ -4,10 +4,16 @@ import {
   DISTRIBUTED_AGENT_TEAMS_GET_DEBUG_SNAPSHOT,
   DISTRIBUTED_AGENT_TEAMS_GET_RUNTIME_SESSION,
   DISTRIBUTED_AGENT_TEAMS_GET_TOPOLOGY,
+  DISTRIBUTED_AGENT_TEAMS_JOIN_TEAM_MEMBER,
+  DISTRIBUTED_AGENT_TEAMS_LEAVE_TEAM_MEMBER,
+  DISTRIBUTED_AGENT_TEAMS_RECONNECT_LEAD,
   DISTRIBUTED_AGENT_TEAMS_SEND_RUNTIME_CONTROL,
   DISTRIBUTED_AGENT_TEAMS_START_TEAM,
   normalizeCreateRemoteAssignmentRequest,
   normalizeGetDistributedRuntimeSessionRequest,
+  normalizeJoinDistributedTeamMemberRequest,
+  normalizeLeaveDistributedTeamMemberRequest,
+  normalizeReconnectDistributedLeadRequest,
   normalizeSendDistributedRuntimeControlRequest,
   normalizeStartDistributedTeamRequest,
 } from '../../../../contracts';
@@ -36,6 +42,15 @@ export const registerDistributedAgentTeamsIpc = (
   ipcMain.handle(DISTRIBUTED_AGENT_TEAMS_START_TEAM, (_event, input: unknown) =>
     feature.startTeam(normalizeStartDistributedTeamRequest(input))
   );
+  ipcMain.handle(DISTRIBUTED_AGENT_TEAMS_RECONNECT_LEAD, (_event, input: unknown) =>
+    feature.reconnectLead(normalizeReconnectDistributedLeadRequest(input))
+  );
+  ipcMain.handle(DISTRIBUTED_AGENT_TEAMS_JOIN_TEAM_MEMBER, (_event, input: unknown) =>
+    feature.joinTeamMember(normalizeJoinDistributedTeamMemberRequest(input))
+  );
+  ipcMain.handle(DISTRIBUTED_AGENT_TEAMS_LEAVE_TEAM_MEMBER, (_event, input: unknown) =>
+    feature.leaveTeamMember(normalizeLeaveDistributedTeamMemberRequest(input))
+  );
 };
 
 export const removeDistributedAgentTeamsIpc = (ipcMain: IpcMain): void => {
@@ -46,4 +61,7 @@ export const removeDistributedAgentTeamsIpc = (ipcMain: IpcMain): void => {
   ipcMain.removeHandler(DISTRIBUTED_AGENT_TEAMS_SEND_RUNTIME_CONTROL);
   ipcMain.removeHandler(DISTRIBUTED_AGENT_TEAMS_CREATE_ASSIGNMENT);
   ipcMain.removeHandler(DISTRIBUTED_AGENT_TEAMS_START_TEAM);
+  ipcMain.removeHandler(DISTRIBUTED_AGENT_TEAMS_RECONNECT_LEAD);
+  ipcMain.removeHandler(DISTRIBUTED_AGENT_TEAMS_JOIN_TEAM_MEMBER);
+  ipcMain.removeHandler(DISTRIBUTED_AGENT_TEAMS_LEAVE_TEAM_MEMBER);
 };

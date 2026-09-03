@@ -23,6 +23,7 @@ import {
   type LeaseId,
   type MembershipId,
   type TeamId,
+  type TeamMembershipRole,
   type WorkspaceId,
 } from '@claude-teams/agent-teams-protocol';
 
@@ -34,6 +35,7 @@ export interface WorkerAssignment {
   readonly teamId?: TeamId;
   readonly membershipId?: MembershipId;
   readonly workspaceId?: WorkspaceId;
+  readonly teamRole?: TeamMembershipRole;
   readonly targetNodeId: NodeId;
   readonly title: string;
   readonly description?: string;
@@ -83,6 +85,7 @@ interface AssignmentRow {
   team_id: string | null;
   membership_id: string | null;
   workspace_id: string | null;
+  team_role: string | null;
   target_node_id: string;
   title: string;
   description: string | null;
@@ -118,6 +121,7 @@ const mapAssignment = (row: AssignmentRow): WorkerAssignment => ({
   ...(row.workspace_id === null
     ? {}
     : { workspaceId: workspaceIdSchema.parse(row.workspace_id) }),
+  ...(row.team_role === null ? {} : { teamRole: row.team_role as TeamMembershipRole }),
   targetNodeId: nodeIdSchema.parse(row.target_node_id),
   title: row.title,
   ...(row.description === null ? {} : { description: row.description }),
@@ -229,6 +233,7 @@ export class WorkerAssignmentStore {
         team_id TEXT,
         membership_id TEXT,
         workspace_id TEXT,
+        team_role TEXT,
         target_node_id TEXT NOT NULL,
         title TEXT NOT NULL,
         description TEXT,
@@ -258,6 +263,7 @@ export class WorkerAssignmentStore {
     this.ensureAssignmentColumn('attempt_id', 'TEXT');
     this.ensureAssignmentColumn('membership_id', 'TEXT');
     this.ensureAssignmentColumn('workspace_id', 'TEXT');
+    this.ensureAssignmentColumn('team_role', 'TEXT');
     this.ensureAssignmentColumn('lease_id', 'TEXT');
     this.ensureAssignmentColumn('lease_epoch', 'INTEGER');
     this.ensureAssignmentColumn('lease_expires_at', 'TEXT');
@@ -283,6 +289,7 @@ export class WorkerAssignmentStore {
         existing.teamId === command.envelope.teamId &&
         existing.membershipId === payload.membershipId &&
         existing.workspaceId === payload.workspaceId &&
+        existing.teamRole === payload.teamRole &&
         existing.title === payload.title &&
         existing.description === payload.description;
       if (!sameOffer) throw new WorkerAssignmentOfferConflictError(payload.assignmentId);
@@ -295,10 +302,10 @@ export class WorkerAssignmentStore {
       this.database
         .prepare(
           `INSERT INTO assignments
-            (assignment_id, offer_command_id, team_id, membership_id, workspace_id,
+            (assignment_id, offer_command_id, team_id, membership_id, workspace_id, team_role,
              target_node_id, title, description,
              state, revision, offered_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'proposed', 0, ?, ?)`
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', 0, ?, ?)`
         )
         .run(
           payload.assignmentId,
@@ -306,6 +313,7 @@ export class WorkerAssignmentStore {
           command.envelope.teamId ?? null,
           payload.membershipId ?? null,
           payload.workspaceId ?? null,
+          payload.teamRole ?? null,
           command.envelope.targetNodeId,
           payload.title,
           payload.description ?? null,

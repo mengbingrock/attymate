@@ -6,12 +6,14 @@ import {
   membershipIdSchema,
   workspaceIdSchema,
 } from './ids';
+import { teamMembershipRoleSchema } from './teamMembership';
 
 export const assignmentOfferPayloadSchema = z
   .object({
     assignmentId: assignmentIdSchema,
     membershipId: membershipIdSchema.optional(),
     workspaceId: workspaceIdSchema.optional(),
+    teamRole: teamMembershipRoleSchema.optional(),
     title: z.string().trim().min(1).max(240),
     description: z.string().trim().min(1).max(20_000).optional(),
   })

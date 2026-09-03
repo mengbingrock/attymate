@@ -55,6 +55,7 @@ const runtimeTools = [
   'task_add_comment',
   'task_complete',
   'message_send',
+  'team_leave',
   'progress_report',
   'result_submit',
   'support_request',
@@ -66,6 +67,12 @@ const runtimeTools = [
   'calendar_event_list',
   'calendar_event_get',
   'calendar_change_request',
+] as const;
+
+const leadRuntimeTools = [
+  'team_membership_list',
+  'team_member_join',
+  'team_member_leave',
 ] as const;
 
 const managerOnlyTools = [
@@ -91,9 +98,14 @@ const internalProtocolOperations = [
 
 export type OwnerControlToolName = (typeof ownerControlTools)[number];
 export type RuntimeToolName = (typeof runtimeTools)[number];
+export type LeadRuntimeToolName = (typeof leadRuntimeTools)[number];
 export type ManagerOnlyToolName = (typeof managerOnlyTools)[number];
 export type InternalProtocolOperation = (typeof internalProtocolOperations)[number];
-export type PublicMcpToolName = OwnerControlToolName | RuntimeToolName | ManagerOnlyToolName;
+export type PublicMcpToolName =
+  | OwnerControlToolName
+  | RuntimeToolName
+  | LeadRuntimeToolName
+  | ManagerOnlyToolName;
 
 const publicToolsByProfile: Readonly<Record<McpCapabilityProfile, ReadonlySet<string>>> = {
   'agent-teams-control': new Set(ownerControlTools),
@@ -127,10 +139,31 @@ export const assertSessionCanInvokeTool = (
   context: McpSessionContext,
   toolName: string
 ): void => {
+  if (
+    context.profile === 'agent-teams-runtime' &&
+    context.teamRole === 'lead' &&
+    (leadRuntimeTools as readonly string[]).includes(toolName)
+  ) {
+    return;
+  }
   if (!canProfileInvokeTool(context.profile, toolName)) {
     throw new McpCapabilityError(context.profile, toolName);
   }
 };
+
+export const listRuntimeToolsForRole = (
+  role: 'lead' | 'member'
+): readonly (RuntimeToolName | LeadRuntimeToolName)[] =>
+  Object.freeze([
+    ...runtimeTools,
+    ...(role === 'lead' ? leadRuntimeTools : []),
+  ].sort());
+
+export const canRuntimeRoleInvokeTool = (
+  role: 'lead' | 'member',
+  toolName: string
+): toolName is RuntimeToolName | LeadRuntimeToolName =>
+  (listRuntimeToolsForRole(role) as readonly string[]).includes(toolName);
 
 export const isInternalProtocolOperation = (
   operation: string

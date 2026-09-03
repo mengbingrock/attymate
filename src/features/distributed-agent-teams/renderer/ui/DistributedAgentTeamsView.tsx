@@ -89,6 +89,14 @@ const WorkerCard = ({ worker }: { worker: DistributedWorkerDto }): React.JSX.Ele
           <dt className="text-text-muted">Sequence</dt>
           <dd className="mt-0.5 text-text-secondary">{worker.lastHeartbeatSequence}</dd>
         </div>
+        <div className="col-span-2">
+          <dt className="text-text-muted">Team discovery</dt>
+          <dd className="mt-0.5 text-text-secondary">
+            {worker.autoJoinTeamId
+              ? `Advertising auto-join for ${shortId(worker.autoJoinTeamId)}`
+              : 'Available for lead enrollment'}
+          </dd>
+        </div>
       </dl>
     </article>
   );

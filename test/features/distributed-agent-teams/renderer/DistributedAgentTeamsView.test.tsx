@@ -45,6 +45,7 @@ const topology: DistributedTopologyDto = {
       lastHeartbeatAt: '2026-08-24T19:00:00.000Z',
       lastHeartbeatSequence: 4,
       status: 'connected',
+      autoJoinTeamId: 'team-remote-ui-smoke',
     },
   ],
 };
@@ -128,6 +129,10 @@ const debugSnapshot: DistributedDebugSnapshotDto = {
       teamId: 'team-remote-ui-smoke',
       nodeId: 'node-atlas-coordinator',
       workspaceId: 'workspace-atlas',
+      label: 'Atlas Coordinator',
+      role: 'lead',
+      status: 'active',
+      revision: 1,
       createdAt: '2026-08-24T18:59:00.000Z',
       updatedAt: '2026-08-24T18:59:00.000Z',
     },
@@ -136,6 +141,10 @@ const debugSnapshot: DistributedDebugSnapshotDto = {
       teamId: 'team-remote-ui-smoke',
       nodeId: 'node-beacon-reviewer',
       workspaceId: 'workspace-beacon',
+      label: 'Beacon Reviewer',
+      role: 'member',
+      status: 'active',
+      revision: 1,
       createdAt: '2026-08-24T18:59:00.000Z',
       updatedAt: '2026-08-24T18:59:00.000Z',
     },
@@ -148,6 +157,7 @@ describe('DistributedAgentTeamsView', () => {
   });
 
   afterEach(() => {
+    window.sessionStorage.clear();
     document.body.innerHTML = '';
     vi.unstubAllGlobals();
   });
@@ -175,6 +185,7 @@ describe('DistributedAgentTeamsView', () => {
     expect(host.textContent).toContain('2 connected / 2');
     expect(host.textContent).toContain('Atlas Coordinator');
     expect(host.textContent).toContain('Beacon Reviewer');
+    expect(host.textContent).toContain('Advertising auto-join for team-rem…smoke');
     expect(host.textContent).toContain('team-rem…smoke');
     expect(host.textContent).toContain('proposed');
     expect(host.textContent).toContain('Awaiting worker acceptance');
@@ -213,6 +224,52 @@ describe('DistributedAgentTeamsView', () => {
     expect(onOpenTeam).toHaveBeenCalledWith('team-remote-ui-smoke');
   });
 
+  it('shows a roster-only team before any assignment activity exists', () => {
+    const summaries = buildDistributedTeamSummaries(
+      { ...topology, membershipRoutes: debugSnapshot.membershipRoutes },
+      { ...assignmentEvents, events: [] }
+    );
+
+    expect(summaries).toMatchObject([
+      {
+        teamId: 'team-remote-ui-smoke',
+        workers: [
+          { label: 'Atlas Coordinator', status: 'connected' },
+          { label: 'Beacon Reviewer', status: 'connected' },
+        ],
+        assignmentCount: 0,
+      },
+    ]);
+  });
+
+  it('removes departed members from the roster and makes their Worker available again', () => {
+    const departedSnapshot: DistributedDebugSnapshotDto = {
+      ...debugSnapshot,
+      membershipRoutes: debugSnapshot.membershipRoutes.map((route) =>
+        route.membershipId === 'membership-beacon'
+          ? {
+              ...route,
+              status: 'left',
+              revision: 2,
+              updatedAt: '2026-08-24T19:01:00.000Z',
+              leftAt: '2026-08-24T19:01:00.000Z',
+            }
+          : route
+      ),
+    };
+    const model = buildDistributedTeamDetail(
+      'team-remote-ui-smoke',
+      topology,
+      assignmentEvents,
+      departedSnapshot
+    );
+
+    expect(model.members.map(({ route }) => route.membershipId)).toEqual(['membership-atlas']);
+    expect(model.availableWorkers).toEqual([
+      expect.objectContaining({ nodeId: 'node-beacon-reviewer' }),
+    ]);
+  });
+
   it('adapts relay state into a local-style team detail and semantic Console view', async () => {
     const model = buildDistributedTeamDetail(
       'team-remote-ui-smoke',
@@ -240,6 +297,7 @@ describe('DistributedAgentTeamsView', () => {
     document.body.appendChild(host);
     const root = createRoot(host);
     const onStartTeam = vi.fn();
+    const onReconnectLead = vi.fn();
     await act(async () => {
       root.render(
         <DistributedTeamDetailView
@@ -249,8 +307,11 @@ describe('DistributedAgentTeamsView', () => {
           refreshing={false}
           error={null}
           mutationError={null}
+          reconnectLeadMessage={null}
           creatingAssignment={false}
           startingTeam={false}
+          reconnectingLead={false}
+          membershipMutation={null}
           insecureLanMode={false}
           selectedRuntimeNodeId={null}
           runtimeSession={null}
@@ -265,12 +326,16 @@ describe('DistributedAgentTeamsView', () => {
           }))}
           onCreateAssignment={vi.fn(async () => undefined)}
           onStartTeam={onStartTeam}
+          onReconnectLead={onReconnectLead}
+          onJoinTeamMember={vi.fn(async () => undefined)}
+          onLeaveTeamMember={vi.fn(async () => undefined)}
         />
       );
     });
 
     expect(host.textContent).toContain('Remote protocol v2');
     expect(host.textContent).toContain('Atlas Coordinator');
+    expect(host.textContent).toContain('Auto-joined');
     expect(host.textContent).toContain('Assignments');
     const startButton = [...host.querySelectorAll('button')].find((button) =>
       button.textContent?.includes('Start team')
@@ -278,6 +343,11 @@ describe('DistributedAgentTeamsView', () => {
     expect(startButton?.disabled).toBe(false);
     await act(async () => startButton?.click());
     expect(onStartTeam).toHaveBeenCalledOnce();
+    const reconnectButton = [...host.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Reconnect lead')
+    );
+    await act(async () => reconnectButton?.click());
+    expect(onReconnectLead).toHaveBeenCalledOnce();
     const debugButton = host.querySelector<HTMLButtonElement>('article button');
     await act(async () => {
       debugButton?.click();
@@ -285,5 +355,163 @@ describe('DistributedAgentTeamsView', () => {
     expect(host.textContent).toContain('Worker runtime is not active yet');
     expect(host.textContent).not.toContain('Raw Relay protocol traffic');
     expect(host.textContent).not.toContain('assignment.offer');
+  });
+
+  it('keeps the selected tab while a refreshed roster is rendered', async () => {
+    const initialModel = buildDistributedTeamDetail(
+      'team-remote-ui-smoke',
+      topology,
+      assignmentEvents,
+      debugSnapshot
+    );
+    const refreshedModel = buildDistributedTeamDetail(
+      'team-remote-ui-smoke',
+      {
+        ...topology,
+        workers: [
+          ...topology.workers,
+          {
+            ...topology.workers[1]!,
+            nodeId: 'node-cascade-worker',
+            workerInstanceId: 'worker-cascade-instance',
+            label: 'Cascade Worker',
+          },
+        ],
+      },
+      assignmentEvents,
+      {
+        ...debugSnapshot,
+        membershipRoutes: [
+          ...debugSnapshot.membershipRoutes,
+          {
+            ...debugSnapshot.membershipRoutes[1]!,
+            membershipId: 'membership-cascade',
+            nodeId: 'node-cascade-worker',
+            workspaceId: 'workspace-cascade',
+            label: 'Cascade Worker',
+          },
+        ],
+      }
+    );
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const props = {
+      relayUrl: topology.relayUrl,
+      loading: false,
+      refreshing: false,
+      error: null,
+      mutationError: null,
+      reconnectLeadMessage: null,
+      creatingAssignment: false,
+      startingTeam: false,
+      reconnectingLead: false,
+      membershipMutation: null,
+      insecureLanMode: false,
+      selectedRuntimeNodeId: null,
+      runtimeSession: null,
+      runtimeLoading: false,
+      runtimeSending: false,
+      runtimeError: null,
+      onRefresh: vi.fn(),
+      onSelectRuntimeNode: vi.fn(),
+      onRuntimeControl: vi.fn(async (control: { controlId: string }) => ({
+        controlId: control.controlId,
+        accepted: true as const,
+      })),
+      onCreateAssignment: vi.fn(async () => undefined),
+      onStartTeam: vi.fn(),
+      onReconnectLead: vi.fn(),
+      onJoinTeamMember: vi.fn(async () => undefined),
+      onLeaveTeamMember: vi.fn(async () => undefined),
+    };
+
+    await act(async () => root.render(<DistributedTeamDetailView model={initialModel} {...props} />));
+    const messagesTab = [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
+      (button) => button.textContent?.trim() === 'Messages'
+    )!;
+    await act(async () => {
+      messagesTab.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+      await Promise.resolve();
+    });
+    expect(messagesTab.dataset.state).toBe('active');
+
+    await act(async () => root.render(<DistributedTeamDetailView model={refreshedModel} {...props} />));
+    expect(
+      [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
+        (button) => button.textContent?.trim() === 'Messages'
+      )?.dataset.state
+    ).toBe('active');
+
+    const overviewTab = [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
+      (button) => button.textContent?.trim() === 'Overview'
+    )!;
+    await act(async () => {
+      overviewTab.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+      await Promise.resolve();
+    });
+    expect(host.textContent).toContain('Cascade Worker');
+  });
+
+  it('restores the selected tab after the team detail remounts', async () => {
+    const model = buildDistributedTeamDetail(
+      'team-remote-ui-smoke',
+      topology,
+      assignmentEvents,
+      debugSnapshot
+    );
+    const props = {
+      model,
+      relayUrl: topology.relayUrl,
+      loading: false,
+      refreshing: false,
+      error: null,
+      mutationError: null,
+      reconnectLeadMessage: null,
+      creatingAssignment: false,
+      startingTeam: false,
+      reconnectingLead: false,
+      membershipMutation: null,
+      insecureLanMode: false,
+      selectedRuntimeNodeId: null,
+      runtimeSession: null,
+      runtimeLoading: false,
+      runtimeSending: false,
+      runtimeError: null,
+      onRefresh: vi.fn(),
+      onSelectRuntimeNode: vi.fn(),
+      onRuntimeControl: vi.fn(async (control: { controlId: string }) => ({
+        controlId: control.controlId,
+        accepted: true as const,
+      })),
+      onCreateAssignment: vi.fn(async () => undefined),
+      onStartTeam: vi.fn(),
+      onReconnectLead: vi.fn(),
+      onJoinTeamMember: vi.fn(async () => undefined),
+      onLeaveTeamMember: vi.fn(async () => undefined),
+    };
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    let root = createRoot(host);
+
+    await act(async () => root.render(<DistributedTeamDetailView {...props} />));
+    const consoleTab = [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
+      (button) => button.textContent?.trim() === 'Console'
+    )!;
+    await act(async () => {
+      consoleTab.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+      await Promise.resolve();
+    });
+    expect(consoleTab.dataset.state).toBe('active');
+
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await act(async () => root.render(<DistributedTeamDetailView {...props} />));
+
+    expect(
+      [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
+        (button) => button.textContent?.trim() === 'Console'
+      )?.dataset.state
+    ).toBe('active');
   });
 });

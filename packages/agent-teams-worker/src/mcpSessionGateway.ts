@@ -1,5 +1,6 @@
 import {
   assertSessionCanInvokeTool,
+  listRuntimeToolsForRole,
   listToolsForProfile,
   mcpSessionContextSchema,
   type McpSessionContext,
@@ -84,7 +85,11 @@ export const filterMcpToolsForSession = <T extends McpToolDefinition>(
   definitions: readonly T[]
 ): readonly T[] => {
   const context = mcpSessionContextSchema.parse(inputContext);
-  const allowedNames = new Set(listToolsForProfile(context.profile));
+  const allowedNames = new Set(
+    context.profile === 'agent-teams-runtime'
+      ? listRuntimeToolsForRole(context.teamRole ?? 'member')
+      : listToolsForProfile(context.profile)
+  );
   return Object.freeze(definitions.filter((definition) => allowedNames.has(definition.name)));
 };
 

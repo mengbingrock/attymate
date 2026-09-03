@@ -6,6 +6,12 @@ import type {
   DistributedRuntimeSessionDto,
   DistributedTopologyDto,
   GetDistributedRuntimeSessionRequest,
+  JoinDistributedTeamMemberReceiptDto,
+  JoinDistributedTeamMemberRequest,
+  LeaveDistributedTeamMemberReceiptDto,
+  LeaveDistributedTeamMemberRequest,
+  ReconnectDistributedLeadReceiptDto,
+  ReconnectDistributedLeadRequest,
   RemoteAssignmentReceiptDto,
   SendDistributedRuntimeControlRequest,
   StartDistributedTeamReceiptDto,
@@ -26,4 +32,13 @@ export interface DistributedAgentTeamsElectronApi {
     request: CreateRemoteAssignmentRequest
   ): Promise<RemoteAssignmentReceiptDto>;
   startTeam(request: StartDistributedTeamRequest): Promise<StartDistributedTeamReceiptDto>;
+  reconnectLead(
+    request: ReconnectDistributedLeadRequest
+  ): Promise<ReconnectDistributedLeadReceiptDto>;
+  joinTeamMember(
+    request: JoinDistributedTeamMemberRequest
+  ): Promise<JoinDistributedTeamMemberReceiptDto>;
+  leaveTeamMember(
+    request: LeaveDistributedTeamMemberRequest
+  ): Promise<LeaveDistributedTeamMemberReceiptDto>;
 }

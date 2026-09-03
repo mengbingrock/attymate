@@ -13,6 +13,7 @@ import {
   workerInstanceIdSchema,
   workspaceIdSchema,
 } from './ids';
+import { teamMembershipRoleSchema } from './teamMembership';
 
 export const coordinationModeSchema = z.enum(['local_filesystem_v1', 'lan_relay_v2']);
 
@@ -50,6 +51,7 @@ export const runtimeSessionContextSchema = z
     assignmentId: assignmentIdSchema,
     attemptId: attemptIdSchema,
     workspaceId: workspaceIdSchema,
+    teamRole: teamMembershipRoleSchema.optional(),
     leaseEpoch: z.number().int().nonnegative(),
     turnId: turnIdSchema,
   })

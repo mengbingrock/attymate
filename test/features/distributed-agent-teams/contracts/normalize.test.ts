@@ -1,5 +1,8 @@
 import {
   normalizeCreateRemoteAssignmentRequest,
+  normalizeJoinDistributedTeamMemberRequest,
+  normalizeLeaveDistributedTeamMemberRequest,
+  normalizeReconnectDistributedLeadRequest,
   normalizeStartDistributedTeamRequest,
 } from '@features/distributed-agent-teams/contracts';
 import { describe, expect, it } from 'vitest';
@@ -58,5 +61,58 @@ describe('normalizeStartDistributedTeamRequest', () => {
 
   it.each([null, {}, { teamId: '../team' }])('rejects malformed input %#', (input) => {
     expect(() => normalizeStartDistributedTeamRequest(input)).toThrow();
+  });
+});
+
+describe('normalizeReconnectDistributedLeadRequest', () => {
+  it('canonicalizes the team identity', () => {
+    expect(
+      normalizeReconnectDistributedLeadRequest({ teamId: ` ${TEAM_ID.toUpperCase()} ` })
+    ).toEqual({ teamId: TEAM_ID });
+  });
+
+  it.each([null, {}, { teamId: '../team' }])('rejects malformed input %#', (input) => {
+    expect(() => normalizeReconnectDistributedLeadRequest(input)).toThrow();
+  });
+});
+
+describe('normalize dynamic membership requests', () => {
+  it('normalizes join and leave requests at the renderer boundary', () => {
+    expect(
+      normalizeJoinDistributedTeamMemberRequest({
+        teamId: TEAM_ID.toUpperCase(),
+        targetNodeId: NODE_ID,
+        title: '  Join the review team  ',
+      })
+    ).toEqual({
+      teamId: TEAM_ID,
+      targetNodeId: NODE_ID,
+      title: 'Join the review team',
+    });
+    expect(
+      normalizeLeaveDistributedTeamMemberRequest({
+        teamId: TEAM_ID,
+        membershipId: MEMBERSHIP_ID,
+        expectedRevision: 2,
+        reason: '  Work complete  ',
+      })
+    ).toEqual({
+      teamId: TEAM_ID,
+      membershipId: MEMBERSHIP_ID,
+      expectedRevision: 2,
+      reason: 'Work complete',
+    });
+  });
+
+  it.each([
+    { teamId: TEAM_ID, targetNodeId: NODE_ID, membershipId: MEMBERSHIP_ID },
+    { teamId: TEAM_ID, targetNodeId: NODE_ID, role: 'owner' },
+    { teamId: TEAM_ID, membershipId: MEMBERSHIP_ID, expectedRevision: 0 },
+    { teamId: TEAM_ID, membershipId: 'not-a-uuid' },
+  ])('rejects malformed membership input %#', (input) => {
+    const normalize = 'targetNodeId' in input
+      ? normalizeJoinDistributedTeamMemberRequest
+      : normalizeLeaveDistributedTeamMemberRequest;
+    expect(() => normalize(input)).toThrow();
   });
 });

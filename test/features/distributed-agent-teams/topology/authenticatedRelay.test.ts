@@ -13,7 +13,7 @@ import {
 import { startAgentTeamsRelay } from '@claude-teams/agent-teams-relay';
 import { startAgentTeamsWorker } from '@claude-teams/agent-teams-worker';
 import { createDistributedAgentTeamsFeature } from '@features/distributed-agent-teams/main';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 const MANAGER_TOKEN = 'manager-token-which-is-long-enough-for-tests';
 const WORKER_TOKEN = 'worker-token-which-is-long-enough-for-tests';
@@ -61,6 +61,36 @@ describe('Authenticated distributed Relay', () => {
       });
       expect(JSON.stringify(await manager.getTopology())).not.toContain(MANAGER_TOKEN);
       expect(JSON.stringify(worker.getStatus())).not.toContain(WORKER_TOKEN);
+
+      const teamId = '55555555-5555-4555-8555-555555555555';
+      const joined = await manager.joinTeamMember({
+        teamId,
+        targetNodeId: '33333333-3333-4333-8333-333333333333',
+        title: 'Lead the authenticated team',
+      });
+      expect(joined.membership).toMatchObject({ teamId, role: 'lead', status: 'active' });
+      await vi.waitFor(() =>
+        expect(worker.listAssignments()).toEqual([
+          expect.objectContaining({ state: 'leased', teamRole: 'lead' }),
+        ])
+      );
+      await expect(manager.getTopology()).resolves.toMatchObject({
+        membershipRoutes: [
+          expect.objectContaining({ membershipId: joined.membership.membershipId, role: 'lead' }),
+        ],
+      });
+
+      await manager.leaveTeamMember({
+        teamId,
+        membershipId: joined.membership.membershipId,
+        expectedRevision: joined.membership.revision,
+      });
+      await vi.waitFor(() =>
+        expect(worker.listAssignments()[0]).toMatchObject({ state: 'fenced' })
+      );
+      await expect(manager.getTopology()).resolves.toMatchObject({
+        membershipRoutes: [expect.objectContaining({ status: 'left' })],
+      });
     } finally {
       await worker.stop();
       await relay.close();

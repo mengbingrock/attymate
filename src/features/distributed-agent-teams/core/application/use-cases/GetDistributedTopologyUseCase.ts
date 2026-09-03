@@ -6,10 +6,15 @@ export class GetDistributedTopologyUseCase {
 
   async execute(): Promise<DistributedTopologyDto> {
     try {
+      const [workers, membershipRoutes] = await Promise.all([
+        this.relay.listWorkers(),
+        this.relay.listMembershipRoutes(),
+      ]);
       return {
         relayUrl: this.relay.relayUrl,
         insecureLanMode: this.relay.insecureLanMode,
-        workers: [...(await this.relay.listWorkers())],
+        workers: [...workers],
+        membershipRoutes: [...membershipRoutes],
         fetchedAt: new Date().toISOString(),
         degraded: false,
       };
@@ -18,6 +23,7 @@ export class GetDistributedTopologyUseCase {
         relayUrl: this.relay.relayUrl,
         insecureLanMode: this.relay.insecureLanMode,
         workers: [],
+        membershipRoutes: [],
         fetchedAt: new Date().toISOString(),
         degraded: true,
         warning: error instanceof Error ? error.message : 'Relay topology request failed',

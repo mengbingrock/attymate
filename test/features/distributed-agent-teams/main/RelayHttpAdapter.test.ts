@@ -31,6 +31,7 @@ describe('RelayHttpAdapter', () => {
             lastHeartbeatAt: '2026-08-14T10:00:05.000Z',
             lastHeartbeatSequence: 2,
             status: 'connected',
+            autoJoinTeamId: TEAM_ID,
           },
         ],
       })
@@ -38,7 +39,12 @@ describe('RelayHttpAdapter', () => {
     const adapter = new RelayHttpAdapter('http://127.0.0.1:43170/', fetchImpl as typeof fetch);
 
     await expect(adapter.listWorkers()).resolves.toEqual([
-      expect.objectContaining({ nodeId: NODE_ID, label: 'Alice Worker', status: 'connected' }),
+      expect.objectContaining({
+        nodeId: NODE_ID,
+        label: 'Alice Worker',
+        status: 'connected',
+        autoJoinTeamId: TEAM_ID,
+      }),
     ]);
     expect(fetchImpl).toHaveBeenCalledWith(
       'http://127.0.0.1:43170/v2/workers',
@@ -134,6 +140,74 @@ describe('RelayHttpAdapter', () => {
         reason: 'manager_started_team',
       },
     });
+  });
+
+  it('joins and removes team memberships through manager-authenticated routes', async () => {
+    const managerToken = 'manager-token-which-is-long-enough-for-tests';
+    const requests: Array<{ url: string; method: string; body: unknown; authorization: string | null }> = [];
+    const route = {
+      membershipId: MEMBERSHIP_ID,
+      teamId: TEAM_ID,
+      nodeId: NODE_ID,
+      workspaceId: WORKSPACE_ID,
+      label: 'Alice Worker',
+      role: 'member',
+      status: 'active',
+      revision: 1,
+      createdAt: '2026-08-14T10:00:00.000Z',
+      updatedAt: '2026-08-14T10:00:00.000Z',
+    };
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      requests.push({
+        url: String(input),
+        method: init?.method ?? 'GET',
+        body: init?.body === undefined ? undefined : JSON.parse(String(init.body)),
+        authorization: new Headers(init?.headers).get('authorization'),
+      });
+      if (init?.method === 'POST') {
+        return Response.json(
+          { membership: route, assignmentId: ASSIGNMENT_ID, commandIds: [COMMAND_ID] },
+          { status: 201 }
+        );
+      }
+      return Response.json({
+        membership: { ...route, status: 'left', revision: 2 },
+        releasedAssignmentIds: [ASSIGNMENT_ID],
+      });
+    });
+    const adapter = new RelayHttpAdapter(
+      'https://relay.example.test',
+      fetchImpl as typeof fetch,
+      managerToken
+    );
+
+    await expect(
+      adapter.joinTeamMember({ teamId: TEAM_ID, targetNodeId: NODE_ID, role: 'member' })
+    ).resolves.toMatchObject({ membership: { status: 'active' }, assignmentId: ASSIGNMENT_ID });
+    await expect(
+      adapter.leaveTeamMember({
+        teamId: TEAM_ID,
+        membershipId: MEMBERSHIP_ID,
+        expectedRevision: 1,
+      })
+    ).resolves.toMatchObject({
+      membership: { status: 'left', revision: 2 },
+      releasedAssignmentIds: [ASSIGNMENT_ID],
+    });
+    expect(requests).toEqual([
+      expect.objectContaining({
+        url: `https://relay.example.test/v2/teams/${TEAM_ID}/members`,
+        method: 'POST',
+        authorization: `Bearer ${managerToken}`,
+        body: { targetNodeId: NODE_ID, role: 'member' },
+      }),
+      expect.objectContaining({
+        url: `https://relay.example.test/v2/teams/${TEAM_ID}/members/${MEMBERSHIP_ID}`,
+        method: 'DELETE',
+        authorization: `Bearer ${managerToken}`,
+        body: { expectedRevision: 1 },
+      }),
+    ]);
   });
 
   it('maps validated Relay assignment events into renderer DTOs', async () => {
@@ -256,6 +330,10 @@ describe('RelayHttpAdapter', () => {
               teamId: TEAM_ID,
               nodeId: NODE_ID,
               workspaceId: WORKSPACE_ID,
+              label: 'Alice Worker',
+              role: 'lead',
+              status: 'active',
+              revision: 1,
               createdAt: timestamp,
               updatedAt: timestamp,
             },
@@ -281,7 +359,12 @@ describe('RelayHttpAdapter', () => {
       expect.objectContaining({ leaseId: LEASE_ID, assignmentRevision: 0, status: 'active' }),
     ]);
     expect(routes).toEqual([
-      expect.objectContaining({ membershipId: MEMBERSHIP_ID, workspaceId: WORKSPACE_ID }),
+      expect.objectContaining({
+        membershipId: MEMBERSHIP_ID,
+        workspaceId: WORKSPACE_ID,
+        role: 'lead',
+        status: 'active',
+      }),
     ]);
   });
 
@@ -358,7 +441,7 @@ describe('RelayHttpAdapter', () => {
     );
   });
 
-  it('discards a revoked cached runtime capability before retrying', async () => {
+  it('recreates a revoked runtime capability and retries an event poll once', async () => {
     let sessionCreates = 0;
     const fetchImpl = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
@@ -406,10 +489,161 @@ describe('RelayHttpAdapter', () => {
       leaseEpoch: 1,
     };
 
-    await expect(adapter.getRuntimeSession(sessionRequest)).rejects.toThrow('HTTP 401');
     await expect(adapter.getRuntimeSession(sessionRequest)).resolves.toMatchObject({
       sessionId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
     });
+    expect(sessionCreates).toBe(2);
+  });
+
+  it('recreates a revoked runtime capability and retries a control once', async () => {
+    let sessionCreates = 0;
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith('/v2/runtime-sessions')) {
+        sessionCreates += 1;
+        return Response.json(
+          {
+            sessionId:
+              sessionCreates === 1
+                ? 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+                : 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+            sessionToken: `session-token-${sessionCreates}-which-is-long-enough-for-tests`,
+            scope: {
+              teamId: TEAM_ID,
+              nodeId: NODE_ID,
+              assignmentId: ASSIGNMENT_ID,
+              attemptId: ATTEMPT_ID,
+              leaseId: LEASE_ID,
+              leaseEpoch: 1,
+            },
+            capabilities: ['turn.start'],
+            expiresAt: '2099-08-14T10:05:00.000Z',
+          },
+          { status: 201 }
+        );
+      }
+      if (url.includes('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/controls')) {
+        return Response.json({ error: 'RUNTIME_SESSION_DENIED' }, { status: 401 });
+      }
+      if (url.includes('cccccccc-cccc-4ccc-8ccc-cccccccccccc/controls')) {
+        return Response.json({ accepted: true, controlId: COMMAND_ID }, { status: 202 });
+      }
+      return Response.json({}, { status: 404 });
+    });
+    const adapter = new RelayHttpAdapter(
+      'http://127.0.0.1:43170',
+      fetchImpl as typeof fetch,
+      'manager-token-which-is-long-enough-for-tests'
+    );
+
+    await expect(
+      adapter.sendRuntimeControl({
+        session: {
+          teamId: TEAM_ID,
+          nodeId: NODE_ID,
+          assignmentId: ASSIGNMENT_ID,
+          attemptId: ATTEMPT_ID,
+          leaseEpoch: 1,
+        },
+        control: {
+          controlId: COMMAND_ID,
+          type: 'turn.start',
+          payload: {
+            threadId: 'thr_1',
+            appServerGeneration: 3,
+            message: 'retry after Relay restart',
+          },
+        },
+      })
+    ).resolves.toEqual({ accepted: true, controlId: COMMAND_ID });
+    expect(sessionCreates).toBe(2);
+  });
+
+  it('shares one replacement session between concurrent polling and control retries', async () => {
+    let sessionCreates = 0;
+    let revoked = false;
+    let deniedRequests = 0;
+    let releaseDeniedRequests: (() => void) | undefined;
+    const deniedRequestsReady = new Promise<void>((resolve) => {
+      releaseDeniedRequests = resolve;
+    });
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith('/v2/runtime-sessions')) {
+        sessionCreates += 1;
+        return Response.json(
+          {
+            sessionId:
+              sessionCreates === 1
+                ? 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+                : 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+            sessionToken: `session-token-${sessionCreates}-which-is-long-enough-for-tests`,
+            scope: {
+              teamId: TEAM_ID,
+              nodeId: NODE_ID,
+              assignmentId: ASSIGNMENT_ID,
+              attemptId: ATTEMPT_ID,
+              leaseId: LEASE_ID,
+              leaseEpoch: 1,
+            },
+            capabilities: ['events.read', 'turn.start'],
+            expiresAt: '2099-08-14T10:05:00.000Z',
+          },
+          { status: 201 }
+        );
+      }
+      if (url.includes('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/')) {
+        if (!revoked && url.includes('/events')) {
+          return Response.json({ events: [], truncated: false, nextCursor: 0 });
+        }
+        deniedRequests += 1;
+        if (deniedRequests === 2) releaseDeniedRequests?.();
+        await deniedRequestsReady;
+        return Response.json({ error: 'RUNTIME_SESSION_DENIED' }, { status: 401 });
+      }
+      if (url.includes('cccccccc-cccc-4ccc-8ccc-cccccccccccc/events')) {
+        return Response.json({ events: [], truncated: false, nextCursor: 0 });
+      }
+      if (url.includes('cccccccc-cccc-4ccc-8ccc-cccccccccccc/controls')) {
+        return Response.json({ accepted: true, controlId: COMMAND_ID }, { status: 202 });
+      }
+      return Response.json({}, { status: 404 });
+    });
+    const adapter = new RelayHttpAdapter(
+      'http://127.0.0.1:43170',
+      fetchImpl as typeof fetch,
+      'manager-token-which-is-long-enough-for-tests'
+    );
+    const sessionRequest = {
+      teamId: TEAM_ID,
+      nodeId: NODE_ID,
+      assignmentId: ASSIGNMENT_ID,
+      attemptId: ATTEMPT_ID,
+      leaseEpoch: 1,
+    };
+
+    await expect(adapter.getRuntimeSession(sessionRequest)).resolves.toMatchObject({
+      sessionId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    });
+    revoked = true;
+    const [polled, controlled] = await Promise.all([
+      adapter.getRuntimeSession(sessionRequest),
+      adapter.sendRuntimeControl({
+        session: sessionRequest,
+        control: {
+          controlId: COMMAND_ID,
+          type: 'turn.start',
+          payload: {
+            threadId: 'thr_1',
+            appServerGeneration: 3,
+            message: 'retry concurrently after Relay restart',
+          },
+        },
+      }),
+    ]);
+
+    expect(polled.sessionId).toBe('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+    expect(controlled).toEqual({ accepted: true, controlId: COMMAND_ID });
     expect(sessionCreates).toBe(2);
   });
 

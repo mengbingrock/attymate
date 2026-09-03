@@ -1,4 +1,6 @@
-import { RUNTIME_BRIDGE_TOOL_NAMES } from './runtimeMcpServer';
+import { runtimeBridgeToolNames } from './runtimeMcpServer';
+
+import type { TeamMembershipRole } from '@claude-teams/agent-teams-protocol';
 
 export const RUNTIME_MCP_SERVER_NAME = 'agent-teams-runtime';
 export const OWNER_CONTROL_MCP_SERVER_NAME = 'agent-teams-control';
@@ -32,7 +34,8 @@ export const buildRestrictedRuntimeMcpConfig = (
   spec: CodexRuntimeMcpLaunchSpec,
   token: string,
   configuredServerNames: readonly string[],
-  configuredPluginNames: readonly string[] = []
+  configuredPluginNames: readonly string[] = [],
+  teamRole: TeamMembershipRole = 'member'
 ): Readonly<Record<string, unknown>> => {
   const disabled = Object.fromEntries(
     [...new Set(configuredServerNames)]
@@ -52,19 +55,23 @@ export const buildRestrictedRuntimeMcpConfig = (
         env: {
           ...spec.env,
           AGENT_TEAMS_RUNTIME_SESSION_TOKEN: token,
+          AGENT_TEAMS_RUNTIME_TEAM_ROLE: teamRole,
         },
         enabled: true,
         required: true,
         startup_timeout_sec: 10,
         tool_timeout_sec: 30,
         default_tools_approval_mode: 'approve',
-        enabled_tools: [...RUNTIME_BRIDGE_TOOL_NAMES],
+        enabled_tools: [...runtimeBridgeToolNames(teamRole)],
       },
     },
   };
 };
 
-export const assertRestrictedRuntimeMcpInventory = (response: unknown): void => {
+export const assertRestrictedRuntimeMcpInventory = (
+  response: unknown,
+  teamRole: TeamMembershipRole = 'member'
+): void => {
   if (typeof response !== 'object' || response === null || Array.isArray(response)) {
     throw new Error('Codex runtime MCP inventory response is invalid');
   }
@@ -105,7 +112,7 @@ export const assertRestrictedRuntimeMcpInventory = (response: unknown): void => 
     throw new Error('Codex runtime MCP inventory is missing tools');
   }
   const actualTools = Object.keys(tools).sort();
-  const expectedTools = [...RUNTIME_BRIDGE_TOOL_NAMES].sort();
+  const expectedTools = [...runtimeBridgeToolNames(teamRole)].sort();
   if (
     actualTools.length !== expectedTools.length ||
     actualTools.some((tool, index) => tool !== expectedTools[index])
