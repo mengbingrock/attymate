@@ -10,6 +10,11 @@ export interface CodexRuntimeMcpLaunchSpec {
   readonly args: readonly string[];
   readonly cwd?: string;
   readonly env?: Readonly<Record<string, string>>;
+  /**
+   * Worker-owned file (mode 0600) holding the current session token. Set for shared-daemon
+   * runtimes, where the daemon keeps the bridge process alive across turns and token rotations.
+   */
+  readonly tokenFile?: string;
 }
 
 export const readConfiguredMcpServerNames = (response: unknown): readonly string[] => {
@@ -43,6 +48,9 @@ export const buildRestrictedRuntimeMcpConfig = (
       .map((name) => [name, { enabled: false }])
   );
   return {
+    // Thread-scoped feature disables: the runtime thread must not see apps or plugins even when
+    // the hosting App Server (a shared daemon, possibly the owner's own) has them enabled.
+    features: { apps: false, plugins: false, remote_plugin: false },
     plugins: Object.fromEntries(
       [...new Set(configuredPluginNames)].map((name) => [name, { enabled: false }])
     ),
@@ -55,6 +63,9 @@ export const buildRestrictedRuntimeMcpConfig = (
         env: {
           ...spec.env,
           AGENT_TEAMS_RUNTIME_SESSION_TOKEN: token,
+          ...(spec.tokenFile === undefined
+            ? {}
+            : { AGENT_TEAMS_RUNTIME_SESSION_TOKEN_FILE: spec.tokenFile }),
           AGENT_TEAMS_RUNTIME_TEAM_ROLE: teamRole,
         },
         enabled: true,

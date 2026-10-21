@@ -1,6 +1,9 @@
 import { resolve } from 'node:path';
 
-import { createAgentTeamsRuntimeMcpServer } from './runtimeMcpServer';
+import {
+  createAgentTeamsRuntimeMcpServer,
+  createRuntimeSessionTokenSource,
+} from './runtimeMcpServer';
 
 const valueAfter = (name: string, fallback?: string): string | undefined => {
   const index = process.argv.indexOf(name);
@@ -14,8 +17,10 @@ const rawSocketPath = valueAfter(
 const socketPath = rawSocketPath.startsWith('\\\\.\\pipe\\')
   ? rawSocketPath
   : resolve(rawSocketPath);
-const token = process.env.AGENT_TEAMS_RUNTIME_SESSION_TOKEN;
-if (token === undefined) throw new Error('AGENT_TEAMS_RUNTIME_SESSION_TOKEN is required');
+const token = createRuntimeSessionTokenSource({
+  token: process.env.AGENT_TEAMS_RUNTIME_SESSION_TOKEN,
+  tokenFile: process.env.AGENT_TEAMS_RUNTIME_SESSION_TOKEN_FILE,
+});
 const teamRole = process.env.AGENT_TEAMS_RUNTIME_TEAM_ROLE;
 if (teamRole !== 'lead' && teamRole !== 'member') {
   throw new Error('AGENT_TEAMS_RUNTIME_TEAM_ROLE must be lead or member');

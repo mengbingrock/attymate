@@ -124,6 +124,37 @@ pnpm --filter @claude-teams/agent-teams-worker dev start \
   --relay wss://relay.example/v2/worker-stream
 ```
 
+### Attachable App Server (shared daemon mode)
+
+`--app-server-mode private-stdio` (default) spawns one private `codex app-server` child per
+session; only the Worker holds that JSON-RPC connection. `--app-server-mode shared-daemon` makes
+the Worker run `CODEX_HOME=<home> codex app-server daemon start` (idempotent) and speak the same
+App Server protocol over the daemon's Unix control socket (`<home>/app-server-control/
+app-server-control.sock`, resolved through its short temp-directory symlink because Unix socket
+paths are length-limited). Per-thread configuration such as the assignment-scoped runtime MCP
+server is still passed in `thread/start`, so the security invariants above are unchanged.
+
+What changes is ownership of the threads: they now live in the home's managed daemon, so the
+owner can attach to the very same threads from the stock Codex CLI:
+
+```bash
+CODEX_HOME="$WORKER_DATA_DIR/codex-home" codex agents    # live view of running threads
+CODEX_HOME="$WORKER_DATA_DIR/codex-home" codex resume    # reopen or continue a thread
+```
+
+Trade-offs: feature disables are passed per thread (`features` in the `thread/start` config), so
+the home's `config.toml` and daemon stay untouched and the home may be the owner's own `~/.codex`;
+the per-thread inventory check still fails closed with `Codex runtime MCP inventory leaked
+capabilities: ...` if a capability leaks. Anything the owner types into an attached thread is
+visible to the Worker's next turn on that thread.
+
+Token lifecycle differs from private-stdio runtimes: the daemon keeps the thread's bridge process
+alive, so the assignment's session token is no longer revoked when a turn completes, and the Worker
+mirrors the current token into `<data-dir>/runtime-session.token` (owner-only) which the bridge reads
+per call via `AGENT_TEAMS_RUNTIME_SESSION_TOKEN_FILE`. Authorization still requires the token to be
+bound to the binding's current turn and to an unexpired lease. `--app-server-socket <path>` overrides
+the control socket when the daemon was provisioned elsewhere.
+
 Use `--codex-home <path>` to select a different dedicated home. `status` reports the resolved path;
 `diagnose` reports whether it is private and whether an `auth.json` artifact is present without
 reading or printing credential contents. `setup` is separate: it manages the control MCP entry in

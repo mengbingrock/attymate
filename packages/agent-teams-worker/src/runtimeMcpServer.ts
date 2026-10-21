@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 import {
   canRuntimeRoleInvokeTool,
@@ -108,15 +109,52 @@ export interface RuntimeMcpToolDefinition {
   readonly execute: (input: unknown) => Promise<ReturnType<typeof jsonContent>>;
 }
 
+/**
+ * Where the bridge takes its session token from. A plain string is the token handed over in the
+ * process environment (private stdio runtimes). A function is consulted on every call, so a bridge
+ * process that outlives a token rotation (shared daemon runtimes keep MCP servers alive across
+ * turns) always presents the Worker's current token.
+ */
+export type RuntimeSessionTokenSource = string | (() => string);
+
+export const createRuntimeSessionTokenSource = (input: {
+  readonly token?: string;
+  readonly tokenFile?: string;
+  readonly readFile?: (path: string) => string;
+}): RuntimeSessionTokenSource => {
+  const { token, tokenFile } = input;
+  if (tokenFile === undefined || tokenFile.trim() === '') {
+    if (token === undefined || token === '') {
+      throw new Error('AGENT_TEAMS_RUNTIME_SESSION_TOKEN is required');
+    }
+    return token;
+  }
+  const read = input.readFile ?? ((path: string) => readFileSync(path, 'utf8'));
+  return () => {
+    let fromFile = '';
+    try {
+      fromFile = read(tokenFile).trim();
+    } catch {
+      fromFile = '';
+    }
+    if (fromFile !== '') return fromFile;
+    if (token !== undefined && token !== '') return token;
+    throw new Error(`Runtime session token file is empty or unreadable: ${tokenFile}`);
+  };
+};
+
+const resolveToken = (source: RuntimeSessionTokenSource): string =>
+  typeof source === 'function' ? source() : source;
+
 export const createRuntimeMcpToolDefinitions = (
   socketPath: string,
-  token: string,
+  token: RuntimeSessionTokenSource,
   teamRole: TeamMembershipRole = 'member'
 ): readonly RuntimeMcpToolDefinition[] => {
   const call = async (toolName: string, input: unknown) =>
     await requestWorkerControl<unknown>(socketPath, `/v2/runtime-tools/${toolName}`, {
       method: 'POST',
-      bearerToken: token,
+      bearerToken: resolveToken(token),
       body: { idempotencyKey: randomUUID(), arguments: input },
     });
   const definitions: readonly RuntimeMcpToolDefinition[] = [
@@ -193,7 +231,7 @@ export const createRuntimeMcpToolDefinitions = (
 
 export const createAgentTeamsRuntimeMcpServer = (
   socketPath: string,
-  token: string,
+  token: RuntimeSessionTokenSource,
   teamRole: TeamMembershipRole = 'member'
 ): FastMCP => {
   const server = new FastMCP({ name: 'agent-teams-runtime', version: '2.0.0' });

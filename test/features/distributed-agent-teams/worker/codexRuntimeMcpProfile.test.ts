@@ -33,6 +33,7 @@ describe('Codex runtime MCP profile', () => {
     );
 
     expect(config).toEqual({
+      features: { apps: false, plugins: false, remote_plugin: false },
       plugins: {
         'browser@openai-bundled': { enabled: false },
         'documents@openai-primary-runtime': { enabled: false },
@@ -62,6 +63,7 @@ describe('Codex runtime MCP profile', () => {
     );
 
     expect(config).toEqual({
+      features: { apps: false, plugins: false, remote_plugin: false },
       plugins: {},
       mcp_servers: {
         'agent-teams-runtime': expect.objectContaining({

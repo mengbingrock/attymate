@@ -22,6 +22,23 @@ Every Worker runs Codex App Server with a private Worker-owned `CODEX_HOME` (by 
 plugin/MCP configuration automatically. `--codex-home` selects an explicit private directory, and
 the Worker `status`/`diagnose` commands expose its non-secret state.
 
+By default each session is a private `codex app-server` child on stdio pipes that nothing else can
+attach to. `--app-server-mode shared-daemon` instead starts (idempotently) and connects to the
+managed App Server daemon of that same Codex home (`codex app-server daemon start`). Threads then
+live in the daemon, so the home's owner can open the running or finished threads later with
+`CODEX_HOME=<data-dir>/codex-home codex agents` (live agent command center) or
+`CODEX_HOME=<data-dir>/codex-home codex resume`. `--app-server-socket <path>` overrides the control
+socket. The runtime thread's feature disables (`apps`, `plugins`, `remote_plugin = false`) travel in each
+thread's own `thread/start` config, so the home's `config.toml` and its daemon are left as they
+are; the per-thread inventory check still fails closed if a capability leaks. That makes it safe to
+point `--codex-home` at the owner's existing `~/.codex`: team threads then appear directly in that
+person's `codex agents` and Codex app, next to their own work. Writing the disables into the home
+config remains available as an opt-in (`writeHomeFeatureDisables`) for daemons that ignore
+thread-level overrides.
+Because the daemon keeps a thread's MCP bridge process alive across turns, the Worker in this mode
+also mirrors the current runtime session token into `<data-dir>/runtime-session.token` (mode 0600)
+and the bridge reads it on every call, so token rotations after a Worker restart stay transparent.
+
 The implementation follows
 [the distributed Codex runtime ADR](../../../docs/team-management/distributed-codex-runtime.md).
 

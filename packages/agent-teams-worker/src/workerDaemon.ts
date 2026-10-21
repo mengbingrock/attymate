@@ -59,6 +59,8 @@ export interface AgentTeamsWorkerOptions {
   readonly controlSocketPath?: string;
   readonly reconnectDelayMs?: number;
   readonly leaseSweepIntervalMs?: number;
+  /** How often queued peer messages are re-offered to the runtime when an earlier attempt could not run. */
+  readonly messageDeliveryRetryIntervalMs?: number;
   readonly codexRuntime?: {
     readonly cwd: string;
     readonly model?: string;
@@ -608,27 +610,45 @@ export const startAgentTeamsWorker = async (
     if (binding.state === 'completed') {
       const assignment = assignmentStore.get(scope.assignmentId);
       if (assignment?.leaseExpiresAt === undefined) return;
-      const continued = await runtimeSupervisor.startTurn({
-        ...leaseIdentity,
+      // Claim the messages before continuing the thread so a failure is recorded on them (and
+      // retried later) instead of escaping this promise and leaving them pending forever.
+      const completedIdentity = {
         threadId: binding.threadId,
+        turnId: binding.turnId,
         appServerGeneration: binding.appServerGeneration,
-        leaseExpiresAt: assignment.leaseExpiresAt,
-        message: pendingMessages.map(messageText).join('\n\n---\n\n'),
-      });
-      if (continued.threadId === undefined || continued.turnId === undefined) return;
-      const continuedIdentity = {
-        threadId: continued.threadId,
-        turnId: continued.turnId,
-        appServerGeneration: continued.appServerGeneration,
       };
-      for (const message of pendingMessages) {
-        const claimed = messageStore.beginSteer(
-          message.messageId,
-          scope,
-          continuedIdentity
-        );
-        if (claimed !== undefined) messageStore.markSteered(message.messageId, continuedIdentity);
+      const claimedMessages = pendingMessages.filter(
+        (message) => messageStore.beginSteer(message.messageId, scope, completedIdentity) !== undefined
+      );
+      if (claimedMessages.length === 0) return;
+      let continued: WorkerRuntimeBinding;
+      try {
+        continued = await runtimeSupervisor.startTurn({
+          ...leaseIdentity,
+          threadId: binding.threadId,
+          appServerGeneration: binding.appServerGeneration,
+          leaseExpiresAt: assignment.leaseExpiresAt,
+          message: claimedMessages.map(messageText).join('\n\n---\n\n'),
+        });
+      } catch (error) {
+        const reason =
+          error instanceof Error ? error.message : 'Codex runtime continuation failed';
+        for (const message of claimedMessages) {
+          messageStore.markSteerFailed(message.messageId, completedIdentity, reason);
+        }
+        return;
       }
+      if (continued.threadId === undefined || continued.turnId === undefined) {
+        for (const message of claimedMessages) {
+          messageStore.markSteerFailed(
+            message.messageId,
+            completedIdentity,
+            'Codex runtime continuation returned no thread or turn'
+          );
+        }
+        return;
+      }
+      for (const message of claimedMessages) messageStore.markSteered(message.messageId, completedIdentity);
       return;
     }
 
@@ -976,6 +996,13 @@ export const startAgentTeamsWorker = async (
   }
   sweepExpiredLeases();
   const leaseSweepTimer = setInterval(sweepExpiredLeases, options.leaseSweepIntervalMs ?? 1_000);
+  // Delivery is normally triggered by arrival, turn completion, and runtime recovery. If none of
+  // those fire again after a transient failure (for example a daemon session that was mid-reconnect
+  // when the message arrived), a queued message would otherwise stay pending forever.
+  const messageDeliveryRetryTimer = setInterval(
+    () => scheduleMessageDelivery(),
+    options.messageDeliveryRetryIntervalMs ?? 5_000
+  );
   connect();
 
   return {
@@ -1005,6 +1032,7 @@ export const startAgentTeamsWorker = async (
       await controlServer?.close();
       clearHeartbeat();
       clearInterval(leaseSweepTimer);
+      clearInterval(messageDeliveryRetryTimer);
       if (reconnectTimer !== undefined) clearTimeout(reconnectTimer);
       if (socket !== undefined && socket.readyState < WebSocket.CLOSING) {
         await new Promise<void>((resolve) => {

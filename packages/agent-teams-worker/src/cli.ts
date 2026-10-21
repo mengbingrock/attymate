@@ -15,7 +15,12 @@ import {
   readCodexMcpRegistrationState,
   removeCodexMcpRegistration,
 } from './codexMcpRegistration';
-import { CodexAppServerProcessFactory } from './codexAppServerClient';
+import {
+  CodexAppServerDaemonFactory,
+  CodexAppServerProcessFactory,
+  defaultCodexDaemonSocketPath,
+  resolveCodexAppServerMode,
+} from './codexAppServerClient';
 import { startAgentTeamsWorker } from './workerDaemon';
 import { resolveWorkerBridgeLaunch } from './workerBridgeLaunch';
 import { prepareWorkerCodexHome, resolveWorkerCodexHomePath } from './workerCodexHome';
@@ -57,6 +62,27 @@ const defaultControlSocketPath = (dataDir: string): string =>
 const configuredCodexHome = (dataDir: string): string =>
   resolveWorkerCodexHomePath(dataDir, valueAfter('--codex-home'));
 
+/**
+ * `--app-server-mode private-stdio` (default) spawns a private App Server child per session.
+ * `--app-server-mode shared-daemon` drives the managed daemon of the Worker's Codex home instead,
+ * so the owner can later attach to the same threads with `CODEX_HOME=<home> codex agents`.
+ * `--app-server-socket <path>` overrides the daemon control socket location.
+ */
+const configuredAppServer = (
+  codexHome: string
+): { readonly mode: 'private-stdio' | 'shared-daemon'; readonly socketPath?: string } => {
+  const mode = resolveCodexAppServerMode(valueAfter('--app-server-mode'));
+  if (mode !== 'shared-daemon') return { mode };
+  const explicitSocket = valueAfter('--app-server-socket');
+  return {
+    mode,
+    socketPath:
+      explicitSocket === undefined
+        ? defaultCodexDaemonSocketPath(codexHome)
+        : resolveSocketPath(explicitSocket),
+  };
+};
+
 const runSetup = async (): Promise<void> => {
   const dataDir = defaultDataDir();
   const controlSocketPath = defaultControlSocketPath(dataDir);
@@ -81,6 +107,7 @@ const runStatus = async (): Promise<void> => {
     command: 'status',
     dataDir,
     codexHome: configuredCodexHome(dataDir),
+    appServer: configuredAppServer(configuredCodexHome(dataDir)),
     controlSocketPath: defaultControlSocketPath(dataDir),
     codexMcp: {
       configPath: defaultCodexConfigPath(),
@@ -133,7 +160,7 @@ const runWorker = async (): Promise<void> => {
     autoJoinTeamIdValue === undefined ? undefined : teamIdSchema.parse(autoJoinTeamIdValue);
   const runtimeBridgeLaunch = resolveWorkerBridgeLaunch(import.meta.url, 'runtimeMcpCli');
   const runtimeMcpCommand = valueAfter('--runtime-mcp-command');
-
+  const appServer = configuredAppServer(workerCodexHome.codexHome);
   const worker = await startAgentTeamsWorker({
     relayUrl,
     ...(relayToken === undefined ? {} : { relayToken }),
@@ -152,10 +179,20 @@ const runWorker = async (): Promise<void> => {
       : {
           codexRuntime: {
             cwd: resolve(runtimeCwd),
-            sessionFactory: new CodexAppServerProcessFactory({
-              binaryPath: valueAfter('--codex-binary', 'codex')!,
-              env: workerCodexHome.env,
-            }),
+            sessionFactory:
+              appServer.mode === 'shared-daemon'
+                ? new CodexAppServerDaemonFactory({
+                    binaryPath: valueAfter('--codex-binary', 'codex')!,
+                    codexHome: workerCodexHome.codexHome,
+                    env: workerCodexHome.env,
+                    ...(valueAfter('--app-server-socket') === undefined
+                      ? {}
+                      : { socketPath: appServer.socketPath }),
+                  })
+                : new CodexAppServerProcessFactory({
+                    binaryPath: valueAfter('--codex-binary', 'codex')!,
+                    env: workerCodexHome.env,
+                  }),
             runtimeMcp: {
               command: runtimeMcpCommand ?? runtimeBridgeLaunch.command,
               args: [
@@ -165,6 +202,9 @@ const runWorker = async (): Promise<void> => {
                 '--socket',
                 controlSocketPath,
               ],
+              ...(appServer.mode === 'shared-daemon'
+                ? { tokenFile: join(dataDir, 'runtime-session.token') }
+                : {}),
             },
             ...(valueAfter('--runtime-model') === undefined
               ? {}
@@ -178,6 +218,7 @@ const runWorker = async (): Promise<void> => {
     ...worker.getStatus(),
     dataDir,
     codexHome: workerCodexHome.codexHome,
+    appServer,
     controlSocketPath,
   });
 

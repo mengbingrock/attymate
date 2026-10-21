@@ -1,3 +1,4 @@
+import { renameSync, rmSync, writeFileSync } from 'node:fs';
 import type {
   ExecutionLeaseIdentity,
   RuntimeSessionContext,
@@ -584,7 +585,9 @@ export class WorkerCodexRuntimeSupervisor {
   ): WorkerRuntimeBinding | undefined {
     if (turn?.status === 'completed') {
       const completed = this.store.settle(binding.attemptId, 'completed', 'completed');
-      this.revokeRuntimeMcpAttempt(binding.attemptId);
+      // The attempt's session token stays valid for continuation turns: shared-daemon runtimes
+      // keep the bridge process (and its token) alive across turns, and authorization still
+      // requires the token to be bound to the binding's current turn.
       this.options.onCompleted?.(completed);
       return completed;
     }
@@ -681,6 +684,7 @@ export class WorkerCodexRuntimeSupervisor {
       leaseId: assignment.leaseId,
       expiresAt: assignment.leaseExpiresAt,
     });
+    this.publishRuntimeSessionToken(created.token);
     const configured = {
       ...created,
       attemptId: assignment.attemptId,
@@ -697,6 +701,7 @@ export class WorkerCodexRuntimeSupervisor {
   ): Promise<ConfiguredRuntimeMcpSession | undefined> {
     if (this.options.runtimeMcp === undefined) return undefined;
     const created = this.runtimeSessions.rotateAttempt(binding.attemptId, expiresAt);
+    this.publishRuntimeSessionToken(created.token);
     const configured = {
       ...created,
       attemptId: binding.attemptId,
@@ -723,6 +728,24 @@ export class WorkerCodexRuntimeSupervisor {
     this.runtimeSessions.revokeAttempt(attemptId);
     if (this.runtimeMcpSession?.attemptId === attemptId) {
       this.runtimeMcpSession = undefined;
+      this.publishRuntimeSessionToken(undefined);
+    }
+  }
+
+  /** Mirrors the current token into the Worker-owned token file consumed by long-lived bridges. */
+  private publishRuntimeSessionToken(token: string | undefined): void {
+    const tokenFile = this.options.runtimeMcp?.tokenFile;
+    if (tokenFile === undefined) return;
+    try {
+      if (token === undefined) {
+        rmSync(tokenFile, { force: true });
+        return;
+      }
+      const temporary = `${tokenFile}.${process.pid}.tmp`;
+      writeFileSync(temporary, token, { encoding: 'utf8', mode: 0o600 });
+      renameSync(temporary, tokenFile);
+    } catch {
+      // The bridge falls back to the token in its environment; the next rotation retries.
     }
   }
 
