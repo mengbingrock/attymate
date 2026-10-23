@@ -6,6 +6,7 @@ packages:
   - packages/agent-teams-protocol
   - packages/agent-teams-relay
   - packages/agent-teams-worker
+  - packages/agent-teams-teams-adapter
 minimumReleaseAge: 4320
 minimumReleaseAgeExclude:
   - '@esbuild/*'
