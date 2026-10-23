@@ -28,9 +28,7 @@ const WORKER_TOKEN = 'worker-token-which-is-long-enough-for-tests';
 
 class InteractiveCodexSession implements WorkerCodexAppServerSession {
   readonly requests: Array<{ method: string; params: unknown }> = [];
-  readonly notificationListeners = new Set<
-    (notification: CodexAppServerNotification) => void
-  >();
+  readonly notificationListeners = new Set<(notification: CodexAppServerNotification) => void>();
   readonly requestListeners = new Set<(request: CodexAppServerRequest) => void>();
   readonly requestResponses: Array<{ id: number | string; result: unknown }> = [];
 
@@ -68,11 +66,7 @@ class InteractiveCodexSession implements WorkerCodexAppServerSession {
   }
 }
 
-const jsonRequest = async (
-  url: string,
-  token: string,
-  init: RequestInit = {}
-): Promise<Response> =>
+const jsonRequest = async (url: string, token: string, init: RequestInit = {}): Promise<Response> =>
   await fetch(url, {
     ...init,
     headers: {
@@ -89,9 +83,7 @@ describe('authenticated remote Codex runtime bridge', () => {
       organizationId: organizationIdSchema.parse('10000000-0000-4000-8000-000000000001'),
       personId: personIdSchema.parse('10000000-0000-4000-8000-000000000002'),
       nodeId: nodeIdSchema.parse('10000000-0000-4000-8000-000000000003'),
-      workerInstanceId: workerInstanceIdSchema.parse(
-        '10000000-0000-4000-8000-000000000004'
-      ),
+      workerInstanceId: workerInstanceIdSchema.parse('10000000-0000-4000-8000-000000000004'),
       teamId: teamIdSchema.parse('10000000-0000-4000-8000-000000000005'),
     };
     const relay = await startAgentTeamsRelay({
@@ -228,6 +220,45 @@ describe('authenticated remote Codex runtime bridge', () => {
         turnId: 'turn_remote',
         command: 'pnpm test',
       });
+      const staleApprovalId = '10000000-0000-4000-8000-000000000019';
+      const staleApproval = await jsonRequest(
+        `${relay.httpUrl}/v2/runtime-sessions/${created.sessionId}/controls`,
+        created.sessionToken,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            controlId: staleApprovalId,
+            type: 'approval.resolve',
+            payload: {
+              approvalRequestId: 42,
+              decision: 'accept',
+              expectedThreadId: 'thr_remote',
+              expectedTurnId: 'old_turn',
+              appServerGeneration: 1,
+            },
+          }),
+        }
+      );
+      expect(staleApproval.status).toBe(202);
+      await vi.waitFor(async () => {
+        const events = (await (
+          await jsonRequest(
+            `${relay.httpUrl}/v2/runtime-sessions/${created.sessionId}/events?after=0`,
+            created.sessionToken
+          )
+        ).json()) as { events: unknown[] };
+        expect(events.events).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              event: expect.objectContaining({
+                kind: 'control.result',
+                payload: expect.objectContaining({ controlId: staleApprovalId, ok: false }),
+              }),
+            }),
+          ])
+        );
+      });
+      expect(codex.requestResponses).toHaveLength(0);
       const approvalResponse = await jsonRequest(
         `${relay.httpUrl}/v2/runtime-sessions/${created.sessionId}/controls`,
         created.sessionToken,
@@ -236,7 +267,13 @@ describe('authenticated remote Codex runtime bridge', () => {
           body: JSON.stringify({
             controlId: '10000000-0000-4000-8000-000000000009',
             type: 'approval.resolve',
-            payload: { approvalRequestId: 42, decision: 'accept' },
+            payload: {
+              approvalRequestId: 42,
+              decision: 'accept',
+              expectedThreadId: 'thr_remote',
+              expectedTurnId: 'turn_remote',
+              appServerGeneration: 1,
+            },
           }),
         }
       );
@@ -289,9 +326,7 @@ describe('authenticated remote Codex runtime bridge', () => {
       expect(continuationResponse.status).toBe(202);
       await vi.waitFor(() => {
         expect(worker.listAssignments()[0]).toMatchObject({ state: 'running' });
-        expect(
-          codex.requests.filter((request) => request.method === 'turn/start')
-        ).toHaveLength(2);
+        expect(codex.requests.filter((request) => request.method === 'turn/start')).toHaveLength(2);
       });
 
       const readControlId = '10000000-0000-4000-8000-000000000010';

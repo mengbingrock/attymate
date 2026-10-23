@@ -5,6 +5,11 @@ import readline from 'node:readline';
 import { parse as parseToml } from 'smol-toml';
 import WebSocket from 'ws';
 
+import {
+  runtimeConnectionFeatures,
+  type CodexRuntimeConnectionPolicy,
+} from './codexRuntimeConnections';
+
 export interface CodexAppServerNotification {
   readonly method: string;
   readonly params: unknown;
@@ -64,21 +69,24 @@ export const resolveCodexAppServerMode = (value: string | undefined): CodexAppSe
 export const defaultCodexDaemonSocketPath = (codexHome: string): string =>
   join(codexHome, 'app-server-control', 'app-server-control.sock');
 
-const codexFeatureDisableArgs = (disableRemotePlugins: boolean | undefined): readonly string[] => [
-  '--disable',
-  'apps',
-  '--disable',
-  'plugins',
-  ...(disableRemotePlugins === false ? [] : ['--disable', 'remote_plugin']),
-];
+const codexFeatureDisableArgs = (
+  disableRemotePlugins: boolean | undefined,
+  connections?: CodexRuntimeConnectionPolicy
+): readonly string[] =>
+  Object.entries(runtimeConnectionFeatures(connections)).flatMap(([name, enabled]) =>
+    name === 'remote_plugin' && disableRemotePlugins === false && !enabled
+      ? []
+      : [enabled ? '--enable' : '--disable', name]
+  );
 
 export const buildCodexDaemonStartArgs = (options: {
   readonly launcherArgs?: readonly string[];
   readonly disableRemotePlugins?: boolean;
+  readonly connections?: CodexRuntimeConnectionPolicy;
   readonly restart?: boolean;
 }): readonly string[] => [
   ...(options.launcherArgs ?? []),
-  ...codexFeatureDisableArgs(options.disableRemotePlugins),
+  ...codexFeatureDisableArgs(options.disableRemotePlugins, options.connections),
   'app-server',
   'daemon',
   options.restart === true ? 'restart' : 'start',
@@ -88,12 +96,14 @@ const FEATURES_BLOCK_START = '# >>> agent-teams-worker managed: features';
 const FEATURES_BLOCK_END = '# <<< agent-teams-worker managed: features';
 
 const requiredFeatureDisables = (
-  disableRemotePlugins: boolean | undefined
-): Readonly<Record<string, false>> => ({
-  apps: false,
-  plugins: false,
-  ...(disableRemotePlugins === false ? {} : { remote_plugin: false }),
-});
+  disableRemotePlugins: boolean | undefined,
+  connections?: CodexRuntimeConnectionPolicy
+): Readonly<Record<string, boolean>> =>
+  Object.fromEntries(
+    Object.entries(runtimeConnectionFeatures(connections)).filter(
+      ([name, enabled]) => name !== 'remote_plugin' || disableRemotePlugins !== false || enabled
+    )
+  );
 
 /**
  * The managed daemon does not inherit `--disable` flags from `codex app-server daemon start`; it
@@ -103,10 +113,13 @@ const requiredFeatureDisables = (
  */
 export const ensureCodexHomeFeatureDisables = async (
   codexHome: string,
-  options: { readonly disableRemotePlugins?: boolean } = {}
+  options: {
+    readonly disableRemotePlugins?: boolean;
+    readonly connections?: CodexRuntimeConnectionPolicy;
+  } = {}
 ): Promise<{ readonly configPath: string; readonly changed: boolean }> => {
   const configPath = join(codexHome, 'config.toml');
-  const required = requiredFeatureDisables(options.disableRemotePlugins);
+  const required = requiredFeatureDisables(options.disableRemotePlugins, options.connections);
   let existing = '';
   try {
     existing = await readFile(configPath, 'utf8');
@@ -117,7 +130,9 @@ export const ensureCodexHomeFeatureDisables = async (
   try {
     parsed = parseToml(existing) as Record<string, unknown>;
   } catch (error) {
-    throw new Error(`Worker Codex home config is not valid TOML (${configPath}): ${errorMessage(error)}`);
+    throw new Error(
+      `Worker Codex home config is not valid TOML (${configPath}): ${errorMessage(error)}`
+    );
   }
   const features = parsed.features;
   const featureTable =
@@ -147,7 +162,11 @@ export const ensureCodexHomeFeatureDisables = async (
       existing.slice(endIndex + FEATURES_BLOCK_END.length).replace(/^\n/, '');
   } else if (featureTable !== undefined) {
     throw new Error(
-      `Worker Codex home config already defines [features] without the Worker's disables (${configPath}); set ${Object.keys(required).join(', ')} = false there or remove the table.`
+      `Worker Codex home config already defines [features] with a different policy (${configPath}); set ${Object.entries(
+        required
+      )
+        .map(([name, value]) => `${name} = ${String(value)}`)
+        .join(', ')} there or remove the table.`
     );
   } else {
     next = `${existing.replace(/\s*$/, '')}${existing.trim().length > 0 ? '\n\n' : ''}${managedBlock}`;
@@ -164,6 +183,7 @@ interface CodexAppServerSessionOptions {
 }
 
 export interface CodexAppServerProcessFactoryOptions extends CodexAppServerSessionOptions {
+  readonly connections?: CodexRuntimeConnectionPolicy;
   readonly binaryPath: string;
   readonly launcherArgs?: readonly string[];
   readonly env?: NodeJS.ProcessEnv;
@@ -171,6 +191,7 @@ export interface CodexAppServerProcessFactoryOptions extends CodexAppServerSessi
 }
 
 export interface CodexAppServerDaemonFactoryOptions extends CodexAppServerSessionOptions {
+  readonly connections?: CodexRuntimeConnectionPolicy;
   readonly binaryPath: string;
   /** The Worker's `CODEX_HOME`; the daemon and its control socket belong to this home. */
   readonly codexHome: string;
@@ -496,7 +517,7 @@ export class CodexAppServerProcessFactory implements WorkerCodexAppServerSession
       this.options.binaryPath,
       [
         ...(this.options.launcherArgs ?? []),
-        ...codexFeatureDisableArgs(this.options.disableRemotePlugins),
+        ...codexFeatureDisableArgs(this.options.disableRemotePlugins, this.options.connections),
         'app-server',
       ],
       {
@@ -609,7 +630,9 @@ export class CodexAppServerDaemonFactory implements WorkerCodexAppServerSessionF
       socket.once('error', (error) => {
         clearTimeout(timer);
         reject(
-          new Error(`Could not connect to Codex App Server daemon at ${socketPath}: ${error.message}`)
+          new Error(
+            `Could not connect to Codex App Server daemon at ${socketPath}: ${error.message}`
+          )
         );
       });
       socket.once('unexpected-response', (_request, response) => {
