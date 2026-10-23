@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Agent Teams pilot: data handling</title>
+<main><h1>Agent Teams pilot: data handling</h1>
+<p>This internal pilot connects explicitly enrolled Microsoft Teams identities to their existing local Agent Teams Workers. Device owners choose which existing MCP servers, plugins and connected apps their Workers can use.</p>
+<p>Messages and replies travel through Microsoft Teams and the operator's configured HTTPS endpoint. The existing Relay and Workers run Codex with the selected local login. Requested connector results and local tool output are processed by Codex; final answers can be returned to the owner's private Teams conversation.</p>
+<p>The adapter stores request identifiers, replies, conversation references and approval records in private local SQLite journals. Replies may contain the context the owner requested. The deployment operator controls local storage, access and retention.</p>
+<p>Local files, browsers and desktop apps require owner opt-in and remain subject to Codex and operating system permissions. Supported approval requests can be answered in Teams; secret input and initial operating system permissions must be handled locally. Do not enter credentials in chat.</p></main></html>

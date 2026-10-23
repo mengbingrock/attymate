@@ -430,6 +430,17 @@ export const startAgentTeamsRelay = async (
         continue;
       }
       const latestOffer = offers.at(-1);
+      const latestState = eventStore
+        .listLatestAssignmentEventsForNode(nodeId)
+        .find((event) => event.envelope.assignmentId === latestOffer?.envelope.assignmentId);
+      // A failed execution needs explicit recovery. Heartbeats must not create fresh
+      // inference attempts indefinitely after authentication, quota, or runtime failures.
+      if (
+        latestState !== undefined &&
+        assignmentStateChangedPayloadSchema.parse(latestState.envelope.payload).state === 'failed'
+      ) {
+        continue;
+      }
       const latestPayload =
         latestOffer === undefined
           ? undefined

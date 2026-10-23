@@ -38,8 +38,107 @@ Each Worker launches App Server with a dedicated `CODEX_HOME`, defaulting to
 links, and pre-existing group/world-accessible directories, and passes the override only to the
 App Server child. This keeps the operator's personal plugins, MCP servers, skills, history, and
 configuration out of distributed execution. The Worker never copies or rewrites credentials.
-It also starts Codex with the stock `apps`, `plugins`, and `remote_plugin` feature surfaces disabled;
-the assignment-scoped Worker MCP bridge is the only permitted external tool server.
+By default it starts Codex with `apps`, `plugins`, and `remote_plugin` disabled;
+the assignment-scoped Worker MCP bridge is then the only permitted external tool server.
+An owner can opt in to selected existing connections with `--connections-config`.
+This changes connection access without changing the Relay, Worker, or lease architecture.
+
+### Owner local access and native UI tools
+
+The owner may supply `--local-access-config /private/local-access.json` with
+`{"mode":"personal","writableRoots":[]}`. Personal mode tells the runtime to use
+local tools for owner-requested files, rather than claiming the working directory
+is the only readable location. The installed Codex 0.145.0 sandbox schema has no
+per-directory read allowlist: reads follow Codex and operating system access.
+`writableRoots` adds write locations, not read limits. Other writes and network
+access retain the normal on-request approval flow. The Relay's workspace file
+broker continues to reject paths outside its workspace.
+
+`--computer-use` loads the official unified native MCP launch specification
+already installed in this device's selected Codex home. That component exposes
+Browser Use (including available Chrome/Edge backends) and native Computer Use.
+The Worker does not copy another desktop chat's access identity, change vendor
+code, install an alternative automation backend, or bypass native permissions.
+Installed tools still require a live functional test on each device.
+
+Teams approval responses travel through the existing `approval.resolve` control.
+The adapter supplies the expected thread, turn and App Server generation; the
+Worker verifies these and the pending RPC before responding. Permission replies
+copy only requested permission fields and grant them for the current turn.
+All three running components must use the updated protocol before this flow is
+tested: an old Relay rejects the additional approval context fields.
+
+### Existing plugins, apps, and MCP connections
+
+Pass an owner-only JSON file (0600) to the Worker:
+
+```sh
+agent-teams-worker start --connections-config /private/worker-connections.json ...
+```
+
+```json
+{
+  "mcpServers": {
+    "clio": {
+      "enabledTools": ["auth_status", "list_matters", "list_tasks"],
+      "env": { "READ_ONLY": "true" },
+      "readOnly": true,
+      "approvalMode": "approve"
+    }
+  },
+  "apps": {
+    "connector-id-from-app-list": {
+      "enabledTools": ["get_profile", "search"],
+      "readOnly": true,
+      "expectedEmail": "owner@example.com"
+    }
+  },
+  "plugins": {}
+}
+```
+
+MCP server definitions and credentials come from the selected Codex home. The
+file selects existing servers; it does not create incomplete server definitions
+or copy credentials. Omit `enabledTools` to permit all tools on a selected MCP
+server. Its approval mode defaults to `prompt`; `readOnly: true` verifies tool
+annotations before execution begins. Provider authorization still controls which
+records the account can read.
+
+Apps use IDs from App Server `app/list` and tool names from `app/read`.
+Only named app tools are enabled. Apps default to read-only, and `expectedEmail`
+can check the connected account using provider metadata. Unselected apps remain
+disabled. Hosted apps can be enabled independently of packaged plugins.
+
+Packaged plugins are selected by their configured `name@marketplace` key:
+
+```json
+{
+  "plugins": {
+    "notes@local": {
+      "mcpServers": {
+        "notes": {
+          "inventoryName": "plugin_notes_notes",
+          "enabledTools": ["search"]
+        }
+      }
+    }
+  }
+}
+```
+
+Use the server's actual name from `mcpServerStatus/list` as `inventoryName`.
+Declare every bundled server the plugin needs. Plugin tool approvals default to
+`prompt`; plugin hooks retain Codex's own trust requirements. Unselected configured
+plugins and MCP servers remain disabled. The owner-control server cannot be
+selected or substituted for the assignment-scoped runtime bridge.
+
+Connection checks run on starts and continuations. The hosted app MCP status
+endpoint returns a raw catalog that includes disabled tools, so the Worker checks
+selected tools and account metadata there and checks effective callable app IDs
+separately with `app/installed`. Task and runtime controls remain lease-bound.
+Direct provider tools use their configured account and approval rules rather than
+the runtime bridge's assignment token. Use read tools for context-only deployments;
+external mutations require their own authorization.
 
 ## Security invariants
 

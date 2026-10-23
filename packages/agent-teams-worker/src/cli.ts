@@ -25,6 +25,9 @@ import { startAgentTeamsWorker } from './workerDaemon';
 import { resolveWorkerBridgeLaunch } from './workerBridgeLaunch';
 import { prepareWorkerCodexHome, resolveWorkerCodexHomePath } from './workerCodexHome';
 import { diagnoseAgentTeamsWorker } from './workerDiagnostics';
+import { readRuntimeConnectionPolicy } from './codexRuntimeConnections';
+import { readLocalAccessPolicy } from './localAccessPolicy';
+import { nativeComputerUseEnvironment, withNativeComputerUse } from './nativeComputerUse';
 
 const valueAfter = (name: string, fallback?: string): string | undefined => {
   const index = process.argv.indexOf(name);
@@ -135,6 +138,11 @@ const runMcpRemove = async (): Promise<void> => {
   });
 };
 
+const configuredConnections = () => {
+  const path = valueAfter('--connections-config');
+  return path === undefined ? undefined : readRuntimeConnectionPolicy(resolve(path));
+};
+
 const runWorker = async (): Promise<void> => {
   const relayUrl = valueAfter('--relay', 'ws://127.0.0.1:43170/v2/worker-stream')!;
   const relayToken = valueAfter('--relay-token', process.env.AGENT_TEAMS_RELAY_WORKER_TOKEN);
@@ -161,6 +169,16 @@ const runWorker = async (): Promise<void> => {
   const runtimeBridgeLaunch = resolveWorkerBridgeLaunch(import.meta.url, 'runtimeMcpCli');
   const runtimeMcpCommand = valueAfter('--runtime-mcp-command');
   const appServer = configuredAppServer(workerCodexHome.codexHome);
+  const selectedConnections = await configuredConnections();
+  const connections = process.argv.includes('--computer-use')
+    ? await withNativeComputerUse(workerCodexHome.codexHome, selectedConnections)
+    : selectedConnections;
+  const runtimeEnv = nativeComputerUseEnvironment(workerCodexHome.env);
+  const localAccessPath = valueAfter('--local-access-config');
+  const localAccess =
+    localAccessPath === undefined
+      ? undefined
+      : await readLocalAccessPolicy(resolve(localAccessPath));
   const worker = await startAgentTeamsWorker({
     relayUrl,
     ...(relayToken === undefined ? {} : { relayToken }),
@@ -179,21 +197,25 @@ const runWorker = async (): Promise<void> => {
       : {
           codexRuntime: {
             cwd: resolve(runtimeCwd),
+            ...(localAccess === undefined ? {} : { localAccess }),
             sessionFactory:
               appServer.mode === 'shared-daemon'
                 ? new CodexAppServerDaemonFactory({
+                    connections,
                     binaryPath: valueAfter('--codex-binary', 'codex')!,
                     codexHome: workerCodexHome.codexHome,
-                    env: workerCodexHome.env,
+                    env: runtimeEnv,
                     ...(valueAfter('--app-server-socket') === undefined
                       ? {}
                       : { socketPath: appServer.socketPath }),
                   })
                 : new CodexAppServerProcessFactory({
+                    connections,
                     binaryPath: valueAfter('--codex-binary', 'codex')!,
-                    env: workerCodexHome.env,
+                    env: runtimeEnv,
                   }),
             runtimeMcp: {
+              connections,
               command: runtimeMcpCommand ?? runtimeBridgeLaunch.command,
               args: [
                 ...(runtimeMcpCommand === undefined

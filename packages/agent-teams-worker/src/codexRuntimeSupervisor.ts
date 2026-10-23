@@ -16,10 +16,19 @@ import {
   assertRestrictedRuntimeMcpInventory,
   buildRestrictedRuntimeMcpConfig,
   readConfiguredPluginNames,
+  readConfiguredAppNames,
+  readConfiguredAppToolNames,
+  assertRuntimeAppInventory,
   readConfiguredMcpServerNames,
   type CodexRuntimeMcpLaunchSpec,
 } from './codexRuntimeMcpProfile';
 import { WorkerRuntimeStore, type WorkerRuntimeBinding } from './workerRuntimeStore';
+import {
+  localAccessRuntimeConfig,
+  personalAccessInstructions,
+  type LocalAccessPolicy,
+} from './localAccessPolicy';
+import { codexApprovalResponse } from './codexApprovalResponse';
 import {
   WorkerRuntimeSessionStore,
   type CreatedRuntimeMcpSession,
@@ -30,6 +39,7 @@ export interface WorkerCodexRuntimeOptions {
   readonly cwd: string;
   readonly sessionFactory: WorkerCodexAppServerSessionFactory;
   readonly model?: string;
+  readonly localAccess?: LocalAccessPolicy;
   readonly runtimeIdentity?: {
     readonly organizationId: string;
     readonly personId: string;
@@ -258,18 +268,22 @@ export class WorkerCodexRuntimeSupervisor {
     );
     await session.request('thread/resume', {
       threadId: completed.threadId,
+      ...(personalAccessInstructions(this.options.localAccess) === undefined
+        ? {}
+        : { developerInstructions: personalAccessInstructions(this.options.localAccess) }),
       cwd: this.options.cwd,
       approvalPolicy: 'on-request',
       sandbox: 'workspace-write',
-      ...(runtimeMcpSession === undefined ? {} : { config: runtimeMcpSession.config }),
+      ...(localAccessRuntimeConfig(runtimeMcpSession?.config, this.options.localAccess) ===
+      undefined
+        ? {}
+        : {
+            config: localAccessRuntimeConfig(runtimeMcpSession?.config, this.options.localAccess),
+          }),
       ...(this.options.model === undefined ? {} : { model: this.options.model }),
     });
     if (runtimeMcpSession !== undefined) {
-      await this.assertRuntimeMcpInventory(
-        session,
-        completed.threadId,
-        runtimeMcpSession.teamRole
-      );
+      await this.assertRuntimeMcpInventory(session, completed.threadId, runtimeMcpSession.teamRole);
     }
     const turnResponse = await session.request<TurnStartResponse>('turn/start', {
       threadId: completed.threadId,
@@ -278,17 +292,18 @@ export class WorkerCodexRuntimeSupervisor {
       approvalPolicy: 'on-request',
       sandboxPolicy: {
         type: 'workspaceWrite',
-        writableRoots: [this.options.cwd],
+        writableRoots: [
+          this.options.cwd,
+          ...(this.options.localAccess?.mode === 'personal'
+            ? this.options.localAccess.writableRoots
+            : []),
+        ],
         networkAccess: false,
       },
       ...(this.options.model === undefined ? {} : { model: this.options.model }),
     });
     const turnId = requireRuntimeId(turnResponse.turn?.id, 'turn/start');
-    const binding = this.store.continueTurn(
-      completed.attemptId,
-      turnId,
-      this.appServerGeneration!
-    );
+    const binding = this.store.continueTurn(completed.attemptId, turnId, this.appServerGeneration!);
     if (runtimeMcpSession !== undefined) {
       this.runtimeSessions.bindTurn(runtimeMcpSession.token, turnId);
     }
@@ -300,7 +315,14 @@ export class WorkerCodexRuntimeSupervisor {
   resolveApproval(
     identity: ExecutionLeaseIdentity,
     approvalRequestId: number | string,
-    decision: 'accept' | 'acceptForSession' | 'decline' | 'cancel'
+    decision: 'accept' | 'acceptForSession' | 'decline' | 'cancel',
+    context?: {
+      expectedThreadId?: string;
+      expectedTurnId?: string;
+      appServerGeneration?: number;
+      answers?: Record<string, string[]>;
+      form?: Record<string, string | number | boolean>;
+    }
   ): void {
     const active = this.store.active();
     if (
@@ -312,7 +334,22 @@ export class WorkerCodexRuntimeSupervisor {
     ) {
       throw new Error('Codex approval precondition does not match the active turn');
     }
-    this.session.respondToRequest(approvalRequestId, { decision });
+    const request = this.pendingRequests.get(approvalRequestId);
+    const params = asRecord(request?.params);
+    if (
+      !request ||
+      (typeof params?.threadId === 'string' && params.threadId !== active.threadId) ||
+      (typeof params?.turnId === 'string' && params.turnId !== active.turnId) ||
+      (context?.expectedThreadId !== undefined && context.expectedThreadId !== active.threadId) ||
+      (context?.expectedTurnId !== undefined && context.expectedTurnId !== active.turnId) ||
+      (context?.appServerGeneration !== undefined &&
+        context.appServerGeneration !== active.appServerGeneration)
+    )
+      throw new Error('Approval request is no longer pending in this runtime turn');
+    this.session.respondToRequest(
+      approvalRequestId,
+      codexApprovalResponse(request, decision, context?.answers, context?.form)
+    );
     this.pendingRequests.delete(approvalRequestId);
   }
 
@@ -376,10 +413,18 @@ export class WorkerCodexRuntimeSupervisor {
       const runtimeMcpSession = await this.createRuntimeMcpSession(session, assignment);
       const threadResponse = await session.request<ThreadStartResponse>('thread/start', {
         cwd: this.options.cwd,
+        ...(personalAccessInstructions(this.options.localAccess) === undefined
+          ? {}
+          : { developerInstructions: personalAccessInstructions(this.options.localAccess) }),
         approvalPolicy: 'on-request',
         sandbox: 'workspace-write',
         serviceName: 'agent_teams_worker',
-        ...(runtimeMcpSession === undefined ? {} : { config: runtimeMcpSession.config }),
+        ...(localAccessRuntimeConfig(runtimeMcpSession?.config, this.options.localAccess) ===
+        undefined
+          ? {}
+          : {
+              config: localAccessRuntimeConfig(runtimeMcpSession?.config, this.options.localAccess),
+            }),
         ...(this.options.model === undefined ? {} : { model: this.options.model }),
       });
       const threadId = requireRuntimeId(threadResponse.thread?.id, 'thread/start');
@@ -390,7 +435,8 @@ export class WorkerCodexRuntimeSupervisor {
       const prompt = [
         `Complete the leased Agent Teams assignment: ${assignment.title}`,
         assignment.description,
-        'Work only inside the supplied workspace. Do not commit, push, or publish; the Worker owns verification and publication.',
+        personalAccessInstructions(this.options.localAccess) ??
+          'Work only inside the supplied workspace. Do not commit, push, or publish; the Worker owns verification and publication.',
       ]
         .filter((line): line is string => line !== undefined)
         .join('\n\n');
@@ -401,7 +447,12 @@ export class WorkerCodexRuntimeSupervisor {
         approvalPolicy: 'on-request',
         sandboxPolicy: {
           type: 'workspaceWrite',
-          writableRoots: [this.options.cwd],
+          writableRoots: [
+            this.options.cwd,
+            ...(this.options.localAccess?.mode === 'personal'
+              ? this.options.localAccess.writableRoots
+              : []),
+          ],
           networkAccess: false,
         },
         ...(this.options.model === undefined ? {} : { model: this.options.model }),
@@ -465,9 +516,7 @@ export class WorkerCodexRuntimeSupervisor {
     if (this.closing) return;
     if (this.launchPromise !== undefined) {
       const inFlight = this.launchPromise;
-      void inFlight
-        .finally(() => this.scheduleRecovery(event.error))
-        .catch(() => undefined);
+      void inFlight.finally(() => this.scheduleRecovery(event.error)).catch(() => undefined);
       return;
     }
     this.scheduleRecovery(event.error);
@@ -476,10 +525,7 @@ export class WorkerCodexRuntimeSupervisor {
   private scheduleRecovery(closeError: Error): void {
     if (this.closing || this.launchPromise !== undefined) return;
     const active = this.store.active();
-    if (
-      active === undefined ||
-      this.options.canRecover?.(active) === false
-    ) {
+    if (active === undefined || this.options.canRecover?.(active) === false) {
       return;
     }
     this.launchPromise = this.recover(active, closeError).finally(() => {
@@ -495,10 +541,7 @@ export class WorkerCodexRuntimeSupervisor {
     if (this.options.canRecover?.(binding) === false) return binding;
     try {
       const session = await this.ensureSession();
-      const recovering = this.store.markRecovering(
-        binding.attemptId,
-        this.appServerGeneration!
-      );
+      const recovering = this.store.markRecovering(binding.attemptId, this.appServerGeneration!);
       if (recovering.threadId === undefined || recovering.turnId === undefined) {
         return this.requireReconciliation(
           recovering,
@@ -531,10 +574,18 @@ export class WorkerCodexRuntimeSupervisor {
 
       const resumeResponse = await session.request<ThreadReadResponse>('thread/resume', {
         threadId: recovering.threadId,
+        ...(personalAccessInstructions(this.options.localAccess) === undefined
+          ? {}
+          : { developerInstructions: personalAccessInstructions(this.options.localAccess) }),
         cwd: this.options.cwd,
         approvalPolicy: 'on-request',
         sandbox: 'workspace-write',
-        ...(runtimeMcpSession === undefined ? {} : { config: runtimeMcpSession.config }),
+        ...(localAccessRuntimeConfig(runtimeMcpSession?.config, this.options.localAccess) ===
+        undefined
+          ? {}
+          : {
+              config: localAccessRuntimeConfig(runtimeMcpSession?.config, this.options.localAccess),
+            }),
         ...(this.options.model === undefined ? {} : { model: this.options.model }),
       });
       if (runtimeMcpSession !== undefined) {
@@ -574,9 +625,9 @@ export class WorkerCodexRuntimeSupervisor {
     turnId: string
   ): PersistedTurn | undefined {
     if (!Array.isArray(thread?.turns)) return undefined;
-    return thread.turns
-      .map((turn) => asRecord(turn))
-      .find((turn) => turn?.id === turnId) as PersistedTurn | undefined;
+    return thread.turns.map((turn) => asRecord(turn)).find((turn) => turn?.id === turnId) as
+      | PersistedTurn
+      | undefined;
   }
 
   private projectTerminalTurn(
@@ -613,10 +664,7 @@ export class WorkerCodexRuntimeSupervisor {
     return failed;
   }
 
-  private requireReconciliation(
-    binding: WorkerRuntimeBinding,
-    error: Error
-  ): WorkerRuntimeBinding {
+  private requireReconciliation(binding: WorkerRuntimeBinding, error: Error): WorkerRuntimeBinding {
     const failed = this.store.markNeedsReconciliation(binding.attemptId, error.message);
     this.revokeRuntimeMcpAttempt(binding.attemptId);
     this.options.onReconciliationRequired?.(failed, error);
@@ -624,6 +672,11 @@ export class WorkerCodexRuntimeSupervisor {
   }
 
   private handleNotification(notification: CodexAppServerNotification): void {
+    if (notification.method === 'serverRequest/resolved') {
+      const resolved = asRecord(notification.params)?.requestId;
+      if (typeof resolved === 'string' || typeof resolved === 'number')
+        this.pendingRequests.delete(resolved);
+    }
     const binding = this.store.active();
     if (binding !== undefined) this.options.onRuntimeEvent?.(binding, notification);
     if (notification.method !== 'turn/completed') return;
@@ -633,6 +686,7 @@ export class WorkerCodexRuntimeSupervisor {
     const status = typeof turn?.status === 'string' ? turn.status : undefined;
     const active = binding;
     if (active === undefined || active.turnId !== turnId || status === undefined) return;
+    this.pendingRequests.clear();
     if (status === 'completed') {
       const completed = this.store.settle(active.attemptId, 'completed', status);
       this.options.onCompleted?.(completed);
@@ -760,12 +814,32 @@ export class WorkerCodexRuntimeSupervisor {
       cwd: this.options.cwd,
       includeLayers: false,
     });
+    // Built-in desktop plugins can contribute MCPs not listed in config.toml.
+    // Disable those too before a plugin-enabled thread is allowed to start.
+    let additionalServers: string[] = [];
+    if (Object.keys(runtimeMcp.connections?.plugins ?? {}).length > 0) {
+      const inventory = asRecord(await session.request('mcpServerStatus/list', { limit: 100 }));
+      if (!Array.isArray(inventory?.data) || inventory.nextCursor != null)
+        throw new Error('Cannot establish the owner MCP inventory');
+      additionalServers = inventory.data
+        .map((value) => asRecord(value)?.name)
+        .filter((name): name is string => typeof name === 'string');
+      additionalServers.push(
+        'messages',
+        'codex_app',
+        'code-review',
+        'openai-api-key-local-confirmation'
+      );
+    }
     return buildRestrictedRuntimeMcpConfig(
       runtimeMcp,
       token,
       readConfiguredMcpServerNames(response),
       readConfiguredPluginNames(response),
-      teamRole
+      teamRole,
+      readConfiguredAppNames(response),
+      readConfiguredAppToolNames(response),
+      additionalServers
     );
   }
 
@@ -779,6 +853,10 @@ export class WorkerCodexRuntimeSupervisor {
       limit: 100,
       detail: 'toolsAndAuthOnly',
     });
-    assertRestrictedRuntimeMcpInventory(response, teamRole);
+    assertRestrictedRuntimeMcpInventory(response, teamRole, this.options.runtimeMcp?.connections);
+    const connections = this.options.runtimeMcp?.connections;
+    if (connections !== undefined && Object.keys(connections.apps).length > 0) {
+      assertRuntimeAppInventory(await session.request('app/installed', { threadId }), connections);
+    }
   }
 }

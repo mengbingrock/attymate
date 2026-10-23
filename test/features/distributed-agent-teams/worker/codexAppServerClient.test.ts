@@ -2,19 +2,47 @@
 
 import { fileURLToPath } from 'node:url';
 
-import { CodexAppServerProcessFactory } from '@claude-teams/agent-teams-worker';
+import {
+  CodexAppServerProcessFactory,
+  runtimeConnectionPolicySchema,
+} from '@claude-teams/agent-teams-worker';
 import { describe, expect, it } from 'vitest';
 
 describe('CodexAppServerProcessFactory', () => {
+  it('enables plugin features only when a Worker selects connections', async () => {
+    const fixture = fileURLToPath(new URL('./fixtures/fakeCodexAppServer.mjs', import.meta.url));
+    const session = await new CodexAppServerProcessFactory({
+      binaryPath: process.execPath,
+      launcherArgs: [fixture],
+      connections: runtimeConnectionPolicySchema.parse({
+        mcpServers: {},
+        plugins: {},
+        apps: { outlook: { enabledTools: ['get_profile'] } },
+      }),
+    }).open();
+    try {
+      await expect(session.request('fixture/getArgv')).resolves.toEqual([
+        '--enable',
+        'apps',
+        '--disable',
+        'plugins',
+        '--disable',
+        'remote_plugin',
+        'app-server',
+      ]);
+    } finally {
+      await session.close();
+    }
+  });
   it('keeps a stdio session open and responds to numeric-id server requests', async () => {
     const fixture = fileURLToPath(new URL('./fixtures/fakeCodexAppServer.mjs', import.meta.url));
     const serverRequests: string[] = [];
     const factory = new CodexAppServerProcessFactory({
       binaryPath: process.execPath,
       launcherArgs: [fixture],
-      onServerRequest: async (request) => {
+      onServerRequest: (request) => {
         serverRequests.push(request.method);
-        return { decision: 'decline' };
+        return Promise.resolve({ decision: 'decline' });
       },
     });
     const session = await factory.open();

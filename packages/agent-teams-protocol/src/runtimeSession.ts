@@ -109,6 +109,18 @@ export const runtimeControlSchema = z.discriminatedUnion('type', [
             z.string().trim().min(1).max(256),
           ]),
           decision: z.enum(['accept', 'acceptForSession', 'decline', 'cancel']),
+          expectedThreadId: opaqueRuntimeIdSchema.optional(),
+          expectedTurnId: opaqueRuntimeIdSchema.optional(),
+          appServerGeneration: z.number().int().positive().optional(),
+          answers: z
+            .record(z.string().min(1).max(128), z.array(z.string().max(2000)).max(8))
+            .optional(),
+          form: z
+            .record(
+              z.string().min(1).max(128),
+              z.union([z.string().max(2000), z.number(), z.boolean()])
+            )
+            .optional(),
         })
         .strict(),
     })

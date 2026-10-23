@@ -3,11 +3,45 @@ import {
   buildRestrictedRuntimeMcpConfig,
   readConfiguredMcpServerNames,
   readConfiguredPluginNames,
+  runtimeConnectionPolicySchema,
   RUNTIME_BRIDGE_TOOL_NAMES,
 } from '@claude-teams/agent-teams-worker';
 import { describe, expect, it } from 'vitest';
 
 describe('Codex runtime MCP profile', () => {
+  it('loads an owner selected native transport and disables injected native servers', () => {
+    const config = buildRestrictedRuntimeMcpConfig(
+      {
+        command: '/node',
+        args: ['/bridge'],
+        connections: runtimeConnectionPolicySchema.parse({
+          mcpServers: {
+            cua_repl: {
+              launch: { command: '/official/node', args: ['/official/cua'] },
+              enabledTools: ['js'],
+            },
+          },
+        }),
+      },
+      'token',
+      ['browseros'],
+      [],
+      'member',
+      [],
+      {},
+      ['messages', 'browseros']
+    );
+    const servers = config.mcp_servers as Record<string, unknown>;
+    expect(servers.cua_repl).toMatchObject({
+      enabled: true,
+      command: '/official/node',
+      args: ['/official/cua'],
+      enabled_tools: ['js'],
+      default_tools_approval_mode: 'prompt',
+    });
+    expect(servers.messages).toEqual({ enabled: false, command: '/node' });
+    expect(servers.browseros).toEqual({ enabled: false });
+  });
   it('disables every discovered server and injects only the tokenized runtime bridge', () => {
     const configured = readConfiguredMcpServerNames({
       config: {
@@ -84,10 +118,7 @@ describe('Codex runtime MCP profile', () => {
     ).not.toThrow();
     expect(() =>
       assertRestrictedRuntimeMcpInventory({
-        data: [
-          runtime,
-          { name: 'github', tools: {}, resources: [], resourceTemplates: [] },
-        ],
+        data: [runtime, { name: 'github', tools: {}, resources: [], resourceTemplates: [] }],
         nextCursor: null,
       })
     ).not.toThrow();

@@ -1,0 +1,14 @@
+{
+  "name": "@claude-teams/agent-teams-teams-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24.15.0 <25" },
+  "scripts": {
+    "start": "tsx src/cli.ts",
+    "ingress": "tsx src/ingress.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": { "@microsoft/teams.apps": "2.1.1" },
+  "devDependencies": { "tsx": "^4.21.0", "typescript": "^5.8.3" }
+}

@@ -22,6 +22,7 @@ import WebSocket from 'ws';
 
 import type { WorkerCodexAppServerSessionFactory } from './codexAppServerClient';
 import type { CodexRuntimeMcpLaunchSpec } from './codexRuntimeMcpProfile';
+import type { LocalAccessPolicy } from './localAccessPolicy';
 import { WorkerCodexRuntimeSupervisor } from './codexRuntimeSupervisor';
 import { authorizeWorkerToolInvocation } from './mcpSessionGateway';
 import { parseRuntimeMcpToolArguments } from './runtimeMcpServer';
@@ -63,6 +64,7 @@ export interface AgentTeamsWorkerOptions {
   readonly messageDeliveryRetryIntervalMs?: number;
   readonly codexRuntime?: {
     readonly cwd: string;
+    readonly localAccess?: LocalAccessPolicy;
     readonly model?: string;
     readonly sessionFactory: WorkerCodexAppServerSessionFactory;
     readonly runtimeMcp?: CodexRuntimeMcpLaunchSpec;
@@ -219,6 +221,9 @@ export const startAgentTeamsWorker = async (
       : new WorkerCodexRuntimeSupervisor({
           dataDir: options.dataDir,
           cwd: options.codexRuntime.cwd,
+          ...(options.codexRuntime.localAccess === undefined
+            ? {}
+            : { localAccess: options.codexRuntime.localAccess }),
           ...(options.codexRuntime.model === undefined
             ? {}
             : { model: options.codexRuntime.model }),
@@ -293,7 +298,9 @@ export const startAgentTeamsWorker = async (
           },
         });
   const workspaceFileBroker =
-    options.codexRuntime === undefined ? undefined : new WorkspaceFileBroker(options.codexRuntime.cwd);
+    options.codexRuntime === undefined
+      ? undefined
+      : new WorkspaceFileBroker(options.codexRuntime.cwd);
   let controlServer: StartedWorkerControlServer | undefined;
   let socket: WebSocket | undefined;
   let heartbeatTimer: NodeJS.Timeout | undefined;
@@ -456,7 +463,11 @@ export const startAgentTeamsWorker = async (
 
   const handleRuntimeControl = async (message: RelayRuntimeControlMessage): Promise<void> => {
     const scope = currentRuntimeScope();
-    if (scope === undefined || !scopeMatches(scope, message.scope) || runtimeSupervisor === undefined) {
+    if (
+      scope === undefined ||
+      !scopeMatches(scope, message.scope) ||
+      runtimeSupervisor === undefined
+    ) {
       emitScopedRuntimeEvent(
         message.scope,
         {
@@ -527,7 +538,8 @@ export const startAgentTeamsWorker = async (
         result = runtimeSupervisor.resolveApproval(
           scope,
           message.control.payload.approvalRequestId,
-          message.control.payload.decision
+          message.control.payload.decision,
+          message.control.payload
         );
       } else if (message.control.type === 'review.start') {
         result = await runtimeSupervisor.startReview(scope, message.control.payload.threadId);
@@ -618,7 +630,8 @@ export const startAgentTeamsWorker = async (
         appServerGeneration: binding.appServerGeneration,
       };
       const claimedMessages = pendingMessages.filter(
-        (message) => messageStore.beginSteer(message.messageId, scope, completedIdentity) !== undefined
+        (message) =>
+          messageStore.beginSteer(message.messageId, scope, completedIdentity) !== undefined
       );
       if (claimedMessages.length === 0) return;
       let continued: WorkerRuntimeBinding;
@@ -631,8 +644,7 @@ export const startAgentTeamsWorker = async (
           message: claimedMessages.map(messageText).join('\n\n---\n\n'),
         });
       } catch (error) {
-        const reason =
-          error instanceof Error ? error.message : 'Codex runtime continuation failed';
+        const reason = error instanceof Error ? error.message : 'Codex runtime continuation failed';
         for (const message of claimedMessages) {
           messageStore.markSteerFailed(message.messageId, completedIdentity, reason);
         }
@@ -648,7 +660,8 @@ export const startAgentTeamsWorker = async (
         }
         return;
       }
-      for (const message of claimedMessages) messageStore.markSteered(message.messageId, completedIdentity);
+      for (const message of claimedMessages)
+        messageStore.markSteered(message.messageId, completedIdentity);
       return;
     }
 
@@ -708,11 +721,7 @@ export const startAgentTeamsWorker = async (
     }
     const context = runtimeSupervisor.authorizeRuntimeSession(input.token);
     const parsedArguments = parseRuntimeMcpToolArguments(input.toolName, input.arguments);
-    const invocation = authorizeWorkerToolInvocation(
-      context,
-      input.toolName,
-      parsedArguments
-    );
+    const invocation = authorizeWorkerToolInvocation(context, input.toolName, parsedArguments);
     if (input.toolName === 'runtime_context') {
       return { context: invocation.context, team: membershipStore.get(context.teamId) };
     }
