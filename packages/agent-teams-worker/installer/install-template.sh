@@ -79,7 +79,10 @@ say "Using your existing Codex home: $CODEX_HOME_DIR (team threads will show up 
 uuid() { "$NODE" -e "console.log(require('crypto').randomUUID())"; }
 # Unix socket paths are limited to ~100 characters, so keep the control socket in a short, private dir.
 SOCK_DIR="${TMPDIR:-/tmp}/agent-teams-$(id -u)"; mkdir -p "$SOCK_DIR"; chmod 700 "$SOCK_DIR"
-CONTROL_SOCK="$SOCK_DIR/mate-${TEAM_ID:0:8}.sock"
+# Unique per install directory, so two members of one team on the same machine never share a socket.
+# Kept short because Unix socket paths are limited to about 100 characters.
+DIR_SUM=$(printf '%s' "$DIR" | cksum | cut -d' ' -f1)
+CONTROL_SOCK="$SOCK_DIR/mate-${TEAM_ID:0:8}-${DIR_SUM}.sock"
 ENV_FILE="$DIR/config.env"
 if [ ! -s "$ENV_FILE" ]; then
   cat >"$ENV_FILE" <<EOF
