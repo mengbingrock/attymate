@@ -42,6 +42,14 @@ and the bridge reads it on every call, so token rotations after a Worker restart
 The implementation follows
 [the distributed Codex runtime ADR](../../../docs/team-management/distributed-codex-runtime.md).
 
+## Team directory and join portal
+
+The Relay can publish named teams, each protected by its own join token, and serve a public join page
+at `/join/` when started with `--public-url`. A join token is shown once, stored only as a digest, and
+also works as a Worker credential that binds the Worker to that one team. Managers create, rotate, and
+remove tokens through `/v2/team-directory`. The desktop app does not manage the directory yet. See
+`docs/team-management/distributed-codex-runtime.md`.
+
 ## Leaderless teams
 
 A team can run with members only. The Relay stores a per-team coordination mode (`led` by default,

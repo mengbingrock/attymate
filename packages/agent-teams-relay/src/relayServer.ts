@@ -35,6 +35,7 @@ import {
   type WorkerInstanceId,
 } from '@claude-teams/agent-teams-protocol';
 import Fastify, { type FastifyInstance } from 'fastify';
+import type { IncomingMessage } from 'node:http';
 import { type RawData, WebSocket, WebSocketServer } from 'ws';
 
 import { RelayCommandStore, type RelayCommandRecord } from './relayCommandStore';
@@ -49,6 +50,12 @@ import {
   RelayRuntimeSessionAuthorizationError,
   RelayRuntimeSessionStore,
 } from './relayRuntimeSessionStore';
+import {
+  registerJoinPortal,
+  registerTeamDirectoryManagerRoutes,
+  type RelayJoinPortalOptions,
+} from './relayJoinPortal';
+import { RelayTeamDirectoryStore } from './relayTeamDirectoryStore';
 
 export interface AgentTeamsRelayOptions {
   readonly host: string;
@@ -62,6 +69,8 @@ export interface AgentTeamsRelayOptions {
     readonly managerToken: string;
     readonly workerToken: string;
   };
+  /** Public team directory and join page at /join/. Off unless configured. */
+  readonly joinPortal?: RelayJoinPortalOptions;
 }
 
 export interface ConnectedWorkerProjection {
@@ -105,8 +114,15 @@ const defaultOfferText = (
   };
 };
 
+/** Set when a Worker authenticated with a team join token: the session may serve only that team. */
+interface WorkerTeamScope {
+  readonly teamId: TeamId;
+  readonly tokenHash: string;
+}
+
 interface MutableWorkerSession {
   hello: ReturnType<typeof workerHelloMessageSchema.parse>;
+  teamScope?: WorkerTeamScope;
   socket: WebSocket;
   connectedAt: string;
   lastHeartbeatAt: string;
@@ -191,6 +207,8 @@ export const startAgentTeamsRelay = async (
   const eventStore = new RelayEventStore(options.dataDir);
   const leaseStore = new RelayLeaseStore(options.dataDir, options.leaseDurationMs);
   const membershipRouteStore = new RelayMembershipRouteStore(options.dataDir);
+  const teamDirectory = new RelayTeamDirectoryStore(options.dataDir);
+  const upgradeTeamScopes = new WeakMap<IncomingMessage, WorkerTeamScope>();
   const runtimeSessionStore = new RelayRuntimeSessionStore();
   const auth =
     options.auth === undefined
@@ -331,6 +349,9 @@ export const startAgentTeamsRelay = async (
     const requested = joinTeamMemberRequestSchema.parse(input);
     const worker = sessions.get(requested.targetNodeId);
     if (worker === undefined) throw new TypeError('Target Worker must be connected before joining');
+    if (worker.teamScope !== undefined && worker.teamScope.teamId !== teamId) {
+      throw new TypeError('Target Worker joined with a team token and can only serve that team');
+    }
     const membershipId = membershipIdSchema.parse(requested.membershipId ?? randomUUID());
     const workspaceId = requested.workspaceId ?? randomUUID();
     const assignmentId = randomUUID();
@@ -1081,23 +1102,33 @@ export const startAgentTeamsRelay = async (
       return;
     }
     if (auth !== undefined && !tokenMatches(request.headers.authorization, auth.workerToken)) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
-      socket.destroy();
-      return;
+      // A team join token admits the Worker to exactly one team.
+      const teamScope = teamDirectory.resolveJoinToken(bearerValue(request.headers.authorization));
+      if (teamScope === undefined) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+      upgradeTeamScopes.set(request, teamScope);
     }
     webSocketServer.handleUpgrade(request, socket, head, (webSocket) => {
       webSocketServer.emit('connection', webSocket, request);
     });
   });
 
-  webSocketServer.on('connection', (socket) => {
+  webSocketServer.on('connection', (socket, request: IncomingMessage) => {
     let boundNodeId: NodeId | undefined;
+    const teamScope = upgradeTeamScopes.get(request);
 
     socket.on('message', (data) => {
       try {
         const input = parseJsonMessage(data);
         if (boundNodeId === undefined) {
           const hello = workerHelloMessageSchema.parse(input);
+          if (teamScope !== undefined && hello.autoJoinTeamId !== teamScope.teamId) {
+            socket.close(4010, 'Team join token does not match the advertised team');
+            return;
+          }
           const previous = sessions.get(hello.nodeId);
           if (previous !== undefined && previous.socket !== socket) {
             previous.socket.close(4001, 'Replaced by newer Worker session');
@@ -1107,6 +1138,7 @@ export const startAgentTeamsRelay = async (
           boundNodeId = hello.nodeId;
           sessions.set(hello.nodeId, {
             hello,
+            ...(teamScope === undefined ? {} : { teamScope }),
             socket,
             connectedAt,
             lastHeartbeatAt: connectedAt,
@@ -1377,6 +1409,25 @@ export const startAgentTeamsRelay = async (
     });
   });
 
+  const portalDependencies = {
+    app,
+    teamDirectory,
+    membershipRouteStore,
+    connectedNodeIds: () => new Set<string>(sessions.keys()),
+    setCoordination: (teamId: TeamId, coordination: 'led' | 'leaderless') => {
+      updateTeamSettings(teamId, { coordination });
+    },
+    revokeJoinTokenSessions: (tokenHash: string) => {
+      for (const session of sessions.values()) {
+        if (session.teamScope?.tokenHash === tokenHash) {
+          session.socket.close(4011, 'Team join token was revoked');
+        }
+      }
+    },
+  };
+  registerTeamDirectoryManagerRoutes(portalDependencies);
+  if (options.joinPortal !== undefined) registerJoinPortal(portalDependencies, options.joinPortal);
+
   reconcilePeerMessageDeliveries();
 
   await app.listen({ host: options.host, port: options.port });
@@ -1409,6 +1460,7 @@ export const startAgentTeamsRelay = async (
       eventStore.close();
       leaseStore.close();
       membershipRouteStore.close();
+      teamDirectory.close();
     },
   };
 };

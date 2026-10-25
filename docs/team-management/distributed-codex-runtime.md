@@ -211,6 +211,56 @@ idempotent. If the lead or the operator removes that membership, its tombstone s
 re-enrollment on later reconnects. Re-enrollment then requires an explicit join or a deliberately
 new Worker node identity.
 
+### Team directory and public join portal
+
+A Relay can publish a team directory with a public join page. Each directory team has a name, a
+description, a `listed` flag, and its own **join token** (`atj_…`, 256 random bits). The Relay stores
+only a SHA-256 digest of each token and returns the plaintext exactly once, when it is created or
+rotated.
+
+Manager routes (manager token required):
+
+| Route | Purpose |
+|---|---|
+| `GET /v2/team-directory` | All directory entries with their coordination mode; never tokens |
+| `POST /v2/team-directory` | Create an entry (`name`, optional `description`, `listed`, `coordination`, `teamId`); returns `joinToken` |
+| `PATCH /v2/team-directory/<team>` | Rename, re-describe, or list/unlist |
+| `POST /v2/team-directory/<team>/join-token` | Rotate the token; Workers connected with the old token are disconnected |
+| `DELETE /v2/team-directory/<team>` | Remove the entry and revoke its token |
+
+A join token is also a Worker credential. A Worker that connects with it instead of the Relay-wide
+Worker token is bound to that team: its hello must advertise that team as `autoJoinTeamId` (close
+code 4010 otherwise), and the manager cannot enroll it into any other team. Rotation or removal closes
+its session with code 4011. The Worker needs no change; the token goes in
+`AGENT_TEAMS_RELAY_WORKER_TOKEN` or `--relay-token` as before.
+
+The public portal is off unless the Relay gets `--public-url`. With it, the Relay serves:
+
+- `/join/`: a static page that lists listed teams with a token (name, description, mode, member and
+  online counts) and, after a correct token, offers the installer download and clone-and-run steps;
+- `GET /join/api/teams`: the same listing as JSON;
+- `POST /join/api/teams/<team>/verify` and `POST /join/api/teams/<team>/installer` with `{"token"}`.
+  Wrong tokens and unknown teams get the same 401. The installer is rendered like
+  `installer/build-installer.sh`, with the public Worker stream URL and the team's token baked in.
+
+```bash
+relay --public-url https://relay.example/next \
+  --join-installer-template packages/agent-teams-worker/installer/install-template.sh \
+  --join-worker-bundle worker-bundle.tgz \
+  --join-repo-url https://github.com/<org>/<repo>.git --join-repo-branch <branch>
+```
+
+`worker-bundle.tgz` holds `cli.js`, `controlMcpCli.js`, and `runtimeMcpCli.js` at its root. Without
+the installer options the page offers only the clone steps; without the repository options only the
+installer. Pages are sent with a strict Content-Security-Policy (no third-party origins, no inline
+script), `nosniff`, and `no-referrer`, and render manager-supplied text with `textContent` only.
+
+Failed token checks are rate limited per client (20 per 10 minutes by default). Behind a loopback
+reverse proxy the Relay trusts only the proxy's own, last `X-Forwarded-For` entry. When the proxy
+itself sees every client as loopback (for example a TCP pass-through in front of it without the PROXY
+protocol), clients cannot be told apart and share one larger budget (300 per 10 minutes), so a single
+client cannot lock others out quickly. The join tokens' entropy, not the limiter, is the real defense.
+
 ### Leaderless teams
 
 A team is `led` by default: the Relay keeps exactly one active lead, makes the first joiner the
