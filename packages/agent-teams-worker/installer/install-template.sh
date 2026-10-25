@@ -155,7 +155,7 @@ say "Waiting for the worker to connect to ${RELAY_URL}"
 for _ in $(seq 1 30); do
   sleep 2
   if grep -q '"state": *"connected"' "$DIR/data/worker-status.json" 2>/dev/null; then
-    say "Connected. Team ${TEAM_ID} will enroll '${LABEL}' as a member once the lead is active."
+    say "Connected. Team ${TEAM_ID} will enroll '${LABEL}' as a member (right away in a leaderless team, otherwise once the team has an active lead)."
     echo "  status:  bash $DIR/bin/status.sh"
     echo "  attach:  codex agents   (team threads live in your own Codex home)"
     echo "  logs:    $DIR/logs/worker.log"
