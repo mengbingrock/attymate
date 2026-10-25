@@ -11,6 +11,30 @@ import {
 export const teamMembershipRoleSchema = z.enum(['lead', 'member']);
 export const teamMembershipStatusSchema = z.enum(['active', 'left']);
 
+/**
+ * `led` (default) keeps exactly one active lead per team. `leaderless` teams have members only:
+ * the Relay never assigns or promotes a lead, every join is a member join, and roster changes
+ * other than a member leaving itself go through the manager API.
+ */
+export const teamCoordinationModeSchema = z.enum(['led', 'leaderless']);
+
+export const teamSettingsRecordSchema = z
+  .object({
+    teamId: teamIdSchema,
+    coordination: teamCoordinationModeSchema,
+    /** 0 while the team still runs on defaults and has never been configured. */
+    revision: z.number().int().nonnegative(),
+    updatedAt: z.iso.datetime({ offset: true }).optional(),
+  })
+  .strict();
+
+export const updateTeamSettingsRequestSchema = z
+  .object({
+    coordination: teamCoordinationModeSchema,
+    expectedRevision: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+
 export const teamMembershipRecordSchema = z
   .object({
     membershipId: membershipIdSchema,
@@ -86,6 +110,9 @@ export const teamMemberLeaveRequestedPayloadSchema = z
 
 export type TeamMembershipRole = z.infer<typeof teamMembershipRoleSchema>;
 export type TeamMembershipStatus = z.infer<typeof teamMembershipStatusSchema>;
+export type TeamCoordinationMode = z.infer<typeof teamCoordinationModeSchema>;
+export type TeamSettingsRecord = z.infer<typeof teamSettingsRecordSchema>;
+export type UpdateTeamSettingsRequest = z.infer<typeof updateTeamSettingsRequestSchema>;
 export type TeamMembershipRecord = z.infer<typeof teamMembershipRecordSchema>;
 export type TeamMembershipSnapshotPayload = z.infer<
   typeof teamMembershipSnapshotPayloadSchema

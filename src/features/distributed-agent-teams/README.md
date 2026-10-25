@@ -42,6 +42,14 @@ and the bridge reads it on every call, so token rotations after a Worker restart
 The implementation follows
 [the distributed Codex runtime ADR](../../../docs/team-management/distributed-codex-runtime.md).
 
+## Leaderless teams
+
+A team can run with members only. The Relay stores a per-team coordination mode (`led` by default,
+or `leaderless`) behind `GET`/`PUT /v2/teams/<team>/settings`. Leaderless teams never get a lead:
+every join is a member join, auto-join works without a lead, and the Relay's startup lead
+promotion skips them. Desktop's **Reconnect lead** reports that such a team has no active lead. See
+`docs/team-management/distributed-codex-runtime.md` for the API and switching rules.
+
 ## Persistent local leads
 
 Desktop recovery is deliberately limited to lead installations provisioned under:

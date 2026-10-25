@@ -19,6 +19,7 @@ import {
   teamMemberLeaveRequestedPayloadSchema,
   teamMembershipSnapshotPayloadSchema,
   teamIdSchema,
+  updateTeamSettingsRequestSchema,
   workspaceIdSchema,
   workerRuntimeEventMessageSchema,
   workerEventMessageSchema,
@@ -41,6 +42,7 @@ import { RelayEventStore, type RelayEventRecord } from './relayEventStore';
 import { RelayLeaseStore, type RelayLeaseRecord } from './relayLeaseStore';
 import {
   RelayMembershipRouteStore,
+  RelayTeamLeaderlessError,
   type RelayMembershipRoute,
 } from './relayMembershipRouteStore';
 import {
@@ -80,6 +82,28 @@ export interface ConnectedWorkerProjection {
 }
 
 const MEMBERSHIP_REACTIVATION_GRACE_MS = 30_000;
+
+const LEADERLESS_MEMBER_TITLE = 'Join the leaderless distributed team';
+const LEADERLESS_MEMBER_DESCRIPTION =
+  'This team has no lead. Coordinate directly with your peers: claim and complete tasks, ' +
+  'message teammates with message_send, and report progress and results to the team.';
+
+const defaultOfferText = (
+  leaderless: boolean,
+  role: 'lead' | 'member'
+): { readonly title: string; readonly description: string } => {
+  if (leaderless) return { title: LEADERLESS_MEMBER_TITLE, description: LEADERLESS_MEMBER_DESCRIPTION };
+  if (role === 'lead') {
+    return {
+      title: 'Lead the distributed team',
+      description: 'Coordinate the active roster, delegate work, and collect teammate reports.',
+    };
+  }
+  return {
+    title: 'Join the distributed team',
+    description: 'Join the team, accept delegated work, and report results to the team lead.',
+  };
+};
 
 interface MutableWorkerSession {
   hello: ReturnType<typeof workerHelloMessageSchema.parse>;
@@ -310,7 +334,12 @@ export const startAgentTeamsRelay = async (
     const membershipId = membershipIdSchema.parse(requested.membershipId ?? randomUUID());
     const workspaceId = requested.workspaceId ?? randomUUID();
     const assignmentId = randomUUID();
-    const role = requested.role ?? (membershipRouteStore.activeLead(teamId) ? 'member' : 'lead');
+    const leaderless = membershipRouteStore.isLeaderless(teamId);
+    if (leaderless && requested.role === 'lead') throw new RelayTeamLeaderlessError(teamId);
+    const role =
+      requested.role ??
+      (leaderless || membershipRouteStore.activeLead(teamId) ? 'member' : 'lead');
+    const defaults = defaultOfferText(leaderless, role);
     const offer = enqueueCommand({
       protocolVersion: 2,
       commandId: randomUUID(),
@@ -324,12 +353,8 @@ export const startAgentTeamsRelay = async (
         membershipId,
         workspaceId,
         teamRole: role,
-        title: requested.title ?? (role === 'lead' ? 'Lead the distributed team' : 'Join the distributed team'),
-        description:
-          requested.description ??
-          (role === 'lead'
-            ? 'Coordinate the active roster, delegate work, and collect teammate reports.'
-            : 'Join the team, accept delegated work, and report results to the team lead.'),
+        title: requested.title ?? defaults.title,
+        description: requested.description ?? defaults.description,
       },
     });
     const accept = enqueueCommand({
@@ -441,10 +466,13 @@ export const startAgentTeamsRelay = async (
       ) {
         continue;
       }
-      const latestPayload =
+      const latestOfferPayload =
         latestOffer === undefined
           ? undefined
           : assignmentOfferPayloadSchema.parse(latestOffer.envelope.payload);
+      // A role change (leaderless switch, promotion) makes the old offer text wrong; use defaults.
+      const latestPayload =
+        latestOfferPayload?.teamRole === membership.role ? latestOfferPayload : undefined;
       joinTeamMember(membership.teamId, {
         targetNodeId: membership.nodeId,
         membershipId: membership.membershipId,
@@ -469,8 +497,11 @@ export const startAgentTeamsRelay = async (
     ) {
       return;
     }
-    const lead = membershipRouteStore.activeLead(teamId);
-    if (lead === undefined || lead.nodeId === nodeId) return;
+    const leaderless = membershipRouteStore.isLeaderless(teamId);
+    if (!leaderless) {
+      const lead = membershipRouteStore.activeLead(teamId);
+      if (lead === undefined || lead.nodeId === nodeId) return;
+    }
 
     const membershipId = membershipIdSchema.parse(
       deterministicRouteId('membership', teamId, nodeId)
@@ -484,8 +515,9 @@ export const startAgentTeamsRelay = async (
       workspaceId,
       role: 'member',
       title: `Auto-join ${session.hello.label}`,
-      description:
-        'Join the advertised distributed team, accept delegated work, and report results to the team lead.',
+      description: leaderless
+        ? LEADERLESS_MEMBER_DESCRIPTION
+        : 'Join the advertised distributed team, accept delegated work, and report results to the team lead.',
     });
   };
 
@@ -539,6 +571,89 @@ export const startAgentTeamsRelay = async (
     });
   };
 
+  /** Releases granted/active leases of the given assignments and returns those it released. */
+  const releaseAssignmentLeases = (
+    teamId: TeamId,
+    assignmentIds: readonly AssignmentId[]
+  ): AssignmentId[] => {
+    const released: AssignmentId[] = [];
+    for (const assignmentId of assignmentIds) {
+      for (const lease of leaseStore
+        .listAll()
+        .filter(
+          (candidate) =>
+            candidate.assignmentId === assignmentId &&
+            ['granted', 'active'].includes(candidate.status)
+        )) {
+        leaseStore.release(assignmentId, lease.attemptId, lease.leaseEpoch);
+        runtimeSessionStore.revokeScope({
+          teamId,
+          nodeId: lease.nodeId,
+          assignmentId,
+          attemptId: lease.attemptId,
+          leaseId: lease.leaseId,
+          leaseEpoch: lease.leaseEpoch,
+        });
+        released.push(assignmentId);
+      }
+    }
+    return released;
+  };
+
+  /**
+   * Switches a team between led and leaderless coordination. A demoted lead or a promoted member
+   * gets its current execution fenced and a fresh assignment offer in its new role, so its runtime
+   * tool profile matches the Relay's authority. Advertised Workers may auto-join afterwards.
+   */
+  const updateTeamSettings = (teamIdInput: string, input: unknown) => {
+    const teamId = teamIdSchema.parse(teamIdInput);
+    const requested = updateTeamSettingsRequestSchema.parse(input);
+    const change = membershipRouteStore.setTeamCoordination({
+      teamId,
+      coordination: requested.coordination,
+      ...(requested.expectedRevision === undefined
+        ? {}
+        : { expectedRevision: requested.expectedRevision }),
+    });
+    const releasedAssignmentIds: AssignmentId[] = [];
+    if (change.demoted !== undefined) {
+      const demoted = change.demoted;
+      pendingLeadActivations.delete(demoted.membershipId);
+      releasedAssignmentIds.push(
+        ...releaseAssignmentLeases(teamId, assignmentIdsForMembership(demoted.membershipId))
+      );
+      if (sessions.get(demoted.nodeId) !== undefined) {
+        joinTeamMember(teamId, {
+          targetNodeId: demoted.nodeId,
+          membershipId: demoted.membershipId,
+          workspaceId: demoted.workspaceId,
+          role: 'member',
+        });
+      }
+    }
+    if (change.promoted !== undefined) {
+      const promoted = change.promoted;
+      pendingLeadActivations.set(promoted.membershipId, promoted);
+      releasedAssignmentIds.push(
+        ...releaseAssignmentLeases(teamId, assignmentIdsForMembership(promoted.membershipId))
+      );
+      activatePendingLeadForNode(promoted.nodeId);
+    }
+    if (change.changed) {
+      broadcastMembershipSnapshot(teamId);
+      for (const nodeId of sessions.keys()) reconcileAdvertisedMembershipForNode(nodeId);
+    }
+    return {
+      settings: change.settings,
+      changed: change.changed,
+      ...(change.demoted === undefined ? {} : { demotedMembershipId: change.demoted.membershipId }),
+      ...(change.promoted === undefined
+        ? {}
+        : { promotedMembershipId: change.promoted.membershipId }),
+      releasedAssignmentIds: [...new Set(releasedAssignmentIds)],
+    };
+  };
+
   const leaveTeamMember = (
     teamIdInput: string,
     input: unknown
@@ -566,48 +681,11 @@ export const startAgentTeamsRelay = async (
         : membershipRouteStore.get(requested.successorMembershipId);
     const successorAssignmentIds =
       successor === undefined ? [] : assignmentIdsForMembership(successor.membershipId);
+    releaseAssignmentLeases(teamId, assignmentIds);
     const releasedAssignmentIds = [...assignmentIds];
-    for (const assignmentId of assignmentIds) {
-      for (const lease of leaseStore
-        .listAll()
-        .filter(
-          (candidate) =>
-            candidate.assignmentId === assignmentId &&
-            ['granted', 'active'].includes(candidate.status)
-        )) {
-        leaseStore.release(assignmentId, lease.attemptId, lease.leaseEpoch);
-        runtimeSessionStore.revokeScope({
-          teamId,
-          nodeId: lease.nodeId,
-          assignmentId,
-          attemptId: lease.attemptId,
-          leaseId: lease.leaseId,
-          leaseEpoch: lease.leaseEpoch,
-        });
-      }
-    }
     if (successor?.status === 'active' && successor.role === 'lead') {
       pendingLeadActivations.set(successor.membershipId, successor);
-      for (const assignmentId of successorAssignmentIds) {
-        for (const lease of leaseStore
-          .listAll()
-          .filter(
-            (candidate) =>
-              candidate.assignmentId === assignmentId &&
-              ['granted', 'active'].includes(candidate.status)
-          )) {
-          leaseStore.release(assignmentId, lease.attemptId, lease.leaseEpoch);
-          runtimeSessionStore.revokeScope({
-            teamId,
-            nodeId: lease.nodeId,
-            assignmentId,
-            attemptId: lease.attemptId,
-            leaseId: lease.leaseId,
-            leaseEpoch: lease.leaseEpoch,
-          });
-          releasedAssignmentIds.push(assignmentId);
-        }
-      }
+      releasedAssignmentIds.push(...releaseAssignmentLeases(teamId, successorAssignmentIds));
       activatePendingLeadForNode(successor.nodeId);
     }
     broadcastMembershipSnapshot(teamId, [before.nodeId]);
@@ -690,7 +768,11 @@ export const startAgentTeamsRelay = async (
     }
     const selfLeave = targetMembershipId === actor.membershipId;
     if (actor.role !== 'lead' && !selfLeave) {
-      throw new TypeError('Only the active team lead can change another membership');
+      throw new TypeError(
+        membershipRouteStore.isLeaderless(event.teamId)
+          ? 'Leaderless teams change other memberships only through the manager API'
+          : 'Only the active team lead can change another membership'
+      );
     }
     leaseStore.expireThrough();
     const holdsLease = leaseStore.listAll().some(
@@ -833,6 +915,15 @@ export const startAgentTeamsRelay = async (
   app.get('/v2/events', async () => ({ events: eventStore.listAll() }));
   app.get('/v2/leases', async () => ({ leases: leaseStore.listAll() }));
   app.get('/v2/membership-routes', async () => ({ routes: membershipRouteStore.listAll() }));
+  app.get('/v2/team-settings', () => ({ teams: membershipRouteStore.listTeamSettings() }));
+  app.get('/v2/teams/:teamId/settings', (request) => {
+    const teamId = teamIdSchema.parse((request.params as { teamId?: unknown }).teamId);
+    return { settings: membershipRouteStore.teamSettings(teamId) };
+  });
+  app.put('/v2/teams/:teamId/settings', (request) => {
+    const teamId = teamIdSchema.parse((request.params as { teamId?: unknown }).teamId);
+    return updateTeamSettings(teamId, request.body);
+  });
   app.post('/v2/teams/:teamId/members', async (request, reply) => {
     const teamId = teamIdSchema.parse((request.params as { teamId?: unknown }).teamId);
     return reply.code(201).send(joinTeamMember(teamId, request.body));

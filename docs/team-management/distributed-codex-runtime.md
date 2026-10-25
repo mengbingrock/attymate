@@ -204,11 +204,45 @@ AGENT_TEAMS_AUTO_JOIN_TEAM_ID=<team UUID>
 ```
 
 The equivalent CLI option is `--auto-join-team <team UUID>`. Auto-discovery only enrolls the
-Worker as a `member`; it cannot claim leadership, and the team must already have an active lead.
+Worker as a `member`; it cannot claim leadership, and a led team must already have an active lead.
+A leaderless team (below) accepts auto-join immediately.
 The Relay derives a stable enrollment identity from the team and Worker node, so reconnects are
-idempotent. If the lead removes that membership, its tombstone suppresses automatic re-enrollment
-on later reconnects. Re-enrollment then requires an explicit lead action or a deliberately new
-Worker node identity.
+idempotent. If the lead or the operator removes that membership, its tombstone suppresses automatic
+re-enrollment on later reconnects. Re-enrollment then requires an explicit join or a deliberately
+new Worker node identity.
+
+### Leaderless teams
+
+A team is `led` by default: the Relay keeps exactly one active lead, makes the first joiner the
+lead, and on every start promotes the oldest member of any team that lost its lead. Declare a team
+`leaderless` to run it with members only:
+
+```bash
+curl -X PUT "$RELAY/v2/teams/<team UUID>/settings" \
+  -H "authorization: Bearer $AGENT_TEAMS_RELAY_MANAGER_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"coordination":"leaderless","expectedRevision":0}'
+```
+
+The team does not need any members yet. `GET /v2/teams/<team UUID>/settings` reads the mode (revision
+`0` means the team was never configured) and `GET /v2/team-settings` lists every configured team.
+`expectedRevision` is optional and guards against concurrent changes with a 409.
+
+In a leaderless team:
+
+- every join, explicit or auto-join, is a `member` join, and a `role: "lead"` join fails with 409
+  `RELAY_TEAM_LEADERLESS`;
+- the startup lead promotion skips the team;
+- members coordinate peer to peer with `message_send` and the task tools; the default assignment text
+  tells them there is no lead;
+- no agent can add or remove other members, because those tools are lead-only. The operator does it
+  through `POST` and `DELETE /v2/teams/<team UUID>/members`, and a member can still leave itself.
+
+Switching a led team to `leaderless` demotes its lead to member. Switching back to `led` promotes the
+oldest active member. In both cases the Relay fences that membership's current execution lease and
+offers it a fresh assignment in its new role, so its runtime tool profile matches. Connected Workers
+that advertise the team auto-join as soon as it becomes leaderless. The mode is Relay state only and
+does not appear in membership snapshots, so Workers built before this change keep working.
 
 Authenticate the isolated execution home explicitly once before accepting runtime assignments:
 

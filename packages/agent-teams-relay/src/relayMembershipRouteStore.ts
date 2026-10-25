@@ -5,13 +5,16 @@ import {
   membershipIdSchema,
   nodeIdSchema,
   teamIdSchema,
+  teamCoordinationModeSchema,
   teamMembershipRoleSchema,
   teamMembershipStatusSchema,
   workspaceIdSchema,
   type MembershipId,
   type NodeId,
+  type TeamCoordinationMode,
   type TeamId,
   type TeamMembershipRole,
+  type TeamSettingsRecord,
   type TeamMembershipStatus,
   type WorkspaceId,
 } from '@claude-teams/agent-teams-protocol';
@@ -58,6 +61,22 @@ const mapRow = (row: RelayMembershipRouteRow): RelayMembershipRoute => ({
   ...(row.left_at === null ? {} : { leftAt: row.left_at }),
 });
 
+interface RelayTeamSettingsRow {
+  team_id: string;
+  coordination: string;
+  revision: number;
+  updated_at: string;
+}
+
+export interface RelayTeamCoordinationChange {
+  readonly settings: TeamSettingsRecord;
+  readonly changed: boolean;
+  /** The former lead, now a member, when a led team became leaderless. */
+  readonly demoted?: RelayMembershipRoute;
+  /** The oldest active member, now the lead, when a leaderless team became led. */
+  readonly promoted?: RelayMembershipRoute;
+}
+
 export class RelayMembershipRouteConflictError extends Error {
   readonly code = 'RELAY_MEMBERSHIP_ROUTE_CONFLICT';
 
@@ -73,6 +92,32 @@ export class RelayTeamLeadConflictError extends Error {
   constructor(readonly teamId: TeamId) {
     super(`Team ${teamId} already has an active lead`);
     this.name = 'RelayTeamLeadConflictError';
+  }
+}
+
+export class RelayTeamLeaderlessError extends Error {
+  readonly code = 'RELAY_TEAM_LEADERLESS';
+  readonly statusCode = 409;
+
+  constructor(readonly teamId: TeamId) {
+    super(`Team ${teamId} is leaderless and cannot have a lead membership`);
+    this.name = 'RelayTeamLeaderlessError';
+  }
+}
+
+export class RelayTeamSettingsRevisionConflictError extends Error {
+  readonly code = 'RELAY_TEAM_SETTINGS_REVISION_CONFLICT';
+  readonly statusCode = 409;
+
+  constructor(
+    readonly teamId: TeamId,
+    readonly expectedRevision: number,
+    readonly actualRevision: number
+  ) {
+    super(
+      `Team ${teamId} settings revision ${actualRevision} does not match expected revision ${expectedRevision}`
+    );
+    this.name = 'RelayTeamSettingsRevisionConflictError';
   }
 }
 
@@ -113,6 +158,12 @@ export class RelayMembershipRouteStore {
       );
       CREATE INDEX IF NOT EXISTS relay_membership_routes_team_node
         ON relay_membership_routes(team_id, node_id);
+      CREATE TABLE IF NOT EXISTS relay_team_settings (
+        team_id TEXT PRIMARY KEY,
+        coordination TEXT NOT NULL DEFAULT 'led',
+        revision INTEGER NOT NULL DEFAULT 1,
+        updated_at TEXT NOT NULL
+      );
     `);
     this.ensureColumn('label', "TEXT NOT NULL DEFAULT 'Remote member'");
     this.ensureColumn('role', "TEXT NOT NULL DEFAULT 'member'");
@@ -156,7 +207,11 @@ export class RelayMembershipRouteStore {
       }
       return existing;
     }
-    const role = input.role ?? (this.listActiveForTeam(teamId).length === 0 ? 'lead' : 'member');
+    const leaderless = this.isLeaderless(teamId);
+    if (leaderless && input.role === 'lead') throw new RelayTeamLeaderlessError(teamId);
+    const role =
+      input.role ??
+      (leaderless || this.listActiveForTeam(teamId).length > 0 ? 'member' : 'lead');
     if (this.listActiveForTeam(teamId).some((route) => route.nodeId === nodeId)) {
       throw new TypeError(`Worker node ${nodeId} is already an active member of team ${teamId}`);
     }
@@ -286,6 +341,106 @@ export class RelayMembershipRouteStore {
     return row === undefined ? undefined : mapRow(row);
   }
 
+  teamSettings(inputTeamId: string): TeamSettingsRecord {
+    const teamId = teamIdSchema.parse(inputTeamId);
+    const row = this.database
+      .prepare('SELECT * FROM relay_team_settings WHERE team_id = ?')
+      .get(teamId) as RelayTeamSettingsRow | undefined;
+    if (row === undefined) return { teamId, coordination: 'led', revision: 0 };
+    return {
+      teamId,
+      coordination: teamCoordinationModeSchema.parse(row.coordination),
+      revision: row.revision,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  listTeamSettings(): readonly TeamSettingsRecord[] {
+    const rows = this.database
+      .prepare('SELECT team_id FROM relay_team_settings ORDER BY team_id ASC')
+      .all() as { team_id: string }[];
+    return rows.map((row) => this.teamSettings(row.team_id));
+  }
+
+  isLeaderless(teamId: string): boolean {
+    return this.teamSettings(teamId).coordination === 'leaderless';
+  }
+
+  /**
+   * Switches a team between `led` and `leaderless`. Making a team leaderless demotes its active
+   * lead to member; making it led again promotes the oldest active member, so a led team with
+   * members always has exactly one lead. Setting the current mode again is a no-op.
+   */
+  setTeamCoordination(input: {
+    readonly teamId: string;
+    readonly coordination: TeamCoordinationMode;
+    readonly expectedRevision?: number;
+  }): RelayTeamCoordinationChange {
+    const teamId = teamIdSchema.parse(input.teamId);
+    const coordination = teamCoordinationModeSchema.parse(input.coordination);
+    const current = this.teamSettings(teamId);
+    if (input.expectedRevision !== undefined && input.expectedRevision !== current.revision) {
+      throw new RelayTeamSettingsRevisionConflictError(
+        teamId,
+        input.expectedRevision,
+        current.revision
+      );
+    }
+    if (current.coordination === coordination && current.revision > 0) {
+      return { settings: current, changed: false };
+    }
+
+    const now = new Date().toISOString();
+    const lead = this.activeLead(teamId);
+    const oldestMember =
+      coordination === 'led' && lead === undefined
+        ? this.listActiveForTeam(teamId).at(0)
+        : undefined;
+    this.database.exec('BEGIN IMMEDIATE;');
+    try {
+      this.database
+        .prepare(
+          `INSERT INTO relay_team_settings (team_id, coordination, revision, updated_at)
+           VALUES (?, ?, 1, ?)
+           ON CONFLICT(team_id) DO UPDATE SET
+             coordination = excluded.coordination,
+             revision = relay_team_settings.revision + 1,
+             updated_at = excluded.updated_at`
+        )
+        .run(teamId, coordination, now);
+      if (coordination === 'leaderless' && lead !== undefined) {
+        this.database
+          .prepare(
+            `UPDATE relay_membership_routes
+             SET role = 'member', revision = revision + 1, updated_at = ?
+             WHERE membership_id = ? AND status = 'active'`
+          )
+          .run(now, lead.membershipId);
+      }
+      if (oldestMember !== undefined) {
+        this.database
+          .prepare(
+            `UPDATE relay_membership_routes
+             SET role = 'lead', revision = revision + 1, updated_at = ?
+             WHERE membership_id = ? AND status = 'active'`
+          )
+          .run(now, oldestMember.membershipId);
+      }
+      this.database.exec('COMMIT;');
+    } catch (error) {
+      this.database.exec('ROLLBACK;');
+      throw error;
+    }
+    return {
+      settings: this.teamSettings(teamId),
+      changed: current.coordination !== coordination,
+      ...(coordination === 'leaderless' && lead !== undefined
+        ? { demoted: this.get(lead.membershipId)! }
+        : {}),
+      ...(oldestMember === undefined ? {} : { promoted: this.get(oldestMember.membershipId)! }),
+    };
+  }
+
   close(): void {
     this.database.close();
   }
@@ -312,6 +467,7 @@ export class RelayMembershipRouteStore {
       .prepare("SELECT DISTINCT team_id FROM relay_membership_routes WHERE status = 'active'")
       .all() as Array<{ team_id: string }>;
     for (const { team_id: teamId } of teams) {
+      if (this.isLeaderless(teamId)) continue;
       const lead = this.database
         .prepare(
           "SELECT membership_id FROM relay_membership_routes WHERE team_id = ? AND role = 'lead' AND status = 'active' LIMIT 1"
