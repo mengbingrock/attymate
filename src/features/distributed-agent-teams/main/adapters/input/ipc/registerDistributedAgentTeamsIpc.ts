@@ -9,6 +9,7 @@ import {
   DISTRIBUTED_AGENT_TEAMS_RECONNECT_LEAD,
   DISTRIBUTED_AGENT_TEAMS_SEND_RUNTIME_CONTROL,
   DISTRIBUTED_AGENT_TEAMS_START_TEAM,
+  DISTRIBUTED_AGENT_TEAMS_UPDATE_TEAM_SETTINGS,
   normalizeCreateRemoteAssignmentRequest,
   normalizeGetDistributedRuntimeSessionRequest,
   normalizeJoinDistributedTeamMemberRequest,
@@ -16,6 +17,7 @@ import {
   normalizeReconnectDistributedLeadRequest,
   normalizeSendDistributedRuntimeControlRequest,
   normalizeStartDistributedTeamRequest,
+  normalizeUpdateDistributedTeamSettingsRequest,
 } from '../../../../contracts';
 
 import type { DistributedAgentTeamsFeatureFacade } from '../../../composition/createDistributedAgentTeamsFeature';
@@ -51,6 +53,9 @@ export const registerDistributedAgentTeamsIpc = (
   ipcMain.handle(DISTRIBUTED_AGENT_TEAMS_LEAVE_TEAM_MEMBER, (_event, input: unknown) =>
     feature.leaveTeamMember(normalizeLeaveDistributedTeamMemberRequest(input))
   );
+  ipcMain.handle(DISTRIBUTED_AGENT_TEAMS_UPDATE_TEAM_SETTINGS, (_event, input: unknown) =>
+    feature.updateTeamSettings(normalizeUpdateDistributedTeamSettingsRequest(input))
+  );
 };
 
 export const removeDistributedAgentTeamsIpc = (ipcMain: IpcMain): void => {
@@ -64,4 +69,5 @@ export const removeDistributedAgentTeamsIpc = (ipcMain: IpcMain): void => {
   ipcMain.removeHandler(DISTRIBUTED_AGENT_TEAMS_RECONNECT_LEAD);
   ipcMain.removeHandler(DISTRIBUTED_AGENT_TEAMS_JOIN_TEAM_MEMBER);
   ipcMain.removeHandler(DISTRIBUTED_AGENT_TEAMS_LEAVE_TEAM_MEMBER);
+  ipcMain.removeHandler(DISTRIBUTED_AGENT_TEAMS_UPDATE_TEAM_SETTINGS);
 };

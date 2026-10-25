@@ -47,7 +47,12 @@ The implementation follows
 A team can run with members only. The Relay stores a per-team coordination mode (`led` by default,
 or `leaderless`) behind `GET`/`PUT /v2/teams/<team>/settings`. Leaderless teams never get a lead:
 every join is a member join, auto-join works without a lead, and the Relay's startup lead
-promotion skips them. Desktop's **Reconnect lead** reports that such a team has no active lead. See
+promotion skips them. The team detail header shows the mode as a **Led** or **Leaderless** badge
+with a switch button (**Make leaderless** / **Assign a lead**). Its confirmation names the lead who
+will be demoted or the earliest member who will be promoted, and sends the revision it was shown, so
+a concurrent change fails with 409 instead of being overwritten. **Reconnect lead** is hidden for
+leaderless teams. The topology poll reads `GET /v2/team-settings`; a Relay built before settings
+existed answers 404, which the adapter treats as "every team is led". See
 `docs/team-management/distributed-codex-runtime.md` for the API and switching rules.
 
 ## Persistent local leads

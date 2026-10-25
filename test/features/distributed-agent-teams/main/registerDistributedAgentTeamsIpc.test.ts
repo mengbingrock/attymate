@@ -6,6 +6,7 @@ import {
   DISTRIBUTED_AGENT_TEAMS_GET_TOPOLOGY,
   DISTRIBUTED_AGENT_TEAMS_JOIN_TEAM_MEMBER,
   DISTRIBUTED_AGENT_TEAMS_LEAVE_TEAM_MEMBER,
+  DISTRIBUTED_AGENT_TEAMS_UPDATE_TEAM_SETTINGS,
   DISTRIBUTED_AGENT_TEAMS_RECONNECT_LEAD,
   DISTRIBUTED_AGENT_TEAMS_SEND_RUNTIME_CONTROL,
   DISTRIBUTED_AGENT_TEAMS_START_TEAM,
@@ -118,6 +119,11 @@ const createHarness = () => {
       },
       releasedAssignmentIds: [],
     })),
+    updateTeamSettings: vi.fn(async (request) => ({
+      settings: { teamId: request.teamId, coordination: request.coordination, revision: 1 },
+      changed: true,
+      releasedAssignmentIds: [],
+    })),
   };
   return { feature, handlers, ipcMain: ipcMain as unknown as IpcMain };
 };
@@ -191,10 +197,7 @@ describe('distributed Agent Teams IPC', () => {
     ).resolves.toMatchObject({ teamId: TEAM_ID });
     expect(feature.startTeam).toHaveBeenCalledWith({ teamId: TEAM_ID });
     await expect(
-      handlers.get(DISTRIBUTED_AGENT_TEAMS_RECONNECT_LEAD)?.(
-        {},
-        { teamId: TEAM_ID.toUpperCase() }
-      )
+      handlers.get(DISTRIBUTED_AGENT_TEAMS_RECONNECT_LEAD)?.({}, { teamId: TEAM_ID.toUpperCase() })
     ).resolves.toMatchObject({ teamId: TEAM_ID, status: 'started' });
     expect(feature.reconnectLead).toHaveBeenCalledWith({ teamId: TEAM_ID });
     await expect(
@@ -218,6 +221,23 @@ describe('distributed Agent Teams IPC', () => {
       membershipId: MEMBERSHIP_ID,
       expectedRevision: 1,
     });
+    await expect(
+      handlers.get(DISTRIBUTED_AGENT_TEAMS_UPDATE_TEAM_SETTINGS)?.(
+        {},
+        { teamId: TEAM_ID.toUpperCase(), coordination: 'leaderless', expectedRevision: 0 }
+      )
+    ).resolves.toMatchObject({ settings: { coordination: 'leaderless' } });
+    expect(feature.updateTeamSettings).toHaveBeenCalledWith({
+      teamId: TEAM_ID,
+      coordination: 'leaderless',
+      expectedRevision: 0,
+    });
+    expect(() =>
+      handlers.get(DISTRIBUTED_AGENT_TEAMS_UPDATE_TEAM_SETTINGS)?.(
+        {},
+        { teamId: TEAM_ID, coordination: 'anarchy' }
+      )
+    ).toThrow('coordination must be led or leaderless');
   });
 
   it('rejects malformed renderer input before invoking the feature', () => {
@@ -233,7 +253,7 @@ describe('distributed Agent Teams IPC', () => {
     expect(feature.createRemoteAssignment).not.toHaveBeenCalled();
   });
 
-  it('removes only its ten handlers', () => {
+  it('removes only its eleven handlers', () => {
     const { feature, handlers, ipcMain } = createHarness();
     registerDistributedAgentTeamsIpc(ipcMain, feature);
     handlers.set('unrelated', vi.fn());

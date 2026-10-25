@@ -312,6 +312,7 @@ describe('DistributedAgentTeamsView', () => {
           startingTeam={false}
           reconnectingLead={false}
           membershipMutation={null}
+          updatingCoordination={false}
           insecureLanMode={false}
           selectedRuntimeNodeId={null}
           runtimeSession={null}
@@ -329,6 +330,7 @@ describe('DistributedAgentTeamsView', () => {
           onReconnectLead={onReconnectLead}
           onJoinTeamMember={vi.fn(async () => undefined)}
           onLeaveTeamMember={vi.fn(async () => undefined)}
+          onUpdateCoordination={vi.fn(async () => undefined)}
         />
       );
     });
@@ -407,6 +409,7 @@ describe('DistributedAgentTeamsView', () => {
       startingTeam: false,
       reconnectingLead: false,
       membershipMutation: null,
+      updatingCoordination: false,
       insecureLanMode: false,
       selectedRuntimeNodeId: null,
       runtimeSession: null,
@@ -424,9 +427,12 @@ describe('DistributedAgentTeamsView', () => {
       onReconnectLead: vi.fn(),
       onJoinTeamMember: vi.fn(async () => undefined),
       onLeaveTeamMember: vi.fn(async () => undefined),
+      onUpdateCoordination: vi.fn(async () => undefined),
     };
 
-    await act(async () => root.render(<DistributedTeamDetailView model={initialModel} {...props} />));
+    await act(async () =>
+      root.render(<DistributedTeamDetailView model={initialModel} {...props} />)
+    );
     const messagesTab = [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
       (button) => button.textContent?.trim() === 'Messages'
     )!;
@@ -436,7 +442,9 @@ describe('DistributedAgentTeamsView', () => {
     });
     expect(messagesTab.dataset.state).toBe('active');
 
-    await act(async () => root.render(<DistributedTeamDetailView model={refreshedModel} {...props} />));
+    await act(async () =>
+      root.render(<DistributedTeamDetailView model={refreshedModel} {...props} />)
+    );
     expect(
       [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
         (button) => button.textContent?.trim() === 'Messages'
@@ -472,6 +480,7 @@ describe('DistributedAgentTeamsView', () => {
       startingTeam: false,
       reconnectingLead: false,
       membershipMutation: null,
+      updatingCoordination: false,
       insecureLanMode: false,
       selectedRuntimeNodeId: null,
       runtimeSession: null,
@@ -489,6 +498,7 @@ describe('DistributedAgentTeamsView', () => {
       onReconnectLead: vi.fn(),
       onJoinTeamMember: vi.fn(async () => undefined),
       onLeaveTeamMember: vi.fn(async () => undefined),
+      onUpdateCoordination: vi.fn(async () => undefined),
     };
     const host = document.createElement('div');
     document.body.appendChild(host);
@@ -513,5 +523,98 @@ describe('DistributedAgentTeamsView', () => {
         (button) => button.textContent?.trim() === 'Console'
       )?.dataset.state
     ).toBe('active');
+  });
+
+  it('shows the coordination mode and confirms a switch that names the demoted lead', async () => {
+    const ledModel = buildDistributedTeamDetail(
+      'team-remote-ui-smoke',
+      topology,
+      assignmentEvents,
+      debugSnapshot
+    );
+    expect(ledModel.settings).toEqual({
+      teamId: 'team-remote-ui-smoke',
+      coordination: 'led',
+      revision: 0,
+    });
+    const onUpdateCoordination = vi.fn(async () => undefined);
+    const props = {
+      relayUrl: topology.relayUrl,
+      loading: false,
+      refreshing: false,
+      error: null,
+      mutationError: null,
+      reconnectLeadMessage: null,
+      creatingAssignment: false,
+      startingTeam: false,
+      reconnectingLead: false,
+      membershipMutation: null,
+      updatingCoordination: false,
+      insecureLanMode: false,
+      selectedRuntimeNodeId: null,
+      runtimeSession: null,
+      runtimeLoading: false,
+      runtimeSending: false,
+      runtimeError: null,
+      onRefresh: vi.fn(),
+      onSelectRuntimeNode: vi.fn(),
+      onRuntimeControl: vi.fn(async (control: { controlId: string }) => ({
+        controlId: control.controlId,
+        accepted: true as const,
+      })),
+      onCreateAssignment: vi.fn(async () => undefined),
+      onStartTeam: vi.fn(),
+      onReconnectLead: vi.fn(),
+      onJoinTeamMember: vi.fn(async () => undefined),
+      onLeaveTeamMember: vi.fn(async () => undefined),
+      onUpdateCoordination,
+    };
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const buttonNamed = (label: string): HTMLButtonElement | undefined =>
+      [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
+        (button) => button.textContent?.trim() === label
+      );
+
+    await act(async () => root.render(<DistributedTeamDetailView model={ledModel} {...props} />));
+    expect(host.querySelector('[data-testid="team-coordination-badge"]')?.textContent).toBe('Led');
+    expect(buttonNamed('Reconnect lead')).toBeDefined();
+
+    await act(async () => {
+      buttonNamed('Make leaderless')!.click();
+      await Promise.resolve();
+    });
+    expect(document.body.textContent).toContain(
+      'Atlas Coordinator stops leading and restarts as a member.'
+    );
+    const confirmButton = [
+      ...document.body.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'),
+    ].find((button) => button.textContent?.trim() === 'Make leaderless')!;
+    await act(async () => {
+      confirmButton.click();
+      await Promise.resolve();
+    });
+    expect(onUpdateCoordination).toHaveBeenCalledWith('leaderless', 0);
+
+    const leaderlessModel = buildDistributedTeamDetail(
+      'team-remote-ui-smoke',
+      {
+        ...topology,
+        teamSettings: [{ teamId: 'team-remote-ui-smoke', coordination: 'leaderless', revision: 1 }],
+      },
+      assignmentEvents,
+      debugSnapshot
+    );
+    await act(async () =>
+      root.render(<DistributedTeamDetailView model={leaderlessModel} {...props} />)
+    );
+    expect(host.querySelector('[data-testid="team-coordination-badge"]')?.textContent).toBe(
+      'Leaderless'
+    );
+    expect(buttonNamed('Reconnect lead')).toBeUndefined();
+    expect(buttonNamed('Assign a lead')).toBeDefined();
+    await act(async () => root.unmount());
+    host.remove();
   });
 });

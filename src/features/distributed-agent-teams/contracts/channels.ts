@@ -14,3 +14,5 @@ export const DISTRIBUTED_AGENT_TEAMS_RECONNECT_LEAD = 'distributed-agent-teams:r
 export const DISTRIBUTED_AGENT_TEAMS_JOIN_TEAM_MEMBER = 'distributed-agent-teams:join-team-member';
 export const DISTRIBUTED_AGENT_TEAMS_LEAVE_TEAM_MEMBER =
   'distributed-agent-teams:leave-team-member';
+export const DISTRIBUTED_AGENT_TEAMS_UPDATE_TEAM_SETTINGS =
+  'distributed-agent-teams:update-team-settings';

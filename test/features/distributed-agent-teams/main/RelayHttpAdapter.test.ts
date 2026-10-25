@@ -144,7 +144,12 @@ describe('RelayHttpAdapter', () => {
 
   it('joins and removes team memberships through manager-authenticated routes', async () => {
     const managerToken = 'manager-token-which-is-long-enough-for-tests';
-    const requests: Array<{ url: string; method: string; body: unknown; authorization: string | null }> = [];
+    const requests: Array<{
+      url: string;
+      method: string;
+      body: unknown;
+      authorization: string | null;
+    }> = [];
     const route = {
       membershipId: MEMBERSHIP_ID,
       teamId: TEAM_ID,
@@ -208,6 +213,75 @@ describe('RelayHttpAdapter', () => {
         body: { expectedRevision: 1 },
       }),
     ]);
+  });
+
+  it('reads and changes team coordination settings, treating a pre-settings Relay as all led', async () => {
+    const requests: { url: string; method: string; body?: unknown }[] = [];
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      requests.push({
+        url: String(url),
+        method,
+        ...(init?.body === undefined ? {} : { body: JSON.parse(String(init.body)) }),
+      });
+      if (method === 'PUT') {
+        return Response.json({
+          settings: {
+            teamId: TEAM_ID,
+            coordination: 'leaderless',
+            revision: 1,
+            updatedAt: '2026-10-25T20:00:00.000Z',
+          },
+          changed: true,
+          demotedMembershipId: MEMBERSHIP_ID,
+          releasedAssignmentIds: [ASSIGNMENT_ID],
+        });
+      }
+      return Response.json({
+        teams: [{ teamId: TEAM_ID, coordination: 'leaderless', revision: 1 }],
+      });
+    });
+    const adapter = new RelayHttpAdapter(
+      'http://127.0.0.1:43170',
+      fetchImpl as typeof fetch,
+      'm'.repeat(32)
+    );
+
+    await expect(adapter.listTeamSettings()).resolves.toEqual([
+      { teamId: TEAM_ID, coordination: 'leaderless', revision: 1 },
+    ]);
+    await expect(
+      adapter.updateTeamSettings({
+        teamId: TEAM_ID,
+        coordination: 'leaderless',
+        expectedRevision: 0,
+      })
+    ).resolves.toEqual({
+      settings: {
+        teamId: TEAM_ID,
+        coordination: 'leaderless',
+        revision: 1,
+        updatedAt: '2026-10-25T20:00:00.000Z',
+      },
+      changed: true,
+      demotedMembershipId: MEMBERSHIP_ID,
+      releasedAssignmentIds: [ASSIGNMENT_ID],
+    });
+    expect(requests).toEqual([
+      { url: 'http://127.0.0.1:43170/v2/team-settings', method: 'GET' },
+      {
+        url: `http://127.0.0.1:43170/v2/teams/${TEAM_ID}/settings`,
+        method: 'PUT',
+        body: { coordination: 'leaderless', expectedRevision: 0 },
+      },
+    ]);
+
+    const legacyRelay = new RelayHttpAdapter('http://127.0.0.1:43170', (async () =>
+      Response.json({ message: 'Route not found' }, { status: 404 })) as typeof fetch);
+    await expect(legacyRelay.listTeamSettings()).resolves.toEqual([]);
+    const brokenRelay = new RelayHttpAdapter('http://127.0.0.1:43170', (async () =>
+      Response.json({}, { status: 500 })) as typeof fetch);
+    await expect(brokenRelay.listTeamSettings()).rejects.toThrow('HTTP 500');
   });
 
   it('maps validated Relay assignment events into renderer DTOs', async () => {

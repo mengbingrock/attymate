@@ -16,6 +16,8 @@ import type {
   SendDistributedRuntimeControlRequest,
   StartDistributedTeamReceiptDto,
   StartDistributedTeamRequest,
+  UpdateDistributedTeamSettingsReceiptDto,
+  UpdateDistributedTeamSettingsRequest,
 } from './dto';
 
 export interface DistributedAgentTeamsElectronApi {
@@ -41,4 +43,7 @@ export interface DistributedAgentTeamsElectronApi {
   leaveTeamMember(
     request: LeaveDistributedTeamMemberRequest
   ): Promise<LeaveDistributedTeamMemberReceiptDto>;
+  updateTeamSettings(
+    request: UpdateDistributedTeamSettingsRequest
+  ): Promise<UpdateDistributedTeamSettingsReceiptDto>;
 }

@@ -508,6 +508,9 @@ export class HttpAPIClient implements ElectronAPI {
     leaveTeamMember: async () => {
       throw new Error('Distributed team membership is only available in the desktop app');
     },
+    updateTeamSettings: async () => {
+      throw new Error('Distributed team settings are only available in the desktop app');
+    },
   };
 
   memberLogStream: MemberLogStreamApi = {

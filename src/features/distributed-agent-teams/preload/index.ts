@@ -9,6 +9,7 @@ import {
   DISTRIBUTED_AGENT_TEAMS_RECONNECT_LEAD,
   DISTRIBUTED_AGENT_TEAMS_SEND_RUNTIME_CONTROL,
   DISTRIBUTED_AGENT_TEAMS_START_TEAM,
+  DISTRIBUTED_AGENT_TEAMS_UPDATE_TEAM_SETTINGS,
 } from '../contracts/channels';
 
 import type { DistributedAgentTeamsElectronApi } from '../contracts/api';
@@ -32,4 +33,6 @@ export const createDistributedAgentTeamsBridge = (
     ipcRenderer.invoke(DISTRIBUTED_AGENT_TEAMS_JOIN_TEAM_MEMBER, request),
   leaveTeamMember: (request) =>
     ipcRenderer.invoke(DISTRIBUTED_AGENT_TEAMS_LEAVE_TEAM_MEMBER, request),
+  updateTeamSettings: (request) =>
+    ipcRenderer.invoke(DISTRIBUTED_AGENT_TEAMS_UPDATE_TEAM_SETTINGS, request),
 });

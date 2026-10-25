@@ -7,6 +7,7 @@ import type {
   DistributedRelayLeaseDto,
   DistributedRuntimeControlReceiptDto,
   DistributedRuntimeSessionDto,
+  DistributedTeamSettingsDto,
   DistributedWorkerDto,
   GetDistributedRuntimeSessionRequest,
   JoinDistributedTeamMemberReceiptDto,
@@ -15,6 +16,8 @@ import type {
   LeaveDistributedTeamMemberRequest,
   RemoteAssignmentReceiptDto,
   SendDistributedRuntimeControlRequest,
+  UpdateDistributedTeamSettingsReceiptDto,
+  UpdateDistributedTeamSettingsRequest,
 } from '../../../contracts';
 
 export interface DistributedRelayPort {
@@ -26,6 +29,11 @@ export interface DistributedRelayPort {
   listEvents(): Promise<readonly DistributedRelayEventDto[]>;
   listLeases(): Promise<readonly DistributedRelayLeaseDto[]>;
   listMembershipRoutes(): Promise<readonly DistributedMembershipRouteDto[]>;
+  /** Configured teams only. Relays that predate team settings report none. */
+  listTeamSettings(): Promise<readonly DistributedTeamSettingsDto[]>;
+  updateTeamSettings(
+    request: UpdateDistributedTeamSettingsRequest
+  ): Promise<UpdateDistributedTeamSettingsReceiptDto>;
   getRuntimeSession(
     request: GetDistributedRuntimeSessionRequest
   ): Promise<DistributedRuntimeSessionDto>;

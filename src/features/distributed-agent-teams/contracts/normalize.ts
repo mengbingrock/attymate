@@ -11,6 +11,7 @@ import type {
   ReconnectDistributedLeadRequest,
   SendDistributedRuntimeControlRequest,
   StartDistributedTeamRequest,
+  UpdateDistributedTeamSettingsRequest,
 } from './dto';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -178,5 +179,28 @@ export const normalizeSendDistributedRuntimeControlRequest = (
   return {
     session: normalizeGetDistributedRuntimeSessionRequest(record.session),
     control: runtimeControlSchema.parse(record.control),
+  };
+};
+
+export const normalizeUpdateDistributedTeamSettingsRequest = (
+  input: unknown
+): UpdateDistributedTeamSettingsRequest => {
+  const record = asRecord(input);
+  if (record === null) throw new TypeError('Team settings request must be an object');
+  if (record.coordination !== 'led' && record.coordination !== 'leaderless') {
+    throw new TypeError('coordination must be led or leaderless');
+  }
+  if (
+    record.expectedRevision !== undefined &&
+    (!Number.isInteger(record.expectedRevision) || (record.expectedRevision as number) < 0)
+  ) {
+    throw new TypeError('expectedRevision must be a non-negative integer');
+  }
+  return {
+    teamId: uuid(record.teamId, 'teamId'),
+    coordination: record.coordination,
+    ...(record.expectedRevision === undefined
+      ? {}
+      : { expectedRevision: record.expectedRevision as number }),
   };
 };

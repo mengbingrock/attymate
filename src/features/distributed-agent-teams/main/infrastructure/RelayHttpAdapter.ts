@@ -29,6 +29,7 @@ import type {
   DistributedRelayLeaseDto,
   DistributedRuntimeControlReceiptDto,
   DistributedRuntimeSessionDto,
+  DistributedTeamSettingsDto,
   DistributedWorkerDto,
   GetDistributedRuntimeSessionRequest,
   JoinDistributedTeamMemberReceiptDto,
@@ -37,6 +38,8 @@ import type {
   LeaveDistributedTeamMemberRequest,
   RemoteAssignmentReceiptDto,
   SendDistributedRuntimeControlRequest,
+  UpdateDistributedTeamSettingsReceiptDto,
+  UpdateDistributedTeamSettingsRequest,
 } from '../../contracts';
 import type { DistributedRelayPort } from '../../core/application/ports/DistributedRelayPort';
 
@@ -137,6 +140,25 @@ const parseMembershipRoute = (input: unknown): DistributedMembershipRouteDto => 
     ...(optionalString(record.leftAt, 'leftAt') === undefined
       ? {}
       : { leftAt: requiredString(record.leftAt, 'leftAt') }),
+  };
+};
+
+const parseTeamSettings = (input: unknown): DistributedTeamSettingsDto => {
+  const record = asRecord(input, 'Relay team settings');
+  const coordination = record.coordination;
+  if (coordination !== 'led' && coordination !== 'leaderless') {
+    throw new Error('Invalid team coordination mode');
+  }
+  const revision = requiredNumber(record.revision, 'revision');
+  if (!Number.isInteger(revision) || revision < 0)
+    throw new Error('Invalid team settings revision');
+  return {
+    teamId: teamIdSchema.parse(record.teamId),
+    coordination,
+    revision,
+    ...(optionalString(record.updatedAt, 'updatedAt') === undefined
+      ? {}
+      : { updatedAt: requiredString(record.updatedAt, 'updatedAt') }),
   };
 };
 
@@ -317,6 +339,53 @@ export class RelayHttpAdapter implements DistributedRelayPort {
       throw new Error('Relay membership routes response is invalid');
     }
     return payload.routes.map(parseMembershipRoute);
+  }
+
+  async listTeamSettings(): Promise<readonly DistributedTeamSettingsDto[]> {
+    let response: unknown;
+    try {
+      response = await this.request('/v2/team-settings');
+    } catch (error) {
+      // Relays built before team settings existed have no route; every team there is led.
+      if (error instanceof RelayHttpError && error.status === 404) return [];
+      throw error;
+    }
+    const payload = asRecord(response, 'Relay team settings response');
+    if (!Array.isArray(payload.teams)) throw new Error('Relay team settings response is invalid');
+    return payload.teams.map(parseTeamSettings);
+  }
+
+  async updateTeamSettings(
+    request: UpdateDistributedTeamSettingsRequest
+  ): Promise<UpdateDistributedTeamSettingsReceiptDto> {
+    const payload = asRecord(
+      await this.request(`/v2/teams/${encodeURIComponent(request.teamId)}/settings`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          coordination: request.coordination,
+          ...(request.expectedRevision === undefined
+            ? {}
+            : { expectedRevision: request.expectedRevision }),
+        }),
+      }),
+      'Update team settings response'
+    );
+    if (typeof payload.changed !== 'boolean' || !Array.isArray(payload.releasedAssignmentIds)) {
+      throw new Error('Update team settings response is invalid');
+    }
+    return {
+      settings: parseTeamSettings(payload.settings),
+      changed: payload.changed,
+      ...(payload.demotedMembershipId === undefined
+        ? {}
+        : { demotedMembershipId: membershipIdSchema.parse(payload.demotedMembershipId) }),
+      ...(payload.promotedMembershipId === undefined
+        ? {}
+        : { promotedMembershipId: membershipIdSchema.parse(payload.promotedMembershipId) }),
+      releasedAssignmentIds: payload.releasedAssignmentIds.map((assignmentId) =>
+        assignmentIdSchema.parse(assignmentId)
+      ),
+    };
   }
 
   async joinTeamMember(

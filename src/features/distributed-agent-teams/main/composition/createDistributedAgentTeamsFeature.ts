@@ -8,6 +8,7 @@ import { LeaveDistributedTeamMemberUseCase } from '../../core/application/use-ca
 import { ReconnectDistributedLeadUseCase } from '../../core/application/use-cases/ReconnectDistributedLeadUseCase';
 import { SendDistributedRuntimeControlUseCase } from '../../core/application/use-cases/SendDistributedRuntimeControlUseCase';
 import { StartDistributedTeamUseCase } from '../../core/application/use-cases/StartDistributedTeamUseCase';
+import { UpdateDistributedTeamSettingsUseCase } from '../../core/application/use-cases/UpdateDistributedTeamSettingsUseCase';
 import { PersistentLocalLeadRecoveryAdapter } from '../infrastructure/PersistentLocalLeadRecoveryAdapter';
 import { RelayHttpAdapter } from '../infrastructure/RelayHttpAdapter';
 
@@ -29,6 +30,8 @@ import type {
   SendDistributedRuntimeControlRequest,
   StartDistributedTeamReceiptDto,
   StartDistributedTeamRequest,
+  UpdateDistributedTeamSettingsReceiptDto,
+  UpdateDistributedTeamSettingsRequest,
 } from '../../contracts';
 import type { DistributedLocalLeadRecoveryPort } from '../../core/application/ports/DistributedLocalLeadRecoveryPort';
 
@@ -55,6 +58,9 @@ export interface DistributedAgentTeamsFeatureFacade {
   leaveTeamMember(
     request: LeaveDistributedTeamMemberRequest
   ): Promise<LeaveDistributedTeamMemberReceiptDto>;
+  updateTeamSettings(
+    request: UpdateDistributedTeamSettingsRequest
+  ): Promise<UpdateDistributedTeamSettingsReceiptDto>;
 }
 
 export const createDistributedAgentTeamsFeature = (input: {
@@ -77,6 +83,7 @@ export const createDistributedAgentTeamsFeature = (input: {
   );
   const joinTeamMember = new JoinDistributedTeamMemberUseCase(relay);
   const leaveTeamMember = new LeaveDistributedTeamMemberUseCase(relay);
+  const updateTeamSettings = new UpdateDistributedTeamSettingsUseCase(relay);
   return {
     getTopology: () => getTopology.execute(),
     getAssignmentEvents: () => getAssignmentEvents.execute(),
@@ -88,5 +95,6 @@ export const createDistributedAgentTeamsFeature = (input: {
     reconnectLead: (request) => reconnectLead.execute(request),
     joinTeamMember: (request) => joinTeamMember.execute(request),
     leaveTeamMember: (request) => leaveTeamMember.execute(request),
+    updateTeamSettings: (request) => updateTeamSettings.execute(request),
   };
 };

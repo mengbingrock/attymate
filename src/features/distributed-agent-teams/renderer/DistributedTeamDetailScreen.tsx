@@ -10,6 +10,7 @@ import { selectDistributedRuntimeAssignment } from './utils/selectDistributedRun
 
 import type {
   CreateRemoteAssignmentRequest,
+  DistributedTeamCoordination,
   JoinDistributedTeamMemberRequest,
   LeaveDistributedTeamMemberRequest,
 } from '../contracts';
@@ -30,6 +31,7 @@ export const DistributedTeamDetailScreen = ({
   const [reconnectingLead, setReconnectingLead] = useState(false);
   const [reconnectLeadMessage, setReconnectLeadMessage] = useState<string | null>(null);
   const [membershipMutation, setMembershipMutation] = useState<string | null>(null);
+  const [updatingCoordination, setUpdatingCoordination] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [selectedRuntimeNodeId, setSelectedRuntimeNodeId] = useState<string | null>(null);
   const model = useMemo(
@@ -174,6 +176,29 @@ export const DistributedTeamDetailScreen = ({
     [refresh]
   );
 
+  const updateCoordination = useCallback(
+    async (coordination: DistributedTeamCoordination, expectedRevision: number): Promise<void> => {
+      setUpdatingCoordination(true);
+      setMutationError(null);
+      try {
+        await api.distributedAgentTeams.updateTeamSettings({
+          teamId,
+          coordination,
+          expectedRevision,
+        });
+        await refresh();
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Unable to change the team coordination mode.';
+        setMutationError(message);
+        throw error;
+      } finally {
+        setUpdatingCoordination(false);
+      }
+    },
+    [refresh, teamId]
+  );
+
   return (
     <DistributedTeamDetailView
       model={model}
@@ -187,6 +212,7 @@ export const DistributedTeamDetailScreen = ({
       startingTeam={startingTeam}
       reconnectingLead={reconnectingLead}
       membershipMutation={membershipMutation}
+      updatingCoordination={updatingCoordination}
       insecureLanMode={state.topology?.insecureLanMode ?? true}
       selectedRuntimeNodeId={selectedRuntimeNodeId}
       runtimeUnavailableDescription={runtimeUnavailableDescription}
@@ -202,6 +228,7 @@ export const DistributedTeamDetailScreen = ({
       onReconnectLead={() => void reconnectLead()}
       onJoinTeamMember={joinTeamMember}
       onLeaveTeamMember={leaveTeamMember}
+      onUpdateCoordination={updateCoordination}
     />
   );
 };

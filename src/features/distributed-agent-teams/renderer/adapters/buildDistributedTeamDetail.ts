@@ -11,6 +11,7 @@ import type {
   DistributedRelayCommandDto,
   DistributedRelayEventDto,
   DistributedRelayLeaseDto,
+  DistributedTeamSettingsDto,
   DistributedTopologyDto,
   DistributedWorkerDto,
 } from '../../contracts';
@@ -81,6 +82,8 @@ export interface DistributedTeamDetailModel {
   events: DistributedRelayEventDto[];
   leases: DistributedRelayLeaseDto[];
   membershipRoutes: DistributedMembershipRouteDto[];
+  /** Relay coordination mode; teams without stored settings are `led` at revision 0. */
+  settings: DistributedTeamSettingsDto;
 }
 
 export function buildDistributedTeamDetail(
@@ -257,5 +260,8 @@ export function buildDistributedTeamDetail(
     events,
     leases,
     membershipRoutes,
+    settings: topology?.teamSettings?.find(
+      (candidate) => candidate.teamId.toLowerCase() === normalizedTeamId
+    ) ?? { teamId, coordination: 'led', revision: 0 },
   };
 }

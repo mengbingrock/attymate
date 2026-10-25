@@ -18,6 +18,8 @@ export interface DistributedTopologyDto {
   insecureLanMode: boolean;
   workers: DistributedWorkerDto[];
   membershipRoutes?: DistributedMembershipRouteDto[];
+  /** Configured teams only; a team without an entry runs on the default `led` mode. */
+  teamSettings?: DistributedTeamSettingsDto[];
   fetchedAt: string;
   degraded: boolean;
   warning?: string;
@@ -194,6 +196,30 @@ export interface LeaveDistributedTeamMemberRequest {
 
 export interface LeaveDistributedTeamMemberReceiptDto {
   membership: DistributedMembershipRouteDto;
+  releasedAssignmentIds: string[];
+}
+
+export type DistributedTeamCoordination = 'led' | 'leaderless';
+
+export interface DistributedTeamSettingsDto {
+  teamId: string;
+  coordination: DistributedTeamCoordination;
+  /** 0 while the team still runs on Relay defaults. */
+  revision: number;
+  updatedAt?: string;
+}
+
+export interface UpdateDistributedTeamSettingsRequest {
+  teamId: string;
+  coordination: DistributedTeamCoordination;
+  expectedRevision?: number;
+}
+
+export interface UpdateDistributedTeamSettingsReceiptDto {
+  settings: DistributedTeamSettingsDto;
+  changed: boolean;
+  demotedMembershipId?: string;
+  promotedMembershipId?: string;
   releasedAssignmentIds: string[];
 }
 

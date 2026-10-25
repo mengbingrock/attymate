@@ -39,12 +39,14 @@ import {
 } from 'lucide-react';
 
 import { RemoteRuntimeConsole } from './RemoteRuntimeConsole';
+import { TeamCoordinationControl } from './TeamCoordinationControl';
 
 import type {
   CreateRemoteAssignmentRequest,
   DistributedMembershipRouteDto,
   DistributedRuntimeControlReceiptDto,
   DistributedRuntimeSessionDto,
+  DistributedTeamCoordination,
   DistributedWorkerDto,
   JoinDistributedTeamMemberRequest,
   LeaveDistributedTeamMemberRequest,
@@ -69,6 +71,7 @@ interface DistributedTeamDetailViewProps {
   startingTeam: boolean;
   reconnectingLead: boolean;
   membershipMutation: string | null;
+  updatingCoordination: boolean;
   insecureLanMode: boolean;
   selectedRuntimeNodeId: string | null;
   runtimeUnavailableDescription?: string;
@@ -86,6 +89,10 @@ interface DistributedTeamDetailViewProps {
   onReconnectLead: () => void;
   onJoinTeamMember: (request: JoinDistributedTeamMemberRequest) => Promise<void>;
   onLeaveTeamMember: (request: LeaveDistributedTeamMemberRequest) => Promise<void>;
+  onUpdateCoordination: (
+    coordination: DistributedTeamCoordination,
+    expectedRevision: number
+  ) => Promise<void>;
 }
 
 type DetailTab = 'overview' | 'assignments' | 'activity' | 'messages' | 'debug';
@@ -512,6 +519,7 @@ export const DistributedTeamDetailView = ({
   startingTeam,
   reconnectingLead,
   membershipMutation,
+  updatingCoordination,
   insecureLanMode,
   selectedRuntimeNodeId,
   runtimeUnavailableDescription,
@@ -527,7 +535,9 @@ export const DistributedTeamDetailView = ({
   onReconnectLead,
   onJoinTeamMember,
   onLeaveTeamMember,
+  onUpdateCoordination,
 }: DistributedTeamDetailViewProps): React.JSX.Element => {
+  const leaderless = model.settings.coordination === 'leaderless';
   const [activeTab, setActiveTab] = useState<DetailTab>(() => readPersistedDetailTab(model.teamId));
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
@@ -626,6 +636,13 @@ export const DistributedTeamDetailView = ({
                 <span className="size-1.5 rounded-full bg-emerald-400" />
                 {connectedWorkers}/{model.workers.length} connected
               </span>
+              <TeamCoordinationControl
+                settings={model.settings}
+                members={model.members.map((member) => member.route)}
+                disabled={insecureLanMode || membershipMutation !== null}
+                updating={updatingCoordination}
+                onUpdate={onUpdateCoordination}
+              />
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-muted">
               <span className="font-mono">{model.teamId}</span>
@@ -636,15 +653,17 @@ export const DistributedTeamDetailView = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={reconnectingLead}
-              onClick={onReconnectLead}
-            >
-              <RefreshCw className={`size-3.5 ${reconnectingLead ? 'animate-spin' : ''}`} />
-              {reconnectingLead ? 'Reconnecting…' : 'Reconnect lead'}
-            </Button>
+            {leaderless ? null : (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={reconnectingLead}
+                onClick={onReconnectLead}
+              >
+                <RefreshCw className={`size-3.5 ${reconnectingLead ? 'animate-spin' : ''}`} />
+                {reconnectingLead ? 'Reconnecting…' : 'Reconnect lead'}
+              </Button>
+            )}
             <Button
               size="sm"
               disabled={!canStart}
@@ -743,7 +762,9 @@ export const DistributedTeamDetailView = ({
                 ))}
                 {model.members.length === 0 ? (
                   <div className="col-span-full rounded-lg border border-dashed border-border p-10 text-center text-sm text-text-muted">
-                    This team has no active members. Add a connected Worker to create a new lead.
+                    {leaderless
+                      ? 'This leaderless team has no members yet. Add a connected Worker, or start one that advertises this team.'
+                      : 'This team has no active members. Add a connected Worker to create a new lead.'}
                   </div>
                 ) : null}
               </div>
