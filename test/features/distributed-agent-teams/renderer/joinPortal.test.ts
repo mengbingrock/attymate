@@ -148,89 +148,102 @@ it('shows member names, roles, and live presence, safely refreshes, and filters 
   }
 });
 
-it('unlocks a team, requires a native build, downloads that build, and shows local start commands', async () => {
-  const browser = new Window({
-    url: 'https://relay.example/next/join/',
-    settings: {
-      disableJavaScriptFileLoading: true,
-      disableCSSFileLoading: true,
-    },
-  });
-  const team = {
-    teamId: '40000000-0000-4000-8000-000000000001',
-    name: 'Test team',
-    description: '',
-    coordination: 'led',
-    members: 0,
-    online: 0,
-  };
-  const platforms = [
-    { id: 'darwin-x64', label: 'macOS · Intel' },
-    { id: 'linux-x64', label: 'Linux · Intel / AMD x64' },
-  ];
-  const requests: Array<{ path: string; body: unknown }> = [];
-  browser.fetch = vi.fn(async (input, options) => {
-    const path = String(input);
-    const body = options?.body ? JSON.parse(String(options.body)) : undefined;
-    requests.push({ path, body });
-    if (path.endsWith('/installer')) return new browser.Response('test installer');
-    return new browser.Response(
-      JSON.stringify(
-        path.endsWith('/verify')
-          ? { team, installerAvailable: true, installerPlatforms: platforms }
-          : { teams: [team] }
-      ),
-      { headers: { 'content-type': 'application/json' } }
-    );
-  }) as typeof browser.fetch;
-  browser.URL.createObjectURL = vi.fn(() => 'blob:test');
-  browser.URL.revokeObjectURL = vi.fn();
-  const click = vi.spyOn(browser.HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-  try {
-    browser.document.write(JOIN_PORTAL_HTML);
-    browser.eval(JOIN_PORTAL_APP_JS);
-    browser.document.dispatchEvent(new browser.Event('DOMContentLoaded'));
-    await vi.waitFor(() => expect(browser.document.querySelector('#teams button')).not.toBeNull());
-    (browser.document.querySelector('#teams button') as unknown as HTMLButtonElement).click();
-    const input = (id: string) =>
-      browser.document.getElementById(id) as unknown as HTMLInputElement;
-    input('token').value = 'atj_test-only';
-    input('label').value = 'test-mac';
-    browser.document
-      .getElementById('unlock')!
-      .dispatchEvent(new browser.Event('submit', { cancelable: true }));
-    const button = browser.document.getElementById('download') as unknown as HTMLButtonElement;
-    await vi.waitFor(() =>
-      expect(browser.document.getElementById('unlocked')!.hasAttribute('hidden')).toBe(false)
-    );
-    expect(button.disabled).toBe(true);
-    const platform = browser.document.getElementById('platform') as unknown as HTMLSelectElement;
-    expect(Array.from(platform.options).map((option) => option.value)).toEqual([
-      '',
-      'darwin-x64',
-      'linux-x64',
-    ]);
-    platform.value = 'darwin-x64';
-    browser.document.getElementById('platform')!.dispatchEvent(new browser.Event('change'));
-    expect(button.disabled).toBe(false);
-    expect(browser.document.getElementById('desktop-option')!.hasAttribute('hidden')).toBe(false);
-    expect(browser.document.getElementById('desktop-command')!.textContent).toContain(
-      'mate-40000000/bin/desktop.sh'
-    );
-    expect(browser.document.getElementById('run-command')!.textContent).toContain(
-      'agent-teams-join-40000000-darwin-x64.sh --label "test-mac"'
-    );
-    expect(browser.document.getElementById('attach-command')!.textContent).toContain(
-      'mate-40000000/bin/attach.sh'
-    );
-    button.click();
-    await vi.waitFor(() => expect(click).toHaveBeenCalled());
-    expect(requests.find((request) => request.path.endsWith('/installer'))!.body).toEqual({
-      token: 'atj_test-only',
-      platform: 'darwin-x64',
+it.each(['darwin-x64', 'win32-x64'])(
+  'downloads the selected native build and shows its local commands (%s)',
+  async (selectedPlatform) => {
+    const browser = new Window({
+      url: 'https://relay.example/next/join/',
+      settings: {
+        disableJavaScriptFileLoading: true,
+        disableCSSFileLoading: true,
+      },
     });
-  } finally {
-    await browser.happyDOM.close();
-    click.mockRestore();
+    const team = {
+      teamId: '40000000-0000-4000-8000-000000000001',
+      name: 'Test team',
+      description: '',
+      coordination: 'led',
+      members: 0,
+      online: 0,
+    };
+    const platforms = [
+      { id: 'darwin-x64', label: 'macOS · Intel' },
+      { id: 'linux-x64', label: 'Linux · Intel / AMD x64' },
+      { id: 'win32-x64', label: 'Windows · x64' },
+    ];
+    const requests: Array<{ path: string; body: unknown }> = [];
+    browser.fetch = vi.fn(async (input, options) => {
+      const path = String(input);
+      const body = options?.body ? JSON.parse(String(options.body)) : undefined;
+      requests.push({ path, body });
+      if (path.endsWith('/installer')) return new browser.Response('test installer');
+      return new browser.Response(
+        JSON.stringify(
+          path.endsWith('/verify')
+            ? { team, installerAvailable: true, installerPlatforms: platforms }
+            : { teams: [team] }
+        ),
+        { headers: { 'content-type': 'application/json' } }
+      );
+    }) as typeof browser.fetch;
+    browser.URL.createObjectURL = vi.fn(() => 'blob:test');
+    browser.URL.revokeObjectURL = vi.fn();
+    const click = vi
+      .spyOn(browser.HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {});
+    try {
+      browser.document.write(JOIN_PORTAL_HTML);
+      browser.eval(JOIN_PORTAL_APP_JS);
+      browser.document.dispatchEvent(new browser.Event('DOMContentLoaded'));
+      await vi.waitFor(() =>
+        expect(browser.document.querySelector('#teams button')).not.toBeNull()
+      );
+      (browser.document.querySelector('#teams button') as unknown as HTMLButtonElement).click();
+      const input = (id: string) =>
+        browser.document.getElementById(id) as unknown as HTMLInputElement;
+      input('token').value = 'atj_test-only';
+      input('label').value = 'test-mac';
+      browser.document
+        .getElementById('unlock')!
+        .dispatchEvent(new browser.Event('submit', { cancelable: true }));
+      const button = browser.document.getElementById('download') as unknown as HTMLButtonElement;
+      await vi.waitFor(() =>
+        expect(browser.document.getElementById('unlocked')!.hasAttribute('hidden')).toBe(false)
+      );
+      expect(button.disabled).toBe(true);
+      const platform = browser.document.getElementById('platform') as unknown as HTMLSelectElement;
+      expect(Array.from(platform.options).map((option) => option.value)).toEqual([
+        '',
+        'darwin-x64',
+        'linux-x64',
+        'win32-x64',
+      ]);
+      platform.value = selectedPlatform;
+      browser.document.getElementById('platform')!.dispatchEvent(new browser.Event('change'));
+      expect(button.disabled).toBe(false);
+      expect(browser.document.getElementById('desktop-option')!.hasAttribute('hidden')).toBe(
+        selectedPlatform === 'win32-x64'
+      );
+      expect(browser.document.getElementById('desktop-command')!.textContent).toContain(
+        'mate-40000000/bin/desktop.sh'
+      );
+      expect(browser.document.getElementById('run-command')!.textContent).toContain(
+        selectedPlatform === 'win32-x64'
+          ? "agent-teams-join-40000000-win32-x64.ps1\" -Label 'test-mac'"
+          : 'agent-teams-join-40000000-darwin-x64.sh --label "test-mac"'
+      );
+      expect(browser.document.getElementById('attach-command')!.textContent).toContain(
+        'mate-40000000/bin/attach.' + (selectedPlatform === 'win32-x64' ? 'ps1' : 'sh')
+      );
+      button.click();
+      await vi.waitFor(() => expect(click).toHaveBeenCalled());
+      expect(requests.find((request) => request.path.endsWith('/installer'))!.body).toEqual({
+        token: 'atj_test-only',
+        platform: selectedPlatform,
+      });
+    } finally {
+      await browser.happyDOM.close();
+      click.mockRestore();
+    }
   }
-});
+);

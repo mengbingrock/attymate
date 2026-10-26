@@ -49,7 +49,17 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
         run: |
           set -euo pipefail
-          gh run download "$BUILD_RUN" --repo TrueGrit-AI/codex --name "codex-fork-$PLATFORM" --dir native
+          for attempt in $(seq 1 60); do
+            artifact=$(gh api "repos/TrueGrit-AI/codex/actions/runs/$BUILD_RUN/artifacts" --jq ".artifacts[] | select(.name == \"codex-fork-$PLATFORM\") | .id")
+            if [[ -n "$artifact" ]]; then
+              gh run download "$BUILD_RUN" --repo TrueGrit-AI/codex --name "codex-fork-$PLATFORM" --dir native
+              break
+            fi
+            state=$(gh api "repos/TrueGrit-AI/codex/actions/runs/$BUILD_RUN" --jq .status)
+            [[ "$state" != completed ]] || { echo 'Requested platform artifact was not built'; exit 1; }
+            sleep 20
+          done
+          test -f "native/codex-fork-$PLATFORM.tar.gz"
           mkdir -p smoke/package
           tar -xzf "native/codex-fork-$PLATFORM.tar.gz" -C smoke/package
       - name: Compile and package the Worker with the fork
