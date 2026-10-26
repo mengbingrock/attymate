@@ -185,7 +185,7 @@ for _ in $(seq 1 30); do
   if grep -q '"state": *"connected"' "$DIR/data/worker-status.json" 2>/dev/null; then
     say "Connected. Team ${TEAM_ID} will enroll '${LABEL}' as a member (right away in a leaderless team, otherwise once the team has an active lead)."
     echo "  status:  bash $DIR/bin/status.sh"
-    echo "  attach:  codex agents   (team threads live in your own Codex home)"
+    if [ "$APP_SERVER_MODE" = shared-daemon ]; then echo "  attach:  codex agents   (team threads live in your own Codex home)"; else echo "  attach:  bash $DIR/bin/attach.sh   (team threads live in the member's own Codex home)"; fi
     echo "  logs:    $DIR/logs/worker.log"
     exit 0
   fi
