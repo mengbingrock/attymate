@@ -12,7 +12,12 @@ $token = '__WORKER_TOKEN__'
 $team = '__TEAM_ID__'
 if (-not $Dir) { $Dir = Join-Path $env:LOCALAPPDATA "AgentTeams\mate-$($team.Substring(0,8))" }
 $Dir = [IO.Path]::GetFullPath($Dir)
+if ($Dir.TrimEnd('\') -eq [IO.Path]::GetPathRoot($Dir).TrimEnd('\')) { throw 'Choose a new installation directory, not a drive root.' }
 if (Test-Path (Join-Path $Dir 'config.json')) { throw 'This installation already exists. Use its bin\start.ps1 or choose another -Dir.' }
+if (Test-Path $Dir) {
+  if ((Get-Item $Dir -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Installation directory must not be a link.' }
+  if (Get-ChildItem $Dir -Force | Select-Object -First 1) { throw 'Choose a new or empty installation directory.' }
+}
 if ([Environment]::Is64BitProcess -eq $false) { throw 'Run this installer in 64-bit PowerShell.' }
 if ($env:PROCESSOR_ARCHITECTURE -ne 'AMD64') { throw 'This build requires Windows x64.' }
 New-Item -ItemType Directory -Force $Dir | Out-Null

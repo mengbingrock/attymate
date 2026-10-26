@@ -22,9 +22,18 @@ permissions:
 jobs:
   register:
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: windows-2025
     steps:
-      - run: echo 'Dispatch this workflow with a successful custom Codex build run ID to smoke both native installers.'
+      - uses: actions/checkout@v6
+      - name: Parse the native installer in Windows PowerShell
+        shell: powershell
+        run: |
+          $source = (Get-Content packages/agent-teams-worker/installer/install-windows.ps1 -Raw) + "`n#>`n"
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseInput($source, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count) { $errors | Format-List; throw 'Invalid PowerShell installer syntax' }
+          Write-Host 'PowerShell installer parsed successfully. Dispatch with a custom Codex build run ID for native installation tests.'
   smoke:
     if: github.event_name == 'workflow_dispatch'
     name: Install and connect ${{ matrix.platform }}
