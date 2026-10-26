@@ -7,6 +7,11 @@ on:
         description: Successful Native team download builds run in TrueGrit-AI/codex
         required: true
         type: string
+      platform:
+        description: Native platform to verify
+        type: choice
+        default: all
+        options: [all, darwin-arm64, win32-x64]
   push:
     branches: [distributed-agent-teams-mcp-v2]
     paths: ['.github/workflows/distributed-native-installers.yml']
@@ -28,11 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: darwin-arm64
-            runner: macos-15
-          - platform: win32-x64
-            runner: windows-2025
+        include: ${{ fromJSON(inputs.platform == 'win32-x64' && '[{"platform":"win32-x64","runner":"windows-2025"}]' || inputs.platform == 'darwin-arm64' && '[{"platform":"darwin-arm64","runner":"macos-15"}]' || '[{"platform":"darwin-arm64","runner":"macos-15"},{"platform":"win32-x64","runner":"windows-2025"}]') }}
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
