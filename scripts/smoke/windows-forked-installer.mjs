@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import WebSocket from 'ws';
@@ -11,11 +11,18 @@ if (process.platform !== 'win32') throw new Error('Run this smoke on a Windows r
 const kit = resolve(process.argv[2]);
 const root = mkdtempSync(join(tmpdir(), 'agent-teams-windows-smoke-'));
 const install = join(root, 'installation with spaces');
+const home = join(root, 'existing codex login');
+mkdirSync(home);
+writeFileSync(
+  join(home, 'auth.json'),
+  JSON.stringify({ OPENAI_API_KEY: 'sk-test-only-no-provider-calls' })
+);
 const manager = randomBytes(32).toString('hex');
 const workerToken = randomBytes(32).toString('hex');
 const env = {
   ...process.env,
   OPENAI_API_KEY: 'sk-test-only-no-provider-calls',
+  CODEX_HOME: home,
   AGENT_TEAMS_RELAY_MANAGER_TOKEN: manager,
   AGENT_TEAMS_RELAY_WORKER_TOKEN: workerToken,
 };
@@ -95,7 +102,6 @@ try {
       install,
       '-Label',
       'Windows isolated smoke',
-      '-PrivateCodexHome',
       '-NoService',
     ],
     { env, encoding: 'utf8', timeout: 180000, windowsHide: true }
@@ -107,7 +113,8 @@ try {
   if (installed.status !== 0)
     throw new Error('Installer failed: ' + installed.stdout + installed.stderr);
   const config = JSON.parse(readFileSync(join(install, 'config.json'), 'utf8'));
-  assert.equal(config.home, join(install, 'codex-home'));
+  assert.equal(config.home, home);
+  assert.equal(existsSync(join(install, 'codex-home')), false);
   const url = JSON.parse(readFileSync(join(install, 'data', 'app-server.json'), 'utf8')).url;
   await waitFor(async () => {
     const result = await fetch(address.httpUrl + '/v2/workers', {

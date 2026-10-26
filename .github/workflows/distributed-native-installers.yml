@@ -68,7 +68,9 @@ jobs:
         shell: bash
         run: |
           revision=$(node -p 'JSON.parse(require("fs").readFileSync("smoke/package/build-manifest.json")).revision')
-          python3 scripts/smoke/forked-codex-installer.py --root "$PWD/smoke" --node "$(command -v node)" --revision "$revision"
+          smoke_root=$(mktemp -d /private/tmp/agent-teams-native-XXXXXX)
+          cp -R smoke/. "$smoke_root/"
+          python3 scripts/smoke/forked-codex-installer.py --root "$smoke_root" --node "$(command -v node)" --revision "$revision"
       - name: Exercise Windows installer and two authenticated server clients
         if: runner.os == 'Windows'
         shell: bash
