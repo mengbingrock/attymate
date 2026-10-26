@@ -16,11 +16,21 @@ Interactive Codex runtime sessions additionally require
 Workers. Session capability tokens stay inside the main-process Relay adapter. The renderer sees
 only lease-scoped DTOs and validated controls.
 
-Every Worker runs Codex App Server with a private Worker-owned `CODEX_HOME` (by default
-`<data-dir>/codex-home`). Authenticate that home explicitly with
+Directly started Workers default to a private Worker-owned `CODEX_HOME` at
+`<data-dir>/codex-home`. Authenticate that home explicitly with
 `CODEX_HOME=<data-dir>/codex-home codex login`; the Worker never imports credentials or personal
 plugin/MCP configuration automatically. `--codex-home` selects an explicit private directory, and
 the Worker `status`/`diagnose` commands expose its non-secret state.
+
+The [teammate installer](../../../packages/agent-teams-worker/installer/README.md) now embeds an
+explicitly built Codex fork. Its supervisor runs the customized server on a private Unix socket;
+the installer reuses the existing `$CODEX_HOME` or `~/.codex` login by default, with
+`--private-codex-home` available for a separate sign-in. Credentials are not copied. Server and
+client use an installation-owned `sqlite_home` so the personal daemon's database stays separate;
+the Worker uses `--app-server-mode shared-daemon --app-server-connect-only --app-server-socket ...`
+and the bundled client uses `agents --remote unix://...` against that same socket. Connect-only
+requires an explicit socket and never starts another daemon. The modes below remain available
+for Workers launched directly from source.
 
 By default each session is a private `codex app-server` child on stdio pipes that nothing else can
 attach to. `--app-server-mode shared-daemon` instead starts (idempotently) and connects to the

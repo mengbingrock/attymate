@@ -7,3 +7,4 @@ export * from './runtimeSession';
 export * from './sessionContext';
 export * from './teamMembership';
 export * from './teamMessaging';
+export * from './desktopChat';

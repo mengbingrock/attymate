@@ -22,6 +22,10 @@ const MAX_CONTROL_RESPONSE_BYTES = 2 * 1024 * 1024;
 const MAX_CONTROL_REQUEST_BYTES = 64 * 1024;
 
 export interface WorkerControlSnapshotProvider {
+  readonly desktopChatAction?: (input: unknown) => Promise<unknown>;
+  readonly desktopChatPrepare?: (input: unknown) => unknown;
+  readonly desktopChatBind?: (input: unknown) => unknown;
+  readonly desktopChatTool?: (token: string, tool: string, input: unknown) => unknown;
   readonly getStatus: () => AgentTeamsWorkerStatus;
   readonly listInboxCommands: () => readonly WorkerInboxCommand[];
   readonly listMessages: () => readonly WorkerTeamMessage[];
@@ -214,6 +218,23 @@ const handleControlRequest = async (
     return;
   }
 
+  if (request.method === 'POST' && url.pathname.startsWith('/v2/desktop-chat/')) {
+    const body = await readJsonBody(request);
+    const action = url.pathname.slice('/v2/desktop-chat/'.length);
+    if (action === 'action' && provider.desktopChatAction)
+      jsonResponse(response, await provider.desktopChatAction(body));
+    else if (action === 'prepare' && provider.desktopChatPrepare)
+      jsonResponse(response, provider.desktopChatPrepare(body));
+    else if (action === 'bind' && provider.desktopChatBind)
+      jsonResponse(response, await provider.desktopChatBind(body));
+    else if (action === 'tool' && provider.desktopChatTool && typeof body.tool === 'string')
+      jsonResponse(
+        response,
+        await provider.desktopChatTool(bearerToken(request), body.tool, body.arguments)
+      );
+    else jsonResponse(response, { error: 'Desktop chat operation unavailable' }, 404);
+    return;
+  }
   const runtimeToolMatch = /^\/v2\/runtime-tools\/([a-z][a-z0-9_.-]*)$/.exec(url.pathname);
   if (request.method === 'POST' && runtimeToolMatch !== null) {
     if (provider.executeRuntimeTool === undefined) {
@@ -228,7 +249,11 @@ const handleControlRequest = async (
     if (typeof idempotencyKey !== 'string' || !/^[A-Za-z0-9._:-]{1,200}$/.test(idempotencyKey)) {
       throw new TypeError('Runtime MCP idempotencyKey is invalid');
     }
-    if (typeof toolArguments !== 'object' || toolArguments === null || Array.isArray(toolArguments)) {
+    if (
+      typeof toolArguments !== 'object' ||
+      toolArguments === null ||
+      Array.isArray(toolArguments)
+    ) {
       throw new TypeError('Runtime MCP arguments must be an object');
     }
     jsonResponse(
@@ -335,6 +360,7 @@ const closeServer = async (server: Server): Promise<void> => {
 export const requestWorkerControl = async <T>(
   socketPath: string,
   path:
+    | `/v2/desktop-chat/${'action' | 'prepare' | 'bind' | 'tool'}`
     | '/v2/agent-context'
     | '/v2/worker-status'
     | '/v2/assignments'
@@ -394,7 +420,7 @@ export const requestWorkerControl = async <T>(
       }
     );
     request.once('error', reject);
-    request.setTimeout(5_000, () => {
+    request.setTimeout(30_000, () => {
       request.destroy(new Error('Worker control request timed out'));
     });
     request.end(options?.body === undefined ? undefined : JSON.stringify(options.body));

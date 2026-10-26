@@ -1,3 +1,4 @@
+import { openDesktopChat } from './openDesktopChat';
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -70,15 +71,29 @@ const configuredCodexHome = (dataDir: string): string =>
  * `--app-server-mode shared-daemon` drives the managed daemon of the Worker's Codex home instead,
  * so the owner can later attach to the same threads with `CODEX_HOME=<home> codex agents`.
  * `--app-server-socket <path>` overrides the daemon control socket location.
+ * `--app-server-connect-only` requires that explicit socket and never starts a daemon.
  */
 const configuredAppServer = (
   codexHome: string
-): { readonly mode: 'private-stdio' | 'shared-daemon'; readonly socketPath?: string } => {
+): {
+  readonly mode: 'private-stdio' | 'shared-daemon';
+  readonly socketPath?: string;
+  readonly connectOnly?: boolean;
+} => {
   const mode = resolveCodexAppServerMode(valueAfter('--app-server-mode'));
+  if (
+    process.argv.includes('--app-server-connect-only') &&
+    (mode !== 'shared-daemon' || valueAfter('--app-server-socket') === undefined)
+  ) {
+    throw new Error(
+      '--app-server-connect-only requires shared-daemon mode and --app-server-socket'
+    );
+  }
   if (mode !== 'shared-daemon') return { mode };
   const explicitSocket = valueAfter('--app-server-socket');
   return {
     mode,
+    connectOnly: process.argv.includes('--app-server-connect-only'),
     socketPath:
       explicitSocket === undefined
         ? defaultCodexDaemonSocketPath(codexHome)
@@ -197,6 +212,12 @@ const runWorker = async (): Promise<void> => {
       : {
           codexRuntime: {
             cwd: resolve(runtimeCwd),
+            ...(process.platform === 'darwin' && valueAfter('--desktop-launcher')
+              ? {
+                  openDesktop: (threadId: string) =>
+                    openDesktopChat(resolve(valueAfter('--desktop-launcher')!), threadId),
+                }
+              : {}),
             ...(localAccess === undefined ? {} : { localAccess }),
             sessionFactory:
               appServer.mode === 'shared-daemon'
@@ -205,6 +226,7 @@ const runWorker = async (): Promise<void> => {
                     binaryPath: valueAfter('--codex-binary', 'codex')!,
                     codexHome: workerCodexHome.codexHome,
                     env: runtimeEnv,
+                    ensureDaemon: !process.argv.includes('--app-server-connect-only'),
                     ...(valueAfter('--app-server-socket') === undefined
                       ? {}
                       : { socketPath: appServer.socketPath }),

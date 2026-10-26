@@ -2,7 +2,6 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WebSocketServer, type WebSocket } from 'ws';
 
 import {
   buildCodexDaemonStartArgs,
@@ -12,6 +11,7 @@ import {
   parseDaemonSocketPath,
   resolveCodexAppServerMode,
 } from '@claude-teams/agent-teams-worker';
+import { type WebSocket, WebSocketServer } from 'ws';
 
 describe('Codex App Server mode helpers', () => {
   it('defaults to a private stdio child and accepts the shared daemon mode', () => {
@@ -134,6 +134,17 @@ describe('CodexAppServerDaemonFactory', () => {
     await session.close();
   });
 
+  it('connects to an explicitly managed fork without starting a stock daemon', async () => {
+    const session = await new CodexAppServerDaemonFactory({
+      binaryPath: '/does-not-exist/stock-codex',
+      codexHome: dir,
+      socketPath,
+      ensureDaemon: false,
+    }).open();
+    expect(await session.request('thread/list', {})).toEqual({ data: [{ id: 't1' }] });
+    await session.close();
+  });
+
   it('delivers daemon-initiated requests and notifications, and reports unexpected closes', async () => {
     const factory = new CodexAppServerDaemonFactory({
       binaryPath: 'codex-not-used',
@@ -190,7 +201,9 @@ describe('ensureCodexHomeFeatureDisables', () => {
   it('refuses to clobber a foreign [features] table that enables something', async () => {
     const home = await mkdtemp(join(tmpdir(), 'agt-home-'));
     await writeFile(join(home, 'config.toml'), '[features]\napps = true\n');
-    await expect(ensureCodexHomeFeatureDisables(home)).rejects.toThrow(/already defines \[features\]/);
+    await expect(ensureCodexHomeFeatureDisables(home)).rejects.toThrow(
+      /already defines \[features\]/
+    );
     await rm(home, { recursive: true, force: true });
   });
 

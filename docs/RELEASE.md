@@ -2,6 +2,11 @@
 
 Agent Teams AI packages the desktop application and terminal-platform support assets. It does not download, stage, or bundle an agent runtime. At runtime, teams use the user's installed stock Claude Code or OpenAI Codex CLI.
 
+Distributed teammate installers have a separate packaging path: they embed an explicitly built
+forked Codex package and run its customized App Server locally, shared by the Worker and terminal
+client. See [teammate installer](../packages/agent-teams-worker/installer/README.md). This does not
+change the Electron release packaging below.
+
 ## Before creating a release
 
 Use the repository-pinned Node and pnpm versions, then run the normal quality gates:

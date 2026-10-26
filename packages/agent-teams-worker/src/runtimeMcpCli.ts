@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { createDesktopChatMcp } from './desktopChatMcp';
 
 import {
   createAgentTeamsRuntimeMcpServer,
@@ -22,9 +23,12 @@ const token = createRuntimeSessionTokenSource({
   tokenFile: process.env.AGENT_TEAMS_RUNTIME_SESSION_TOKEN_FILE,
 });
 const teamRole = process.env.AGENT_TEAMS_RUNTIME_TEAM_ROLE;
-if (teamRole !== 'lead' && teamRole !== 'member') {
+const desktopChat = process.argv.includes('--desktop-chat');
+if (!desktopChat && teamRole !== 'lead' && teamRole !== 'member') {
   throw new Error('AGENT_TEAMS_RUNTIME_TEAM_ROLE must be lead or member');
 }
 
-const server = createAgentTeamsRuntimeMcpServer(socketPath, token, teamRole);
+const server = desktopChat
+  ? createDesktopChatMcp(socketPath, typeof token === 'string' ? token : token())
+  : createAgentTeamsRuntimeMcpServer(socketPath, token, teamRole as 'lead' | 'member');
 await server.start({ transportType: 'stdio' });

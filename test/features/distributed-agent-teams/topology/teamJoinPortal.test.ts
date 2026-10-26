@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -132,9 +133,11 @@ describe('team directory and public join portal', () => {
             coordination: 'leaderless',
             members: 0,
             online: 0,
+            memberList: [],
           },
         ],
         installerAvailable: true,
+        installerPlatforms: [],
       });
       expect(listing.body).not.toContain('atj_');
       expect(listing.body).not.toContain(hidden.team.teamId);
@@ -219,6 +222,7 @@ describe('team directory and public join portal', () => {
       expect((await relay.app.inject({ url: '/join/api/teams' })).json().teams[0]).toMatchObject({
         members: 1,
         online: 1,
+        memberList: [{ label: 'peer-01', role: 'member', online: true }],
       });
       // The manager cannot reuse that Worker for another team.
       const crossTeam = await relay.app.inject({
@@ -249,6 +253,13 @@ describe('team directory and public join portal', () => {
       const nextToken = rotated.json<{ joinToken: string }>().joinToken;
       expect(nextToken).not.toBe(joinToken);
       await vi.waitFor(() => expect(relay.listWorkers()).toEqual([]));
+      const offlineListing = (await relay.app.inject({ url: '/join/api/teams' })).json();
+      expect(offlineListing.teams[0].memberList).toEqual([
+        { label: 'peer-01', role: 'member', online: false },
+      ]);
+      expect(offlineListing.teams[0].members).toBe(1);
+      expect(offlineListing.teams[0].online).toBe(0);
+      expect(JSON.stringify(offlineListing)).not.toContain('nodeId');
       expect((await verify(team.teamId, joinToken, '192.0.2.9')).statusCode).toBe(401);
       expect((await verify(team.teamId, nextToken, '192.0.2.9')).statusCode).toBe(200);
       expect(
@@ -275,6 +286,76 @@ describe('team directory and public join portal', () => {
     try {
       expect((await relay.app.inject({ url: '/join/' })).statusCode).toBe(404);
       expect((await relay.app.inject({ url: '/join/api/teams' })).statusCode).toBe(404);
+    } finally {
+      await relay.close();
+    }
+  });
+
+  it('advertises available native builds and streams only the authenticated selected platform', async () => {
+    const mac = gzipSync(randomBytes(100_001));
+    const linux = gzipSync(randomBytes(73_003));
+    const relay = await startAgentTeamsRelay({
+      host: '127.0.0.1',
+      port: 0,
+      dataDir: await mkdtemp(join(tmpdir(), 'agent-teams-platform-download-')),
+      auth: { managerToken: MANAGER_TOKEN, workerToken: WORKER_TOKEN },
+      joinPortal: {
+        publicUrl: PUBLIC_URL,
+        installer: {
+          template:
+            'RELAY="__RELAY_URL__"\nTOKEN="__WORKER_TOKEN__"\nTEAM="__TEAM_ID__"\n__PAYLOAD_BELOW__\n',
+          platformBundles: { 'darwin-x64': mac, 'linux-x64': linux },
+        },
+      },
+    });
+    try {
+      const created = await relay.app.inject({
+        method: 'POST',
+        url: '/v2/team-directory',
+        headers: manager,
+        payload: { name: 'Native downloads' },
+      });
+      const { team, joinToken } = created.json<{ team: { teamId: string }; joinToken: string }>();
+      const expected = [
+        { id: 'darwin-x64', label: 'macOS · Intel' },
+        { id: 'linux-x64', label: 'Linux · Intel / AMD x64' },
+      ];
+      expect(
+        (await relay.app.inject({ url: '/join/api/teams' })).json().installerPlatforms
+      ).toEqual(expected);
+      expect(
+        (
+          await relay.app.inject({
+            method: 'POST',
+            url: `/join/api/teams/${team.teamId}/verify`,
+            payload: { token: joinToken },
+          })
+        ).json().installerPlatforms
+      ).toEqual(expected);
+      const download = (token: string, platform?: unknown) =>
+        relay.app.inject({
+          method: 'POST',
+          url: `/join/api/teams/${team.teamId}/installer`,
+          payload: { token, ...(platform === undefined ? {} : { platform }) },
+        });
+      expect((await download('invalid', 'darwin-x64')).statusCode).toBe(401);
+      expect((await download(joinToken)).json()).toEqual({ error: 'installer_platform_required' });
+      expect((await download(joinToken, 'darwin-arm64')).json()).toEqual({
+        error: 'installer_platform_unavailable',
+      });
+      expect((await download(joinToken, '__proto__')).statusCode).toBe(400);
+      for (const [platform, bytes] of [
+        ['darwin-x64', mac],
+        ['linux-x64', linux],
+      ] as const) {
+        const response = await download(joinToken, platform);
+        expect(response.statusCode).toBe(200);
+        expect(response.headers['content-disposition']).toContain(`${platform}.sh`);
+        expect(Number(response.headers['content-length'])).toBe(Buffer.byteLength(response.body));
+        const payload = response.body.split('__PAYLOAD_BELOW__\n')[1];
+        expect(Buffer.from(payload, 'base64')).toEqual(bytes);
+        expect(response.body).toContain(`TOKEN="${joinToken}"`);
+      }
     } finally {
       await relay.close();
     }

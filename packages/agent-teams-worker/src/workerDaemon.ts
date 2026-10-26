@@ -1,9 +1,11 @@
+import { DesktopChatService } from './desktopChatService';
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
   assignmentAcceptPayloadSchema,
+  teamMessageDeliveryPayloadSchema,
   relayToWorkerMessageSchema,
   DISTRIBUTED_RUNTIME_CAPABILITIES,
   type RelayRuntimeControlMessage,
@@ -62,12 +64,18 @@ export interface AgentTeamsWorkerOptions {
   readonly leaseSweepIntervalMs?: number;
   /** How often queued peer messages are re-offered to the runtime when an earlier attempt could not run. */
   readonly messageDeliveryRetryIntervalMs?: number;
+  readonly desktopChat?: {
+    readonly sessionFactory: WorkerCodexAppServerSessionFactory;
+    readonly runtimeMcp: CodexRuntimeMcpLaunchSpec;
+    readonly openDesktop?: (threadId: string) => Promise<void>;
+  };
   readonly codexRuntime?: {
     readonly cwd: string;
     readonly localAccess?: LocalAccessPolicy;
     readonly model?: string;
     readonly sessionFactory: WorkerCodexAppServerSessionFactory;
     readonly runtimeMcp?: CodexRuntimeMcpLaunchSpec;
+    readonly openDesktop?: (threadId: string) => Promise<void>;
   };
 }
 
@@ -156,6 +164,18 @@ export const startAgentTeamsWorker = async (
       return undefined;
     }
     if (command.envelope.type === 'team.message.deliver') {
+      if (command.envelope.teamId && desktopChats?.hasChat(command.envelope.teamId)) {
+        const p = teamMessageDeliveryPayloadSchema.parse(command.envelope.payload);
+        desktopChats.receive({
+          id: p.messageId,
+          teamId: command.envelope.teamId,
+          senderMembershipId: p.senderMembershipId,
+          recipientMembershipId: p.recipientMembershipId,
+          text: p.message,
+          sentAt: p.sentAt,
+        });
+        return undefined;
+      }
       messageStore.acceptDelivery(command, activeMessageScope());
       return undefined;
     }
@@ -708,6 +728,54 @@ export const startAgentTeamsWorker = async (
     void messageDeliveryPromise.catch(() => undefined);
   };
 
+  const desktopOptions = options.desktopChat ?? options.codexRuntime;
+  const desktopChats =
+    desktopOptions?.runtimeMcp === undefined
+      ? undefined
+      : new DesktopChatService({
+          dataDir: options.dataDir,
+          nodeId: options.nodeId,
+          memberships: membershipStore,
+          factory: desktopOptions.sessionFactory,
+          mcp: desktopOptions.runtimeMcp,
+          connected: () => status.state === 'connected',
+          deliverAssignment: async (message) => {
+            const scope = activeMessageScope();
+            const identity = assignmentStore.activeLeaseIdentity();
+            if (
+              !runtimeSupervisor ||
+              !scope ||
+              !identity ||
+              scope.teamId !== message.teamId ||
+              scope.membershipId !== message.recipientMembershipId
+            )
+              return false;
+            const binding = runtimeSupervisor
+              .listBindings()
+              .find(
+                (b) =>
+                  b.attemptId === scope.attemptId &&
+                  b.state === 'completed' &&
+                  !b.reconciliationState
+              );
+            const assignment = assignmentStore.get(scope.assignmentId);
+            if (!binding?.threadId || !assignment?.leaseExpiresAt) return false;
+            await runtimeSupervisor.startTurn({
+              ...identity,
+              threadId: binding.threadId,
+              appServerGeneration: binding.appServerGeneration,
+              leaseExpiresAt: assignment.leaseExpiresAt,
+              message: `Agent Teams message ${message.id} from membership ${message.senderMembershipId}:\n${message.text}\nReply using agent-teams-runtime.message_send to that membership. Do not acknowledge acknowledgements.`,
+            });
+            return true;
+          },
+          send: (message) => {
+            if (socket?.readyState === WebSocket.OPEN)
+              socket.send(JSON.stringify({ type: 'worker.desktop_message', message }));
+          },
+          ...(desktopOptions.openDesktop ? { openDesktop: desktopOptions.openDesktop } : {}),
+        });
+
   const executeRuntimeTool = (input: {
     readonly token: string;
     readonly toolName: string;
@@ -845,6 +913,7 @@ export const startAgentTeamsWorker = async (
           workerInstanceId: options.workerInstanceId,
           workerGeneration: options.workerGeneration,
           label: options.label,
+          ...(desktopChats ? { desktopPairingHash: desktopChats.store.pairingHash } : {}),
           ...(options.autoJoinTeamId === undefined
             ? {}
             : { autoJoinTeamId: options.autoJoinTeamId }),
@@ -858,6 +927,45 @@ export const startAgentTeamsWorker = async (
 
     socket.on('message', (data) => {
       const message = relayToWorkerMessageSchema.parse(JSON.parse(data.toString('utf8')));
+      if (message.type === 'relay.desktop_control') {
+        void (
+          desktopChats
+            ? desktopChats.action(message.request)
+            : Promise.reject(new Error('Desktop team chats are not enabled'))
+        ).then(
+          (result) =>
+            socket?.send(
+              JSON.stringify({
+                type: 'worker.desktop_result',
+                requestId: message.request.requestId,
+                result,
+              })
+            ),
+          (error) =>
+            socket?.send(
+              JSON.stringify({
+                type: 'worker.desktop_result',
+                requestId: message.request.requestId,
+                error: String(error instanceof Error ? error.message : error).slice(0, 512),
+              })
+            )
+        );
+        return;
+      }
+      if (message.type === 'relay.desktop_message') {
+        if (desktopChats) {
+          desktopChats.receive(message.message);
+          socket?.send(
+            JSON.stringify({ type: 'worker.desktop_message_ack', id: message.message.id })
+          );
+        }
+        return;
+      }
+      if (message.type === 'relay.desktop_message_ack') {
+        // Rejected messages are not retried forever; the durable local inbox retains the payload.
+        desktopChats?.store.acknowledge(message.id);
+        return;
+      }
       if (message.type === 'relay.error') {
         if (!readyResolved) rejectReady(new Error(`${message.code}: ${message.message}`));
         socket?.close(4000, message.code);
@@ -878,6 +986,7 @@ export const startAgentTeamsWorker = async (
         heartbeatTimer = setInterval(sendHeartbeat, message.heartbeatIntervalMs);
         flushPendingEvents();
         flushRuntimeEvents();
+        desktopChats?.flush();
         return;
       }
       if (message.type === 'relay.event_ack') {
@@ -1001,6 +1110,15 @@ export const startAgentTeamsWorker = async (
       rejectAssignment,
       deferAssignment,
       executeRuntimeTool,
+      ...(desktopChats
+        ? {
+            desktopChatAction: (input: unknown) => desktopChats.action(input),
+            desktopChatPrepare: (input: unknown) => desktopChats.prepare(input),
+            desktopChatBind: (input: unknown) => desktopChats.bind(input),
+            desktopChatTool: (token: string, tool: string, input: unknown) =>
+              desktopChats.tool(token, tool, input),
+          }
+        : {}),
     });
   }
   sweepExpiredLeases();
@@ -1051,6 +1169,7 @@ export const startAgentTeamsWorker = async (
       }
       updateStatus({ state: 'stopped' });
       await persistStatus();
+      await desktopChats?.close();
       await runtimeSupervisor?.close();
       await messageDeliveryPromise?.catch(() => undefined);
       assignmentStore.close();

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { canProfileInvokeTool, type PublicMcpToolName } from '@claude-teams/agent-teams-protocol';
 import { FastMCP } from 'fastmcp';
 import { z } from 'zod';
@@ -91,9 +92,16 @@ export const createOwnerControlToolDefinitions = (
       description: 'Show the local personal-agent identity and Worker connection context',
       parameters: emptyParameters,
       execute: async () =>
-        jsonContent(
-          await requestWorkerControl<WorkerAgentContextProjection>(socketPath, '/v2/agent-context')
-        ),
+        jsonContent({
+          ...(await requestWorkerControl<WorkerAgentContextProjection>(
+            socketPath,
+            '/v2/agent-context'
+          )),
+          teamChats: await requestWorkerControl(socketPath, '/v2/desktop-chat/action', {
+            method: 'POST',
+            body: { action: 'context', requestId: randomUUID() },
+          }).catch(() => null),
+        }),
     },
     {
       name: 'worker_status',

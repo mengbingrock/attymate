@@ -255,6 +255,38 @@ the installer options the page offers only the clone steps; without the reposito
 installer. Pages are sent with a strict Content-Security-Policy (no third-party origins, no inline
 script), `nosniff`, and `no-referrer`, and render manager-supplied text with `textContent` only.
 
+Native fork distributions can publish separate archives with repeated
+`--join-worker-bundle-platform <platform>=<archive>` flags instead of `--join-worker-bundle`.
+Archives also contain the corresponding `codex-runtime/<platform>/` package and manifest; see
+[the teammate installer](../../packages/agent-teams-worker/installer/README.md). The public catalog
+and successful token check expose `installerPlatforms`. The download POST then takes
+`{"token":"<team token>","platform":"darwin-x64"}`. Only configured builds are offered, and a
+missing or unavailable platform returns 400. Legacy single-archive downloads remain supported.
+Installer responses stream base64 in bounded chunks with an exact content length, avoiding a
+second complete in-memory copy of a native runtime's shell installer.
+
+The published page is [relay.truegrit.dev/next/join/](https://relay.truegrit.dev/next/join/);
+the domain root redirects there. It offers the tested Intel Mac and Linux x64 builds. Users pick
+a team, enter their join token and member name, select their computer, download and run the
+installer, then copy the displayed `attach.sh` command to open the customized local Codex client.
+The installer reuses the current `$CODEX_HOME` or `~/.codex` sign-in by default without copying
+credentials. `--private-codex-home` selects a separate sign-in. The fork's state database is kept
+under the installation with a process-local `sqlite_home` override, and its socket is separate
+from the user's normal daemon. Existing home permissions and configuration are not changed.
+Apple Silicon is offered only after a native `darwin-arm64` archive has been staged and configured.
+
+To publish the portal while existing teams keep running, use the same compiled CLI in a separate
+process with `--installer-portal-only --upstream-url http://127.0.0.1:43181`. This process needs no
+manager or Worker credential: it delegates listing, token checks, token revocation, and rate limits
+to the existing Relay's public join API. Its upstream must be a loopback HTTP origin. It owns no
+team database or execution leases. Route `/next/join/*` to it while stripping `/next`; leave other
+`/next/*` traffic, including Worker WebSockets, on the original Relay. Caddy can hot-reload this
+route without restarting that Relay. The current service is `agent-teams-installer-portal.service`
+on loopback port 43182; its immutable release directory is under
+`~/agent-teams-next/releases/web-installers-20261026T015209Z/`. Deployment and archive-download
+verification reports are stored there. Do not use the original Relay's SQLite database in a second
+Relay process to publish installer changes.
+
 Failed token checks are rate limited per client (20 per 10 minutes by default). Behind a loopback
 reverse proxy the Relay trusts only the proxy's own, last `X-Forwarded-For` entry. When the proxy
 itself sees every client as loopback (for example a TCP pass-through in front of it without the PROXY
@@ -343,3 +375,58 @@ Use `--codex-home <path>` to select a different dedicated home. `status` reports
 reading or printing credential contents. `setup` is separate: it manages the control MCP entry in
 the operator-facing Codex configuration, while the isolated home is used only by distributed App
 Server execution.
+
+
+## Desktop team chats
+
+The relay join portal now also drives membership-scoped desktop chats. This extension stays in
+the existing distributed protocol/relay/worker packages; the standalone portal remains separate
+from the Electron feature facade. `desktopChat.ts` owns wire validation, `RelayDesktopChats`
+owns paired-device routing and durable message delivery, and `DesktopChatService` owns local
+binding policy, persistence, and App Server operations.
+
+A private local pairing code is hashed in the Worker hello. `POST /join/api/desktop` authenticates
+that code, lists only the paired node's active memberships, and dispatches validated `context`,
+`open`, `attach`, or `default` commands over its existing authenticated Worker connection.
+The public directory does not expose node identifiers or pairing hashes. The standalone installer
+portal forwards these operations to the core relay, which remains the membership authority.
+
+Bindings persist in `desktop-chats.sqlite` with a separate credential per chat. The tools exposed
+under `agent-teams-runtime` are `runtime_context`, `team_membership_list`, `message_send`, and
+`message_list`. They use membership scope, never a fabricated task/lease. Task progress and result
+submission remain in the existing leased-assignment MCP profile. Every invocation checks current
+membership, and the bridge fails closed while disconnected. Role changes are read from the latest
+membership snapshot rather than a stale credential payload.
+
+`desktopTransport.ts` attaches the selected configuration on desktop `thread/start` and
+`thread/resume`, using the existing fork API. A new default applies only to new chats. Other
+connections, including direct CLI connections, do not inherit this desktop default. Per-chat
+credentials are independent of the assignment supervisor's rotating token file. Fresh chats record
+a developer context item via `thread/inject_items` so legacy history is durable before desktop
+resume, without fabricating a user turn or model response.
+
+Membership messages are validated at the relay against the authenticated sender node and both
+active memberships. Both ends persist messages; reconnect retries use stable message IDs.
+Incoming messages enter the most recently created bound chat for that membership when it is idle.
+The model is told not to acknowledge acknowledgements. If there is no desktop chat, a completed
+active assignment can receive the message using its existing supervisor. Replies from leased
+assignments use the original message route and are diverted to a selected desktop chat locally.
+Delivery is at least once across a crash between submitting a turn and recording its receipt;
+the injected message includes its ID for duplicate recognition. It does not promise exactly-once
+model execution.
+
+Verification: `desktopTeamChats.test.ts`, `desktopTransport.test.ts`, and `joinPortal.test.ts` cover
+binding persistence, scoped tools, revoked/cross-team access, paired routing, acknowledgements,
+text framing, default selection, and the UI flow. `scripts/smoke/desktop-team-chat.ts` is an opt-in
+live echo and Worker-restart test against an explicitly supplied daemon; it creates only isolated
+test teams/workspaces and never copies login credentials.
+
+The macOS installer supervisor raises its soft file-descriptor limit to at least 4096 when
+permitted. Persistent chat MCP subprocesses keep pipes open, so launchd's default limit of 256
+can otherwise prevent later chats from initializing their required tools.
+
+Live verification on the Intel Mac covered member-to-lead echo and reply, Worker restart with the
+same chat credential, new-chat default selection, desktop resume, and the deployed portal opening
+a visible chat that successfully called `runtime_context`. Both published macOS x64 and Linux x64
+installer payloads were downloaded and checksum-verified. Linux desktop launch is not supported;
+the Linux package was verified as a downloadable runtime, not through a GUI smoke test.

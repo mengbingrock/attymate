@@ -17,6 +17,35 @@ const runWorkerCli = async (args: readonly string[]): Promise<string> => {
 };
 
 describe('agent-teams-worker setup CLI', () => {
+  it('requires an explicit shared socket for connect-only and reports its configuration', async () => {
+    await expect(runWorkerCli(['status', '--app-server-connect-only'])).rejects.toThrow(
+      /requires shared-daemon mode and --app-server-socket/
+    );
+    await expect(
+      runWorkerCli(['status', '--app-server-mode', 'shared-daemon', '--app-server-connect-only'])
+    ).rejects.toThrow(/requires shared-daemon mode and --app-server-socket/);
+    const testDir = await mkdtemp(join(tmpdir(), 'agent-teams-fork-cli-'));
+    const status = JSON.parse(
+      await runWorkerCli([
+        'status',
+        '--data-dir',
+        testDir,
+        '--codex-config',
+        join(testDir, 'config.toml'),
+        '--app-server-mode',
+        'shared-daemon',
+        '--app-server-connect-only',
+        '--app-server-socket',
+        join(testDir, 'fork.sock'),
+      ])
+    );
+    expect(status.appServer).toEqual({
+      mode: 'shared-daemon',
+      connectOnly: true,
+      socketPath: join(testDir, 'fork.sock'),
+    });
+  });
+
   it('registers, reports, and removes only the owned Codex MCP entry', async () => {
     const testDir = await mkdtemp(join(tmpdir(), 'agent-teams-worker-cli-'));
     const dataDir = join(testDir, 'worker');

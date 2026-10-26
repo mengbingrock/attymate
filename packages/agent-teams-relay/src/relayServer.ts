@@ -55,6 +55,7 @@ import {
   registerTeamDirectoryManagerRoutes,
   type RelayJoinPortalOptions,
 } from './relayJoinPortal';
+import { RelayDesktopChats } from './relayDesktopChats';
 import { RelayTeamDirectoryStore } from './relayTeamDirectoryStore';
 
 export interface AgentTeamsRelayOptions {
@@ -101,7 +102,8 @@ const defaultOfferText = (
   leaderless: boolean,
   role: 'lead' | 'member'
 ): { readonly title: string; readonly description: string } => {
-  if (leaderless) return { title: LEADERLESS_MEMBER_TITLE, description: LEADERLESS_MEMBER_DESCRIPTION };
+  if (leaderless)
+    return { title: LEADERLESS_MEMBER_TITLE, description: LEADERLESS_MEMBER_DESCRIPTION };
   if (role === 'lead') {
     return {
       title: 'Lead the distributed team',
@@ -208,6 +210,19 @@ export const startAgentTeamsRelay = async (
   const leaseStore = new RelayLeaseStore(options.dataDir, options.leaseDurationMs);
   const membershipRouteStore = new RelayMembershipRouteStore(options.dataDir);
   const teamDirectory = new RelayTeamDirectoryStore(options.dataDir);
+  const desktopChats = new RelayDesktopChats({
+    dataDir: options.dataDir,
+    workers: () =>
+      [...sessions.values()].map((s) => ({
+        nodeId: s.hello.nodeId,
+        label: s.hello.label,
+        pairingHash: s.hello.desktopPairingHash,
+        send: (value) => s.socket.send(JSON.stringify(value)),
+      })),
+    memberships: () => membershipRouteStore.listAll(),
+    teamName: (id) => teamDirectory.list().find((t) => t.teamId === id)?.name ?? id,
+  });
+  if (options.joinPortal) desktopChats.register(app);
   const upgradeTeamScopes = new WeakMap<IncomingMessage, WorkerTeamScope>();
   const runtimeSessionStore = new RelayRuntimeSessionStore();
   const auth =
@@ -300,7 +315,10 @@ export const startAgentTeamsRelay = async (
     return record;
   };
 
-  function broadcastMembershipSnapshot(teamIdInput: string, additionalNodeIds: NodeId[] = []): void {
+  function broadcastMembershipSnapshot(
+    teamIdInput: string,
+    additionalNodeIds: NodeId[] = []
+  ): void {
     const teamId = teamIdSchema.parse(teamIdInput);
     const members = membershipRouteStore.listActiveForTeam(teamId);
     const payload = teamMembershipSnapshotPayloadSchema.parse({
@@ -358,8 +376,7 @@ export const startAgentTeamsRelay = async (
     const leaderless = membershipRouteStore.isLeaderless(teamId);
     if (leaderless && requested.role === 'lead') throw new RelayTeamLeaderlessError(teamId);
     const role =
-      requested.role ??
-      (leaderless || membershipRouteStore.activeLead(teamId) ? 'member' : 'lead');
+      requested.role ?? (leaderless || membershipRouteStore.activeLead(teamId) ? 'member' : 'lead');
     const defaults = defaultOfferText(leaderless, role);
     const offer = enqueueCommand({
       protocolVersion: 2,
@@ -400,15 +417,12 @@ export const startAgentTeamsRelay = async (
   };
 
   const assignmentOffersForMembership = (membershipId: MembershipId) =>
-    commandStore
-      .listAll()
-      .filter((command) => {
-        if (command.envelope.type !== 'assignment.offer') return false;
-        return (
-          assignmentOfferPayloadSchema.parse(command.envelope.payload).membershipId ===
-          membershipId
-        );
-      });
+    commandStore.listAll().filter((command) => {
+      if (command.envelope.type !== 'assignment.offer') return false;
+      return (
+        assignmentOfferPayloadSchema.parse(command.envelope.payload).membershipId === membershipId
+      );
+    });
 
   const assignmentIdsForMembership = (membershipId: MembershipId): AssignmentId[] =>
     assignmentOffersForMembership(membershipId).flatMap((command) =>
@@ -455,9 +469,7 @@ export const startAgentTeamsRelay = async (
     if (['rejected', 'completed', 'cancelled', 'failed', 'fenced'].includes(state.state)) {
       return false;
     }
-    return (
-      Date.now() - Date.parse(latestStateEvent.receivedAt) < MEMBERSHIP_REACTIVATION_GRACE_MS
-    );
+    return Date.now() - Date.parse(latestStateEvent.receivedAt) < MEMBERSHIP_REACTIVATION_GRACE_MS;
   };
 
   const reactivateActiveMembershipsForNode = (nodeId: NodeId): void => {
@@ -569,10 +581,7 @@ export const startAgentTeamsRelay = async (
     if (
       leaseStore
         .listAll()
-        .some(
-          (lease) =>
-            lease.nodeId === nodeId && ['granted', 'active'].includes(lease.status)
-        )
+        .some((lease) => lease.nodeId === nodeId && ['granted', 'active'].includes(lease.status))
     ) {
       return;
     }
@@ -796,15 +805,17 @@ export const startAgentTeamsRelay = async (
       );
     }
     leaseStore.expireThrough();
-    const holdsLease = leaseStore.listAll().some(
-      (lease) =>
-        lease.assignmentId === event.assignmentId &&
-        lease.attemptId === event.attemptId &&
-        lease.leaseEpoch === event.leaseEpoch &&
-        lease.nodeId === sourceNodeId &&
-        lease.teamId === event.teamId &&
-        ['granted', 'active'].includes(lease.status)
-    );
+    const holdsLease = leaseStore
+      .listAll()
+      .some(
+        (lease) =>
+          lease.assignmentId === event.assignmentId &&
+          lease.attemptId === event.attemptId &&
+          lease.leaseEpoch === event.leaseEpoch &&
+          lease.nodeId === sourceNodeId &&
+          lease.teamId === event.teamId &&
+          ['granted', 'active'].includes(lease.status)
+      );
     if (!holdsLease) throw new TypeError('Team membership actor does not hold the active lease');
     return actor;
   };
@@ -1171,6 +1182,7 @@ export const startAgentTeamsRelay = async (
           reconcileAdvertisedMembershipForNode(hello.nodeId);
           reactivateActiveMembershipsForNode(hello.nodeId);
           maybeGrantNextAssignment(hello.nodeId);
+          desktopChats.flush(hello.nodeId);
           void persistProjection();
           return;
         }
@@ -1180,6 +1192,7 @@ export const startAgentTeamsRelay = async (
           socket.close(4002, 'Worker session is no longer current');
           return;
         }
+        if (desktopChats.handle(boundNodeId, input)) return;
         const inputType =
           typeof input === 'object' && input !== null && 'type' in input ? input.type : undefined;
         if (inputType === 'worker.command_ack') {
@@ -1450,6 +1463,7 @@ export const startAgentTeamsRelay = async (
     listLeases: () => leaseStore.listAll(),
     listMembershipRoutes: () => membershipRouteStore.listAll(),
     close: async () => {
+      desktopChats.close();
       for (const session of sessions.values()) {
         session.socket.close(1001, 'Relay shutting down');
       }

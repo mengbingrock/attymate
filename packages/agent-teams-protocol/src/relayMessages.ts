@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+  relayDesktopControlSchema,
+  relayDesktopMessageSchema,
+  desktopMessageAckSchema,
+} from './desktopChat';
 
 import {
   assignmentIdSchema,
@@ -56,6 +61,10 @@ export const workerHelloMessageSchema = z
     workerInstanceId: workerInstanceIdSchema,
     workerGeneration: z.number().int().positive(),
     label: z.string().trim().min(1).max(128),
+    desktopPairingHash: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
     autoJoinTeamId: teamIdSchema.optional(),
     runtimeCapabilities: z.array(runtimeSessionCapabilitySchema).max(32).optional(),
     lastInboundCursor: z.number().int().nonnegative(),
@@ -150,6 +159,9 @@ export const workerToRelayMessageSchema = z.discriminatedUnion('type', [
 ]);
 
 export const relayToWorkerMessageSchema = z.discriminatedUnion('type', [
+  relayDesktopControlSchema,
+  relayDesktopMessageSchema,
+  desktopMessageAckSchema.extend({ type: z.literal('relay.desktop_message_ack') }),
   relayWelcomeMessageSchema,
   relayHeartbeatAckMessageSchema,
   relayCommandMessageSchema,

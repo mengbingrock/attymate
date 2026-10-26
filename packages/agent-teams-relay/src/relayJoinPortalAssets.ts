@@ -22,6 +22,19 @@ export const JOIN_PORTAL_HTML = String.raw`<!doctype html>
   </div>
 </header>
 <main class="wrap">
+  <section class="intro desktop-panel" aria-labelledby="desktop-title">
+    <h2 id="desktop-title">Your desktop team</h2>
+    <p>Pair your installed device, choose its team, and open a connected Codex chat.</p>
+    <form id="desktop-pair">
+      <label class="field"><span>Private device pairing code</span><input id="desktop-code" type="password" autocomplete="off" required aria-describedby="desktop-help"></label>
+      <p id="desktop-help" class="muted">Use the code printed by the installer. It controls this device; keep it private.</p>
+      <button type="submit" class="primary">Connect device</button>
+    </form>
+    <p id="desktop-status" role="status" aria-live="polite"></p>
+    <label class="field"><span>Existing chat ID or Codex chat link (optional)</span><input id="desktop-thread" type="text" autocomplete="off" placeholder="Paste a chat link to attach an idle personal chat"></label>
+    <div id="desktop-teams"></div>
+    <div id="desktop-chats"></div>
+  </section>
   <section class="intro">
     <h1>Join a team</h1>
     <p>Pick a team, unlock it with the join token its owner gave you, and connect this computer as a member.
@@ -33,6 +46,7 @@ export const JOIN_PORTAL_HTML = String.raw`<!doctype html>
       <input id="filter" type="search" placeholder="Filter teams" autocomplete="off" spellcheck="false">
     </label>
     <span id="count" class="muted"></span>
+    <button id="refresh" type="button" class="secondary">Refresh</button>
   </div>
   <p id="status" class="status" role="status" aria-live="polite">Loading teams…</p>
   <ul id="teams" class="teams"></ul>
@@ -67,18 +81,35 @@ export const JOIN_PORTAL_HTML = String.raw`<!doctype html>
       <p class="success" role="status">Token accepted. Choose how to connect this computer.</p>
 
       <section class="option" id="option-installer">
-        <h3><span class="step">1</span>One command</h3>
-        <p class="muted">For macOS or Linux with the Codex CLI installed and signed in. It installs a background service that uses your existing Codex home.</p>
+        <h3><span class="step">1</span>Install and start</h3>
+        <p class="muted">For macOS or Linux. Includes the team's forked Codex runtime and starts its customized App Server using your existing Codex login. If you are not signed in yet, the installer guides you through sign-in.</p>
+        <label class="field" id="platform-field" hidden>
+          <span>Your computer</span>
+          <select id="platform" aria-describedby="platform-help"></select>
+          <small id="platform-help">Choose the build that matches this computer. On a Mac, check Apple menu → About This Mac for its chip or processor.</small>
+        </label>
         <button id="download" type="button" class="primary">Download installer</button>
         <p id="download-error" class="error" role="alert" hidden></p>
-        <p class="muted">Then run it:</p>
+        <p class="muted">After the download finishes, run this in Terminal. The installer reuses your Codex sign-in and starts your team member:</p>
         <div class="code"><pre id="run-command"></pre><button type="button" class="copy" data-copy="run-command">Copy</button></div>
         <p class="warn">The installer contains your join token. Keep it to yourself.</p>
+        <p class="muted">For a separate Codex sign-in, add <code>--private-codex-home</code> to the install command.</p>
+      </section>
+
+      <section class="option" id="option-attach">
+        <h3><span class="step">2</span>Open Codex</h3>
+        <p class="muted">When installation reports Connected, run this in Terminal to open your team's local Codex client:</p>
+        <div class="code"><pre id="attach-command"></pre><button type="button" class="copy" data-copy="attach-command">Copy</button></div>
+        <div id="desktop-option" hidden>
+          <p class="muted">On macOS, open your installed Codex desktop app with the same App Server:</p>
+          <div class="code"><pre id="desktop-command"></pre><button type="button" class="copy" data-copy="desktop-command">Copy</button></div>
+          <p class="muted">Uses a separate app window and profile. Install Codex desktop separately; the launcher also detects Codex in the ChatGPT desktop app.</p>
+        </div>
       </section>
 
       <section class="option" id="option-clone">
         <h3><span class="step">2</span>From a clone</h3>
-        <p class="muted">Run the worker from source. Needs Node 24.15 or newer, pnpm, and the Codex CLI signed in.</p>
+        <p class="muted">Run the worker from source. Needs Node 24.15 or newer, pnpm, and the team's forked Codex package. Start its App Server separately and connect the worker and client to that socket.</p>
         <div class="code"><pre id="clone-commands"></pre><button type="button" class="copy" data-copy="clone-commands">Copy</button></div>
         <p class="muted">Keep it running in tmux or a login service. To restart later, rerun the last block.</p>
       </section>
@@ -154,6 +185,18 @@ body {
 .intro { padding: 40px 0 8px; }
 .intro h1 { font-size: 28px; line-height: 1.2; letter-spacing: -.02em; margin: 0 0 8px; }
 .intro p { margin: 0; color: var(--muted); max-width: 62ch; }
+.desktop-panel h2 { margin: 0 0 8px; font-size: 24px; letter-spacing: -.02em; }
+.desktop-panel > p { margin-bottom: 18px; }
+#desktop-pair { margin: 18px 0 12px; }
+#desktop-pair .muted { margin: 0 0 12px; font-size: 13px; }
+#desktop-status:empty { display: none; }
+#desktop-status { padding: 10px 12px; background: var(--surface-2); border-radius: 8px; }
+#desktop-teams .option { padding-bottom: 12px; }
+#desktop-teams button, #desktop-chats button { margin: 6px 8px 0 0; }
+#desktop-chats { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 12px; }
+#desktop-chats button { font-size: 13px; font-weight: 500; }
+#desktop-chats h3 { flex-basis: 100%; margin: 4px 0; font-size: 14px; }
+button:disabled { opacity: .6; cursor: progress; }
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 24px 0 12px; }
 .search { flex: 1; max-width: 360px; }
 input {
@@ -185,6 +228,14 @@ input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); ou
 .team p { margin: 0; color: var(--muted); grid-column: 1; overflow-wrap: anywhere; }
 .team .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; grid-column: 1; margin-top: 6px; font-size: 13px; color: var(--muted); }
 .team .actions { grid-column: 2; grid-row: 1 / span 3; }
+.team .roster { grid-column: 1 / -1; border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
+.roster h3 { font-size: 13px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+.member-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.member { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.member-name { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.member-role { color: var(--muted); }
+.member-status { margin-left: auto; color: var(--muted); white-space: nowrap; }
+.member-status.online { color: var(--ok); }
 .badge { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 9px; }
 .badge.leaderless { color: var(--peer); background: var(--peer-soft); }
 .badge.led { color: var(--led); background: var(--led-soft); }
@@ -202,7 +253,8 @@ dialog::backdrop { background: rgba(8, 12, 18, .55); }
 .sheet-head h2 { margin: 0; font-size: 20px; letter-spacing: -.01em; overflow-wrap: anywhere; }
 .eyebrow { margin: 0 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .unlock { display: grid; gap: 14px; }
-.field { display: grid; gap: 6px; }
+.field { display: grid; gap: 6px; margin-bottom: 12px; }
+.field select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; width: 100%; }
 .field > span { font-weight: 600; font-size: 14px; }
 .field small { color: var(--muted); font-size: 12.5px; }
 .error { color: var(--danger); margin: 0; }
@@ -240,6 +292,8 @@ export const JOIN_PORTAL_APP_JS = String.raw`
   'use strict';
   var LABEL_PATTERN = /^[A-Za-z0-9._-]{1,40}$/;
   var teams = [];
+  var loading = false;
+  var loaded = false;
   var current = null; // { team, token, label, verified }
 
   function $(id) { return document.getElementById(id); }
@@ -260,7 +314,8 @@ export const JOIN_PORTAL_APP_JS = String.raw`
     var list = $('teams');
     var query = $('filter').value.trim().toLowerCase();
     var shown = teams.filter(function (team) {
-      return !query || (team.name + ' ' + team.description).toLowerCase().indexOf(query) !== -1;
+      var names = (team.memberList || []).map(function (member) { return member.label; }).join(' ');
+      return !query || (team.name + ' ' + team.description + ' ' + names).toLowerCase().indexOf(query) !== -1;
     });
     list.replaceChildren();
     shown.forEach(function (team) {
@@ -283,6 +338,29 @@ export const JOIN_PORTAL_APP_JS = String.raw`
       button.addEventListener('click', function () { openJoin(team); });
       actions.appendChild(button);
       item.appendChild(actions);
+      var roster = el('section', 'roster');
+      roster.setAttribute('aria-label', 'Members of ' + team.name);
+      roster.appendChild(el('h3', '', 'Team members'));
+      if (Array.isArray(team.memberList)) {
+        var members = el('ul', 'member-list');
+        team.memberList.forEach(function (member) {
+          var row = el('li', 'member');
+          row.appendChild(el('span', 'member-name', member.label));
+          row.appendChild(el('span', 'member-role', member.role === 'lead' ? 'Lead' : 'Member'));
+          var status = el('span', 'member-status' + (member.online ? ' online' : ''));
+          var indicator = el('span', 'dot' + (member.online ? ' on' : ''));
+          indicator.setAttribute('aria-hidden', 'true');
+          status.appendChild(indicator);
+          status.appendChild(document.createTextNode(member.online ? 'Online' : 'Offline'));
+          row.appendChild(status);
+          members.appendChild(row);
+        });
+        if (team.memberList.length) roster.appendChild(members);
+        else roster.appendChild(el('p', '', 'No members have joined yet.'));
+      } else {
+        roster.appendChild(el('p', '', 'Member details are unavailable.'));
+      }
+      item.appendChild(roster);
       list.appendChild(item);
     });
     $('count').textContent = teams.length ? shown.length + ' of ' + teams.length + ' team' + (teams.length === 1 ? '' : 's') : '';
@@ -292,16 +370,24 @@ export const JOIN_PORTAL_APP_JS = String.raw`
   }
 
   function loadTeams() {
+    if (loading) return;
+    loading = true;
+    $('refresh').disabled = true;
     fetch('api/teams', { headers: { accept: 'application/json' }, cache: 'no-store' })
       .then(function (response) {
         if (!response.ok) throw new Error('HTTP ' + response.status);
         return response.json();
       })
       .then(function (body) {
-        teams = body.teams || [];
-        renderTeams();
+        var next = body.teams || [];
+        if (!loaded || JSON.stringify(next) !== JSON.stringify(teams) || $('status').classList.contains('error-state')) {
+          teams = next;
+          loaded = true;
+          renderTeams();
+        }
       })
-      .catch(function () { setStatus('Could not load teams from the relay. Try again shortly.', true); });
+      .catch(function () { setStatus('Could not refresh teams. Displayed member status may be out of date. Try Refresh.', true); })
+      .then(function () { loading = false; $('refresh').disabled = false; });
   }
 
   function openJoin(team) {
@@ -391,7 +477,7 @@ export const JOIN_PORTAL_APP_JS = String.raw`
       '',
       '# 2. Save the token and a fixed identity (once)',
       'D=~/.local/share/agent-teams/team-' + team8,
-      'mkdir -p "$D/data" ~/agent-teams-workspace && chmod 700 "$D" ~/.codex',
+      'mkdir -p "$D/data" "$D/codex-home" ~/agent-teams-workspace && chmod 700 "$D" "$D/codex-home"',
       'cat > "$D/worker.env" <<EOF',
       'AGENT_TEAMS_RELAY_WORKER_TOKEN=' + current.token,
       'AGENT_TEAMS_AUTO_JOIN_TEAM_ID=' + current.team.teamId,
@@ -402,16 +488,26 @@ export const JOIN_PORTAL_APP_JS = String.raw`
       'EOF',
       'chmod 600 "$D/worker.env"',
       '',
-      '# 3. Start the worker (from the agent-teams folder; rerun to restart)',
+      '# 3. Sign in and start the customized App Server in a separate terminal',
+      'CODEX=/absolute/path/to/fork/bin/codex',
+      'CODEX_HOME="$D/codex-home" "$CODEX" login',
+      'CODEX_HOME="$D/codex-home" "$CODEX" app-server --listen unix://"$D/app-server.sock"',
+      '',
+      '# 4. Start the worker (from the agent-teams folder, in another terminal)',
       'D=~/.local/share/agent-teams/team-' + team8,
+      'CODEX=/absolute/path/to/fork/bin/codex',
       'set -a; . "$D/worker.env"; set +a',
       'pnpm --filter @claude-teams/agent-teams-worker dev start \\',
       '  --relay ' + body.workerStreamUrl + ' \\',
       '  --label ' + current.label + ' \\',
       '  --data-dir "$D/data" --control-socket /tmp/agent-teams-' + team8 + '.sock \\',
-      '  --codex-home ~/.codex --runtime-cwd ~/agent-teams-workspace \\',
+      '  --codex-binary "$CODEX" --codex-home "$D/codex-home" --runtime-cwd ~/agent-teams-workspace \\',
+      '  --app-server-mode shared-daemon --app-server-connect-only --app-server-socket "$D/app-server.sock" \\',
       '  --organization-id "$ORG" --person-id "$PERSON" \\',
-      '  --node-id "$NODE" --worker-instance-id "$INSTANCE"'
+      '  --node-id "$NODE" --worker-instance-id "$INSTANCE"',
+      '',
+      '# 5. Attach the fork client in another terminal (use the same D and CODEX paths)',
+      'CODEX_HOME="$D/codex-home" "$CODEX" agents --remote unix://"$D/app-server.sock"'
     ].join('\n');
   }
 
@@ -420,21 +516,60 @@ export const JOIN_PORTAL_APP_JS = String.raw`
     $('unlock').hidden = true;
     $('unlocked').hidden = false;
     $('option-installer').hidden = !body.installerAvailable;
-    $('run-command').textContent = 'bash ~/Downloads/agent-teams-join-' + team8 + '.sh --label ' + current.label;
-    $('option-clone').hidden = !body.repository;
+    $('option-attach').hidden = !body.installerAvailable;
+    current.platforms = body.installerPlatforms || [];
+    var select = $('platform');
+    select.replaceChildren();
+    if (current.platforms.length) {
+      var placeholder = el('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Choose your computer';
+      select.appendChild(placeholder);
+      current.platforms.forEach(function (platform) {
+        var option = el('option');
+        option.value = platform.id;
+        option.textContent = platform.label;
+        select.appendChild(option);
+      });
+      if (current.platforms.length === 1) select.value = current.platforms[0].id;
+    }
+    $('platform-field').hidden = !current.platforms.length;
+    updateInstallerSelection();
+    $('attach-command').textContent = 'bash "$HOME/.local/share/agent-teams/mate-' + team8 + '/bin/attach.sh"';
+    $('option-clone').hidden = !body.repository || body.installerAvailable;
     if (body.repository) $('clone-commands').textContent = cloneCommands(body);
     $('token').value = '';
-    ($('download').hidden ? $('close') : $('download')).focus();
+    (current.platforms.length > 1 ? select : body.installerAvailable ? $('download') : $('close')).focus();
+  }
+
+  function installerFilename() {
+    return 'agent-teams-join-' + current.team.teamId.slice(0, 8) +
+      (current.platform ? '-' + current.platform : '') + '.sh';
+  }
+
+  function updateInstallerSelection() {
+    if (!current) return;
+    current.platform = $('platform').value || '';
+    var ready = !current.platforms.length || Boolean(current.platform);
+    $('download').disabled = !ready;
+    $('download').textContent = 'Download installer';
+    $('run-command').textContent = ready ? 'bash ~/Downloads/' + installerFilename() + ' --label ' + current.label : 'Choose your computer above to get its install command.';
+    $('desktop-option').hidden = !current.platform || current.platform.indexOf('darwin-') !== 0;
+    $('desktop-command').textContent = 'bash "$HOME/.local/share/agent-teams/mate-' + current.team.teamId.slice(0, 8) + '/bin/desktop.sh"';
   }
 
   function download() {
     if (!current || !current.verified) return;
+    if (current.platforms.length && !current.platform) return;
     var button = $('download');
     button.disabled = true;
-    button.textContent = 'Preparing…';
-    var filename = 'agent-teams-join-' + current.team.teamId.slice(0, 8) + '.sh';
+    button.textContent = 'Downloading…';
+    $('platform').disabled = true;
+    var filename = installerFilename();
+    var body = { token: current.token };
+    if (current.platform) body.platform = current.platform;
     $('download-error').hidden = true;
-    postJson('api/teams/' + encodeURIComponent(current.team.teamId) + '/installer', { token: current.token })
+    postJson('api/teams/' + encodeURIComponent(current.team.teamId) + '/installer', body)
       .then(function (response) {
         if (!response.ok) return describeFailure(response).then(function (message) { throw new Error(message); });
         return response.blob();
@@ -458,7 +593,8 @@ export const JOIN_PORTAL_APP_JS = String.raw`
       })
       .then(function () {
         button.disabled = false;
-        if (button.textContent === 'Preparing…') button.textContent = 'Download installer';
+        $('platform').disabled = false;
+        if (button.textContent === 'Downloading…') button.textContent = 'Download installer';
       });
   }
 
@@ -473,13 +609,71 @@ export const JOIN_PORTAL_APP_JS = String.raw`
     if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () { button.textContent = 'Select and copy'; });
   }
 
+  var pairedCode = null;
+  var desktopBusy = false;
+  async function desktopRequest(action, teamId, threadId, requestId) {
+    if (desktopBusy) return;
+    desktopBusy = true;
+    $('desktop-status').textContent = 'Connecting to your device…';
+    document.querySelectorAll('#desktop-teams button, #desktop-chats button').forEach(function (b) {b.disabled = true;});
+    try {
+      var request = {action: action, requestId: requestId || crypto.randomUUID()};
+      if (teamId !== undefined) request.teamId = teamId;
+      if (threadId) request.threadId = threadId;
+      var response = await fetch('api/desktop', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({pairingCode: pairedCode, request: request})});
+      var body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'Device request failed');
+      renderDesktop(body);
+      $('desktop-status').textContent = body.device.label + ': ' + (body.result.desktopOpened ? 'Team chat opened in Codex.' : 'Connected.');
+    } catch (error) { $('desktop-status').textContent = error.message; }
+    finally { desktopBusy = false; document.querySelectorAll('#desktop-teams button, #desktop-chats button').forEach(function (b) {b.disabled = false;}); }
+  }
+  function desktopButton(text, action) {
+    var button = el('button', text === 'Open team chat' ? 'primary' : 'secondary', text); button.type = 'button'; button.addEventListener('click', action); return button;
+  }
+  function renderDesktop(body) {
+    var root = $('desktop-teams'); root.replaceChildren();
+    var result = body.result || {};
+    (body.teams || []).forEach(function (team) {
+      var row = el('section', 'option');
+      row.appendChild(el('h3', '', team.name + ' · ' + team.role));
+      if (result.defaultTeamId === team.teamId) row.appendChild(el('p', 'muted', 'Default for new chats in the connected desktop window'));
+      var openRequestId = crypto.randomUUID();
+      row.appendChild(desktopButton('Open team chat', function () { desktopRequest('open', team.teamId, undefined, openRequestId); }));
+      row.appendChild(desktopButton('Attach existing chat', function () {
+        var thread = $('desktop-thread').value.trim();
+        if (thread.indexOf('codex://threads/') === 0) { try { thread = new URL(thread).pathname.slice(1); } catch (error) { thread = ''; } }
+        if (!/^[a-zA-Z0-9-]{1,100}$/.test(thread)) { $('desktop-status').textContent = 'Paste a valid chat ID or Codex chat link first.'; return; }
+        desktopRequest('attach', team.teamId, thread);
+      }));
+      row.appendChild(desktopButton('Use for new desktop chats', function () { desktopRequest('default', team.teamId); }));
+      root.appendChild(row);
+    });
+    root.appendChild(desktopButton('Personal chats by default', function () { desktopRequest('default', null); }));
+    root.appendChild(desktopButton('Refresh device', function () { desktopRequest('context'); }));
+    var chats = $('desktop-chats'); chats.replaceChildren();
+    if ((result.chats || []).length) chats.appendChild(el('h3', '', 'Your team chats'));
+    (result.chats || []).forEach(function (chat) {
+      var team = (body.teams || []).find(function (t) { return t.teamId === chat.teamId; });
+      if (!team) return;
+      chats.appendChild(desktopButton('Open ' + team.name + ' chat · ' + chat.threadId.slice(-6), function () {desktopRequest('open', chat.teamId, undefined, chat.id);}));
+    });
+  }
   document.addEventListener('DOMContentLoaded', function () {
+    $('desktop-pair').addEventListener('submit', function (event) {
+      event.preventDefault(); pairedCode = $('desktop-code').value.trim();
+      $('desktop-code').value = ''; desktopRequest('context');
+    });
     $('filter').addEventListener('input', renderTeams);
+    $('refresh').addEventListener('click', loadTeams);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) loadTeams(); });
+    setInterval(function () { if (!document.hidden) loadTeams(); }, 10000);
     $('unlock').addEventListener('submit', unlock);
     $('close').addEventListener('click', closeJoin);
     $('join').addEventListener('close', function () { current = null; });
     $('join').addEventListener('click', function (event) { if (event.target === $('join')) closeJoin(); });
     $('download').addEventListener('click', download);
+    $('platform').addEventListener('change', updateInstallerSelection);
     document.addEventListener('click', copyFrom);
     loadTeams();
   });

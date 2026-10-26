@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { startAgentTeamsRelay } from './relayServer';
+import { INSTALLER_PLATFORM_LABELS, type InstallerPlatform } from './relayJoinPortal';
+import { startInstallerPortal } from './installerPortalServer';
 
 const valueAfter = (name: string, fallback?: string): string | undefined => {
   const index = process.argv.indexOf(name);
@@ -30,10 +32,27 @@ if ((managerToken === undefined) !== (workerToken === undefined)) {
 const publicUrl = valueAfter('--public-url');
 const installerTemplatePath = valueAfter('--join-installer-template');
 const workerBundlePath = valueAfter('--join-worker-bundle');
+const platformBundles: Partial<Record<InstallerPlatform, Buffer>> = {};
+for (let index = 0; index < process.argv.length; index++) {
+  if (process.argv[index] !== '--join-worker-bundle-platform') continue;
+  const entry = process.argv[index + 1] ?? '';
+  const separator = entry.indexOf('=');
+  const platform = entry.slice(0, separator);
+  const path = entry.slice(separator + 1);
+  if (separator < 1 || !path || !Object.hasOwn(INSTALLER_PLATFORM_LABELS, platform)) {
+    throw new Error('--join-worker-bundle-platform requires a supported platform=path');
+  }
+  if (platformBundles[platform as InstallerPlatform] !== undefined)
+    throw new Error(`Duplicate installer platform: ${platform}`);
+  platformBundles[platform as InstallerPlatform] = readFileSync(resolve(path));
+}
 const repoUrl = valueAfter('--join-repo-url');
 const repoBranch = valueAfter('--join-repo-branch');
-if ((installerTemplatePath === undefined) !== (workerBundlePath === undefined)) {
-  throw new Error('--join-installer-template and --join-worker-bundle must be given together');
+const hasBundle = workerBundlePath !== undefined || Object.keys(platformBundles).length > 0;
+if ((installerTemplatePath !== undefined) !== hasBundle) {
+  throw new Error(
+    '--join-installer-template requires --join-worker-bundle or --join-worker-bundle-platform, and vice versa'
+  );
 }
 if ((repoUrl === undefined) !== (repoBranch === undefined)) {
   throw new Error('--join-repo-url and --join-repo-branch must be given together');
@@ -43,12 +62,15 @@ const joinPortal =
     ? undefined
     : {
         publicUrl,
-        ...(installerTemplatePath === undefined || workerBundlePath === undefined
+        ...(installerTemplatePath === undefined || !hasBundle
           ? {}
           : {
               installer: {
                 template: readFileSync(resolve(installerTemplatePath), 'utf8'),
-                workerBundleTgz: readFileSync(resolve(workerBundlePath)),
+                ...(workerBundlePath === undefined
+                  ? {}
+                  : { workerBundleTgz: readFileSync(resolve(workerBundlePath)) }),
+                platformBundles,
               },
             }),
         ...(repoUrl === undefined || repoBranch === undefined
@@ -56,16 +78,26 @@ const joinPortal =
           : { repository: { url: repoUrl, branch: repoBranch } }),
       };
 
-const relay = await startAgentTeamsRelay({
-  host,
-  port,
-  dataDir,
-  logger: false,
-  ...(managerToken === undefined || workerToken === undefined
-    ? {}
-    : { auth: { managerToken, workerToken } }),
-  ...(joinPortal === undefined ? {} : { joinPortal }),
-});
+const portalOnly = process.argv.includes('--installer-portal-only');
+if (portalOnly && joinPortal === undefined)
+  throw new Error('--installer-portal-only requires --public-url and installer bundles');
+const relay = portalOnly
+  ? await startInstallerPortal({
+      host,
+      port,
+      upstreamUrl: valueAfter('--upstream-url', 'http://127.0.0.1:43181')!,
+      joinPortal: joinPortal!,
+    })
+  : await startAgentTeamsRelay({
+      host,
+      port,
+      dataDir,
+      logger: false,
+      ...(managerToken === undefined || workerToken === undefined
+        ? {}
+        : { auth: { managerToken, workerToken } }),
+      ...(joinPortal === undefined ? {} : { joinPortal }),
+    });
 process.stdout.write(
   `${JSON.stringify({ event: 'relay.started', httpUrl: relay.httpUrl, wsUrl: relay.wsUrl, dataDir, insecureLanMode: managerToken === undefined, joinPortal: joinPortal === undefined ? 'off' : { publicUrl, installer: joinPortal.installer !== undefined, repository: joinPortal.repository !== undefined } })}\n`
 );

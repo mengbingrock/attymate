@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream';
+
 import type { TeamCoordinationMode, TeamId } from '@claude-teams/agent-teams-protocol';
 import { teamCoordinationModeSchema, teamIdSchema } from '@claude-teams/agent-teams-protocol';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -6,11 +8,23 @@ import { JOIN_PORTAL_APP_JS, JOIN_PORTAL_CSS, JOIN_PORTAL_HTML } from './relayJo
 import type { RelayMembershipRouteStore } from './relayMembershipRouteStore';
 import type { RelayTeamDirectoryEntry, RelayTeamDirectoryStore } from './relayTeamDirectoryStore';
 
+export const INSTALLER_PLATFORM_LABELS = {
+  'darwin-x64': 'macOS · Intel',
+  'darwin-arm64': 'macOS · Apple Silicon',
+  'linux-x64': 'Linux · Intel / AMD x64',
+  'linux-arm64': 'Linux · ARM64',
+} as const;
+export type InstallerPlatform = keyof typeof INSTALLER_PLATFORM_LABELS;
+
 export interface RelayJoinPortalOptions {
   /** Public base URL of this Relay, e.g. https://relay.example/next. Workers connect to its /v2/worker-stream. */
   readonly publicUrl: string;
   /** Installer template plus the gzipped worker bundle; without it the portal offers only clone steps. */
-  readonly installer?: { readonly template: string; readonly workerBundleTgz: Buffer };
+  readonly installer?: {
+    readonly template: string;
+    readonly workerBundleTgz?: Buffer;
+    readonly platformBundles?: Partial<Record<InstallerPlatform, Buffer>>;
+  };
   /** Git repository and branch shown in the clone-and-run instructions. */
   readonly repository?: { readonly url: string; readonly branch: string };
   /** Failed token checks allowed per client in one window. */
@@ -85,7 +99,7 @@ const clientKey = (request: FastifyRequest): { readonly key: string; readonly sh
   return { key: 'shared', shared: true };
 };
 
-const SECURITY_HEADERS: Record<string, string> = {
+export const SECURITY_HEADERS: Record<string, string> = {
   'content-security-policy':
     "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
   'x-content-type-options': 'nosniff',
@@ -106,15 +120,76 @@ const renderInstaller = (
   template: string,
   workerBundleTgz: Buffer,
   values: { readonly relayUrl: string; readonly token: string; readonly teamId: string }
-): string => {
+): { readonly stream: Readable; readonly contentLength: number } => {
   // Same substitutions and payload framing as installer/build-installer.sh.
   const script = template
     .replace('__RELAY_URL__', values.relayUrl)
     .replace('__WORKER_TOKEN__', values.token)
     .replace('__TEAM_ID__', values.teamId);
-  const payload = workerBundleTgz.toString('base64').replace(/.{1,76}/g, '$&\n');
   const header = script.endsWith('\n') ? script : script + '\n';
-  return header + payload;
+  // Keep the chunk size divisible by three so concatenated base64 has padding only at the end.
+  // Encoding a native runtime as one string (then wrapping every line) can exhaust the relay heap.
+  const chunkSize = 48 * 1024;
+  function* chunks(): Generator<string> {
+    yield header;
+    for (let offset = 0; offset < workerBundleTgz.length; offset += chunkSize) {
+      yield workerBundleTgz.subarray(offset, offset + chunkSize).toString('base64') + '\n';
+    }
+  }
+  return {
+    stream: Readable.from(chunks()),
+    contentLength:
+      Buffer.byteLength(header) +
+      4 * Math.ceil(workerBundleTgz.length / 3) +
+      Math.ceil(workerBundleTgz.length / chunkSize),
+  };
+};
+
+export const installerCatalog = (installer: RelayJoinPortalOptions['installer']) => {
+  const installerPlatforms = Object.entries(INSTALLER_PLATFORM_LABELS)
+    .filter(([id]) => installer?.platformBundles?.[id as InstallerPlatform] !== undefined)
+    .map(([id, label]) => ({ id, label }));
+  return {
+    installerPlatforms,
+    installerAvailable: installer?.workerBundleTgz !== undefined || installerPlatforms.length > 0,
+  };
+};
+
+export const sendTeamInstaller = (
+  reply: FastifyReply,
+  installer: NonNullable<RelayJoinPortalOptions['installer']>,
+  platform: unknown,
+  values: { readonly relayUrl: string; readonly token: string; readonly teamId: string }
+): FastifyReply => {
+  const selected =
+    typeof platform === 'string' && Object.hasOwn(INSTALLER_PLATFORM_LABELS, platform)
+      ? (platform as InstallerPlatform)
+      : undefined;
+  const bundle =
+    platform === undefined
+      ? installer.workerBundleTgz
+      : selected === undefined
+        ? undefined
+        : installer.platformBundles?.[selected];
+  if (bundle === undefined)
+    return reply
+      .code(400)
+      .headers(SECURITY_HEADERS)
+      .send({
+        error:
+          platform === undefined ? 'installer_platform_required' : 'installer_platform_unavailable',
+      });
+  const script = renderInstaller(installer.template, bundle, values);
+  return reply
+    .headers(SECURITY_HEADERS)
+    .header('cache-control', 'no-store')
+    .header('content-type', 'text/x-shellscript; charset=utf-8')
+    .header('content-length', String(script.contentLength))
+    .header(
+      'content-disposition',
+      `attachment; filename="agent-teams-join-${values.teamId.slice(0, 8)}${selected === undefined ? '' : '-' + selected}.sh"`
+    )
+    .send(script.stream);
 };
 
 export const registerTeamDirectoryManagerRoutes = (deps: PortalDependencies): void => {
@@ -201,6 +276,7 @@ export const registerJoinPortal = (
   const failures = new FailureWindow(options.failureWindowMs ?? 10 * 60_000);
   const maxFailuresPerClient = options.maxFailuresPerClient ?? 20;
   const maxFailuresShared = options.maxFailuresShared ?? 300;
+  const { installerPlatforms, installerAvailable } = installerCatalog(options.installer);
 
   const publicTeam = (entry: RelayTeamDirectoryEntry) => {
     const connected = deps.connectedNodeIds();
@@ -212,6 +288,13 @@ export const registerJoinPortal = (
       coordination: membershipRouteStore.teamSettings(entry.teamId).coordination,
       members: members.length,
       online: members.filter((member) => connected.has(member.nodeId)).length,
+      memberList: members
+        .map((member) => ({
+          label: member.label,
+          role: member.role,
+          online: connected.has(member.nodeId),
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
     };
   };
 
@@ -271,7 +354,8 @@ export const registerJoinPortal = (
       .header('cache-control', 'no-store')
       .send({
         teams: teamDirectory.listPublic().map(publicTeam),
-        installerAvailable: options.installer !== undefined,
+        installerAvailable,
+        installerPlatforms,
       })
   );
 
@@ -284,30 +368,26 @@ export const registerJoinPortal = (
       .send({
         team: publicTeam(authorized.entry),
         workerStreamUrl,
-        installerAvailable: options.installer !== undefined,
+        installerAvailable,
+        installerPlatforms,
         ...(options.repository === undefined ? {} : { repository: options.repository }),
       });
   });
 
   app.post('/join/api/teams/:teamId/installer', (request, reply) => {
-    if (options.installer === undefined) {
+    if (options.installer === undefined || !installerAvailable) {
       return reply.code(503).headers(SECURITY_HEADERS).send({ error: 'installer_not_configured' });
     }
     const authorized = authorize(request, reply);
     if (authorized === undefined) return reply;
-    const script = renderInstaller(options.installer.template, options.installer.workerBundleTgz, {
+    const platform =
+      typeof request.body === 'object' && request.body !== null
+        ? (request.body as { platform?: unknown }).platform
+        : undefined;
+    return sendTeamInstaller(reply, options.installer, platform, {
       relayUrl: workerStreamUrl,
       token: authorized.token,
       teamId: authorized.teamId,
     });
-    return reply
-      .headers(SECURITY_HEADERS)
-      .header('cache-control', 'no-store')
-      .header('content-type', 'text/x-shellscript; charset=utf-8')
-      .header(
-        'content-disposition',
-        `attachment; filename="agent-teams-join-${authorized.teamId.slice(0, 8)}.sh"`
-      )
-      .send(script);
   });
 };
