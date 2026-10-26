@@ -52,7 +52,7 @@ packages/agent-teams-worker/installer/build-installer.sh \
   --out agent-teams-mate-<team>.sh
 ```
 
-Supported targets: `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`. Repeat staging for each
+Supported targets: `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `win32-x64`. Repeat staging for each
 target to include. Existing staged targets are refused to prevent merging builds. The manifest
 records a release-supplied revision and every file's SHA-256. Installation verifies all files before
 executing the fork, and refuses missing platforms or corruption without a stock fallback.
@@ -107,6 +107,59 @@ tool-free model turn returning `LOGIN_REUSE_OK`. No credentials were copied. The
 daemon's version/socket metadata and `config.toml` were unchanged.
 Apple Silicon (`darwin-arm64`) packaging is supported by staging; a native fork build must be
 provided separately before distributing to that platform.
+
+## GitHub Actions builds and signing
+
+The public fork's [Native team download builds workflow](https://github.com/TrueGrit-AI/codex/blob/build/native-team-downloads/.github/workflows/fork-native-downloads.yml)
+builds the customized App Server, CLI, V8 host, response proxy, and Windows sandbox helpers on native
+Apple Silicon and Windows x64 runners. It preserves the tested Guardian configuration fix and
+records the exact fork commit, compiler, build profile, Actions run, and file hashes. Its artifacts
+are unsigned build inputs; they are not presented as signed releases.
+
+Download a successful run's `codex-fork-darwin-arm64` and `codex-fork-win32-x64` artifacts. The
+`Distributed native installer smoke` workflow in this repository takes that fork run ID, builds
+the Worker, stages each runtime, and exercises native installers in fresh test directories against
+a temporary local relay. It makes no model calls and uses no personal Codex home or user project.
+
+Sign the extracted Mac package on the certificate owner's Mac before staging its final bundle:
+
+```bash
+node packages/agent-teams-worker/installer/sign-macos-runtime.mjs \
+  /path/to/extracted/package '<Developer ID Application identity>' '<notarytool profile>'
+node scripts/build/distributed-worker-bundle.mjs /path/to/worker-kit
+node packages/agent-teams-worker/installer/stage-codex-runtime.mjs \
+  --source /path/to/extracted/package --bundle-dir /path/to/worker-kit \
+  --platform darwin-arm64 --revision <fork-commit>
+```
+
+The signing helper verifies Actions hashes, applies Developer ID signatures and the fork's V8
+hardened-runtime entitlements, verifies signatures, and regenerates hashes. Supplying a named
+notarytool profile submits the binaries to Apple and requires an Accepted result. Without a profile
+the build manifest explicitly records `not-submitted`; signing alone does not claim notarization.
+The signing private key remains in the owner's keychain. Windows builds do not use an Apple
+certificate and currently have no Authenticode signature.
+
+## Native Windows installer
+
+The relay accepts `--join-windows-installer-template <install-windows.ps1>` and
+`--join-worker-bundle-platform win32-x64=<archive>`. The archive includes the four compiled Worker
+entrypoints, `windows-install.mjs`, and `codex-runtime/win32-x64/` containing `bin/codex.exe` and helpers.
+Windows is listed only when both its template and archive are available. The download is a `.ps1`
+with a framed payload; the Web UI supplies a command for that downloaded file. Its PowerShell
+execution-policy override applies to that one process, without changing the machine's policy.
+
+The installer protects its directory with a current-user/SYSTEM ACL, verifies native file hashes,
+reuses `$CODEX_HOME` or the existing user's `.codex`, and creates a private Node 24 copy if needed.
+`-PrivateCodexHome` selects a separate login; `-NoService` skips the per-user Startup shortcut.
+It uses an authenticated loopback WebSocket because Windows Node cannot connect to the fork's
+AF_UNIX transport. The Worker and bundled CLI share that server and its private SQLite home;
+the Worker never starts an alternate daemon. Control MCP uses an installation-specific named pipe.
+
+The installation lives at `$env:LOCALAPPDATA/AgentTeams/mate-<team-prefix>`. Its `bin` directory has
+`start.ps1`, `stop.ps1`, `status.ps1`, `attach.ps1`, and `desktop.ps1`. The desktop launcher accepts
+the installed desktop `.exe` path as an optional argument and preserves the app's bundled policy
+reader. Windows can attach chats and select their team from the dashboard; automatic foreground
+opening of a specific desktop chat remains macOS-only.
 
 The existing EC2 fork was located at `/data/agent-teams/codex` (also `~/agent-teams/codex`), with
 base fork commit `831737cdcdc1d04ccdf6f6eb0b081388a5a2f034` and additional uncommitted changes.

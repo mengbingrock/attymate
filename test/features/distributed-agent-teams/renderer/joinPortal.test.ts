@@ -218,7 +218,7 @@ it('unlocks a team, requires a native build, downloads that build, and shows loc
       'mate-40000000/bin/desktop.sh'
     );
     expect(browser.document.getElementById('run-command')!.textContent).toContain(
-      'agent-teams-join-40000000-darwin-x64.sh --label test-mac'
+      'agent-teams-join-40000000-darwin-x64.sh --label "test-mac"'
     );
     expect(browser.document.getElementById('attach-command')!.textContent).toContain(
       'mate-40000000/bin/attach.sh'

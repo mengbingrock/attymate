@@ -16,11 +16,12 @@ const source = resolve(value('--source'));
 const bundle = resolve(value('--bundle-dir'));
 const platform = value('--platform');
 const revision = value('--revision');
-if (!['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64'].includes(platform)) {
+if (!['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64', 'win32-x64'].includes(platform)) {
   throw new Error(`Unsupported runtime platform: ${platform}`);
 }
-if (!(await lstat(join(source, 'bin/codex'))).isFile()) {
-  throw new Error('Fork package must contain a regular bin/codex executable');
+const executable = platform.startsWith('win32-') ? 'bin/codex.exe' : 'bin/codex';
+if (!(await lstat(join(source, executable))).isFile()) {
+  throw new Error(`Fork package must contain a regular ${executable} executable`);
 }
 const destination = join(bundle, 'codex-runtime', platform);
 if (source === destination || destination.startsWith(source + '/')) {
@@ -30,7 +31,7 @@ await mkdir(join(bundle, 'codex-runtime'), { recursive: true });
 // An existing target must be removed deliberately by the release operator, not merged with a new build.
 await mkdir(destination);
 await cp(source, destination, { recursive: true, dereference: true });
-await chmod(join(destination, 'bin/codex'), 0o700);
+await chmod(join(destination, executable), 0o700);
 const files = {};
 const visit = async (directory, prefix = '') => {
   for (const entry of await readdir(directory, { withFileTypes: true })) {

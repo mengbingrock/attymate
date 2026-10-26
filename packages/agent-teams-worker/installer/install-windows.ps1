@@ -1,0 +1,73 @@
+param(
+  [string]$Label = $env:COMPUTERNAME,
+  [string]$Dir = '',
+  [string]$CodexHome = '',
+  [switch]$PrivateCodexHome,
+  [switch]$NoService,
+  [switch]$NoStart
+)
+$ErrorActionPreference = 'Stop'
+$relay = '__RELAY_URL__'
+$token = '__WORKER_TOKEN__'
+$team = '__TEAM_ID__'
+if (-not $Dir) { $Dir = Join-Path $env:LOCALAPPDATA "AgentTeams\mate-$($team.Substring(0,8))" }
+$Dir = [IO.Path]::GetFullPath($Dir)
+if (Test-Path (Join-Path $Dir 'config.json')) { throw 'This installation already exists. Use its bin\start.ps1 or choose another -Dir.' }
+if ([Environment]::Is64BitProcess -eq $false) { throw 'Run this installer in 64-bit PowerShell.' }
+if ($env:PROCESSOR_ARCHITECTURE -ne 'AMD64') { throw 'This build requires Windows x64.' }
+New-Item -ItemType Directory -Force $Dir | Out-Null
+$sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+# Protect enrollment credentials and the local App Server capability before unpacking.
+& icacls.exe $Dir /inheritance:r /grant:r "*${sid}:(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Could not make installation directory private.' }
+$worker = Join-Path $Dir 'worker'
+New-Item -ItemType Directory -Force $worker | Out-Null
+$archive = Join-Path $Dir 'worker.tgz'
+$reader = [IO.File]::OpenText($PSCommandPath)
+$output = [IO.File]::Create($archive)
+try {
+  while (($line = $reader.ReadLine()) -ne '__PAYLOAD_BELOW__') {
+    if ($null -eq $line) { throw 'Installer payload is missing.' }
+  }
+  while ($null -ne ($line = $reader.ReadLine())) {
+    if ($line -eq '#>') { break }
+    if ($line) { $bytes = [Convert]::FromBase64String($line); $output.Write($bytes,0,$bytes.Length) }
+  }
+} finally { $reader.Dispose(); $output.Dispose() }
+& tar.exe -xzf $archive -C $worker
+if ($LASTEXITCODE -ne 0) { throw 'Could not unpack the native runtime.' }
+Remove-Item $archive
+$node = (Get-Command node.exe -ErrorAction SilentlyContinue).Source
+if ($node) {
+  & $node -e 'process.exit(process.versions.node.split(".")[0] === "24" && +process.versions.node.split(".")[1] >= 15 ? 0 : 1)'
+  if ($LASTEXITCODE -ne 0) { $node = $null }
+}
+if (-not $node) {
+  $version = 'v24.19.0'
+  $name = "node-$version-win-x64.zip"
+  $zip = Join-Path $Dir $name
+  Invoke-WebRequest "https://nodejs.org/dist/$version/$name" -OutFile $zip -UseBasicParsing
+  $checksums = (Invoke-WebRequest "https://nodejs.org/dist/$version/SHASUMS256.txt" -UseBasicParsing).Content
+  $expected = (($checksums -split "`n" | Where-Object { $_.Trim().EndsWith("  $name") }) -split '\s+')[0]
+  if (-not $expected -or (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Node download checksum mismatch.' }
+  Expand-Archive $zip -DestinationPath (Join-Path $Dir 'node') -Force
+  Remove-Item $zip
+  $node = Join-Path $Dir "node\node-$version-win-x64\node.exe"
+}
+$env:AGENT_TEAMS_INSTALL_RELAY = $relay
+$env:AGENT_TEAMS_INSTALL_TOKEN = $token
+$env:AGENT_TEAMS_INSTALL_TEAM = $team
+$env:AGENT_TEAMS_INSTALL_LABEL = $Label
+$env:AGENT_TEAMS_INSTALL_CODEX_HOME = $CodexHome
+$env:AGENT_TEAMS_INSTALL_PRIVATE_HOME = [string][bool]$PrivateCodexHome
+$env:AGENT_TEAMS_INSTALL_NO_SERVICE = [string][bool]$NoService
+$env:AGENT_TEAMS_INSTALL_NO_START = [string][bool]$NoStart
+try {
+  & $node (Join-Path $worker 'windows-install.mjs') install $Dir
+  if ($LASTEXITCODE -ne 0) { throw 'Installation did not complete. See the error above.' }
+} finally {
+  Get-ChildItem Env:AGENT_TEAMS_INSTALL_* | Remove-Item
+}
+exit
+<#
+__PAYLOAD_BELOW__

@@ -30,7 +30,17 @@ if ((managerToken === undefined) !== (workerToken === undefined)) {
  * downloads; --join-repo-url with --join-repo-branch enables the clone-and-run instructions.
  */
 const publicUrl = valueAfter('--public-url');
+const googleClientFile = process.env.AGENT_TEAMS_GOOGLE_CLIENT_FILE;
+const googleClient = googleClientFile
+  ? (JSON.parse(readFileSync(resolve(googleClientFile), 'utf8')).web as
+      | { client_id?: string; client_secret?: string }
+      | undefined)
+  : undefined;
+if (googleClientFile && (!googleClient?.client_id || !googleClient?.client_secret))
+  throw new Error('Google OAuth client file must contain a web client ID and secret');
+const accountsEnabled = process.argv.includes('--accounts') || googleClient !== undefined;
 const installerTemplatePath = valueAfter('--join-installer-template');
+const windowsInstallerTemplatePath = valueAfter('--join-windows-installer-template');
 const workerBundlePath = valueAfter('--join-worker-bundle');
 const platformBundles: Partial<Record<InstallerPlatform, Buffer>> = {};
 for (let index = 0; index < process.argv.length; index++) {
@@ -62,11 +72,29 @@ const joinPortal =
     ? undefined
     : {
         publicUrl,
+        ...(accountsEnabled
+          ? {
+              accounts:
+                googleClient?.client_id && googleClient.client_secret
+                  ? {
+                      google: {
+                        clientId: googleClient.client_id,
+                        clientSecret: googleClient.client_secret,
+                      },
+                    }
+                  : {},
+            }
+          : {}),
         ...(installerTemplatePath === undefined || !hasBundle
           ? {}
           : {
               installer: {
                 template: readFileSync(resolve(installerTemplatePath), 'utf8'),
+                ...(windowsInstallerTemplatePath === undefined
+                  ? {}
+                  : {
+                      windowsTemplate: readFileSync(resolve(windowsInstallerTemplatePath), 'utf8'),
+                    }),
                 ...(workerBundlePath === undefined
                   ? {}
                   : { workerBundleTgz: readFileSync(resolve(workerBundlePath)) }),

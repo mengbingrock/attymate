@@ -1,0 +1,80 @@
+name: Distributed native installer smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      codex_run_id:
+        description: Successful Native team download builds run in TrueGrit-AI/codex
+        required: true
+        type: string
+  push:
+    branches: [distributed-agent-teams-mcp-v2]
+    paths: ['.github/workflows/distributed-native-installers.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  register:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Dispatch this workflow with a successful custom Codex build run ID to smoke both native installers.'
+  smoke:
+    if: github.event_name == 'workflow_dispatch'
+    name: Install and connect ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            runner: macos-15
+          - platform: win32-x64
+            runner: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Download the native custom fork from Actions
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN: ${{ inputs.codex_run_id }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          gh run download "$BUILD_RUN" --repo TrueGrit-AI/codex --name "codex-fork-$PLATFORM" --dir native
+          mkdir -p smoke/package
+          tar -xzf "native/codex-fork-$PLATFORM.tar.gz" -C smoke/package
+      - name: Compile and package the Worker with the fork
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          node scripts/build/distributed-worker-bundle.mjs smoke/kit
+          revision=$(node -p 'JSON.parse(require("fs").readFileSync("smoke/package/build-manifest.json")).revision')
+          node packages/agent-teams-worker/installer/stage-codex-runtime.mjs --source smoke/package --bundle-dir smoke/kit --platform "$PLATFORM" --revision "$revision"
+          cp packages/agent-teams-worker/installer/{build-installer.sh,install-template.sh,stage-codex-runtime.mjs} smoke/kit/
+          tar -czf "native/worker-bundle-$PLATFORM.tgz" -C smoke/kit cli.js controlMcpCli.js runtimeMcpCli.js desktopBridgeCli.js windows-install.mjs codex-runtime
+      - name: Exercise native Mac installer and two server clients
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          revision=$(node -p 'JSON.parse(require("fs").readFileSync("smoke/package/build-manifest.json")).revision')
+          python3 scripts/smoke/forked-codex-installer.py --root "$PWD/smoke" --node "$(command -v node)" --revision "$revision"
+      - name: Exercise Windows installer and two authenticated server clients
+        if: runner.os == 'Windows'
+        shell: bash
+        run: node scripts/smoke/windows-forked-installer.mjs smoke/kit native/worker-bundle-win32-x64.tgz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tested-worker-${{ matrix.platform }}
+          path: native/worker-bundle-${{ matrix.platform }}.tgz
+          if-no-files-found: error

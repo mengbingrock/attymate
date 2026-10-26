@@ -7,21 +7,31 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { JOIN_PORTAL_APP_JS, JOIN_PORTAL_CSS, JOIN_PORTAL_HTML } from './relayJoinPortalAssets';
 import type { RelayMembershipRouteStore } from './relayMembershipRouteStore';
 import type { RelayTeamDirectoryEntry, RelayTeamDirectoryStore } from './relayTeamDirectoryStore';
+import type { AccountPortalOptions } from './accountPortal/accountRoutes';
+import {
+  accountPortalHtml,
+  ACCOUNT_PORTAL_CSS,
+  ACCOUNT_PORTAL_JS,
+  accountPrivacyHtml,
+} from './accountPortal/accountAssets';
 
 export const INSTALLER_PLATFORM_LABELS = {
   'darwin-x64': 'macOS · Intel',
   'darwin-arm64': 'macOS · Apple Silicon',
   'linux-x64': 'Linux · Intel / AMD x64',
   'linux-arm64': 'Linux · ARM64',
+  'win32-x64': 'Windows · Intel / AMD x64',
 } as const;
 export type InstallerPlatform = keyof typeof INSTALLER_PLATFORM_LABELS;
 
 export interface RelayJoinPortalOptions {
+  readonly accounts?: AccountPortalOptions;
   /** Public base URL of this Relay, e.g. https://relay.example/next. Workers connect to its /v2/worker-stream. */
   readonly publicUrl: string;
   /** Installer template plus the gzipped worker bundle; without it the portal offers only clone steps. */
   readonly installer?: {
     readonly template: string;
+    readonly windowsTemplate?: string;
     readonly workerBundleTgz?: Buffer;
     readonly platformBundles?: Partial<Record<InstallerPlatform, Buffer>>;
   };
@@ -119,7 +129,8 @@ const sendAsset = (reply: FastifyReply, contentType: string, body: string) =>
 const renderInstaller = (
   template: string,
   workerBundleTgz: Buffer,
-  values: { readonly relayUrl: string; readonly token: string; readonly teamId: string }
+  values: { readonly relayUrl: string; readonly token: string; readonly teamId: string },
+  trailer = ''
 ): { readonly stream: Readable; readonly contentLength: number } => {
   // Same substitutions and payload framing as installer/build-installer.sh.
   const script = template
@@ -135,11 +146,13 @@ const renderInstaller = (
     for (let offset = 0; offset < workerBundleTgz.length; offset += chunkSize) {
       yield workerBundleTgz.subarray(offset, offset + chunkSize).toString('base64') + '\n';
     }
+    if (trailer) yield trailer;
   }
   return {
     stream: Readable.from(chunks()),
     contentLength:
       Buffer.byteLength(header) +
+      Buffer.byteLength(trailer) +
       4 * Math.ceil(workerBundleTgz.length / 3) +
       Math.ceil(workerBundleTgz.length / chunkSize),
   };
@@ -147,7 +160,11 @@ const renderInstaller = (
 
 export const installerCatalog = (installer: RelayJoinPortalOptions['installer']) => {
   const installerPlatforms = Object.entries(INSTALLER_PLATFORM_LABELS)
-    .filter(([id]) => installer?.platformBundles?.[id as InstallerPlatform] !== undefined)
+    .filter(
+      ([id]) =>
+        installer?.platformBundles?.[id as InstallerPlatform] !== undefined &&
+        (id !== 'win32-x64' || installer.windowsTemplate !== undefined)
+    )
     .map(([id, label]) => ({ id, label }));
   return {
     installerPlatforms,
@@ -171,7 +188,8 @@ export const sendTeamInstaller = (
       : selected === undefined
         ? undefined
         : installer.platformBundles?.[selected];
-  if (bundle === undefined)
+  const windows = selected === 'win32-x64';
+  if (bundle === undefined || (windows && installer.windowsTemplate === undefined))
     return reply
       .code(400)
       .headers(SECURITY_HEADERS)
@@ -179,15 +197,23 @@ export const sendTeamInstaller = (
         error:
           platform === undefined ? 'installer_platform_required' : 'installer_platform_unavailable',
       });
-  const script = renderInstaller(installer.template, bundle, values);
+  const script = renderInstaller(
+    windows ? installer.windowsTemplate! : installer.template,
+    bundle,
+    values,
+    windows ? '#>\n' : ''
+  );
   return reply
     .headers(SECURITY_HEADERS)
     .header('cache-control', 'no-store')
-    .header('content-type', 'text/x-shellscript; charset=utf-8')
+    .header(
+      'content-type',
+      windows ? 'text/plain; charset=utf-8' : 'text/x-shellscript; charset=utf-8'
+    )
     .header('content-length', String(script.contentLength))
     .header(
       'content-disposition',
-      `attachment; filename="agent-teams-join-${values.teamId.slice(0, 8)}${selected === undefined ? '' : '-' + selected}.sh"`
+      `attachment; filename="agent-teams-join-${values.teamId.slice(0, 8)}${selected === undefined ? '' : '-' + selected}.${windows ? 'ps1' : 'sh'}"`
     )
     .send(script.stream);
 };
@@ -338,8 +364,23 @@ export const registerJoinPortal = (
   };
 
   app.get('/join', (_request, reply) => reply.code(302).header('location', 'join/').send());
-  app.get('/join/', (_request, reply) =>
-    sendAsset(reply, 'text/html; charset=utf-8', JOIN_PORTAL_HTML)
+  app.get('/join/', (request, reply) =>
+    sendAsset(
+      reply,
+      'text/html; charset=utf-8',
+      options.accounts && (request.query as { legacy?: string }).legacy !== '1'
+        ? accountPortalHtml(options.publicUrl)
+        : JOIN_PORTAL_HTML
+    )
+  );
+  app.get('/join/account.js', (_request, reply) =>
+    sendAsset(reply, 'text/javascript; charset=utf-8', ACCOUNT_PORTAL_JS)
+  );
+  app.get('/join/account.css', (_request, reply) =>
+    sendAsset(reply, 'text/css; charset=utf-8', ACCOUNT_PORTAL_CSS)
+  );
+  app.get('/join/privacy', (_request, reply) =>
+    sendAsset(reply, 'text/html; charset=utf-8', accountPrivacyHtml(options.publicUrl))
   );
   app.get('/join/app.js', (_request, reply) =>
     sendAsset(reply, 'text/javascript; charset=utf-8', JOIN_PORTAL_APP_JS)

@@ -3,6 +3,7 @@ import { createConnection } from 'node:net';
 import type { Server } from 'node:http';
 import WebSocket, { WebSocketServer } from 'ws';
 import { requestWorkerControl } from './workerControlServer';
+import { localAppServerWebSocket } from './localAppServerWebSocket';
 
 const object = (v: unknown): Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -32,10 +33,12 @@ export const attachDesktopTransport = (
       return;
     }
     wss.handleUpgrade(request, socket, head, (client) => {
-      const upstream = new WebSocket('ws://localhost/', {
-        createConnection: () => createConnection(socketPath),
-        maxPayload: 32 * 1024 * 1024,
-      });
+      const upstream = socketPath.startsWith('ws:')
+        ? localAppServerWebSocket(socketPath, process.env.AGENT_TEAMS_APP_SERVER_TOKEN)
+        : new WebSocket('ws://localhost/', {
+            createConnection: () => createConnection(socketPath),
+            maxPayload: 32 * 1024 * 1024,
+          });
       const ready = new Promise<void>((resolve, reject) => {
         upstream.once('open', resolve);
         upstream.once('error', reject);

@@ -57,6 +57,8 @@ import {
 } from './relayJoinPortal';
 import { RelayDesktopChats } from './relayDesktopChats';
 import { RelayTeamDirectoryStore } from './relayTeamDirectoryStore';
+import { RelayAccountStore } from './accountPortal/accountStore';
+import { registerAccountRoutes } from './accountPortal/accountRoutes';
 
 export interface AgentTeamsRelayOptions {
   readonly host: string;
@@ -120,6 +122,7 @@ const defaultOfferText = (
 interface WorkerTeamScope {
   readonly teamId: TeamId;
   readonly tokenHash: string;
+  readonly accountDeviceId?: string;
 }
 
 interface MutableWorkerSession {
@@ -210,6 +213,9 @@ export const startAgentTeamsRelay = async (
   const leaseStore = new RelayLeaseStore(options.dataDir, options.leaseDurationMs);
   const membershipRouteStore = new RelayMembershipRouteStore(options.dataDir);
   const teamDirectory = new RelayTeamDirectoryStore(options.dataDir);
+  const accounts = options.joinPortal?.accounts
+    ? new RelayAccountStore(options.dataDir)
+    : undefined;
   const desktopChats = new RelayDesktopChats({
     dataDir: options.dataDir,
     workers: () =>
@@ -1114,7 +1120,15 @@ export const startAgentTeamsRelay = async (
     }
     if (auth !== undefined && !tokenMatches(request.headers.authorization, auth.workerToken)) {
       // A team join token admits the Worker to exactly one team.
-      const teamScope = teamDirectory.resolveJoinToken(bearerValue(request.headers.authorization));
+      const accountDevice = accounts?.resolveDevice(bearerValue(request.headers.authorization));
+      const teamScope =
+        accountDevice && teamDirectory.get(accountDevice.teamId)
+          ? {
+              teamId: teamIdSchema.parse(accountDevice.teamId),
+              tokenHash: accountDevice.tokenHash,
+              accountDeviceId: accountDevice.id,
+            }
+          : teamDirectory.resolveJoinToken(bearerValue(request.headers.authorization));
       if (teamScope === undefined) {
         socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
         socket.destroy();
@@ -1138,6 +1152,13 @@ export const startAgentTeamsRelay = async (
           const hello = workerHelloMessageSchema.parse(input);
           if (teamScope !== undefined && hello.autoJoinTeamId !== teamScope.teamId) {
             socket.close(4010, 'Team join token does not match the advertised team');
+            return;
+          }
+          if (
+            teamScope?.accountDeviceId &&
+            !accounts?.bindDevice(teamScope.accountDeviceId, hello.nodeId)
+          ) {
+            socket.close(4010, 'This installation belongs to a different device');
             return;
           }
           const previous = sessions.get(hello.nodeId);
@@ -1440,6 +1461,17 @@ export const startAgentTeamsRelay = async (
   };
   registerTeamDirectoryManagerRoutes(portalDependencies);
   if (options.joinPortal !== undefined) registerJoinPortal(portalDependencies, options.joinPortal);
+  if (options.joinPortal?.accounts && accounts)
+    registerAccountRoutes({
+      app,
+      store: accounts,
+      options: options.joinPortal,
+      directory: teamDirectory,
+      routes: membershipRouteStore,
+      desktop: desktopChats,
+      online: () => new Set(sessions.keys()),
+      setCoordination: portalDependencies.setCoordination,
+    });
 
   reconcilePeerMessageDeliveries();
 
@@ -1470,6 +1502,7 @@ export const startAgentTeamsRelay = async (
       sessions.clear();
       webSocketServer.close();
       await app.close();
+      accounts?.close();
       commandStore.close();
       eventStore.close();
       leaseStore.close();

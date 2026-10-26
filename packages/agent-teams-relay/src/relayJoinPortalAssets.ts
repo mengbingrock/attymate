@@ -82,7 +82,7 @@ export const JOIN_PORTAL_HTML = String.raw`<!doctype html>
 
       <section class="option" id="option-installer">
         <h3><span class="step">1</span>Install and start</h3>
-        <p class="muted">For macOS or Linux. Includes the team's forked Codex runtime and starts its customized App Server using your existing Codex login. If you are not signed in yet, the installer guides you through sign-in.</p>
+        <p class="muted">Choose an available macOS, Windows, or Linux build. Includes the team's forked Codex runtime and starts its customized App Server using your existing Codex login. If you are not signed in yet, the installer guides you through sign-in.</p>
         <label class="field" id="platform-field" hidden>
           <span>Your computer</span>
           <select id="platform" aria-describedby="platform-help"></select>
@@ -90,7 +90,7 @@ export const JOIN_PORTAL_HTML = String.raw`<!doctype html>
         </label>
         <button id="download" type="button" class="primary">Download installer</button>
         <p id="download-error" class="error" role="alert" hidden></p>
-        <p class="muted">After the download finishes, run this in Terminal. The installer reuses your Codex sign-in and starts your team member:</p>
+        <p class="muted">After the download finishes, run this in Terminal or PowerShell. The installer reuses your Codex sign-in and starts your team member:</p>
         <div class="code"><pre id="run-command"></pre><button type="button" class="copy" data-copy="run-command">Copy</button></div>
         <p class="warn">The installer contains your join token. Keep it to yourself.</p>
         <p class="muted">For a separate Codex sign-in, add <code>--private-codex-home</code> to the install command.</p>
@@ -544,7 +544,7 @@ export const JOIN_PORTAL_APP_JS = String.raw`
 
   function installerFilename() {
     return 'agent-teams-join-' + current.team.teamId.slice(0, 8) +
-      (current.platform ? '-' + current.platform : '') + '.sh';
+      (current.platform ? '-' + current.platform : '') + (current.platform === 'win32-x64' ? '.ps1' : '.sh');
   }
 
   function updateInstallerSelection() {
@@ -553,7 +553,9 @@ export const JOIN_PORTAL_APP_JS = String.raw`
     var ready = !current.platforms.length || Boolean(current.platform);
     $('download').disabled = !ready;
     $('download').textContent = 'Download installer';
-    $('run-command').textContent = ready ? 'bash ~/Downloads/' + installerFilename() + ' --label ' + current.label : 'Choose your computer above to get its install command.';
+    var windows = current.platform === 'win32-x64';
+    $('run-command').textContent = ready ? (windows ? 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$HOME/Downloads/' + installerFilename() + '" -Label ' + "'" + current.label.replace(/'/g,"''") + "'" : 'bash ~/Downloads/' + installerFilename() + ' --label ' + JSON.stringify(current.label).replace(/[$\x60]/g,'\\$&')) : 'Choose your computer above to get its install command.';
+    $('attach-command').textContent = windows ? '& "$env:LOCALAPPDATA/AgentTeams/mate-' + current.team.teamId.slice(0,8) + '/bin/attach.ps1"' : 'bash "$HOME/.local/share/agent-teams/mate-' + current.team.teamId.slice(0,8) + '/bin/attach.sh"';
     $('desktop-option').hidden = !current.platform || current.platform.indexOf('darwin-') !== 0;
     $('desktop-command').textContent = 'bash "$HOME/.local/share/agent-teams/mate-' + current.team.teamId.slice(0, 8) + '/bin/desktop.sh"';
   }

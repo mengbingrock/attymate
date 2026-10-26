@@ -28,9 +28,11 @@ it('serves native installers using the existing relay for token checks, revocati
       publicUrl: 'https://relay.example/next',
       installer: {
         template: 'TOKEN="__WORKER_TOKEN__"\nRELAY="__RELAY_URL__"\n__PAYLOAD_BELOW__\n',
+        windowsTemplate: "$token='__WORKER_TOKEN__'\n<#\n__PAYLOAD_BELOW__\n",
         platformBundles: {
           'darwin-x64': Buffer.from('mac-fork'),
           'linux-x64': Buffer.from('linux-fork'),
+          'win32-x64': Buffer.from('windows-fork'),
         },
       },
     },
@@ -56,6 +58,7 @@ it('serves native installers using the existing relay for token checks, revocati
     expect(catalog.installerPlatforms.map((platform: { id: string }) => platform.id)).toEqual([
       'darwin-x64',
       'linux-x64',
+      'win32-x64',
     ]);
     expect((await download('wrong')).statusCode).toBe(401);
     const result = await download(created.joinToken);
@@ -64,6 +67,22 @@ it('serves native installers using the existing relay for token checks, revocati
     expect(Buffer.from(result.body.split('__PAYLOAD_BELOW__\n')[1], 'base64').toString()).toBe(
       'mac-fork'
     );
+    const windows = await portal.app.inject({
+      method: 'POST',
+      url: `/join/api/teams/${created.team.teamId}/installer`,
+      payload: { token: created.joinToken, platform: 'win32-x64' },
+    });
+    expect(windows.statusCode).toBe(200);
+    expect(windows.headers['content-disposition']).toContain('-win32-x64.ps1');
+    expect(windows.body).toContain(`$token='${created.joinToken}'`);
+    expect(windows.body.endsWith('\n#>\n')).toBe(true);
+    expect(Number(windows.headers['content-length'])).toBe(Buffer.byteLength(windows.body));
+    expect(
+      Buffer.from(
+        windows.body.split('__PAYLOAD_BELOW__\n')[1]!.split('#>')[0]!,
+        'base64'
+      ).toString()
+    ).toBe('windows-fork');
     expect((await download('wrong')).statusCode).toBe(401);
     const throttled = await download(created.joinToken);
     expect(throttled.statusCode).toBe(429);

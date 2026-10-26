@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import readline from 'node:readline';
 import { parse as parseToml } from 'smol-toml';
 import WebSocket from 'ws';
+import { localAppServerWebSocket } from './localAppServerWebSocket';
 
 import {
   runtimeConnectionFeatures,
@@ -564,6 +565,7 @@ export class CodexAppServerDaemonFactory implements WorkerCodexAppServerSessionF
       started = await this.startDaemon(features.changed);
     }
     const candidate = started ?? configured;
+    if (candidate.startsWith('ws:') && this.options.ensureDaemon === false) return candidate;
     try {
       // The daemon publishes a symlink into a short temp directory because Unix socket paths are
       // length-limited; connect to the resolved target.
@@ -618,7 +620,13 @@ export class CodexAppServerDaemonFactory implements WorkerCodexAppServerSessionF
   private connect(socketPath: string): Promise<WebSocket> {
     const timeoutMs = this.options.connectTimeoutMs ?? 10_000;
     return new Promise<WebSocket>((resolve, reject) => {
-      const socket = new WebSocket(`ws+unix://${socketPath}:/`);
+      const socket = socketPath.startsWith('ws:')
+        ? localAppServerWebSocket(
+            socketPath,
+            this.options.env?.AGENT_TEAMS_APP_SERVER_TOKEN ??
+              process.env.AGENT_TEAMS_APP_SERVER_TOKEN
+          )
+        : new WebSocket(`ws+unix://${socketPath}:/`);
       const timer = setTimeout(() => {
         socket.terminate();
         reject(new Error(`Connecting to Codex App Server daemon at ${socketPath} timed out`));

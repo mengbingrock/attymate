@@ -97,7 +97,9 @@ const configuredAppServer = (
     socketPath:
       explicitSocket === undefined
         ? defaultCodexDaemonSocketPath(codexHome)
-        : resolveSocketPath(explicitSocket),
+        : explicitSocket.startsWith('ws:')
+          ? explicitSocket
+          : resolveSocketPath(explicitSocket),
   };
 };
 

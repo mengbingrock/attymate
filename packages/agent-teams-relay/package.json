@@ -21,6 +21,7 @@
   "dependencies": {
     "@claude-teams/agent-teams-protocol": "workspace:*",
     "fastify": "^5.8.5",
+    "jose": "6.2.0",
     "ws": "^8.21.0",
     "zod": "^4.3.6"
   },

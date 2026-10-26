@@ -42,6 +42,42 @@ export class RelayDesktopChats {
       'PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, targetNodeId TEXT NOT NULL, payload TEXT NOT NULL, delivered INTEGER NOT NULL DEFAULT 0)'
     );
   }
+  identify(pairingCode: string) {
+    const hash = createHash('sha256').update(pairingCode).digest('hex');
+    const worker = this.options.workers().find((w) => w.pairingHash === hash);
+    return worker && { nodeId: worker.nodeId, label: worker.label };
+  }
+  async request(
+    nodeId: string,
+    action: import('@claude-teams/agent-teams-protocol').DesktopChatAction
+  ) {
+    const worker = this.options.workers().find((w) => w.nodeId === nodeId && w.pairingHash);
+    if (!worker) throw new Error('Device is offline. Start its Worker and try again.');
+    if (
+      action.teamId &&
+      !this.options
+        .memberships()
+        .some((m) => m.nodeId === nodeId && m.teamId === action.teamId && m.status === 'active')
+    )
+      throw new Error('Device is not an active member of this team.');
+    if ([...this.pending.values()].filter((p) => p.nodeId === nodeId).length >= 4)
+      throw new Error('Device is busy. Try again shortly.');
+    if (this.pending.has(action.requestId)) throw new Error('This request is already in progress.');
+    return new Promise<unknown>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(action.requestId);
+        reject(new Error('Device did not respond. Retry this request.'));
+      }, 25000);
+      this.pending.set(action.requestId, { nodeId, resolve, reject, timer });
+      try {
+        worker.send({ type: 'relay.desktop_control', request: action });
+      } catch (error) {
+        clearTimeout(timer);
+        this.pending.delete(action.requestId);
+        reject(error);
+      }
+    });
+  }
   register(app: FastifyInstance) {
     app.post('/join/api/desktop', async (request, reply) => {
       reply.header('cache-control', 'no-store');
