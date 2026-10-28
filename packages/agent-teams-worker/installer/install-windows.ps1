@@ -39,7 +39,9 @@ try {
     if ($line) { $bytes = [Convert]::FromBase64String($line); $output.Write($bytes,0,$bytes.Length) }
   }
 } finally { $reader.Dispose(); $output.Dispose() }
-& tar.exe -xzf $archive -C $worker
+$systemTar = Join-Path $env:SystemRoot 'System32\tar.exe'
+if (-not (Test-Path $systemTar -PathType Leaf)) { throw 'Windows built-in tar.exe is required.' }
+& $systemTar -xzf $archive -C $worker
 if ($LASTEXITCODE -ne 0) { throw 'Could not unpack the native runtime.' }
 Remove-Item $archive
 $node = (Get-Command node.exe -ErrorAction SilentlyContinue).Source

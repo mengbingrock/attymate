@@ -110,8 +110,15 @@ try {
     join(root, 'installer-output.log'),
     (installed.stdout || '') + (installed.stderr || '')
   );
-  if (installed.status !== 0)
-    throw new Error('Installer failed: ' + installed.stdout + installed.stderr);
+  if (installed.status !== 0) {
+    const logs = ['supervisor.log', 'app-server.log']
+      .map((name) => {
+        const path = join(install, 'logs', name);
+        return existsSync(path) ? name + ':\n' + readFileSync(path, 'utf8').slice(-5000) : '';
+      })
+      .join('\n');
+    throw new Error('Installer failed: ' + installed.stdout + installed.stderr + '\n' + logs);
+  }
   const config = JSON.parse(readFileSync(join(install, 'config.json'), 'utf8'));
   assert.equal(config.home, home);
   assert.equal(existsSync(join(install, 'codex-home')), false);
