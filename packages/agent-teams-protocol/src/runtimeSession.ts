@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { runtimeOwnerProofSchema } from './runtimeOwner';
 
 import {
   assignmentIdSchema,
@@ -40,6 +41,10 @@ export const runtimeSessionScopeSchema = z
 
 export const runtimeSessionCreateRequestSchema = runtimeSessionScopeSchema
   .omit({ leaseId: true })
+  .extend({
+    sessionId: z.uuid().optional(),
+    ownerAuthorization: runtimeOwnerProofSchema.optional(),
+  })
   .strict();
 
 export const DISTRIBUTED_RUNTIME_CAPABILITIES = [
@@ -178,6 +183,8 @@ export const relayRuntimeControlMessageSchema = z
     sessionId: runtimeSessionIdSchema,
     scope: runtimeSessionScopeSchema,
     control: runtimeControlSchema,
+    ownerAuthorization: runtimeOwnerProofSchema.optional(),
+    ownerOperation: z.enum(['session.open', 'runtime.control']).optional(),
   })
   .strict();
 

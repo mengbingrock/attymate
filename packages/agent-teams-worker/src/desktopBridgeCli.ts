@@ -27,7 +27,7 @@ const closeTransport = attachDesktopTransport(server, capability, socket, contro
 await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
 const address = server.address();
 if (!address || typeof address === 'string') throw new Error('Desktop bridge did not bind');
-const env = {
+const env: NodeJS.ProcessEnv = {
   ...process.env,
   CODEX_HOME: home,
   CODEX_APP_SERVER_WS_URL: `ws://127.0.0.1:${address.port}${capability}`,

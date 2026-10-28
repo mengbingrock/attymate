@@ -21,3 +21,5 @@ export * from './workerRuntimeStore';
 export * from './workerTeamMembershipStore';
 export * from './workerRuntimeSessionStore';
 export * from './workspaceFileBroker';
+export * from './runtimeOwnerAuthorization';
+export * from './ownerRuntimeClient';

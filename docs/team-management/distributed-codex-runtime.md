@@ -20,6 +20,73 @@ connection. Every control is checked by the Relay and Worker against the current
 The capability token is random, stored as a SHA-256 digest by the Relay, expires no later than the
 lease, and stays in Electron main. It is not returned through preload or renderer contracts.
 
+## Device-owner authority and cross-person access
+
+Team coordination remains on the existing Relay, Worker, membership and execution-lease protocol.
+Managers and peers may send work goals and receive the recipient Agent's results. A request does
+not grant direct access to that person's desktop, browser, connectors, files or private runtime.
+There is no framework-wide business-result field whitelist.
+
+Private runtime access now requires a device-owner Ed25519 proof in addition to the current lease.
+The Worker creates `runtime-owner-key.json` and `runtime-owner-state.sqlite` in its private data
+directory. The signing key never goes to the Relay. The owner-only local control socket signs
+short-lived requests; the Relay checks the proof early and the target Worker independently checks
+it again before snapshots, steering, starts, approvals, reviews or filesystem operations. Opening
+proofs permit only a snapshot. Controls bind the exact payload, session, node, assignment, attempt
+and lease epoch. Nonces and revocation cutoffs persist across restarts.
+
+Raw runtime events are emitted only to owner-authorized session IDs. Creating another session
+cannot subscribe it to a legitimate owner's tool results or private transcript. Global manager
+credentials, membership, display names, task descriptions and Teams allowlists are not owner proofs.
+The owner is the locally enrolled OS-user authority; this does not claim protection from a malicious
+administrator of the owner's own computer or an owner deliberately exporting their private key.
+
+For a local Manager or Teams adapter, configure `ownerControlSocketPath` in the feature/adapter
+configuration, or `AGENT_TEAMS_OWNER_CONTROL_SOCKET` in the Electron host. It points to that owner's
+local Worker control socket, not an employee's remote socket. Without an owner signer, private
+runtime requests fail closed. Team messaging and shared task lifecycle continue to work.
+
+The local Worker also offers an owner-only client, without a global manager credential:
+
+By default this client uses only local IPC: inspection and control results do not pass through the
+Relay. An explicit `--relay-http-url` exercises the signed remote-owner transport instead. Remote
+inspection passes private data through the trusted Relay; this transport is not end-to-end encrypted.
+
+```sh
+agent-teams-worker owner-runtime --data-dir /private/worker-data
+agent-teams-worker owner-runtime --data-dir /private/worker-data \
+  --relay-http-url https://relay.example --control-file /private/exact-runtime-control.json
+```
+
+The control file follows the existing runtime control schema. It must include a fresh control ID
+and the exact current turn/generation when resolving an approval. With the explicit remote transport,
+sending a control acknowledges dispatch; inspect its `control.result` receipt before claiming execution succeeded. The
+snapshot command displays private owner data and must not be included in shared diagnostics.
+
+An owner may explicitly pair public keys for their other devices with `--owner-keyring` and an
+owner-only JSON array of `{ personId, publicKey }` records. Keys must have the same locally verified
+owner identity. Never copy private keys between people or install a manager's key as an employee's
+owner key. Use a separate Worker data directory and fresh identity when simulating another employee.
+
+Employee approvals must originate from that employee's trusted owner client. A manager-hosted Teams
+adapter with only the manager's local signer cannot approve or inspect an employee's private
+runtime, even if its enrollment file mistakenly lists that employee as an owned node. The employee
+can use their local owner client. Supporting another remote owner UI requires a genuine owner
+signer; an email claim or a manager-signed assertion is insufficient.
+
+For the ngrok pilot, ingress forwards only the three capability-protected owner-runtime paths
+alongside the original Teams and Worker-stream paths. Owner signing and revocation endpoints remain
+local IPC only; manager APIs remain unpublished. All components must be upgraded together: legacy
+Workers without owner keys do not receive a permissive compatibility fallback.
+
+Public owner routes use the [Fastify rate limiter](https://github.com/fastify/fastify-rate-limit)
+before authorization: 60 openings, 120 controls and 600 event reads per minute per socket peer.
+Forwarded headers do not reset these budgets; clients behind the local pilot gateway share them.
+Excess requests receive HTTP 429 and Retry-After. Other team-manager routes retain their behavior.
+
+See [owner-boundary validation](owner-boundary-validation.md) for automated coverage and the
+separate native, independent-account acceptance procedure.
+
 ## OpenAI component boundaries
 
 - **Codex CLI and agent harness:** owns context, compaction, tools, sandboxing, command execution,
@@ -187,7 +254,8 @@ external mutations require their own authorization.
 
 ## Security invariants
 
-- Interactive runtime sessions require both Relay manager and Worker authentication.
+- Private runtime sessions require device-owner signatures and an authenticated Worker transport;
+  a Relay manager credential alone cannot grant private access.
 - Manager and Worker credentials are separate and compared in constant time.
 - Runtime session capabilities are rejected after expiration, lease release, fencing, or identity
   mismatch.

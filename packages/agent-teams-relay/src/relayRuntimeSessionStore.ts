@@ -12,6 +12,7 @@ import {
 
 const DEFAULT_CAPABILITIES: readonly RuntimeSessionCapability[] = [
   'events.read',
+  'turn.start',
   'turn.steer',
   'turn.interrupt',
   'approval.resolve',
@@ -71,6 +72,7 @@ const scopeMatches = (left: RuntimeSessionScope, right: RuntimeSessionScope): bo
 
 const capabilityForControl = (control: RuntimeControl): RuntimeSessionCapability => {
   if (control.type === 'runtime.snapshot') return 'events.read';
+  if (control.type === 'turn.start') return 'turn.start';
   if (control.type === 'turn.steer') return 'turn.steer';
   if (control.type === 'turn.interrupt') return 'turn.interrupt';
   if (control.type === 'approval.resolve') return 'approval.resolve';
@@ -97,7 +99,8 @@ export class RelayRuntimeSessionStore {
   create(
     scopeInput: RuntimeSessionScope,
     leaseExpiresAt: string,
-    capabilities: readonly RuntimeSessionCapability[] = DEFAULT_CAPABILITIES
+    capabilities: readonly RuntimeSessionCapability[] = DEFAULT_CAPABILITIES,
+    requestedSessionId?: string
   ): CreatedRelayRuntimeSession {
     const scope = runtimeSessionScopeSchema.parse(scopeInput);
     const leaseExpiry = Date.parse(leaseExpiresAt);
@@ -106,7 +109,8 @@ export class RelayRuntimeSessionStore {
       throw new RelayRuntimeSessionAuthorizationError();
     }
     const sessionToken = randomBytes(32).toString('base64url');
-    const sessionId = randomUUID();
+    const sessionId = requestedSessionId ?? randomUUID();
+    if (this.sessions.has(sessionId)) throw new RelayRuntimeSessionAuthorizationError();
     const expiresAt = new Date(Math.min(leaseExpiry, now + DEFAULT_TTL_MS)).toISOString();
     this.sessions.set(sessionId, {
       sessionId,

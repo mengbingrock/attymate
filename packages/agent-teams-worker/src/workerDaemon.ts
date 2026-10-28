@@ -19,6 +19,10 @@ import {
   type PersonId,
   type TeamId,
   type WorkerInstanceId,
+  type RuntimeOwnerKey,
+  type RuntimeOwnerRequest,
+  type RuntimeOwnerProof,
+  type RuntimeControl,
 } from '@claude-teams/agent-teams-protocol';
 import WebSocket from 'ws';
 
@@ -50,6 +54,7 @@ import {
 import { WorkspaceFileBroker } from './workspaceFileBroker';
 import { isTeamCommunicationTool, teamCommunicationMessage } from './teamCollaborationRequests';
 import { decodeTeamReply } from './teamMessageReplies';
+import { WorkerRuntimeOwnerAuthorization } from './runtimeOwnerAuthorization';
 import {
   teamInboxNotification,
   runtimeInboxMessage,
@@ -68,6 +73,8 @@ export interface AgentTeamsWorkerOptions {
   readonly label: string;
   readonly autoJoinTeamId?: TeamId;
   readonly controlSocketPath?: string;
+  /** Additional public keys paired locally for this same owner's other devices. */
+  readonly runtimeOwnerKeys?: readonly RuntimeOwnerKey[];
   readonly reconnectDelayMs?: number;
   readonly leaseSweepIntervalMs?: number;
   /** How often queued peer messages are re-offered to the runtime when an earlier attempt could not run. */
@@ -119,6 +126,8 @@ export interface AgentTeamsWorkerStatus {
 }
 
 export interface StartedAgentTeamsWorker {
+  readonly authorizeOwnerRuntimeRequest: (request: RuntimeOwnerRequest) => RuntimeOwnerProof;
+  readonly revokeOwnerRuntimeAccess: () => void;
   readonly ready: Promise<void>;
   readonly getStatus: () => AgentTeamsWorkerStatus;
   readonly listInboxCommands: () => readonly WorkerInboxCommand[];
@@ -144,6 +153,11 @@ export const startAgentTeamsWorker = async (
   options: AgentTeamsWorkerOptions
 ): Promise<StartedAgentTeamsWorker> => {
   await mkdir(options.dataDir, { recursive: true });
+  const runtimeOwner = await WorkerRuntimeOwnerAuthorization.open(
+    options.dataDir,
+    options.personId,
+    options.runtimeOwnerKeys
+  );
   const inboxStore = new WorkerInboxStore(options.dataDir);
   const assignmentStore = new WorkerAssignmentStore(options.dataDir);
   const messageStore = new WorkerMessageStore(options.dataDir);
@@ -493,7 +507,34 @@ export const startAgentTeamsWorker = async (
   const flushRuntimeEvents = (): void => {
     if (socket?.readyState !== WebSocket.OPEN) return;
     while (runtimeEventQueue.length > 0) {
-      socket.send(JSON.stringify(runtimeEventQueue.shift()));
+      const message = runtimeEventQueue.shift()!;
+      const denied =
+        message.event.kind === 'control.result' &&
+        (message.event.payload as { ok?: boolean })?.ok === false;
+      const scope = currentRuntimeScope();
+      const authorized =
+        scope !== undefined &&
+        scopeMatches(scope, message.scope) &&
+        message.sessionId !== undefined &&
+        runtimeOwner.hasSession(message.sessionId, scope);
+      if (!denied && !authorized) continue;
+      socket.send(
+        JSON.stringify(
+          !authorized
+            ? {
+                ...message,
+                event: {
+                  kind: 'control.result',
+                  payload: {
+                    controlId: (message.event.payload as { controlId?: string })?.controlId,
+                    ok: false,
+                    error: 'Device-owner authorization is required for private runtime access',
+                  },
+                },
+              }
+            : message
+        )
+      );
     }
   };
   const emitScopedRuntimeEvent = (
@@ -501,18 +542,36 @@ export const startAgentTeamsWorker = async (
     event: RuntimeEvent,
     sessionId?: string
   ): void => {
-    runtimeEventSequence += 1;
-    runtimeEventQueue.push({
-      type: 'worker.runtime_event',
-      protocolVersion: 2,
-      eventId: randomUUID(),
-      sequence: runtimeEventSequence,
-      scope,
-      ...(sessionId === undefined ? {} : { sessionId }),
-      occurredAt: new Date().toISOString(),
-      event: boundedRuntimeEvent(event),
-    });
-    if (runtimeEventQueue.length > 500) runtimeEventQueue.splice(0, runtimeEventQueue.length - 500);
+    const denied =
+      event.kind === 'control.result' && (event.payload as { ok?: boolean })?.ok === false;
+    const recipients = sessionId === undefined ? runtimeOwner.sessionIds(scope) : [sessionId];
+    for (const recipient of recipients) {
+      const authorized = runtimeOwner.hasSession(recipient, scope);
+      if (!denied && !authorized) continue;
+      const safeEvent: RuntimeEvent = !authorized
+        ? {
+            kind: 'control.result',
+            payload: {
+              controlId: (event.payload as { controlId?: string })?.controlId,
+              ok: false,
+              error: 'Device-owner authorization is required for private runtime access',
+            },
+          }
+        : event;
+      runtimeEventSequence += 1;
+      runtimeEventQueue.push({
+        type: 'worker.runtime_event',
+        protocolVersion: 2,
+        eventId: randomUUID(),
+        sequence: runtimeEventSequence,
+        scope,
+        sessionId: recipient,
+        occurredAt: new Date().toISOString(),
+        event: boundedRuntimeEvent(safeEvent),
+      });
+      if (runtimeEventQueue.length > 500)
+        runtimeEventQueue.splice(0, runtimeEventQueue.length - 500);
+    }
     flushRuntimeEvents();
   };
   emitRuntimeEvent = (event, sessionId) => {
@@ -520,14 +579,20 @@ export const startAgentTeamsWorker = async (
     if (scope !== undefined) emitScopedRuntimeEvent(scope, event, sessionId);
   };
 
-  const handleRuntimeControl = async (message: RelayRuntimeControlMessage): Promise<void> => {
+  const handleRuntimeControl = async (
+    message: RelayRuntimeControlMessage,
+    source: 'relay' | 'local' = 'relay'
+  ): Promise<{ ok: boolean; result?: unknown; error?: string }> => {
+    const emitControlEvent: typeof emitScopedRuntimeEvent = (...args) => {
+      if (source === 'relay') emitScopedRuntimeEvent(...args);
+    };
     const scope = currentRuntimeScope();
     if (
       scope === undefined ||
       !scopeMatches(scope, message.scope) ||
       runtimeSupervisor === undefined
     ) {
-      emitScopedRuntimeEvent(
+      emitControlEvent(
         message.scope,
         {
           kind: 'control.result',
@@ -539,9 +604,25 @@ export const startAgentTeamsWorker = async (
         },
         message.sessionId
       );
-      return;
+      return { ok: false, error: 'The worker runtime scope is no longer active' };
     }
     try {
+      // An opening proof only permits a snapshot, never an arbitrary substituted control.
+      if (message.ownerOperation === 'session.open' && message.control.type !== 'runtime.snapshot')
+        throw new Error('A runtime opening authorization cannot execute a control');
+      const leaseExpiresAt = assignmentStore.get(scope.assignmentId)?.leaseExpiresAt;
+      if (leaseExpiresAt === undefined) throw new Error('Active execution lease is required');
+      if (source === 'relay')
+        runtimeOwner.authorize(
+          {
+            operation: message.ownerOperation ?? 'runtime.control',
+            sessionId: message.sessionId,
+            scope,
+            ...(message.ownerOperation === 'session.open' ? {} : { control: message.control }),
+          },
+          message.ownerAuthorization,
+          leaseExpiresAt
+        );
       let result: unknown;
       let fenceReason: string | undefined;
       if (message.control.type === 'runtime.snapshot') {
@@ -554,13 +635,13 @@ export const startAgentTeamsWorker = async (
               binding.leaseId === scope.leaseId &&
               binding.leaseEpoch === scope.leaseEpoch
           );
-        emitScopedRuntimeEvent(
+        emitControlEvent(
           scope,
           { kind: 'runtime.snapshot', payload: { binding: result } },
           message.sessionId
         );
         for (const request of runtimeSupervisor.listPendingRequests()) {
-          emitScopedRuntimeEvent(
+          emitControlEvent(
             scope,
             {
               kind: 'app-server.request',
@@ -615,12 +696,12 @@ export const startAgentTeamsWorker = async (
           message.control.payload.content,
           message.control.payload.expectedRevision
         );
-        emitScopedRuntimeEvent(scope, {
+        emitControlEvent(scope, {
           kind: 'filesystem.changed',
           payload: { path: message.control.payload.path },
         });
       }
-      emitScopedRuntimeEvent(
+      emitControlEvent(
         scope,
         {
           kind: 'control.result',
@@ -635,8 +716,9 @@ export const startAgentTeamsWorker = async (
           flushPendingEvents();
         }
       }
+      return { ok: true, result };
     } catch (error) {
-      emitScopedRuntimeEvent(
+      emitControlEvent(
         scope,
         {
           kind: 'control.result',
@@ -648,6 +730,10 @@ export const startAgentTeamsWorker = async (
         },
         message.sessionId
       );
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message.slice(0, 512) : 'Runtime control failed',
+      };
     }
   };
 
@@ -1048,6 +1134,7 @@ export const startAgentTeamsWorker = async (
             : { autoJoinTeamId: options.autoJoinTeamId }),
           runtimeCapabilities:
             options.codexRuntime === undefined ? [] : [...DISTRIBUTED_RUNTIME_CAPABILITIES],
+          runtimeOwnerKeys: runtimeOwner.keys,
           lastInboundCursor: inboxStore.lastInboundCursor(),
           sentAt: new Date().toISOString(),
         })
@@ -1234,6 +1321,27 @@ export const startAgentTeamsWorker = async (
   await persistStatus();
   if (options.controlSocketPath !== undefined) {
     controlServer = await startWorkerControlServer(options.controlSocketPath, {
+      getOwnerRuntimeSnapshot: () => ({
+        scope: currentRuntimeScope(),
+        bindings: runtimeSupervisor?.listBindings() ?? [],
+        requests: runtimeSupervisor?.listPendingRequests() ?? [],
+      }),
+      executeOwnerRuntimeControl: async (control: RuntimeControl) => {
+        const scope = currentRuntimeScope();
+        if (!scope) throw new Error('No active local execution lease');
+        return handleRuntimeControl(
+          {
+            type: 'relay.runtime_control',
+            protocolVersion: 2,
+            sessionId: randomUUID(),
+            scope,
+            control,
+          },
+          'local'
+        );
+      },
+      authorizeOwnerRuntimeRequest: (request) => runtimeOwner.sign(request),
+      revokeOwnerRuntimeAccess: () => runtimeOwner.revoke(),
       getStatus: () => status,
       listInboxCommands: () => inboxStore.list(),
       listMessages: () => messageStore.listAll(),
@@ -1277,6 +1385,8 @@ export const startAgentTeamsWorker = async (
   connect();
 
   return {
+    authorizeOwnerRuntimeRequest: (request) => runtimeOwner.sign(request),
+    revokeOwnerRuntimeAccess: () => runtimeOwner.revoke(),
     ready,
     getStatus: () => status,
     listInboxCommands: () => inboxStore.list(),
@@ -1316,6 +1426,7 @@ export const startAgentTeamsWorker = async (
       await desktopChats?.close();
       await runtimeSupervisor?.close();
       await messageDeliveryPromise?.catch(() => undefined);
+      runtimeOwner.close();
       assignmentStore.close();
       outboxStore.close();
       messageStore.close();

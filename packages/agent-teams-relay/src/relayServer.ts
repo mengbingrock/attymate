@@ -40,6 +40,7 @@ import {
   type WorkerInstanceId,
 } from '@claude-teams/agent-teams-protocol';
 import Fastify, { type FastifyInstance } from 'fastify';
+import rateLimit from '@fastify/rate-limit';
 import type { IncomingMessage } from 'node:http';
 import { type RawData, WebSocket, WebSocketServer } from 'ws';
 
@@ -64,6 +65,7 @@ import { RelayDesktopChats } from './relayDesktopChats';
 import { RelayTeamDirectoryStore } from './relayTeamDirectoryStore';
 import { RelayAccountStore } from './accountPortal/accountStore';
 import { registerAccountRoutes } from './accountPortal/accountRoutes';
+import { verifyRuntimeOwnerAuthorization } from './runtimeOwnerAuthorization';
 
 export interface AgentTeamsRelayOptions {
   readonly host: string;
@@ -183,6 +185,7 @@ const bearerValue = (authorization: string | undefined): string | undefined =>
   authorization?.startsWith('Bearer ') ? authorization.slice('Bearer '.length) : undefined;
 
 const isRuntimeCapabilityPath = (url: string): boolean =>
+  /^\/v2\/runtime-sessions(?:[?]|$)/.test(url) ||
   /^\/v2\/runtime-sessions\/[^/?]+\/(events|controls)(?:[?]|$)/.test(url);
 
 const peerDeliveryCommandId = (eventId: string, recipientMembershipId: string): string => {
@@ -215,6 +218,8 @@ export const startAgentTeamsRelay = async (
   const staleAfterMs = options.staleAfterMs ?? heartbeatIntervalMs * 3;
   const sessions = new Map<NodeId, MutableWorkerSession>();
   const app = Fastify({ logger: options.logger ?? false });
+  // Use the socket peer, not caller-supplied forwarding headers, for public owner-route budgets.
+  await app.register(rateLimit, { global: false, cache: 2_000 });
   const webSocketServer = new WebSocketServer({ noServer: true });
   const commandStore = new RelayCommandStore(options.dataDir);
   const eventStore = new RelayEventStore(options.dataDir);
@@ -249,6 +254,7 @@ export const startAgentTeamsRelay = async (
   const insecureLanMode = auth === undefined;
 
   app.addHook('onRequest', async (request, reply) => {
+    if (isRuntimeCapabilityPath(request.url)) reply.header('cache-control', 'no-store');
     if (
       !request.url.startsWith('/v2/') ||
       isRuntimeCapabilityPath(request.url) ||
@@ -995,130 +1001,205 @@ export const startAgentTeamsRelay = async (
     const command = enqueueCommand(request.body);
     return reply.code(201).send({ command });
   });
-  app.post('/v2/runtime-sessions', async (request, reply) => {
-    if (auth === undefined) {
-      return reply.code(409).send({ error: 'authenticated_runtime_sessions_required' });
-    }
-    const requested = runtimeSessionCreateRequestSchema.parse(request.body);
-    leaseStore.expireThrough();
-    const lease = leaseStore
-      .listAll()
-      .find(
-        (candidate) =>
-          candidate.teamId === requested.teamId &&
-          candidate.nodeId === requested.nodeId &&
-          candidate.assignmentId === requested.assignmentId &&
-          candidate.attemptId === requested.attemptId &&
-          candidate.leaseEpoch === requested.leaseEpoch &&
-          ['granted', 'active'].includes(candidate.status)
-      );
-    const workerSession = sessions.get(requested.nodeId);
-    if (
-      lease === undefined ||
-      workerSession === undefined ||
-      !workerSession.hello.runtimeCapabilities?.includes('events.read')
-    ) {
-      return reply.code(409).send({ error: 'runtime_lease_not_active' });
-    }
-    const created = runtimeSessionStore.create(
-      { ...requested, leaseId: lease.leaseId },
-      lease.expiresAt,
-      workerSession.hello.runtimeCapabilities
-    );
-    workerSession.socket.send(
-      JSON.stringify({
-        type: 'relay.runtime_control',
-        protocolVersion: 2,
-        sessionId: created.sessionId,
-        scope: created.scope,
-        control: {
-          controlId: randomUUID(),
-          type: 'runtime.snapshot',
-          payload: {},
-        },
-      })
-    );
-    return reply.code(201).send(created);
-  });
-  app.get('/v2/runtime-sessions/:sessionId/events', async (request, reply) => {
-    try {
-      const sessionId = runtimeSessionIdSchema.parse(
-        (request.params as { sessionId?: unknown }).sessionId
-      );
-      const token = bearerValue(request.headers.authorization);
-      if (token === undefined) throw new RelayRuntimeSessionAuthorizationError();
-      const scope = runtimeSessionStore.authorizeRead(sessionId, token);
-      leaseStore.expireThrough();
-      const readableLease = leaseStore
-        .listAll()
-        .some(
-          (lease) =>
-            lease.assignmentId === scope.assignmentId &&
-            lease.attemptId === scope.attemptId &&
-            lease.leaseId === scope.leaseId &&
-            lease.leaseEpoch === scope.leaseEpoch &&
-            lease.nodeId === scope.nodeId &&
-            lease.teamId === scope.teamId &&
-            ['granted', 'active'].includes(lease.status)
-        );
-      if (!readableLease) {
-        runtimeSessionStore.revokeScope(scope);
-        throw new RelayRuntimeSessionAuthorizationError();
+  app.post(
+    '/v2/runtime-sessions',
+    {
+      preHandler: app.rateLimit({ max: 60, timeWindow: 60_000 }),
+    },
+    async (request, reply) => {
+      if (auth === undefined) {
+        return reply.code(409).send({ error: 'authenticated_runtime_sessions_required' });
       }
-      const rawAfter = (request.query as { after?: unknown }).after ?? '0';
-      const after = typeof rawAfter === 'string' && /^\d+$/.test(rawAfter) ? Number(rawAfter) : NaN;
-      return runtimeSessionStore.listEvents(sessionId, token, after);
-    } catch (error) {
-      if (error instanceof RelayRuntimeSessionAuthorizationError) {
-        return reply.code(401).send({ error: error.code });
+      const parsed = runtimeSessionCreateRequestSchema.safeParse(request.body);
+      if (!parsed.success)
+        return reply.code(400).send({ error: 'invalid_runtime_session_request' });
+      const requested = parsed.data;
+      const { sessionId, ownerAuthorization, ...requestedScope } = requested;
+      const ownerWorker = sessions.get(requested.nodeId);
+      if (
+        !sessionId ||
+        !verifyRuntimeOwnerAuthorization(
+          {
+            operation: 'session.open',
+            sessionId,
+            scope: requestedScope,
+          },
+          ownerAuthorization,
+          (ownerWorker?.hello.runtimeOwnerKeys ?? []).filter(
+            (key) => key.personId === ownerWorker?.hello.personId
+          )
+        )
+      ) {
+        return reply.code(403).send({ error: 'device_owner_authorization_required' });
       }
-      throw error;
-    }
-  });
-  app.post('/v2/runtime-sessions/:sessionId/controls', async (request, reply) => {
-    try {
-      const sessionId = runtimeSessionIdSchema.parse(
-        (request.params as { sessionId?: unknown }).sessionId
-      );
-      const token = bearerValue(request.headers.authorization);
-      if (token === undefined) throw new RelayRuntimeSessionAuthorizationError();
-      const control = runtimeControlSchema.parse(request.body);
-      const scope = runtimeSessionStore.authorizeControl(sessionId, token, control);
       leaseStore.expireThrough();
-      const currentLease = leaseStore
+      const lease = leaseStore
         .listAll()
         .find(
-          (lease) =>
-            lease.assignmentId === scope.assignmentId &&
-            lease.attemptId === scope.attemptId &&
-            lease.leaseId === scope.leaseId &&
-            lease.leaseEpoch === scope.leaseEpoch &&
-            lease.nodeId === scope.nodeId &&
-            lease.teamId === scope.teamId &&
-            ['granted', 'active'].includes(lease.status)
+          (candidate) =>
+            candidate.teamId === requested.teamId &&
+            candidate.nodeId === requested.nodeId &&
+            candidate.assignmentId === requested.assignmentId &&
+            candidate.attemptId === requested.attemptId &&
+            candidate.leaseEpoch === requested.leaseEpoch &&
+            ['granted', 'active'].includes(candidate.status)
         );
-      const workerSession = sessions.get(scope.nodeId);
-      if (currentLease === undefined || workerSession === undefined) {
-        runtimeSessionStore.revokeScope(scope);
+      const workerSession = sessions.get(requested.nodeId);
+      if (
+        lease === undefined ||
+        workerSession === undefined ||
+        !workerSession.hello.runtimeCapabilities?.includes('events.read')
+      ) {
         return reply.code(409).send({ error: 'runtime_lease_not_active' });
+      }
+      let created: ReturnType<RelayRuntimeSessionStore['create']>;
+      try {
+        created = runtimeSessionStore.create(
+          { ...requestedScope, leaseId: lease.leaseId },
+          lease.expiresAt,
+          workerSession.hello.runtimeCapabilities,
+          sessionId
+        );
+      } catch (error) {
+        if (error instanceof RelayRuntimeSessionAuthorizationError)
+          return reply.code(409).send({ error: 'runtime_session_unavailable' });
+        throw error;
       }
       workerSession.socket.send(
         JSON.stringify({
           type: 'relay.runtime_control',
           protocolVersion: 2,
-          sessionId,
-          scope,
-          control,
+          sessionId: created.sessionId,
+          scope: created.scope,
+          ownerAuthorization,
+          ownerOperation: 'session.open',
+          control: {
+            controlId: randomUUID(),
+            type: 'runtime.snapshot',
+            payload: {},
+          },
         })
       );
-      return reply.code(202).send({ accepted: true, controlId: control.controlId });
-    } catch (error) {
-      if (error instanceof RelayRuntimeSessionAuthorizationError) {
-        return reply.code(401).send({ error: error.code });
-      }
-      throw error;
+      return reply.code(201).send(created);
     }
-  });
+  );
+  app.get(
+    '/v2/runtime-sessions/:sessionId/events',
+    {
+      preHandler: app.rateLimit({ max: 600, timeWindow: 60_000 }),
+    },
+    async (request, reply) => {
+      try {
+        const sessionId = runtimeSessionIdSchema.parse(
+          (request.params as { sessionId?: unknown }).sessionId
+        );
+        const token = bearerValue(request.headers.authorization);
+        if (token === undefined) throw new RelayRuntimeSessionAuthorizationError();
+        const scope = runtimeSessionStore.authorizeRead(sessionId, token);
+        leaseStore.expireThrough();
+        const readableLease = leaseStore
+          .listAll()
+          .some(
+            (lease) =>
+              lease.assignmentId === scope.assignmentId &&
+              lease.attemptId === scope.attemptId &&
+              lease.leaseId === scope.leaseId &&
+              lease.leaseEpoch === scope.leaseEpoch &&
+              lease.nodeId === scope.nodeId &&
+              lease.teamId === scope.teamId &&
+              ['granted', 'active'].includes(lease.status)
+          );
+        if (!readableLease) {
+          runtimeSessionStore.revokeScope(scope);
+          throw new RelayRuntimeSessionAuthorizationError();
+        }
+        const rawAfter = (request.query as { after?: unknown }).after ?? '0';
+        const after =
+          typeof rawAfter === 'string' && /^\d+$/.test(rawAfter) ? Number(rawAfter) : NaN;
+        return runtimeSessionStore.listEvents(sessionId, token, after);
+      } catch (error) {
+        if (error instanceof RelayRuntimeSessionAuthorizationError) {
+          return reply.code(401).send({ error: error.code });
+        }
+        if (error instanceof Error && error.name === 'ZodError')
+          return reply.code(400).send({ error: 'invalid_runtime_request' });
+        throw error;
+      }
+    }
+  );
+  app.post(
+    '/v2/runtime-sessions/:sessionId/controls',
+    {
+      preHandler: app.rateLimit({ max: 120, timeWindow: 60_000 }),
+    },
+    async (request, reply) => {
+      try {
+        const sessionId = runtimeSessionIdSchema.parse(
+          (request.params as { sessionId?: unknown }).sessionId
+        );
+        const token = bearerValue(request.headers.authorization);
+        if (token === undefined) throw new RelayRuntimeSessionAuthorizationError();
+        if (
+          typeof request.body !== 'object' ||
+          request.body === null ||
+          Array.isArray(request.body)
+        )
+          return reply.code(400).send({ error: 'invalid_runtime_control' });
+        const body = request.body as Record<string, unknown>;
+        const { ownerAuthorization, ...controlInput } = body;
+        const control = runtimeControlSchema.parse(controlInput);
+        const scope = runtimeSessionStore.authorizeControl(sessionId, token, control);
+        leaseStore.expireThrough();
+        const currentLease = leaseStore
+          .listAll()
+          .find(
+            (lease) =>
+              lease.assignmentId === scope.assignmentId &&
+              lease.attemptId === scope.attemptId &&
+              lease.leaseId === scope.leaseId &&
+              lease.leaseEpoch === scope.leaseEpoch &&
+              lease.nodeId === scope.nodeId &&
+              lease.teamId === scope.teamId &&
+              ['granted', 'active'].includes(lease.status)
+          );
+        const workerSession = sessions.get(scope.nodeId);
+        if (currentLease === undefined || workerSession === undefined) {
+          runtimeSessionStore.revokeScope(scope);
+          return reply.code(409).send({ error: 'runtime_lease_not_active' });
+        }
+        if (
+          !verifyRuntimeOwnerAuthorization(
+            { operation: 'runtime.control', sessionId, scope, control },
+            ownerAuthorization,
+            (workerSession.hello.runtimeOwnerKeys ?? []).filter(
+              (key) => key.personId === workerSession.hello.personId
+            )
+          )
+        ) {
+          return reply.code(403).send({ error: 'device_owner_authorization_required' });
+        }
+        workerSession.socket.send(
+          JSON.stringify({
+            type: 'relay.runtime_control',
+            protocolVersion: 2,
+            sessionId,
+            scope,
+            control,
+            ownerAuthorization,
+            ownerOperation: 'runtime.control',
+          })
+        );
+        return reply.code(202).send({ accepted: true, controlId: control.controlId });
+      } catch (error) {
+        if (error instanceof RelayRuntimeSessionAuthorizationError) {
+          return reply.code(401).send({ error: error.code });
+        }
+        if (error instanceof Error && error.name === 'ZodError')
+          return reply.code(400).send({ error: 'invalid_runtime_control' });
+        throw error;
+      }
+    }
+  );
 
   app.server.on('upgrade', (request, socket, head) => {
     const requestUrl = new URL(request.url ?? '/', 'http://relay.local');
