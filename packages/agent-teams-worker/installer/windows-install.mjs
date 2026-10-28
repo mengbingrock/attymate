@@ -1,16 +1,19 @@
-// Native Windows installer/supervisor. Never starts a stock daemon or copies a login.
+/* global process, console, setTimeout, URL, fetch */
+// Native Windows installer/supervisor for isolated stock and fork installations.
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import {
   existsSync,
+  openSync,
+  closeSync,
+  linkSync,
   mkdirSync,
   readFileSync,
   writeFileSync,
   readdirSync,
   lstatSync,
-  openSync,
-  closeSync,
+  realpathSync,
   unlinkSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
@@ -33,6 +36,23 @@ const run = (binary, args, env = process.env) => {
   const result = spawnSync(binary, args, { env, stdio: 'inherit', windowsHide: true });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`Command failed: ${binary} (exit ${result.status})`);
+};
+const assertManagedStockHome = (runtimeKind, serverOwnership, home, env) => {
+  if (runtimeKind !== 'stock' || serverOwnership === 'external') return;
+  const canonical = (path) => {
+    try {
+      return realpathSync(path).toLowerCase();
+    } catch {
+      return resolve(path).toLowerCase();
+    }
+  };
+  const selected = canonical(home);
+  if (selected === canonical(join(dir, 'codex-home'))) return;
+  const personal = [join(homedir(), '.codex'), ...(env.CODEX_HOME ? [env.CODEX_HOME] : [])];
+  if (personal.some((path) => canonical(path) === selected))
+    throw new Error(
+      'Managed stock runtime requires a dedicated Codex home; shared personal-home isolation is not verified.'
+    );
 };
 const verify = (root) => {
   const manifest = JSON.parse(readFileSync(join(root, 'runtime-manifest.json'), 'utf8'));
@@ -68,16 +88,75 @@ if (command === 'install') {
     mkdirSync(join(dir, name), { recursive: true });
   if (existsSync(join(dir, 'data', 'supervisor.pid')))
     throw new Error('Stop this installation before replacing it.');
-  const runtime = join(worker, 'codex-runtime', 'win32-x64');
-  verify(runtime);
-  const binary = join(runtime, 'bin', 'codex.exe');
   const env = process.env;
+  const runtimeKind = env.AGENT_TEAMS_INSTALL_RUNTIME || 'fork';
+  if (!['stock', 'fork'].includes(runtimeKind)) throw new Error('Invalid runtime kind');
+  if (
+    existsSync(configPath) &&
+    (JSON.parse(readFileSync(configPath, 'utf8')).runtimeKind || 'fork') !== runtimeKind
+  )
+    throw new Error(
+      'Installation runtime differs; choose another directory to keep both installations.'
+    );
+  const serverOwnership = env.AGENT_TEAMS_INSTALL_SERVER_OWNERSHIP || 'managed';
+  if (!['managed', 'external'].includes(serverOwnership))
+    throw new Error('Invalid server ownership');
+  let binary;
+  if (runtimeKind === 'stock') {
+    binary =
+      env.AGENT_TEAMS_INSTALL_CODEX_BINARY ||
+      powershell('(Get-Command codex.exe -ErrorAction Stop).Source').toString().trim();
+    if (!binary || !existsSync(binary))
+      throw new Error('Install official Codex or pass -CodexBinary with its executable path.');
+    binary = resolve(binary);
+    for (const [args, option] of [
+      [['app-server', '--help'], '--listen'],
+      [['agents', '--help'], '--remote'],
+    ]) {
+      const result = spawnSync(binary, args, { encoding: 'utf8', windowsHide: true });
+      if (
+        result.error ||
+        result.status !== 0 ||
+        !((result.stdout || '') + (result.stderr || '')).includes(option)
+      )
+        throw new Error('Selected stock Codex does not support ' + args.join(' ') + ' ' + option);
+    }
+  } else {
+    if (env.AGENT_TEAMS_INSTALL_CODEX_BINARY)
+      throw new Error('-CodexBinary is supported only for stock installers.');
+    const runtime = join(worker, 'codex-runtime', 'win32-x64');
+    verify(runtime);
+    binary = join(runtime, 'bin', 'codex.exe');
+  }
+  let externalEndpoint;
+  let externalToken;
+  if (serverOwnership === 'external') {
+    if (
+      runtimeKind !== 'stock' ||
+      !env.AGENT_TEAMS_INSTALL_CODEX_HOME ||
+      !env.AGENT_TEAMS_INSTALL_APP_SERVER_TOKEN_FILE
+    )
+      throw new Error(
+        'External mode requires stock runtime, -CodexHome, -AppServerSocket, and -AppServerTokenFile.'
+      );
+    externalEndpoint = env.AGENT_TEAMS_INSTALL_APP_SERVER_SOCKET;
+    if (!/^ws:\/\/127\.0\.0\.1:[0-9]+$/.test(externalEndpoint || ''))
+      throw new Error('External App Server must use an authenticated loopback WebSocket endpoint.');
+    externalToken = readFileSync(env.AGENT_TEAMS_INSTALL_APP_SERVER_TOKEN_FILE, 'utf8').trim();
+    if (!externalToken) throw new Error('External App Server capability token is empty.');
+  } else if (
+    env.AGENT_TEAMS_INSTALL_APP_SERVER_SOCKET ||
+    env.AGENT_TEAMS_INSTALL_APP_SERVER_TOKEN_FILE
+  ) {
+    throw new Error('External endpoint options require -ServerOwnership external.');
+  }
   const home = resolve(
     env.AGENT_TEAMS_INSTALL_CODEX_HOME ||
-      (env.AGENT_TEAMS_INSTALL_PRIVATE_HOME === 'True'
+      (env.AGENT_TEAMS_INSTALL_PRIVATE_HOME === 'True' || runtimeKind === 'stock'
         ? join(dir, 'codex-home')
         : env.CODEX_HOME || join(homedir(), '.codex'))
   );
+  assertManagedStockHome(runtimeKind, serverOwnership, home, env);
   if (existsSync(home) && (!lstatSync(home).isDirectory() || lstatSync(home).isSymbolicLink()))
     throw new Error('Codex home must be a directory, not a link.');
   mkdirSync(home, { recursive: true });
@@ -96,6 +175,10 @@ if (command === 'install') {
     const id = randomBytes(12).toString('hex');
     config = {
       node: process.execPath,
+      runtimeKind,
+      serverOwnership,
+      externalEndpoint,
+      installationId: randomUUID(),
       binary,
       home,
       relay: env.AGENT_TEAMS_INSTALL_RELAY,
@@ -107,11 +190,12 @@ if (command === 'install') {
       nodeId: randomUUID(),
       instance: randomUUID(),
       control: '\\\\.\\pipe\\agent-teams-' + id,
-      serverToken: randomBytes(32).toString('hex'),
+      serverToken: externalToken || randomBytes(32).toString('hex'),
     };
+    config.controlMcpName = 'agent_teams_control_' + config.installationId.replaceAll('-', '');
     save(configPath, config);
   }
-  for (const mode of ['start', 'stop', 'status', 'attach', 'desktop']) {
+  for (const mode of ['start', 'stop', 'status', 'attach', 'desktop', 'uninstall']) {
     writeFileSync(
       join(dir, 'bin', mode + '.ps1'),
       '& ' +
@@ -125,14 +209,20 @@ if (command === 'install') {
         ' @args\n'
     );
   }
-  run(process.execPath, [
-    join(worker, 'cli.js'),
-    'setup',
-    '--control-socket',
-    config.control,
-    '--codex-config',
-    join(home, 'config.toml'),
-  ]);
+  const setupControl = () =>
+    run(process.execPath, [
+      join(worker, 'cli.js'),
+      'setup',
+      '--data-dir',
+      join(dir, 'data'),
+      '--control-mcp-name',
+      config.controlMcpName || 'agent-teams-control',
+      '--control-socket',
+      config.control,
+      '--codex-config',
+      join(home, 'config.toml'),
+    ]);
+  setupControl();
   if (env.AGENT_TEAMS_INSTALL_NO_SERVICE !== 'True') {
     const action =
       '& ' + psQuote(process.execPath) + ' ' + psQuote(self) + ' start ' + psQuote(dir);
@@ -171,25 +261,182 @@ if (command === 'install') {
       await new Promise((r) => setTimeout(r, 200));
     }
     if (!connected) throw new Error('Worker did not connect; see logs/supervisor.log');
+    setupControl(); // The live Worker has now persisted metadata for expected-target removal.
     console.log(
       'Connected. Private device pairing code: ' +
         readFileSync(join(dir, 'data', 'desktop-pairing-code'), 'utf8').trim()
     );
   }
-  console.log('Installed. Open PowerShell and run: & ' + psQuote(join(dir, 'bin', 'desktop.ps1')));
+  console.log(
+    'Installed. Open PowerShell and run: & ' +
+      psQuote(join(dir, 'bin', runtimeKind === 'stock' ? 'attach.ps1' : 'desktop.ps1'))
+  );
   process.exit(0);
 }
 
 const config = JSON.parse(readFileSync(configPath, 'utf8'));
+// The child receives CODEX_HOME=config.home intentionally. Ambient-home validation
+// already ran at installation; do not mistake this private override for a personal home.
+assertManagedStockHome(config.runtimeKind, config.serverOwnership, config.home, {});
 const pidFile = join(dir, 'data', 'supervisor.pid');
 const endpointPath = join(dir, 'data', 'app-server.json');
-const alive = () => {
+const statusPath = join(dir, 'data', 'worker-status.json');
+// Publish complete files exclusively; interrupted writes leave only private temporaries.
+const publishLockFile = (path, content) => {
+  const temporary = path + '.' + randomUUID() + '.tmp';
   try {
-    const pid = +readFileSync(pidFile, 'utf8');
-    process.kill(pid, 0);
-    return pid;
-  } catch {
-    return undefined;
+    writeFileSync(temporary, content, { flag: 'wx', mode: 0o600 });
+    try {
+      linkSync(temporary, path);
+      return true;
+    } catch (error) {
+      if (error.code === 'EEXIST') return false;
+      throw error;
+    }
+  } finally {
+    try {
+      unlinkSync(temporary);
+    } catch {
+      // A private temporary never controls ownership; recovery can ignore it.
+    }
+  }
+};
+// Immutable generations recover dead reclaimers without unlinking another guard.
+// Do not delete this journal while the installation may be running.
+const withLockReclamation = (file, operation) => {
+  const directory = file + '.reclaims';
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const stat = lstatSync(directory);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Invalid lock journal');
+  while (true) {
+    const latest = readdirSync(directory)
+      .filter((name) => /^\d{16}\.json$/.test(name))
+      .sort()
+      .at(-1);
+    let generation = 1;
+    if (latest) {
+      const previous = join(directory, latest);
+      const owner = JSON.parse(readFileSync(previous, 'utf8'));
+      if (
+        !owner ||
+        !Number.isSafeInteger(owner.pid) ||
+        owner.pid < 1 ||
+        typeof owner.token !== 'string' ||
+        !owner.token
+      )
+        throw new Error('Invalid lock journal identity');
+      let completed = false;
+      try {
+        completed = readFileSync(previous + '.done', 'utf8') === owner.token;
+        if (!completed) throw new Error('Invalid lock journal completion');
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+      if (!completed) {
+        try {
+          process.kill(owner.pid, 0);
+          return false;
+        } catch (error) {
+          if (error.code === 'EPERM') return false;
+          if (error.code !== 'ESRCH') throw error;
+        }
+      }
+      generation = Number(latest.slice(0, 16)) + 1;
+      if (!Number.isSafeInteger(generation)) throw new Error('Lock journal exhausted');
+    }
+    const record = join(directory, String(generation).padStart(16, '0') + '.json');
+    const token = randomUUID();
+    if (!publishLockFile(record, JSON.stringify({ pid: process.pid, token }))) continue;
+    try {
+      operation();
+    } finally {
+      publishLockFile(record + '.done', token);
+    }
+    return true;
+  }
+};
+const ownership = () => {
+  try {
+    const stat = lstatSync(pidFile);
+    if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('Invalid supervisor lock file.');
+    const content = readFileSync(pidFile, 'utf8');
+    if (!content.trim())
+      throw new Error('Incomplete supervisor lock; inspect it before restarting.');
+    let parsed;
+    try {
+      parsed = /^\s*[0-9]+\s*$/.test(content) ? { pid: Number(content) } : JSON.parse(content);
+    } catch {
+      throw new Error('Invalid supervisor lock; inspect it before restarting.');
+    }
+    if (
+      !parsed ||
+      !Number.isSafeInteger(parsed.pid) ||
+      parsed.pid <= 1 ||
+      (parsed.token !== undefined && typeof parsed.token !== 'string')
+    )
+      throw new Error('Invalid supervisor lock identity.');
+    return { ...parsed, content, inode: stat.ino, device: stat.dev };
+  } catch (error) {
+    if (error.code === 'ENOENT') return undefined;
+    throw error;
+  }
+};
+const removeIfOwned = (owner, guarded = false) => {
+  if (!owner) return;
+  const remove = () => {
+    const current = ownership();
+    if (
+      current?.content !== owner.content ||
+      current.inode !== owner.inode ||
+      current.device !== owner.device
+    )
+      return;
+    for (const path of [endpointPath, pidFile]) {
+      try {
+        unlinkSync(path);
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+    }
+  };
+  if (guarded) remove();
+  else withLockReclamation(pidFile, remove);
+};
+const acquireSupervisor = () => {
+  const value = { pid: process.pid, token: randomUUID() };
+  const content = JSON.stringify(value);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (publishLockFile(pidFile, content)) return ownership();
+    if (
+      !withLockReclamation(pidFile, () => {
+        const previous = ownership();
+        if (!previous) return;
+        try {
+          process.kill(previous.pid, 0);
+          throw new Error(
+            'This installation is already running or its PID belongs to another live process.'
+          );
+        } catch (error) {
+          if (error.code !== 'ESRCH') throw error;
+        }
+        removeIfOwned(previous, true);
+      })
+    )
+      throw new Error(
+        'Supervisor lock recovery is already in progress; retry after checking its owner.'
+      );
+  }
+  throw new Error('Supervisor lock was claimed concurrently; retry after checking its owner.');
+};
+const alive = () => {
+  const owner = ownership();
+  if (!owner) return undefined;
+  try {
+    process.kill(owner.pid, 0);
+    return owner.pid;
+  } catch (error) {
+    if (error.code === 'ESRCH') return undefined;
+    throw error;
   }
 };
 const childEnv = {
@@ -202,13 +449,6 @@ const childEnv = {
 const endpoint = () => JSON.parse(readFileSync(endpointPath, 'utf8')).url;
 if (command === 'start') {
   if (alive()) throw new Error('This installation is already running.');
-  for (const path of [pidFile, endpointPath]) {
-    try {
-      unlinkSync(path);
-    } catch {
-      /* stale or absent */
-    }
-  }
   const log = openSync(join(dir, 'logs', 'supervisor.log'), 'a');
   const child = spawn(process.execPath, [self, 'run', dir], {
     detached: true,
@@ -216,25 +456,37 @@ if (command === 'start') {
     stdio: ['ignore', log, log],
     env: childEnv,
   });
+  let childError;
+  child.on('error', (error) => {
+    childError = error;
+  });
   child.unref();
   closeSync(log);
   for (let i = 0; i < 200; i++) {
-    if (existsSync(endpointPath) && alive()) {
-      console.log('Customized App Server started.');
+    const current = ownership();
+    let published;
+    try {
+      published = JSON.parse(readFileSync(endpointPath, 'utf8'));
+    } catch (error) {
+      if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error;
+    }
+    if (
+      current?.pid === child.pid &&
+      published?.supervisorPid === child.pid &&
+      published?.supervisorToken === current.token &&
+      alive() === child.pid
+    ) {
+      console.log('Selected App Server started.');
       process.exit(0);
     }
+    if (childError) throw childError;
+    if (child.exitCode !== null && child.exitCode !== undefined)
+      throw new Error('Supervisor failed to start; inspect logs/supervisor.log');
     await new Promise((r) => setTimeout(r, 100));
   }
   throw new Error('Startup timed out; see logs/supervisor.log');
 } else if (command === 'run') {
-  let lock;
-  try {
-    lock = openSync(pidFile, 'wx');
-  } catch {
-    throw new Error('Supervisor lock exists; stop the installation first.');
-  }
-  writeFileSync(lock, String(process.pid));
-  closeSync(lock);
+  const owner = acquireSupervisor();
   const children = [];
   const cleanup = () => {
     for (const child of children) {
@@ -244,47 +496,54 @@ if (command === 'start') {
         /* exited */
       }
     }
-    for (const path of [pidFile, endpointPath]) {
-      try {
-        unlinkSync(path);
-      } catch {
-        /* absent */
-      }
-    }
+    removeIfOwned(owner);
   };
   process.on('exit', cleanup);
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => process.exit(0));
-  const reservation = createServer();
-  await new Promise((r) => reservation.listen(0, '127.0.0.1', r));
-  const port = reservation.address().port;
-  await new Promise((r) => reservation.close(r));
-  const url = 'ws://127.0.0.1:' + port;
-  const tokenPath = join(dir, 'data', 'app-server-token');
-  writeFileSync(tokenPath, config.serverToken);
-  const state = 'sqlite_home=' + JSON.stringify(join(dir, 'codex-state'));
-  const serverLog = openSync(join(dir, 'logs', 'app-server.log'), 'a');
-  const server = spawn(
-    config.binary,
-    [
-      '-c',
-      state,
-      'app-server',
-      '--listen',
-      url,
-      '--ws-auth',
-      'capability-token',
-      '--ws-token-file',
-      tokenPath,
-    ],
-    { env: childEnv, windowsHide: true, stdio: ['ignore', serverLog, serverLog] }
-  );
-  closeSync(serverLog);
-  children.push(server);
-  server.on('error', (e) => {
-    console.error(e);
-    process.exit(1);
-  });
-  server.on('exit', () => process.exit(1));
+  for (const path of [endpointPath, statusPath]) {
+    try {
+      unlinkSync(path);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+  let url = config.externalEndpoint;
+  let port;
+  if (config.serverOwnership !== 'external') {
+    const reservation = createServer();
+    await new Promise((r) => reservation.listen(0, '127.0.0.1', r));
+    port = reservation.address().port;
+    await new Promise((r) => reservation.close(r));
+    url = 'ws://127.0.0.1:' + port;
+    const tokenPath = join(dir, 'data', 'app-server-token');
+    writeFileSync(tokenPath, config.serverToken);
+    const state = 'sqlite_home=' + JSON.stringify(join(dir, 'codex-state'));
+    const serverLog = openSync(join(dir, 'logs', 'app-server.log'), 'a');
+    const server = spawn(
+      config.binary,
+      [
+        '-c',
+        state,
+        'app-server',
+        '--listen',
+        url,
+        '--ws-auth',
+        'capability-token',
+        '--ws-token-file',
+        tokenPath,
+      ],
+      { env: childEnv, windowsHide: true, stdio: ['ignore', serverLog, serverLog] }
+    );
+    closeSync(serverLog);
+    children.push(server);
+    server.on('error', (e) => {
+      console.error(e);
+      process.exit(1);
+    });
+    server.on('exit', () => process.exit(1));
+  } else {
+    port = new URL(url).port;
+  }
   let ready = false;
   for (let i = 0; i < 300; i++) {
     try {
@@ -298,7 +557,7 @@ if (command === 'start') {
     }
     await new Promise((r) => setTimeout(r, 100));
   }
-  if (!ready) throw new Error('Customized App Server did not become ready.');
+  if (!ready) throw new Error('Selected App Server did not become ready.');
   const workerProcess = spawn(
     process.execPath,
     [
@@ -321,6 +580,13 @@ if (command === 'start') {
       join(dir, 'workspace'),
       '--codex-binary',
       config.binary,
+      '--runtime-kind',
+      config.runtimeKind || 'fork',
+      '--server-ownership',
+      config.serverOwnership || 'managed',
+      ...(config.installationId ? ['--installation-id', config.installationId] : []),
+      '--control-mcp-name',
+      config.controlMcpName || 'agent-teams-control',
       '--label',
       config.label,
       '--organization-id',
@@ -340,8 +606,9 @@ if (command === 'start') {
     process.exit(1);
   });
   workerProcess.on('exit', () => process.exit(1));
-  save(endpointPath, { url });
-} else if (command === 'stop') {
+  save(endpointPath, { url, supervisorPid: owner.pid, supervisorToken: owner.token });
+} else if (command === 'stop' || command === 'uninstall') {
+  const owner = ownership();
   const pid = alive();
   if (pid) {
     const info = JSON.parse(
@@ -355,12 +622,33 @@ if (command === 'start') {
       throw new Error('PID does not belong to this installation.');
     execFileSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { stdio: 'inherit' });
   }
-  for (const path of [pidFile, endpointPath]) {
-    try {
-      unlinkSync(path);
-    } catch {
-      /* absent */
-    }
+  removeIfOwned(owner);
+  if (command === 'uninstall') {
+    run(process.execPath, [
+      join(worker, 'cli.js'),
+      'mcp-remove',
+      '--control-socket',
+      config.control,
+      '--data-dir',
+      join(dir, 'data'),
+      '--control-mcp-name',
+      config.controlMcpName || 'agent-teams-control',
+      '--codex-config',
+      join(config.home, 'config.toml'),
+    ]);
+    const shortcut = join(
+      process.env.APPDATA,
+      'Microsoft',
+      'Windows',
+      'Start Menu',
+      'Programs',
+      'Startup',
+      'AgentTeams-' + config.nodeId + '.lnk'
+    );
+    if (existsSync(shortcut)) unlinkSync(shortcut);
+    console.log(
+      'Owned MCP registration and startup shortcut removed. Runtime data and login retained.'
+    );
   }
 } else if (command === 'status') {
   console.log(JSON.stringify({ running: !!alive(), nodeId: config.nodeId }));
@@ -380,6 +668,8 @@ if (command === 'start') {
     childEnv
   );
 } else if (command === 'desktop') {
+  if (config.runtimeKind === 'stock')
+    throw new Error('Stock desktop attachment is not verified; use bin/attach.ps1.');
   const candidates = [
     extra[0],
     join(process.env.LOCALAPPDATA, 'Programs', 'Codex', 'Codex.exe'),

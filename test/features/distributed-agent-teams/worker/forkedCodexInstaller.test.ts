@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
@@ -44,7 +44,8 @@ const args = process.argv.slice(2);
 const rawArgs = [...args];
 while (args[0] === '-c') args.splice(0, 2);
 fs.appendFileSync(${JSON.stringify(join(root, 'fork-calls.jsonl'))}, JSON.stringify({ args, rawArgs, home: process.env.CODEX_HOME }) + '\\n');
-if (args[0] === '--version') console.log('codex-cli test-fork');
+if (args.includes('--help')) console.log('--listen --remote');
+else if (args[0] === '--version') console.log('codex-cli test-fork');
 else if (args[0] === 'login') process.exit(0);
 else if (args[0] === 'app-server') {
   if (args[1] !== '--listen') throw new Error('Unexpected daemon launch');
@@ -73,8 +74,11 @@ else if (args[0] === 'app-server') {
 const fs = require('node:fs');
 const args = process.argv.slice(2);
 const data = args[args.indexOf('--data-dir') + 1];
+if (args[0] !== 'start') { fs.writeFileSync(${JSON.stringify(join(root, 'control-operation.json'))}, JSON.stringify(args)); process.exit(0); }
 fs.writeFileSync(${JSON.stringify(join(root, 'worker.json'))}, JSON.stringify({args, parent: process.ppid}));
+fs.writeFileSync(data + '/worker-args.json', JSON.stringify({args, parent: process.ppid}));
 fs.writeFileSync(data + '/worker-status.json', JSON.stringify({state: 'connected'}));
+fs.writeFileSync(data + '/desktop-pairing-code', 'test-only-pairing-code');
 setInterval(() => {}, 1000);
 `
     );
@@ -86,7 +90,8 @@ setInterval(() => {}, 1000);
     if (supervisorPid !== undefined) {
       process.kill(supervisorPid, 'SIGTERM');
       await vi.waitFor(
-        async () => expect(await readFile(join(root, 'server-stopped'), 'utf8')).toBe('stopped'),
+        async () =>
+          expect(await readFile(join(root, 'server-stopped'), 'utf8')).toContain('stopped'),
         { timeout: 5_000 }
       );
       supervisorPid = undefined;
@@ -274,6 +279,94 @@ fetch(new URL('/', endpoint.replace(/^ws:/, 'http:'))).then(async response => {
     );
   });
 
+  it('recovers a dead supervisor PID after reboot without replacing live owners', async () => {
+    await stageAndBuild();
+    await installFork();
+    await exec('bash', [join(install, 'bin/stop.sh')]);
+    await writeFile(join(install, 'data/supervisor.pid'), '2147483647\n');
+    await writeFile(join(install, 'data/supervisor.pid.reclaim'), '');
+    await mkdir(join(install, 'data/supervisor.pid.reclaims'));
+    await writeFile(
+      join(install, 'data/supervisor.pid.reclaims/0000000000000001.json'),
+      JSON.stringify({ pid: 2147483647, token: 'dead-reclaimer' })
+    );
+    const restarted = spawn('bash', [join(install, 'bin/start.sh')], { stdio: 'ignore' });
+    supervisorPid = restarted.pid;
+    await vi.waitFor(
+      async () => {
+        const worker = JSON.parse(await readFile(join(install, 'data/worker-args.json'), 'utf8'));
+        expect(worker.parent).toBe(restarted.pid);
+      },
+      { timeout: 5000 }
+    );
+    const attached = await exec('bash', [join(install, 'bin/attach.sh')]);
+    expect(JSON.parse(attached.stdout).result.userAgent).toBe('test-fork');
+    await exec('bash', [join(install, 'bin/stop.sh')]);
+    supervisorPid = undefined;
+    // A reused PID must never authorize cleanup of an unrelated live process.
+    await writeFile(join(install, 'data/supervisor.pid'), String(process.pid) + '\n');
+    await expect(exec('bash', [join(install, 'bin/start.sh')])).rejects.toThrow(
+      /another live process/
+    );
+    expect(await readFile(join(install, 'data/supervisor.pid'), 'utf8')).toBe(
+      String(process.pid) + '\n'
+    );
+    process.kill(process.pid, 0);
+  });
+
+  it('passes installation data to setup so uninstall can verify the saved MCP target', async () => {
+    await writeFile(join(bundle, 'desktopBridgeCli.js'), '// fixture only enables control setup');
+    await stageAndBuild();
+    await installFork();
+    const worker = JSON.parse(await readFile(join(install, 'data/worker-args.json'), 'utf8'));
+    supervisorPid = worker.parent;
+    const setup = JSON.parse(
+      await readFile(join(root, 'control-operation.json'), 'utf8')
+    ) as string[];
+    expect(setup[0]).toBe('setup');
+    expect(setup[setup.indexOf('--data-dir') + 1]).toBe(join(install, 'data'));
+    await exec('bash', [join(install, 'bin/uninstall.sh')]);
+    supervisorPid = undefined;
+    const remove = JSON.parse(
+      await readFile(join(root, 'control-operation.json'), 'utf8')
+    ) as string[];
+    expect(remove[0]).toBe('mcp-remove');
+    expect(remove[remove.indexOf('--data-dir') + 1]).toBe(join(install, 'data'));
+  });
+
+  it('invalidates old connected status before a failed Worker restart', async () => {
+    await stageAndBuild();
+    await installFork();
+    await exec('bash', [join(install, 'bin/stop.sh')]);
+    await writeFile(
+      join(install, 'data/worker-status.json'),
+      JSON.stringify({ state: 'connected' })
+    );
+    await writeFile(join(install, 'worker/cli.js'), 'process.exit(23);\n');
+    await expect(exec('bash', [join(install, 'bin/start.sh')])).rejects.toThrow();
+    await expect(readFile(join(install, 'data/worker-status.json'))).rejects.toThrow();
+    await expect(readFile(join(install, 'data/supervisor.pid'))).rejects.toThrow();
+  });
+
+  it('does not stop an unrelated process whose arguments mention the supervisor launcher', async () => {
+    await stageAndBuild();
+    await installFork();
+    await exec('bash', [join(install, 'bin/stop.sh')]);
+    const unrelated = spawn(
+      process.execPath,
+      ['-e', 'setInterval(() => {}, 1000)', '--', join(install, 'bin/start.sh')],
+      { stdio: 'ignore' }
+    );
+    try {
+      await writeFile(join(install, 'data/supervisor.pid'), String(unrelated.pid) + '\n');
+      await expect(exec('bash', [join(install, 'bin/stop.sh')])).rejects.toThrow(/does not belong/);
+      process.kill(unrelated.pid!, 0);
+    } finally {
+      unrelated.kill('SIGTERM');
+      await new Promise<void>((done) => unrelated.once('exit', () => done()));
+    }
+  });
+
   it('refuses an altered fork before executing it', async () => {
     await stageAndBuild();
     await writeFile(
@@ -295,6 +388,200 @@ fetch(new URL('/', endpoint.replace(/^ws:/, 'http:'))).then(async response => {
     ]);
     await expect(installFork()).rejects.toThrow(/Runtime checksum mismatch/);
     await expect(readFile(join(root, 'fork-calls.jsonl'), 'utf8')).rejects.toThrow();
+  });
+
+  const buildStock = async () => {
+    await exec('bash', [
+      join(installerRoot, 'build-installer.sh'),
+      '--runtime',
+      'stock',
+      '--bundle-dir',
+      bundle,
+      '--relay',
+      'wss://relay.example.test/v2/worker-stream',
+      '--token',
+      'test-token',
+      '--team',
+      team,
+      '--out',
+      installer,
+    ]);
+    const stock = join(root, 'stock-codex');
+    await writeFile(stock, await readFile(join(source, 'bin/codex')));
+    await chmod(stock, 0o700);
+    return stock;
+  };
+
+  it('requires a dedicated managed stock home and keeps personal authentication untouched', async () => {
+    const stock = await buildStock();
+    await expect(installFork(['--codex-binary', stock, '--existing-codex-home'])).rejects.toThrow(
+      /not verified for stock/
+    );
+    await expect(
+      installFork(['--codex-binary', stock, '--codex-home', join(root, '.codex')])
+    ).rejects.toThrow(/requires a dedicated Codex home/);
+    expect(await readFile(join(root, '.codex/auth.json'), 'utf8')).toBe(
+      '{"testCredential":"do-not-copy"}'
+    );
+    const calls = (await readFile(join(root, 'fork-calls.jsonl'), 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(calls.some((call) => call.args[0] === 'login')).toBe(false);
+  });
+
+  it('quotes systemd launcher paths and escapes literal specifiers and environment syntax', async () => {
+    const stock = await buildStock();
+    install = join(root, 'member %t $USER with spaces');
+    const commands = join(root, 'test-commands');
+    await mkdir(commands);
+    await writeFile(
+      join(commands, 'uname'),
+      '#!/bin/bash\ncase "$1" in -s) echo Linux ;; -m) echo x86_64 ;; *) /usr/bin/uname "$@" ;; esac\n'
+    );
+    await writeFile(
+      join(commands, 'systemctl'),
+      `#!/usr/bin/env node
+const fs = require('node:fs');
+const {spawn} = require('node:child_process');
+const path = require('node:path');
+if (process.argv.includes('enable')) {
+  const unit = fs.readFileSync(path.join(process.env.HOME, '.config/systemd/user', process.argv.at(-1)), 'utf8');
+  fs.writeFileSync(${JSON.stringify(join(root, 'captured-unit'))}, unit);
+  const prefix = 'ExecStart=/bin/bash ';
+  const encoded = unit.split(String.fromCharCode(10)).find(line => line.startsWith(prefix)).slice(prefix.length);
+  const launcher = JSON.parse(encoded).split('%%').join('%').split('$$').join('$');
+  if (!fs.existsSync(launcher)) throw new Error('Incorrectly quoted systemd launcher');
+  spawn('/bin/bash', [launcher], {stdio:'ignore', detached:true, env:process.env}).unref();
+}
+`
+    );
+    await chmod(join(commands, 'uname'), 0o700);
+    await chmod(join(commands, 'systemctl'), 0o700);
+    await exec(
+      'bash',
+      [installer, '--dir', install, '--label', 'Service test', '--codex-binary', stock],
+      {
+        env: {
+          ...process.env,
+          HOME: root,
+          CODEX_HOME: join(root, '.codex'),
+          PATH: commands + ':' + process.env.PATH,
+        },
+        timeout: 15000,
+      }
+    );
+    const worker = JSON.parse(await readFile(join(install, 'data/worker-args.json'), 'utf8'));
+    supervisorPid = worker.parent;
+    const unit = await readFile(join(root, 'captured-unit'), 'utf8');
+    const encoded = unit.split('\n').find((line) => line.startsWith('ExecStart='))!;
+    expect(encoded).toBe(
+      'ExecStart=/bin/bash ' +
+        JSON.stringify(join(install, 'bin/start.sh'))
+          .replaceAll('%', '%%')
+          .replaceAll('$', () => '$$')
+    );
+    expect((await exec('bash', [join(install, 'bin/attach.sh')])).stdout).toContain('test-fork');
+  });
+
+  it('builds a worker-only stock installer and attaches the selected stock client', async () => {
+    const stock = await buildStock();
+    await installFork(['--codex-binary', stock]);
+    const worker = JSON.parse(await readFile(join(install, 'data/worker-args.json'), 'utf8'));
+    supervisorPid = worker.parent;
+    expect(worker.args[worker.args.indexOf('--codex-binary') + 1]).toBe(stock);
+    expect(worker.args[worker.args.indexOf('--runtime-kind') + 1]).toBe('stock');
+    expect(worker.args[worker.args.indexOf('--codex-home') + 1]).toBe(join(install, 'codex-home'));
+    expect(worker.args).not.toContain('--desktop-launcher');
+    const metadata = JSON.parse(await readFile(join(install, 'installation.json'), 'utf8'));
+    expect(metadata.runtimeKind).toBe('stock');
+    expect(metadata.controlMcpName).toMatch(/^agent_teams_control_[a-f0-9]{32}$/);
+    await expect(
+      readFile(join(install, 'worker/codex-runtime', platform, 'bin/codex'))
+    ).rejects.toThrow();
+    const attached = await exec('bash', [join(install, 'bin/attach.sh')]);
+    expect(JSON.parse(attached.stdout).result.userAgent).toBe('test-fork');
+    await expect(exec('bash', [join(install, 'bin/desktop.sh')])).rejects.toThrow(/not verified/);
+    await stageAndBuild();
+    await expect(installFork()).rejects.toThrow(/runtime differs/);
+  });
+
+  it('keeps a manually started stock server alive when its Worker stops', async () => {
+    const stock = await buildStock();
+    const socket = join(root, 'manual.sock');
+    const server = spawn(stock, ['app-server', '--listen', 'unix://' + socket], {
+      env: { ...process.env, CODEX_HOME: join(root, '.codex') },
+      stdio: 'ignore',
+    });
+    try {
+      await vi.waitFor(async () =>
+        expect((await import('node:fs/promises')).stat(socket)).resolves.toBeDefined()
+      );
+      await installFork([
+        '--codex-binary',
+        stock,
+        '--server-ownership',
+        'external',
+        '--app-server-socket',
+        socket,
+        '--codex-home',
+        join(root, '.codex'),
+      ]);
+      const worker = JSON.parse(await readFile(join(install, 'data/worker-args.json'), 'utf8'));
+      expect(worker.args[worker.args.indexOf('--server-ownership') + 1]).toBe('external');
+      await exec('bash', [join(install, 'bin/stop.sh')]);
+      await vi.waitFor(async () =>
+        expect(readFile(join(install, 'data/supervisor.pid'))).rejects.toThrow()
+      );
+      process.kill(server.pid!, 0);
+      const attached = await exec('bash', [join(install, 'bin/attach.sh')]);
+      expect(JSON.parse(attached.stdout).result.userAgent).toBe('test-fork');
+      const calls = (await readFile(join(root, 'fork-calls.jsonl'), 'utf8'))
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+      expect(
+        calls.filter((call) => call.args[0] === 'app-server' && !call.args.includes('--help'))
+      ).toHaveLength(1);
+    } finally {
+      server.kill('SIGTERM');
+      await new Promise<void>((resolve) => server.once('exit', () => resolve()));
+    }
+  });
+
+  it('runs stock and fork installations concurrently with distinct identities and endpoints', async () => {
+    await stageAndBuild();
+    await installFork();
+    const fork = JSON.parse(await readFile(join(install, 'data/worker-args.json'), 'utf8'));
+    supervisorPid = fork.parent;
+    const forkInstall = install;
+    const stock = await buildStock();
+    install = join(root, 'stock member');
+    let stockPid: number | undefined;
+    try {
+      await installFork(['--codex-binary', stock]);
+      const other = JSON.parse(await readFile(join(install, 'data/worker-args.json'), 'utf8'));
+      stockPid = other.parent;
+      for (const flag of [
+        '--node-id',
+        '--control-socket',
+        '--app-server-socket',
+        '--control-mcp-name',
+      ]) {
+        expect(other.args[other.args.indexOf(flag) + 1]).not.toBe(
+          fork.args[fork.args.indexOf(flag) + 1]
+        );
+      }
+      await exec('bash', [join(install, 'bin/uninstall.sh')]);
+      await vi.waitFor(async () =>
+        expect(readFile(join(install, 'data/supervisor.pid'))).rejects.toThrow()
+      );
+      stockPid = undefined;
+      const attached = await exec('bash', [join(forkInstall, 'bin/attach.sh')]);
+      expect(JSON.parse(attached.stdout).result.userAgent).toBe('test-fork');
+    } finally {
+      if (stockPid !== undefined) process.kill(stockPid, 'SIGTERM');
+    }
   });
 
   it('refuses to build an installer without the fork', async () => {

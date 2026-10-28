@@ -27,12 +27,17 @@ it('serves native installers using the existing relay for token checks, revocati
     joinPortal: {
       publicUrl: 'https://relay.example/next',
       installer: {
-        template: 'TOKEN="__WORKER_TOKEN__"\nRELAY="__RELAY_URL__"\n__PAYLOAD_BELOW__\n',
+        template:
+          'RUNTIME_KIND="__RUNTIME_KIND__"\nTOKEN="__WORKER_TOKEN__"\nRELAY="__RELAY_URL__"\n__PAYLOAD_BELOW__\n',
         windowsTemplate: "$token='__WORKER_TOKEN__'\n<#\n__PAYLOAD_BELOW__\n",
         platformBundles: {
           'darwin-x64': Buffer.from('mac-fork'),
           'linux-x64': Buffer.from('linux-fork'),
           'win32-x64': Buffer.from('windows-fork'),
+        },
+        stock: {
+          template: 'RUNTIME_KIND="__RUNTIME_KIND__"\n__PAYLOAD_BELOW__\n',
+          platformBundles: { 'darwin-x64': Buffer.from('stock-worker-only') },
         },
       },
     },
@@ -60,9 +65,31 @@ it('serves native installers using the existing relay for token checks, revocati
       'linux-x64',
       'win32-x64',
     ]);
+    expect(catalog.installerRuntimes.map((runtime: { id: string }) => runtime.id)).toEqual([
+      'fork',
+      'stock',
+    ]);
+    const stock = await portal.app.inject({
+      method: 'POST',
+      url: `/join/api/teams/${created.team.teamId}/installer`,
+      payload: { token: created.joinToken, platform: 'darwin-x64', runtime: 'stock' },
+    });
+    expect(stock.statusCode).toBe(200);
+    expect(stock.body).toContain('RUNTIME_KIND="stock"');
+    expect(stock.headers['content-disposition']).toContain('-stock-darwin-x64.sh');
+    expect(Buffer.from(stock.body.split('__PAYLOAD_BELOW__\n')[1]!, 'base64').toString()).toBe(
+      'stock-worker-only'
+    );
+    const unavailable = await portal.app.inject({
+      method: 'POST',
+      url: `/join/api/teams/${created.team.teamId}/installer`,
+      payload: { token: created.joinToken, platform: 'linux-x64', runtime: 'stock' },
+    });
+    expect(unavailable.statusCode).toBe(400);
     expect((await download('wrong')).statusCode).toBe(401);
     const result = await download(created.joinToken);
     expect(result.statusCode).toBe(200);
+    expect(result.body).toContain('RUNTIME_KIND="fork"');
     expect(result.body).toContain('wss://relay.example/next/v2/worker-stream');
     expect(Buffer.from(result.body.split('__PAYLOAD_BELOW__\n')[1], 'base64').toString()).toBe(
       'mac-fork'

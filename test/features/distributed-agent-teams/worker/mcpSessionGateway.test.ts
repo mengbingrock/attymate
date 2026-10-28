@@ -29,9 +29,7 @@ describe('headless Worker MCP session gateway', () => {
       { name: 'team_launch', description: 'Launch a team' },
     ];
 
-    expect(filterMcpToolsForSession(runtimeContext, definitions)).toEqual([
-      definitions[0],
-    ]);
+    expect(filterMcpToolsForSession(runtimeContext, definitions)).toEqual([definitions[0]]);
   });
 
   it('injects execution identity from the Worker session', () => {
@@ -56,7 +54,7 @@ describe('headless Worker MCP session gateway', () => {
     ).toThrow(RuntimeAuthorityArgumentError);
   });
 
-  it('only exposes and authorizes team management tools for the lead runtime', () => {
+  it('allows member roster discovery while restricting team mutation tools to the lead', () => {
     const definitions = [
       { name: 'progress_report' },
       { name: 'team_membership_list' },
@@ -64,26 +62,22 @@ describe('headless Worker MCP session gateway', () => {
       { name: 'team_member_leave' },
     ];
 
-    expect(filterMcpToolsForSession({ ...runtimeContext, teamRole: 'member' }, definitions)).toEqual([
-      definitions[0],
-    ]);
+    expect(
+      filterMcpToolsForSession({ ...runtimeContext, teamRole: 'member' }, definitions)
+    ).toEqual([definitions[0], definitions[1]]);
     expect(() =>
-      authorizeWorkerToolInvocation(
-        { ...runtimeContext, teamRole: 'member' },
-        'team_member_join',
-        { targetNodeId: '00000000-0000-4000-8000-000000000011' }
-      )
+      authorizeWorkerToolInvocation({ ...runtimeContext, teamRole: 'member' }, 'team_member_join', {
+        targetNodeId: '00000000-0000-4000-8000-000000000011',
+      })
     ).toThrow('cannot invoke team_member_join');
 
     expect(filterMcpToolsForSession({ ...runtimeContext, teamRole: 'lead' }, definitions)).toEqual(
       definitions
     );
     expect(
-      authorizeWorkerToolInvocation(
-        { ...runtimeContext, teamRole: 'lead' },
-        'team_member_join',
-        { targetNodeId: '00000000-0000-4000-8000-000000000011' }
-      ).toolName
+      authorizeWorkerToolInvocation({ ...runtimeContext, teamRole: 'lead' }, 'team_member_join', {
+        targetNodeId: '00000000-0000-4000-8000-000000000011',
+      }).toolName
     ).toBe('team_member_join');
   });
 });

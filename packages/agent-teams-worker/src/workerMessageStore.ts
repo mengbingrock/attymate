@@ -8,10 +8,12 @@ import {
   eventIdSchema,
   teamIdSchema,
   teamMessageDeliveryPayloadSchema,
+  teamMessageEventPayloadSchema,
   type AssignmentId,
   type AttemptId,
   type CommandId,
   type EventId,
+  type EventEnvelope,
   type MembershipId,
   type TeamId,
   type TeamMessageDeliveryPayload,
@@ -19,9 +21,15 @@ import {
 } from '@claude-teams/agent-teams-protocol';
 
 import type { WorkerInboxCommand } from './workerInboxStore';
+import { decodeTeamReply, MessageReplyStore } from './teamMessageReplies';
 
 export type WorkerMessageRoutingState = 'queued' | 'available_active';
-export type WorkerMessageSteerState = 'pending' | 'in_flight' | 'delivered' | 'failed';
+export type WorkerMessageSteerState =
+  | 'pending'
+  | 'in_flight'
+  | 'delivered'
+  | 'failed'
+  | 'uncertain';
 
 export interface WorkerMessageExecutionScope {
   readonly teamId: TeamId;
@@ -55,6 +63,9 @@ export interface WorkerTeamMessage {
   readonly lastSteerError?: string;
   readonly steeredAt?: string;
   readonly readAt?: string;
+  readonly processedAt?: string;
+  readonly repliedAt?: string;
+  readonly replyMessageId?: string;
   readonly receivedAt: string;
 }
 
@@ -68,6 +79,7 @@ interface WorkerTeamMessageRow {
   payload_json: string;
   routing_state: WorkerMessageRoutingState;
   steer_state: WorkerMessageSteerState;
+  steer_outcome: 'uncertain' | null;
   steer_attempts: number;
   steer_thread_id: string | null;
   steer_turn_id: string | null;
@@ -75,6 +87,7 @@ interface WorkerTeamMessageRow {
   last_steer_error: string | null;
   steered_at: string | null;
   read_at: string | null;
+  processed_at: string | null;
   received_at: string;
 }
 
@@ -91,7 +104,7 @@ const mapRow = (row: WorkerTeamMessageRow): WorkerTeamMessage => ({
   ...(row.target_lease_epoch === null ? {} : { targetLeaseEpoch: row.target_lease_epoch }),
   payload: teamMessageDeliveryPayloadSchema.parse(JSON.parse(row.payload_json)),
   routingState: row.routing_state,
-  steerState: row.steer_state,
+  steerState: row.steer_outcome === 'uncertain' ? 'uncertain' : row.steer_state,
   steerAttempts: row.steer_attempts,
   ...(row.steer_thread_id === null ? {} : { steerThreadId: row.steer_thread_id }),
   ...(row.steer_turn_id === null ? {} : { steerTurnId: row.steer_turn_id }),
@@ -101,17 +114,14 @@ const mapRow = (row: WorkerTeamMessageRow): WorkerTeamMessage => ({
   ...(row.last_steer_error === null ? {} : { lastSteerError: row.last_steer_error }),
   ...(row.steered_at === null ? {} : { steeredAt: row.steered_at }),
   ...(row.read_at === null ? {} : { readAt: row.read_at }),
+  ...(row.processed_at == null ? {} : { processedAt: row.processed_at }),
   receivedAt: row.received_at,
 });
 
 const matchesScope = (
   message: Pick<
     WorkerTeamMessage,
-    | 'teamId'
-    | 'targetAssignmentId'
-    | 'targetAttemptId'
-    | 'targetLeaseEpoch'
-    | 'payload'
+    'teamId' | 'targetAssignmentId' | 'targetAttemptId' | 'targetLeaseEpoch' | 'payload'
   >,
   scope: WorkerMessageExecutionScope | undefined
 ): boolean =>
@@ -143,18 +153,27 @@ export class WorkerMessageNotFoundError extends Error {
 
 export class WorkerMessageStore {
   private readonly database: DatabaseSync;
+  private readonly replies: MessageReplyStore;
 
   constructor(dataDir: string) {
     this.database = new DatabaseSync(join(dataDir, 'worker.sqlite'));
     this.database.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
+    this.replies = new MessageReplyStore(this.database);
     this.migrateLegacySchema();
     this.database.exec(this.createTableSql('team_messages'));
+    const columns = this.database.prepare('PRAGMA table_info(team_messages)').all() as {
+      name: string;
+    }[];
+    if (!columns.some(({ name }) => name === 'processed_at'))
+      this.database.exec('ALTER TABLE team_messages ADD COLUMN processed_at TEXT');
+    if (!columns.some(({ name }) => name === 'steer_outcome'))
+      this.database.exec('ALTER TABLE team_messages ADD COLUMN steer_outcome TEXT');
     this.database.exec(`
       CREATE INDEX IF NOT EXISTS team_messages_execution_scope
         ON team_messages(team_id, target_assignment_id, target_attempt_id,
                          target_lease_epoch, routing_state);
       UPDATE team_messages
-      SET steer_state = 'failed', last_steer_error = 'worker_restarted_during_message_steer'
+      SET steer_outcome = 'uncertain', last_steer_error = 'worker_restarted_during_message_steer'
       WHERE steer_state = 'in_flight';
     `);
   }
@@ -221,7 +240,10 @@ export class WorkerMessageStore {
     return this.require(payload.messageId);
   }
 
-  reconcileActiveScope(scope: WorkerMessageExecutionScope): readonly WorkerTeamMessage[] {
+  reconcileActiveScope(
+    scope: WorkerMessageExecutionScope,
+    includeRead = false
+  ): readonly WorkerTeamMessage[] {
     this.database
       .prepare(
         `UPDATE team_messages
@@ -240,25 +262,35 @@ export class WorkerMessageStore {
         scope.membershipId,
         scope.workspaceId
       );
-    return this.listPendingFor(scope);
+    return this.listPendingFor(scope, includeRead);
   }
 
-  listPendingFor(scope: WorkerMessageExecutionScope): readonly WorkerTeamMessage[] {
+  listPendingFor(
+    scope: WorkerMessageExecutionScope,
+    includeRead = false
+  ): readonly WorkerTeamMessage[] {
     return this.listAll().filter(
       (message) =>
         matchesScope(message, scope) &&
         ['pending', 'failed'].includes(message.steerState) &&
-        message.readAt === undefined
+        (includeRead || message.readAt === undefined) &&
+        message.processedAt === undefined
     );
   }
 
   beginSteer(
     inputMessageId: string,
     scope: WorkerMessageExecutionScope,
-    identity: WorkerMessageSteerIdentity
+    identity: WorkerMessageSteerIdentity,
+    includeRead = false
   ): WorkerTeamMessage | undefined {
     const message = this.get(inputMessageId);
-    if (message === undefined || !matchesScope(message, scope) || message.readAt !== undefined) {
+    if (
+      message === undefined ||
+      !matchesScope(message, scope) ||
+      (!includeRead && message.readAt !== undefined) ||
+      message.processedAt !== undefined
+    ) {
       return undefined;
     }
     const result = this.database
@@ -267,31 +299,31 @@ export class WorkerMessageStore {
          SET steer_state = 'in_flight', steer_attempts = steer_attempts + 1,
              steer_thread_id = ?, steer_turn_id = ?, steer_app_server_generation = ?,
              last_steer_error = NULL
-         WHERE message_id = ? AND steer_state IN ('pending', 'failed') AND read_at IS NULL`
+         WHERE message_id = ? AND steer_state IN ('pending', 'failed')
+           AND steer_outcome IS NULL AND processed_at IS NULL`
       )
-      .run(
-        identity.threadId,
-        identity.turnId,
-        identity.appServerGeneration,
-        message.messageId
-      );
+      .run(identity.threadId, identity.turnId, identity.appServerGeneration, message.messageId);
     return result.changes === 0 ? undefined : this.require(message.messageId);
   }
 
-  markSteered(inputMessageId: string, identity: WorkerMessageSteerIdentity): WorkerTeamMessage {
+  markSteered(
+    inputMessageId: string,
+    identity: WorkerMessageSteerIdentity,
+    markRead = true
+  ): WorkerTeamMessage {
     const messageId = eventIdSchema.parse(inputMessageId);
     const now = new Date().toISOString();
     const result = this.database
       .prepare(
         `UPDATE team_messages
-         SET steer_state = 'delivered', steered_at = ?, read_at = ?, last_steer_error = NULL
+         SET steer_state = 'delivered', steer_outcome = NULL, steered_at = ?, read_at = COALESCE(read_at, ?), last_steer_error = NULL
          WHERE message_id = ? AND steer_state = 'in_flight'
            AND steer_thread_id = ? AND steer_turn_id = ?
            AND steer_app_server_generation = ?`
       )
       .run(
         now,
-        now,
+        markRead ? now : null,
         messageId,
         identity.threadId,
         identity.turnId,
@@ -325,6 +357,29 @@ export class WorkerMessageStore {
     return this.require(messageId);
   }
 
+  /** The RPC may have been accepted. Preserve its claim and require positive reconciliation. */
+  markSteerUncertain(
+    inputMessageId: string,
+    identity: WorkerMessageSteerIdentity,
+    error: string
+  ): WorkerTeamMessage {
+    const messageId = eventIdSchema.parse(inputMessageId);
+    this.database
+      .prepare(
+        `UPDATE team_messages SET steer_outcome='uncertain', last_steer_error=?
+      WHERE message_id=? AND steer_state='in_flight' AND steer_thread_id=?
+      AND steer_turn_id=? AND steer_app_server_generation=?`
+      )
+      .run(
+        error.slice(0, 2000),
+        messageId,
+        identity.threadId,
+        identity.turnId,
+        identity.appServerGeneration
+      );
+    return this.require(messageId);
+  }
+
   markRead(inputMessageId: string): WorkerTeamMessage {
     const messageId = eventIdSchema.parse(inputMessageId);
     const result = this.database
@@ -334,19 +389,97 @@ export class WorkerMessageStore {
     return this.require(messageId);
   }
 
+  requeueUnprocessedNotifications(): void {
+    // Accepted notifications remain delivered. Processing receipts are independent; replaying
+    // an accepted turn after restart can execute or reply twice before message_ack persists.
+  }
+
+  listForScope(
+    scope: WorkerMessageExecutionScope,
+    unprocessedOnly = false,
+    limit = 50
+  ): readonly WorkerTeamMessage[] {
+    return this.listAll()
+      .filter(
+        (message) =>
+          matchesScope(message, scope) && (!unprocessedOnly || message.processedAt === undefined)
+      )
+      .slice(0, limit);
+  }
+
+  readForScope(inputMessageId: string, scope: WorkerMessageExecutionScope): WorkerTeamMessage {
+    const message = this.get(inputMessageId);
+    if (!message || !matchesScope(message, scope))
+      throw new WorkerMessageNotFoundError(eventIdSchema.parse(inputMessageId));
+    return this.markRead(message.messageId);
+  }
+
+  acknowledgeForScope(
+    inputMessageId: string,
+    scope: WorkerMessageExecutionScope
+  ): WorkerTeamMessage {
+    const message = this.readForScope(inputMessageId, scope);
+    this.database
+      .prepare(
+        'UPDATE team_messages SET processed_at = COALESCE(processed_at, ?) WHERE message_id = ?'
+      )
+      .run(new Date().toISOString(), message.messageId);
+    return this.require(message.messageId);
+  }
+
   get(inputMessageId: string): WorkerTeamMessage | undefined {
     const messageId = eventIdSchema.parse(inputMessageId);
     const row = this.database
       .prepare('SELECT * FROM team_messages WHERE message_id = ?')
       .get(messageId) as WorkerTeamMessageRow | undefined;
-    return row === undefined ? undefined : mapRow(row);
+    return row === undefined ? undefined : { ...mapRow(row), ...this.replies.get(row.message_id) };
   }
 
   listAll(): readonly WorkerTeamMessage[] {
     const rows = this.database
       .prepare('SELECT * FROM team_messages ORDER BY received_at ASC, message_id ASC')
       .all() as unknown as WorkerTeamMessageRow[];
-    return rows.map(mapRow);
+    return rows.map((row) => ({ ...mapRow(row), ...this.replies.get(row.message_id) }));
+  }
+
+  assertReplyTarget(id: string, scope: WorkerMessageExecutionScope, recipient: string): void {
+    const message = this.get(id);
+    if (
+      !message ||
+      !matchesScope(message, scope) ||
+      message.payload.senderMembershipId !== recipient
+    )
+      throw new Error(
+        'Reply target was not found in this execution inbox or has a different sender'
+      );
+  }
+
+  /** Rebuildable from durable outbox events, including a crash before this local projection. */
+  recordReplyFromOutbox(envelope: EventEnvelope): void {
+    if (envelope.type !== 'team.message') return;
+    const payload = teamMessageEventPayloadSchema.parse(envelope.payload);
+    const replyTo = decodeTeamReply(payload.message).inReplyToMessageId;
+    if (
+      !replyTo ||
+      !envelope.teamId ||
+      !envelope.assignmentId ||
+      !envelope.attemptId ||
+      envelope.leaseEpoch === undefined
+    )
+      return;
+    this.assertReplyTarget(
+      replyTo,
+      {
+        teamId: envelope.teamId,
+        assignmentId: envelope.assignmentId,
+        attemptId: envelope.attemptId,
+        leaseEpoch: envelope.leaseEpoch,
+        membershipId: payload.senderMembershipId,
+        workspaceId: payload.senderWorkspaceId,
+      },
+      payload.recipientMembershipId
+    );
+    this.replies.record(replyTo, envelope.eventId, envelope.occurredAt);
   }
 
   close(): void {
@@ -408,6 +541,7 @@ export class WorkerMessageStore {
         last_steer_error TEXT,
         steered_at TEXT,
         read_at TEXT,
+        processed_at TEXT,
         received_at TEXT NOT NULL,
         CHECK (
           (target_assignment_id IS NULL AND target_attempt_id IS NULL AND target_lease_epoch IS NULL)

@@ -27,6 +27,8 @@ export interface CodexAppServerSessionClosed {
 }
 
 export interface WorkerCodexAppServerSession {
+  /** Public initialize metadata, distinct from the locally selected executable. */
+  readonly serverInfo?: { readonly userAgent?: string };
   readonly request: <T>(method: string, params?: unknown, timeoutMs?: number) => Promise<T>;
   readonly notify: (method: string, params?: unknown) => void;
   readonly onNotification: (
@@ -268,9 +270,17 @@ const initializeSession = async (
   timeoutMs: number
 ): Promise<WorkerCodexAppServerSession> => {
   try {
-    await session.request('initialize', INITIALIZE_PARAMS, timeoutMs);
+    const initialized = await session.request<{ userAgent?: unknown }>(
+      'initialize',
+      INITIALIZE_PARAMS,
+      timeoutMs
+    );
     session.notify('initialized', {});
-    return session;
+    return {
+      ...session,
+      serverInfo:
+        typeof initialized?.userAgent === 'string' ? { userAgent: initialized.userAgent } : {},
+    };
   } catch (error) {
     await session.close();
     throw error;

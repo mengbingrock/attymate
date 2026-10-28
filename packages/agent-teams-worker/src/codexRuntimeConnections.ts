@@ -2,6 +2,8 @@ import { lstat, readFile } from 'node:fs/promises';
 
 import { z } from 'zod';
 
+import { isOwnerControlServerName } from './codexMcpServerNames';
+
 const names = z.array(z.string().min(1)).min(1);
 const server = z
   .object({
@@ -67,7 +69,7 @@ export const runtimeConnectionPolicySchema = z
       ),
     ];
     for (const name of selected) {
-      if (reserved.includes(name))
+      if (reserved.includes(name) || isOwnerControlServerName(name))
         context.addIssue({ code: 'custom', message: `Reserved MCP server ${name}` });
     }
     if (new Set(selected).size !== selected.length)

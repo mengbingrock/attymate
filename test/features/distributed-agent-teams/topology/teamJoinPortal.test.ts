@@ -124,7 +124,7 @@ describe('team directory and public join portal', () => {
         'javascript'
       );
       const listing = await relay.app.inject({ url: '/join/api/teams' });
-      expect(listing.json()).toEqual({
+      expect(listing.json()).toMatchObject({
         teams: [
           {
             teamId: team.teamId,

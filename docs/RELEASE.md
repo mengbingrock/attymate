@@ -2,10 +2,31 @@
 
 Agent Teams AI packages the desktop application and terminal-platform support assets. It does not download, stage, or bundle an agent runtime. At runtime, teams use the user's installed stock Claude Code or OpenAI Codex CLI.
 
-Distributed teammate installers have a separate packaging path: they embed an explicitly built
-forked Codex package and run its customized App Server locally, shared by the Worker and terminal
-client. See [teammate installer](../packages/agent-teams-worker/installer/README.md). This does not
-change the Electron release packaging below.
+Distributed teammate installers have two separate runtime paths. The default `--runtime fork`
+artifact embeds an explicitly built forked Codex package. The additive `--runtime stock` artifact
+contains Worker/bridge code and uses an installed unmodified Codex binary with its built-in App
+Server. The Worker and terminal client share the selected local server. Stock supports managed
+startup and explicit connection to an operator-owned server; external mode never stops that server.
+See [teammate installer](../packages/agent-teams-worker/installer/README.md). These distributions do
+not change the Electron packaging below, and neither path depends on A2A.
+
+Keep fork and stock artifacts and catalog entries distinct. Existing requests without a runtime
+selection continue receiving the fork. New stock CLI installations default to MCP-inbox delivery;
+legacy fork installations retain inline delivery. Both modes need regression coverage. Before
+publishing a runtime/platform pair, verify its installer, exact terminal attachment, scoped MCP
+communication and support/review requests, restart recovery, and independent stop/uninstall while
+the other runtime remains active. Use separate test identities, state, endpoints, and MCP entries.
+
+Current mixed-runtime native evidence covers **darwin-arm64** only. The
+[native matrix smoke](../scripts/smoke/stock-forked-codex.ts) records executable versions/hashes and
+checks stock/fork lead orientations, both delivery modes, native model-driven MCP reads/receipts,
+Worker restarts, and actual terminal clients using disposable homes and a loopback model fixture.
+The current [validation record](team-management/stock-fork-validation.md) also covers native task
+reporting, lead review receipt, fencing, and isolation from a successor assignment.
+Windows contract and fixture checks are not native Windows signoff. Other advertised pairs require
+their own native verification. Stock desktop GUI attachment remains a separate capability gate;
+a successful terminal smoke does not enable it automatically. Historical fork-only verification
+continues to apply to its recorded artifact/version, without certifying new stock distributions.
 
 ## Before creating a release
 

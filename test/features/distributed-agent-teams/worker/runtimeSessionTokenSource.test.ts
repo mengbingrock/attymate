@@ -10,7 +10,7 @@ describe('runtime session token source', () => {
     expect(() => createRuntimeSessionTokenSource({})).toThrow(/is required/);
   });
 
-  it('reads the current token from the file on every call and falls back to the env token', () => {
+  it('reads rotations from the configured file and fails closed when it disappears', () => {
     const contents = new Map<string, string>([['/w/runtime-session.token', 'first\n']]);
     const source = createRuntimeSessionTokenSource({
       token: 'env-token',
@@ -27,7 +27,7 @@ describe('runtime session token source', () => {
     contents.set('/w/runtime-session.token', 'rotated');
     expect(read()).toBe('rotated');
     contents.delete('/w/runtime-session.token');
-    expect(read()).toBe('env-token');
+    expect(() => read()).toThrow(/empty or unreadable/);
   });
 
   it('fails closed when the file is unreadable and no env token exists', () => {

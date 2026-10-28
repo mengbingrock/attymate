@@ -19,13 +19,18 @@ export interface WorkerDiagnosticReport {
   };
   readonly codexMcp: {
     readonly configPath: string;
+    readonly serverName: string;
     readonly state: CodexMcpRegistrationState;
   };
   readonly persistedStatus:
     | { readonly available: true; readonly status: AgentTeamsWorkerStatus }
     | { readonly available: false; readonly error: string };
   readonly controlSocket:
-    | { readonly reachable: true; readonly socketPath: string; readonly status: AgentTeamsWorkerStatus }
+    | {
+        readonly reachable: true;
+        readonly socketPath: string;
+        readonly status: AgentTeamsWorkerStatus;
+      }
     | { readonly reachable: false; readonly socketPath: string; readonly error: string };
 }
 
@@ -79,8 +84,10 @@ export const diagnoseAgentTeamsWorker = async (input: {
   readonly statusPath: string;
   readonly controlSocketPath: string;
   readonly codexHomePath: string;
+  readonly codexMcpServerName?: string;
 }): Promise<WorkerDiagnosticReport> => {
-  const codexState = await readCodexMcpRegistrationState(input.codexConfigPath);
+  const serverName = input.codexMcpServerName ?? 'agent-teams-control';
+  const codexState = await readCodexMcpRegistrationState(input.codexConfigPath, serverName);
   const codexRuntime = await inspectCodexRuntimeHome(input.codexHomePath);
   let persistedStatus: WorkerDiagnosticReport['persistedStatus'];
   try {
@@ -113,7 +120,7 @@ export const diagnoseAgentTeamsWorker = async (input: {
   return {
     ok: codexState.status === 'managed' && controlSocket.reachable,
     codexRuntime,
-    codexMcp: { configPath: input.codexConfigPath, state: codexState },
+    codexMcp: { configPath: input.codexConfigPath, serverName, state: codexState },
     persistedStatus,
     controlSocket,
   };

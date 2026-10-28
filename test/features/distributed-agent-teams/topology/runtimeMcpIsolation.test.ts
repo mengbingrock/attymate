@@ -163,7 +163,8 @@ describe('assignment-scoped runtime MCP isolation', () => {
       port: 0,
       dataDir: join(dataRoot, 'relay'),
       heartbeatIntervalMs: 20,
-      leaseDurationMs: 2_000,
+      // This scenario verifies tool isolation, not expiry during process startup.
+      leaseDurationMs: 30_000,
     });
     const codex = new RuntimeMcpCodexSession();
     const worker = await startAgentTeamsWorker({

@@ -1,7 +1,9 @@
 # Teammate installer
 
-The installer deploys a local forked Codex package, its customized App Server, and the Worker.
-The included terminal client and Worker connect to the same Unix socket. By default they use the
+The default bundled-runtime installer deploys a local forked Codex package, its customized App
+Server, and the Worker. The additive [stock Codex installer](#stock-codex-alongside-the-bundled-runtime)
+uses an installed official binary and its built-in App Server. Both paths remain supported and can
+run together. The included fork terminal client and Worker connect to the same Unix socket. By default they use the
 existing login in `$CODEX_HOME`, or `~/.codex` if that variable is unset. The fork's socket and
 SQLite state are private to the installation; the user's personal server is not restarted.
 
@@ -10,20 +12,21 @@ bash agent-teams-mate-<team>.sh   # optional: --label NAME --dir DIR --codex-hom
 bash ~/.local/share/agent-teams/mate-<team-prefix>/bin/attach.sh
 ```
 
-Requirements: macOS or Linux, network reach to the relay, and a fork package for that OS/CPU in
-the installer. Node 24 is used if available; otherwise a private copy is downloaded.
+The Unix fork installer requires macOS or Linux, network reach to the Relay, and a matching fork
+package in the installer. Node 24 is used if available; otherwise a private copy is downloaded.
 
 An existing sign-in is reused directly from the selected Codex home. Authentication is never
 copied into another home. If no sign-in exists, the installer guides login in the browser or with
 `--device-auth`. Use `--private-codex-home` for a separate sign-in at `<dir>/codex-home`, or
 `--codex-home DIR` to choose a specific home. Existing directories must have mode 0700; their
-permissions and `config.toml` are not rewritten. `--existing-codex-home` remains a compatibility
+permissions are not changed. Setup adds only this installation's owned MCP registration to
+`config.toml`, preserving unrelated settings and registrations. `--existing-codex-home` remains a compatibility
 alias for the default behavior.
 
 The supervisor starts the bundled fork with `app-server --listen unix://PATH`, waits for its socket,
 then starts the Worker with `--app-server-mode shared-daemon --app-server-connect-only` and that
-explicit socket. The Worker cannot start or adopt a stock daemon. `attach.sh` uses the bundled
-client's `agents --remote unix://PATH` against the same endpoint. Both processes receive a
+explicit socket. This fork launcher cannot start or adopt a different stock daemon. `attach.sh`
+uses the bundled client's `agents --remote unix://PATH` against the same endpoint. Both processes receive a
 `sqlite_home` override pointing to `<dir>/codex-state`; the server's logs go to `<dir>/logs`.
 This keeps a different fork version from migrating the personal daemon's state database.
 
@@ -52,7 +55,8 @@ packages/agent-teams-worker/installer/build-installer.sh \
   --out agent-teams-mate-<team>.sh
 ```
 
-Supported targets: `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `win32-x64`. Repeat staging for each
+Packaging targets: `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `win32-x64`. Each advertised
+runtime/platform pair requires its own native verification. Repeat staging for each
 target to include. Existing staged targets are refused to prevent merging builds. The manifest
 records a release-supplied revision and every file's SHA-256. Installation verifies all files before
 executing the fork, and refuses missing platforms or corruption without a stock fallback.
@@ -68,7 +72,8 @@ The live entry point is [relay.truegrit.dev](https://relay.truegrit.dev/).
 
 The output embeds the team credential; distribute it only to that team's members.
 
-On macOS, use `bash <install-dir>/bin/desktop.sh` to open an installed Codex desktop app against
+For a fork installation on macOS, use `bash <install-dir>/bin/desktop.sh` to open an installed
+Codex desktop app against
 the same daemon used by `attach.sh` and the Worker. An optional first argument selects the `.app`
 path; discovery also supports Codex in the ChatGPT desktop app. The launcher uses a separate GUI
 profile under `<install-dir>/desktop-data`, while the backend keeps the selected existing Codex
@@ -80,6 +85,129 @@ protects the bridge. It closes when that desktop process exits. This override is
 desktop protocol compatibility must be checked with the installed app version.
 The GUI retains its bundled CLI for its version-specific startup and organization-policy checks;
 `CODEX_CLI_PATH` is cleared for that GUI process. Its session transport still connects to the fork.
+
+## Stock Codex alongside the bundled runtime
+
+The stock installer uses an installed official Codex executable and its built-in App Server.
+The existing bundled-fork installer remains supported. Build either artifact explicitly:
+
+```bash
+packages/agent-teams-worker/installer/build-installer.sh \
+  --runtime stock --bundle-dir /path/to/worker-bundle \
+  --relay wss://relay.example/v2/worker-stream --token <team-token> \
+  --team <team-UUID> --out agent-teams-mate-stock.sh
+```
+
+The Relay serves stock artifacts separately using `--join-stock-installer-template` together
+with `--join-stock-worker-bundle` or repeated
+`--join-stock-worker-bundle-platform <platform>=<archive>` options. Windows stock artifacts also
+require `--join-stock-windows-installer-template`. Existing `--join-installer-template`,
+`--join-windows-installer-template`, and `--join-worker-bundle*` options continue serving the fork.
+The portal offers only configured platform/runtime pairs. Its download request selects
+`runtime: "stock"` or `runtime: "fork"`; omitted runtime preserves the existing fork download.
+
+`--runtime fork` is the build default and requires a staged `codex-runtime/` archive as before.
+A stock artifact contains Worker code without any bundled Codex runtime. The stock installer
+accepts `--codex-binary /absolute/path/to/codex`, or resolves `codex` from PATH. It records the
+selected path in its launch script and fails if that binary is missing or incompatible.
+
+Stock installs default to `mate-<team-prefix>-stock` and a private `codex-home` requiring its own
+normal Codex sign-in. Fork installs keep their previous directory and login behavior. Each new
+installation has its own node identity, service, sockets, runtime state, and control-MCP name.
+Managed stock installs reject `--existing-codex-home` and an explicit personal Codex home because
+shared rollout/session storage has not been verified across runtime versions. A custom dedicated
+home can be selected with `--codex-home`; external-server mode accepts the operator's explicit
+home and reports that its storage isolation is managed by the operator.
+Installing a different runtime kind into an existing directory is rejected; use another `--dir`.
+Existing fork directories preserve the legacy MCP registration name on upgrade. New installations
+use `agent_teams_control_<installation-id>` so registering another installation cannot replace it.
+
+For a manually started stock App Server, use the same explicit Codex home for both processes:
+
+```bash
+# Start the official binary in one terminal after signing into this dedicated home.
+CODEX_HOME=/path/to/private-codex-home codex app-server \
+  --listen unix:///path/to/private-directory/app-server.sock
+
+# Run the worker-only installer in another terminal.
+bash agent-teams-mate-stock.sh --codex-binary /absolute/path/to/codex \
+  --server-ownership external --app-server-socket /path/to/private-directory/app-server.sock \
+  --codex-home /path/to/private-codex-home --no-service
+```
+
+External mode requires an already running Unix socket server and never starts, stops, or removes
+that server. The normal managed mode starts a dedicated stock App Server and supervises it with
+the Worker. In both cases `bin/attach.sh` connects the selected stock terminal client to that
+exact endpoint. `bin/stop.sh` stops this installation; `bin/uninstall.sh` also removes only its
+service and control-MCP entry while retaining runtime data and login. Select a Worker-created team
+thread; an arbitrary new chat is not enrolled by merely connecting to the server. Stock `bin/desktop.sh` is gated until a desktop/server version
+pair has been verified. Existing fork desktop attachment continues to work.
+
+Running directly from source also bypasses the fork installer:
+
+```bash
+pnpm --filter @claude-teams/agent-teams-worker dev start \
+  --runtime-kind stock --server-ownership external \
+  --app-server-mode shared-daemon --app-server-connect-only \
+  --app-server-socket /path/to/private-directory/app-server.sock \
+  --codex-binary /absolute/path/to/codex --codex-home /path/to/private-codex-home \
+  --data-dir /path/to/private-worker-data --runtime-cwd /path/to/disposable-team-workspace \
+  --relay wss://relay.example/v2/worker-stream --auto-join-team <team-UUID> \
+  --organization-id <stable-organization-UUID> --person-id <stable-person-UUID> \
+  --node-id <stable-node-UUID>
+```
+
+Set `AGENT_TEAMS_RELAY_WORKER_TOKEN` through the existing protected enrollment mechanism. Keep the
+same node/data directory across restarts; two concurrent installations need different node IDs.
+The Worker performs stock protocol compatibility checks before accepting assignments.
+
+The CLI defaults stock to `--message-delivery-mode mcp-inbox` and keeps legacy fork/direct-source
+launches on `inline`; the descriptor persists this selection across restarts. Either mode can be
+selected explicitly. Inbox notifications contain IDs rather than peer-message bodies. The recipient
+uses `message_list` or `message_get` to read content and `message_ack` to record a local processed
+receipt, without sending another acknowledgement to its peer. Existing inline delivery remains
+available for both runtime kinds.
+
+Team MCP supports `message_send` to a membership ID or `recipient: "lead"`, plus scoped
+`support_request` and `review_request` with summaries, optional details, task references, and artifact
+references. Requests resolve the current roster and do not approve reviews, change task status,
+or grant execution authority. A team without a lead requires an explicit recipient. The existing
+Relay transport and Worker own delivery and wake-up; A2A is not required.
+
+`message_send` accepts optional `inReplyToMessageId`. The Worker verifies that the referenced
+message belongs to the current inbox and that the reply targets its sender. It records
+`repliedAt` and `replyMessageId` after the reply enters the durable outbox; this does not mark
+the original message processed. Reply metadata travels in a versioned envelope within the
+existing message text, preserving compatibility with the Relay wire contract. Inbox reads expose
+the decoded body and association. A processing acknowledgement never counts as a reply.
+
+If an App Server accepts a turn but its response is lost, delivery reconciles the persisted
+thread before retrying. Outcomes that cannot be established remain uncertain and require
+reconciliation; restarting the Worker does not automatically resubmit them.
+
+On Windows the stock template accepts `-CodexBinary`, defaults to a private home and a separate
+`-stock` directory, and uses an authenticated loopback WebSocket. External mode additionally
+requires `-ServerOwnership external`, `-AppServerSocket ws://127.0.0.1:<port>`, `-CodexHome`, and
+`-AppServerTokenFile` pointing to the server capability token. Stock terminal attachment uses
+`attach.ps1`; stock GUI attachment remains gated. Publish a platform/runtime pair only after its
+native smoke test passes; syntax and fixture checks do not establish native Windows compatibility.
+
+## Mixed runtime native verification
+
+The current dual-runtime native matrix is verified on **darwin-arm64**, using stock Codex `0.165.0`
+and the tested fork `0.0.0` artifact. The [native smoke](../../../scripts/smoke/stock-forked-codex.ts)
+records both executable hashes and tests both lead orientations, inline and MCP-inbox delivery,
+actual model-driven MCP reads and processing receipts, stock/fork Worker restarts, and actual
+terminal clients attached alongside other App Server clients. Homes, projects, teams, credentials,
+and model responses are disposable local fixtures; no external model provider is needed.
+The matrix also verifies native MCP progress, review requests and result candidates, lease fencing,
+and rejection of old-thread calls during a successor assignment. See the
+[validation record](../../../docs/team-management/stock-fork-validation.md) for exact hashes and limits.
+
+The matrix does not certify other operating systems or architectures. In particular, Windows
+contract and installer-fixture checks are not native Windows signoff. Stock GUI attachment remains
+gated separately from terminal verification. The historical fork-only verification below applies
+to its recorded artifacts and does not certify a new stock platform pair.
 
 ## Native Mac verification
 

@@ -170,3 +170,153 @@ it('requires explicit acceptance before adding an invited member to the dashboar
     await b.happyDOM.close();
   }
 });
+
+it.each(['darwin-x64', 'linux-x64', 'win32-x64'])(
+  'downloads stock runtime and shows local server commands for %s',
+  async (platform) => {
+    const b = browserFor(base + '/join/?team=' + team.teamId);
+    const writes: unknown[] = [];
+    b.fetch = vi.fn(async (url, options) => {
+      const path = String(url).split('api/account/')[1];
+      if (path.endsWith('/installer')) {
+        writes.push(JSON.parse(String(options?.body)));
+        return new b.Response('stock worker');
+      }
+      const data =
+        path === 'session'
+          ? {
+              configured: true,
+              user,
+              csrf: 'csrf',
+              installerPlatforms: [{ id: 'linux-x64', label: 'Linux' }],
+              installerRuntimes: [
+                {
+                  id: 'fork',
+                  label: 'Use bundled team runtime',
+                  installerPlatforms: [{ id: 'linux-x64', label: 'Linux' }],
+                },
+                {
+                  id: 'stock',
+                  label: 'Use installed Codex',
+                  installerPlatforms: [{ id: platform, label: 'Selected computer' }],
+                },
+              ],
+            }
+          : path === 'dashboard'
+            ? { teams: [team], devices: [] }
+            : { team };
+      return new b.Response(JSON.stringify(data));
+    }) as typeof b.fetch;
+    b.URL.createObjectURL = vi.fn(() => 'blob:test');
+    b.URL.revokeObjectURL = vi.fn();
+    const click = vi.spyOn(b.HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    try {
+      mount(b);
+      await vi.waitFor(() =>
+        expect(b.document.querySelectorAll('#runtime-buttons button')).toHaveLength(2)
+      );
+      const runtime = Array.from(b.document.querySelectorAll('#runtime-buttons button')).find(
+        (button) => button.textContent === 'Use installed Codex'
+      )!;
+      (runtime as unknown as HTMLButtonElement).click();
+      const computer = b.document.querySelectorAll('#platform-buttons button')[
+        ['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64', 'win32-x64'].indexOf(platform)
+      ];
+      (computer as unknown as HTMLButtonElement).click();
+      expect(b.document.getElementById('app-server-start-command')!.closest('[hidden]')).toBeNull();
+      expect(b.document.getElementById('desktop-launch-command')!.closest('[hidden]')).toBeNull();
+      expect(b.document.getElementById('app-server-start-command')!.textContent).toContain(
+        'mate-40000000-stock/bin/start.'
+      );
+      expect(writes).toEqual([]);
+      expect(click).not.toHaveBeenCalled();
+      (b.document.getElementById('device-label') as unknown as HTMLInputElement).value =
+        'stock-mac';
+      (b.document.getElementById('download-installer') as unknown as HTMLButtonElement).click();
+      await vi.waitFor(() => expect(click).toHaveBeenCalled());
+      expect(writes).toEqual([{ platform, runtime: 'stock', label: 'stock-mac' }]);
+      await vi.waitFor(() =>
+        expect(b.document.getElementById('desktop-launch-command')!.textContent).toContain(
+          'mate-40000000-stock/bin/attach.' + (platform === 'win32-x64' ? 'ps1' : 'sh')
+        )
+      );
+      const windows = platform === 'win32-x64';
+      for (const mode of ['start', 'status']) {
+        expect(b.document.getElementById('app-server-' + mode + '-command')!.textContent).toBe(
+          windows
+            ? 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA/AgentTeams/mate-40000000-stock/bin/' +
+                mode +
+                '.ps1"'
+            : 'bash "$HOME/.local/share/agent-teams/mate-40000000-stock/bin/' + mode + '.sh"'
+        );
+      }
+      expect(b.document.getElementById('app-server-help')!.textContent).toContain(
+        windows ? 'ws://127.0.0.1' : 'unix://'
+      );
+      expect(b.document.getElementById('app-server-help')!.textContent).toContain(
+        'online worker relay carries team messages'
+      );
+      expect(b.document.getElementById('install-command')!.textContent).toContain(
+        '-stock-' + platform + (platform === 'win32-x64' ? '.ps1' : '.sh')
+      );
+    } finally {
+      click.mockRestore();
+      await b.happyDOM.close();
+    }
+  }
+);
+
+it('shows and copies local server instructions without any available installer', async () => {
+  const b = browserFor(base + '/join/?team=' + team.teamId);
+  const calls: string[] = [];
+  b.fetch = vi.fn(async (url, options) => {
+    const path = String(url).split('api/account/')[1];
+    calls.push(path);
+    expect(options?.method).toBe('GET');
+    if (path === 'session')
+      return new b.Response(
+        JSON.stringify({
+          configured: true,
+          user,
+          csrf: 'csrf',
+          installerRuntimes: [],
+          installerPlatforms: [],
+        })
+      );
+    if (path === 'dashboard') return new b.Response(JSON.stringify({ teams: [team], devices: [] }));
+    throw new Error('Unexpected API: ' + path);
+  }) as typeof b.fetch;
+  const clipboard = vi.spyOn(b.navigator.clipboard, 'writeText').mockResolvedValue();
+  try {
+    mount(b);
+    await vi.waitFor(() =>
+      expect(b.document.querySelectorAll('#platform-buttons button')).toHaveLength(5)
+    );
+    expect(b.document.getElementById('local-server-instructions')!.closest('[hidden]')).toBeNull();
+    (
+      b.document.querySelectorAll('#platform-buttons button')[1] as unknown as HTMLButtonElement
+    ).click();
+    const start = b.document.getElementById('app-server-start-command')!;
+    expect(start.textContent).toBe(
+      'bash "$HOME/.local/share/agent-teams/mate-40000000/bin/start.sh"'
+    );
+    expect(start.closest('[hidden]')).toBeNull();
+    expect(
+      (b.document.getElementById('download-installer') as unknown as HTMLButtonElement).disabled
+    ).toBe(true);
+    (b.document.getElementById('copy-app-server-start') as unknown as HTMLButtonElement).click();
+    await vi.waitFor(() =>
+      expect(b.document.getElementById('notice')!.textContent).toBe(
+        'Local server start command copied.'
+      )
+    );
+    expect(clipboard).toHaveBeenCalledWith(start.textContent);
+    (
+      b.document.querySelectorAll('#runtime-buttons button')[1] as unknown as HTMLButtonElement
+    ).click();
+    expect(start.textContent).toContain('mate-40000000-stock/bin/start.sh');
+    expect(calls.some((path) => path.endsWith('/installer'))).toBe(false);
+  } finally {
+    await b.happyDOM.close();
+  }
+});

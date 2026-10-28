@@ -144,7 +144,18 @@ it('runs Google login, scoped team creation, invitation acceptance, dashboard an
     port: 0,
     dataDir: root,
     auth: { managerToken: 'm'.repeat(40), workerToken: 'w'.repeat(40) },
-    joinPortal: { publicUrl: origin + '/next', accounts: { provider } },
+    joinPortal: {
+      publicUrl: origin + '/next',
+      accounts: { provider },
+      installer: {
+        template: 'RUNTIME_KIND="__RUNTIME_KIND__"\nTOKEN="__WORKER_TOKEN__"\n__PAYLOAD_BELOW__\n',
+        stock: {
+          template:
+            'RUNTIME_KIND="__RUNTIME_KIND__"\nTOKEN="__WORKER_TOKEN__"\n__PAYLOAD_BELOW__\n',
+          platformBundles: { 'darwin-x64': Buffer.from('direct-stock-worker') },
+        },
+      },
+    },
   });
   const gateway = await startInstallerPortal({
     host: '127.0.0.1',
@@ -156,6 +167,11 @@ it('runs Google login, scoped team creation, invitation acceptance, dashboard an
       installer: {
         template: 'TOKEN="__WORKER_TOKEN__"\nTEAM="__TEAM_ID__"\n__PAYLOAD_BELOW__\n',
         platformBundles: { 'darwin-x64': Buffer.from('native-test-fixture') },
+        stock: {
+          template:
+            'RUNTIME_KIND="__RUNTIME_KIND__"\nTOKEN="__WORKER_TOKEN__"\n__PAYLOAD_BELOW__\n',
+          platformBundles: { 'darwin-x64': Buffer.from('proxy-stock-worker') },
+        },
       },
     },
   });
@@ -282,6 +298,21 @@ it('runs Google login, scoped team creation, invitation acceptance, dashboard an
       payload: { label: 'test-mac', platform: 'darwin-x64' },
     });
     expect(denied.statusCode).toBe(404);
+    for (const target of [gateway, relay]) {
+      for (const runtime of ['stock', 'unknown']) {
+        const invalid = await target.app.inject({
+          method: 'POST',
+          url: '/join/api/account/teams/' + team.teamId + '/installer',
+          headers: member,
+          payload: { label: 'invalid-build', platform: 'linux-x64', runtime },
+        });
+        expect(invalid.statusCode).toBe(400);
+      }
+    }
+    const afterInvalid = (
+      await gateway.app.inject({ url: '/join/api/account/dashboard', headers: member })
+    ).json();
+    expect(afterInvalid.devices).toEqual([]);
     const installer = await gateway.app.inject({
       method: 'POST',
       url: '/join/api/account/teams/' + team.teamId + '/installer',
@@ -328,6 +359,17 @@ it('runs Google login, scoped team creation, invitation acceptance, dashboard an
         })
       ).statusCode
     ).toBe(404);
+    for (const target of [gateway, relay]) {
+      const stockInstaller = await target.app.inject({
+        method: 'POST',
+        url: '/join/api/account/teams/' + team.teamId + '/installer',
+        headers: member,
+        payload: { label: 'stock-device', platform: 'darwin-x64', runtime: 'stock' },
+      });
+      expect(stockInstaller.statusCode).toBe(200);
+      expect(stockInstaller.body).toContain('RUNTIME_KIND="stock"');
+      expect(stockInstaller.headers['content-disposition']).toContain('-stock-darwin-x64.sh');
+    }
     await gateway.app.inject({
       method: 'POST',
       url: '/join/api/account/logout',

@@ -29,6 +29,14 @@ without consuming a fresh invitation.
 
 The setup panel includes native downloads, linking an existing device with its private pairing
 code, opening a team chat, attaching an existing idle chat, and selecting a default for new chats.
+Runtime and computer selectors show the selected installation’s local App Server start, status,
+and client commands immediately, without downloading an installer. The instructions remain
+available when no installer build is published for the selection. Downloads are a separate optional
+action. macOS/Linux use a private Unix socket; Windows uses an
+authenticated loopback WebSocket with an installer-selected port. The online Worker relay is
+identified separately as the team messaging connection. Switching runtime/platform selections
+updates the installation commands, including the separate `-stock` installation directory.
+
 Automatic messages currently enter the most recently attached chat for that membership. The UI
 shows this explicitly; another unbound personal chat does not acquire incoming messages merely
 by inspecting the team tools. Devices and the active team's roster refresh while the page is open.

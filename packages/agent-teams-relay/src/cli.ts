@@ -39,31 +39,53 @@ const googleClient = googleClientFile
 if (googleClientFile && (!googleClient?.client_id || !googleClient?.client_secret))
   throw new Error('Google OAuth client file must contain a web client ID and secret');
 const accountsEnabled = process.argv.includes('--accounts') || googleClient !== undefined;
-const installerTemplatePath = valueAfter('--join-installer-template');
-const windowsInstallerTemplatePath = valueAfter('--join-windows-installer-template');
-const workerBundlePath = valueAfter('--join-worker-bundle');
-const platformBundles: Partial<Record<InstallerPlatform, Buffer>> = {};
-for (let index = 0; index < process.argv.length; index++) {
-  if (process.argv[index] !== '--join-worker-bundle-platform') continue;
-  const entry = process.argv[index + 1] ?? '';
-  const separator = entry.indexOf('=');
-  const platform = entry.slice(0, separator);
-  const path = entry.slice(separator + 1);
-  if (separator < 1 || !path || !Object.hasOwn(INSTALLER_PLATFORM_LABELS, platform)) {
-    throw new Error('--join-worker-bundle-platform requires a supported platform=path');
+const readDistribution = (prefix: '--join' | '--join-stock') => {
+  const templatePath = valueAfter(prefix + '-installer-template');
+  const windowsTemplatePath = valueAfter(prefix + '-windows-installer-template');
+  const bundlePath = valueAfter(prefix + '-worker-bundle');
+  const platformBundles: Partial<Record<InstallerPlatform, Buffer>> = {};
+  for (let index = 0; index < process.argv.length; index++) {
+    if (process.argv[index] !== prefix + '-worker-bundle-platform') continue;
+    const entry = process.argv[index + 1] ?? '';
+    const separator = entry.indexOf('=');
+    const platform = entry.slice(0, separator);
+    const path = entry.slice(separator + 1);
+    if (separator < 1 || !path || !Object.hasOwn(INSTALLER_PLATFORM_LABELS, platform)) {
+      throw new Error(prefix + '-worker-bundle-platform requires a supported platform=path');
+    }
+    if (platformBundles[platform as InstallerPlatform] !== undefined)
+      throw new Error(`Duplicate installer platform: ${platform}`);
+    platformBundles[platform as InstallerPlatform] = readFileSync(resolve(path));
   }
-  if (platformBundles[platform as InstallerPlatform] !== undefined)
-    throw new Error(`Duplicate installer platform: ${platform}`);
-  platformBundles[platform as InstallerPlatform] = readFileSync(resolve(path));
-}
+  const hasBundle = bundlePath !== undefined || Object.keys(platformBundles).length > 0;
+  if (
+    (templatePath !== undefined) !== hasBundle ||
+    (windowsTemplatePath !== undefined && !hasBundle)
+  ) {
+    throw new Error(
+      prefix +
+        '-installer-template requires ' +
+        prefix +
+        '-worker-bundle or ' +
+        prefix +
+        '-worker-bundle-platform, and vice versa'
+    );
+  }
+  return templatePath === undefined
+    ? undefined
+    : {
+        template: readFileSync(resolve(templatePath), 'utf8'),
+        ...(windowsTemplatePath === undefined
+          ? {}
+          : { windowsTemplate: readFileSync(resolve(windowsTemplatePath), 'utf8') }),
+        ...(bundlePath === undefined ? {} : { workerBundleTgz: readFileSync(resolve(bundlePath)) }),
+        platformBundles,
+      };
+};
+const forkInstaller = readDistribution('--join');
+const stockInstaller = readDistribution('--join-stock');
 const repoUrl = valueAfter('--join-repo-url');
 const repoBranch = valueAfter('--join-repo-branch');
-const hasBundle = workerBundlePath !== undefined || Object.keys(platformBundles).length > 0;
-if ((installerTemplatePath !== undefined) !== hasBundle) {
-  throw new Error(
-    '--join-installer-template requires --join-worker-bundle or --join-worker-bundle-platform, and vice versa'
-  );
-}
 if ((repoUrl === undefined) !== (repoBranch === undefined)) {
   throw new Error('--join-repo-url and --join-repo-branch must be given together');
 }
@@ -85,20 +107,12 @@ const joinPortal =
                   : {},
             }
           : {}),
-        ...(installerTemplatePath === undefined || !hasBundle
+        ...(forkInstaller === undefined && stockInstaller === undefined
           ? {}
           : {
               installer: {
-                template: readFileSync(resolve(installerTemplatePath), 'utf8'),
-                ...(windowsInstallerTemplatePath === undefined
-                  ? {}
-                  : {
-                      windowsTemplate: readFileSync(resolve(windowsInstallerTemplatePath), 'utf8'),
-                    }),
-                ...(workerBundlePath === undefined
-                  ? {}
-                  : { workerBundleTgz: readFileSync(resolve(workerBundlePath)) }),
-                platformBundles,
+                ...(forkInstaller ?? { template: stockInstaller!.template }),
+                ...(stockInstaller === undefined ? {} : { stock: stockInstaller }),
               },
             }),
         ...(repoUrl === undefined || repoBranch === undefined

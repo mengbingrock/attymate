@@ -33,20 +33,29 @@ it.each(['socket', 'websocket'])(
     else upstreamServer.listen(0, '127.0.0.1');
     await once(upstreamServer, 'listening');
     let bindingSaved = false;
+    let denyTurn = false;
+    const preparedMethods: string[] = [];
     const control = createServer((req, res) => {
       let body = '';
       req.on('data', (data) => {
         body += data;
       });
       req.on('end', () => {
-        if (req.url?.endsWith('/prepare'))
+        if (req.url?.endsWith('/prepare')) {
+          const { method } = JSON.parse(body) as { method: string };
+          preparedMethods.push(method);
+          if (method === 'turn/start' && denyTurn) {
+            res.statusCode = 403;
+            res.end('{"error":"Membership MCP inventory leaked server"}');
+            return;
+          }
           res.end(
             JSON.stringify({
               bindingId: 'binding',
               config: { mcp_servers: { 'agent-teams-runtime': { enabled: true } } },
             })
           );
-        else {
+        } else {
           expect(JSON.parse(body).threadId).toBe(threadId);
           bindingSaved = true;
           res.end('{"ok":true}');
@@ -91,6 +100,14 @@ it.each(['socket', 'websocket'])(
           },
         },
       });
+      const started = received;
+      denyTurn = true;
+      const deniedTurn = once(client, 'message');
+      client.send(JSON.stringify({ id: 2, method: 'turn/start', params: { threadId, input: [] } }));
+      const [deniedBytes] = await deniedTurn;
+      expect(JSON.parse(deniedBytes.toString())).toMatchObject({ id: 2, error: { code: -32000 } });
+      expect(preparedMethods).toEqual(['thread/start', 'turn/start']);
+      expect(received).toBe(started);
       const denied = new WebSocket(`ws://127.0.0.1:${port}/wrong`);
       const [error] = await once(denied, 'error');
       expect(error.message).toContain('401');

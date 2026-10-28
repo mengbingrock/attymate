@@ -1,13 +1,23 @@
 // @vitest-environment node
 
 import { chmod, lstat, mkdir, mkdtemp, readdir, symlink, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { prepareWorkerCodexHome } from '@claude-teams/agent-teams-worker';
 import { describe, expect, it } from 'vitest';
 
 describe('prepareWorkerCodexHome', () => {
+  it('rejects the personal Codex home before managed stock can modify it', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'agent-teams-stock-home-'));
+    await expect(
+      prepareWorkerCodexHome({
+        dataDir: root,
+        codexHome: join(homedir(), '.codex'),
+        managedStock: true,
+      })
+    ).rejects.toThrow('requires a dedicated --codex-home');
+  });
   it('creates a private empty Codex home under Worker data without copying credentials', async () => {
     const root = await mkdtemp(join(tmpdir(), 'agent-teams-worker-codex-home-'));
     const dataDir = join(root, 'worker');

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { renameSync, rmSync, writeFileSync } from 'node:fs';
 import type {
   ExecutionLeaseIdentity,
@@ -20,6 +21,7 @@ import {
   readConfiguredAppToolNames,
   assertRuntimeAppInventory,
   readConfiguredMcpServerNames,
+  runtimeMcpTokenFileForAttempt,
   type CodexRuntimeMcpLaunchSpec,
 } from './codexRuntimeMcpProfile';
 import { WorkerRuntimeStore, type WorkerRuntimeBinding } from './workerRuntimeStore';
@@ -166,6 +168,9 @@ export class WorkerCodexRuntimeSupervisor {
     if ((options.runtimeIdentity === undefined) !== (options.runtimeMcp === undefined)) {
       throw new Error('runtimeIdentity and runtimeMcp must be configured together');
     }
+    // Legacy bridges may still watch this alias. Never publish another attempt's token there.
+    if (options.runtimeMcp?.tokenFile !== undefined)
+      rmSync(options.runtimeMcp.tokenFile, { force: true });
   }
 
   async start(assignment: WorkerAssignment): Promise<WorkerRuntimeBinding> {
@@ -738,11 +743,16 @@ export class WorkerCodexRuntimeSupervisor {
       leaseId: assignment.leaseId,
       expiresAt: assignment.leaseExpiresAt,
     });
-    this.publishRuntimeSessionToken(created.token);
+    this.publishRuntimeSessionToken(assignment.attemptId, created.token);
     const configured = {
       ...created,
       attemptId: assignment.attemptId,
-      config: await this.buildRuntimeMcpConfig(session, created.token, created.teamRole),
+      config: await this.buildRuntimeMcpConfig(
+        session,
+        created.token,
+        created.teamRole,
+        assignment.attemptId
+      ),
     };
     this.runtimeMcpSession = configured;
     return configured;
@@ -755,11 +765,16 @@ export class WorkerCodexRuntimeSupervisor {
   ): Promise<ConfiguredRuntimeMcpSession | undefined> {
     if (this.options.runtimeMcp === undefined) return undefined;
     const created = this.runtimeSessions.rotateAttempt(binding.attemptId, expiresAt);
-    this.publishRuntimeSessionToken(created.token);
+    this.publishRuntimeSessionToken(binding.attemptId, created.token);
     const configured = {
       ...created,
       attemptId: binding.attemptId,
-      config: await this.buildRuntimeMcpConfig(session, created.token, created.teamRole),
+      config: await this.buildRuntimeMcpConfig(
+        session,
+        created.token,
+        created.teamRole,
+        binding.attemptId
+      ),
     };
     this.runtimeMcpSession = configured;
     return configured;
@@ -782,31 +797,33 @@ export class WorkerCodexRuntimeSupervisor {
     this.runtimeSessions.revokeAttempt(attemptId);
     if (this.runtimeMcpSession?.attemptId === attemptId) {
       this.runtimeMcpSession = undefined;
-      this.publishRuntimeSessionToken(undefined);
     }
+    this.publishRuntimeSessionToken(attemptId, undefined);
   }
 
-  /** Mirrors the current token into the Worker-owned token file consumed by long-lived bridges. */
-  private publishRuntimeSessionToken(token: string | undefined): void {
-    const tokenFile = this.options.runtimeMcp?.tokenFile;
-    if (tokenFile === undefined) return;
+  /** A bridge may observe rotations for its own attempt only. Missing files fail closed. */
+  private publishRuntimeSessionToken(attemptId: string, token: string | undefined): void {
+    const base = this.options.runtimeMcp?.tokenFile;
+    if (base === undefined) return;
+    const tokenFile = runtimeMcpTokenFileForAttempt(base, attemptId);
+    if (token === undefined) {
+      rmSync(tokenFile, { force: true });
+      return;
+    }
+    const temporary = `${tokenFile}.${randomUUID()}.tmp`;
     try {
-      if (token === undefined) {
-        rmSync(tokenFile, { force: true });
-        return;
-      }
-      const temporary = `${tokenFile}.${process.pid}.tmp`;
-      writeFileSync(temporary, token, { encoding: 'utf8', mode: 0o600 });
+      writeFileSync(temporary, token, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
       renameSync(temporary, tokenFile);
-    } catch {
-      // The bridge falls back to the token in its environment; the next rotation retries.
+    } finally {
+      rmSync(temporary, { force: true });
     }
   }
 
   private async buildRuntimeMcpConfig(
     session: WorkerCodexAppServerSession,
     token: string,
-    teamRole: RuntimeSessionContext['teamRole']
+    teamRole: RuntimeSessionContext['teamRole'],
+    attemptId: string
   ): Promise<Readonly<Record<string, unknown>>> {
     const runtimeMcp = this.options.runtimeMcp;
     if (runtimeMcp === undefined) throw new Error('Runtime MCP is not configured');
@@ -832,7 +849,14 @@ export class WorkerCodexRuntimeSupervisor {
       );
     }
     return buildRestrictedRuntimeMcpConfig(
-      runtimeMcp,
+      {
+        ...runtimeMcp,
+        ...(runtimeMcp.tokenFile === undefined
+          ? {}
+          : {
+              tokenFile: runtimeMcpTokenFileForAttempt(runtimeMcp.tokenFile, attemptId),
+            }),
+      },
       token,
       readConfiguredMcpServerNames(response),
       readConfiguredPluginNames(response),

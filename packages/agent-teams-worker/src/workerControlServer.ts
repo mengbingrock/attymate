@@ -224,7 +224,7 @@ const handleControlRequest = async (
     if (action === 'action' && provider.desktopChatAction)
       jsonResponse(response, await provider.desktopChatAction(body));
     else if (action === 'prepare' && provider.desktopChatPrepare)
-      jsonResponse(response, provider.desktopChatPrepare(body));
+      jsonResponse(response, await provider.desktopChatPrepare(body));
     else if (action === 'bind' && provider.desktopChatBind)
       jsonResponse(response, await provider.desktopChatBind(body));
     else if (action === 'tool' && provider.desktopChatTool && typeof body.tool === 'string')

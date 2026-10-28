@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test a staged native fork and installer in a disposable Unix directory.
+"""Test a native stock or staged fork installer in a disposable Unix directory.
 
 The kit contains the compiled Worker, mac-relay-test.mjs, and installer scripts.
 Uses an isolated local Relay and no model turns. Existing-login access is opt-in;
@@ -48,8 +48,12 @@ def main():
     parser.add_argument('--root', type=Path, required=True)
     parser.add_argument('--node', default='/usr/local/bin/node')
     parser.add_argument('--revision', required=True)
+    parser.add_argument('--runtime', choices=['stock', 'fork'], default='fork')
+    parser.add_argument('--codex-binary', type=Path)
     parser.add_argument('--existing-login', action='store_true')
     args = parser.parse_args()
+    if args.runtime == 'stock' and (not args.codex_binary or args.existing_login):
+        parser.error('Stock smoke requires --codex-binary and an isolated login home')
     root = args.root.resolve()
     if root.parent != Path('/private/tmp').resolve() or not root.name.startswith('agent-teams-'):
         raise RuntimeError('Use a new agent-teams-* directory under /private/tmp')
@@ -62,13 +66,14 @@ def main():
         auth.write_text(json.dumps({'OPENAI_API_KEY': 'sk-test-only-no-provider-calls'}))
         auth.chmod(0o600)
         (home / 'config.toml').write_text('[features]\napps = false\nplugins = false\nremote_plugin = false\n')
+    config_before_text = (home / 'config.toml').read_text()
     config_before = hashlib.sha256((home / 'config.toml').read_bytes()).hexdigest()
     env = dict(os.environ, PATH='/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', CODEX_HOME=str(home))
     if args.existing_login: env.pop('OPENAI_API_KEY', None)
     else: env['OPENAI_API_KEY'] = 'sk-test-only-no-provider-calls'
     platform = 'darwin-' + ('arm64' if os.uname().machine == 'arm64' else 'x64')
     stage = kit / 'codex-runtime' / platform
-    if not stage.exists():
+    if args.runtime == 'fork' and not stage.exists():
         run([args.node, str(kit / 'stage-codex-runtime.mjs'), '--source', str(root / 'package'),
              '--bundle-dir', str(kit), '--platform', platform, '--revision', args.revision], env=env)
     worker_token = uuid.uuid4().hex + uuid.uuid4().hex
@@ -98,10 +103,12 @@ def main():
             installer = root / 'smoke-installer.sh'
             run(['bash', str(kit / 'build-installer.sh'), '--bundle-dir', str(kit),
                  '--relay', address['wsUrl'], '--token', worker_token, '--team', str(uuid.uuid4()),
-                 '--out', str(installer)], env=env, timeout=180)
+                 '--out', str(installer), '--runtime', args.runtime], env=env, timeout=180)
             print('Built native installer; testing install and private Node selection', flush=True)
             install_args = ['bash', str(installer), '--dir', str(install), '--label', 'Mac reverse SSH smoke', '--no-service']
             if not args.existing_login: install_args.append('--private-codex-home')
+            if args.runtime == 'stock':
+                install_args.extend(['--codex-binary', str(args.codex_binary.resolve())])
             result = subprocess.run(install_args,
                                     env=env, cwd=root, stdin=subprocess.DEVNULL, text=True,
                                     capture_output=True, timeout=240)
@@ -174,22 +181,39 @@ client.onmessage = event => {
 };
 client.onerror = () => { console.error('Desktop transport failed'); process.exit(1); };
 ''')
-            try:
-                desktop = run([node, str(install / 'bin/desktop-bridge.mjs'), socket, binary,
-                               str(home), str(install / 'desktop-data'), node, str(desktop_probe)],
-                              env=env, cwd=root, timeout=20)
-            except subprocess.CalledProcessError as error:
-                raise RuntimeError('Desktop transport failed: ' + error.stderr[-2000:]) from error
-            if not json.loads(desktop.stdout)['configRead']:
-                raise RuntimeError('Desktop transport could not read daemon config')
-            report = {'ok': True, 'platform': platform, 'binary': binary,
+            if args.runtime == 'fork':
+                try:
+                    desktop = run([node, str(install / 'bin/desktop-bridge.mjs'), socket, binary,
+                                   str(home), str(install / 'desktop-data'), node, str(desktop_probe)],
+                                  env=env, cwd=root, timeout=20)
+                except subprocess.CalledProcessError as error:
+                    raise RuntimeError('Desktop transport failed: ' + error.stderr[-2000:]) from error
+                if not json.loads(desktop.stdout)['configRead']:
+                    raise RuntimeError('Desktop transport could not read daemon config')
+            else:
+                desktop_launcher = install / 'bin/desktop.sh'
+                if desktop_launcher.exists():
+                    desktop = subprocess.run(['bash', str(desktop_launcher)], env=env,
+                                             cwd=root, text=True, capture_output=True, timeout=10)
+                    if desktop.returncode == 0:
+                        raise RuntimeError('Unverified stock GUI launcher was enabled')
+            descriptor = json.loads((install / 'data/runtime-installation.json').read_text())
+            config_after = (home / 'config.toml').read_text()
+            if config_before_text.strip() not in config_after:
+                raise RuntimeError('Installer changed the unrelated Codex configuration')
+            if descriptor['controlMcpName'] not in config_after:
+                raise RuntimeError('Installer did not persist its owned MCP registration')
+            report = {'ok': True, 'runtime': args.runtime, 'platform': platform, 'binary': binary,
+                      'binaryVersion': descriptor['binaryVersion'],
+                      'binarySha256': hashlib.sha256(Path(binary).read_bytes()).hexdigest(),
                       'nodeVersion': run([node, '--version'], env=env).stdout.strip(),
                       'connectedWorkers': len(workers), 'connectOnly': status['appServer']['connectOnly'],
                       'clientRendered': True, 'socket': socket, 'providerAuthenticationTested': False,
                       'codexHome': str(home), 'existingHomeUsed': args.existing_login,
                       'configUnchanged': config_before == hashlib.sha256((home / 'config.toml').read_bytes()).hexdigest(),
+                      'unrelatedConfigPreserved': True,
                       'modelTurnsStarted': 0, 'testDirectory': str(root)}
-            report['desktopTransportTested'] = True
+            report['desktopTransportTested'] = args.runtime == 'fork'
             report['desktopGuiRendered'] = False
             (root / 'mac-smoke-result.json').write_text(json.dumps(report, indent=2) + '\n')
             print(json.dumps(report), flush=True)

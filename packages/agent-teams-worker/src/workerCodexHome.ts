@@ -1,4 +1,5 @@
-import { chmod, lstat, mkdir } from 'node:fs/promises';
+import { chmod, lstat, mkdir, realpath } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join, parse, resolve } from 'node:path';
 
 export interface PreparedWorkerCodexHome {
@@ -13,10 +14,19 @@ export const prepareWorkerCodexHome = async (options: {
   readonly dataDir: string;
   readonly codexHome?: string;
   readonly processEnv?: NodeJS.ProcessEnv;
+  readonly managedStock?: boolean;
 }): Promise<PreparedWorkerCodexHome> => {
   const codexHome = resolveWorkerCodexHomePath(options.dataDir, options.codexHome);
   if (codexHome === parse(codexHome).root) {
     throw new Error('Worker Codex home must not be a filesystem root');
+  }
+  if (options.managedStock) {
+    const canonical = async (path: string) => realpath(path).catch(() => resolve(path));
+    if ((await canonical(codexHome)) === (await canonical(join(homedir(), '.codex')))) {
+      throw new Error(
+        'Managed stock runtime requires a dedicated --codex-home; the personal Codex home shares sessions and runtime state'
+      );
+    }
   }
 
   let created = false;

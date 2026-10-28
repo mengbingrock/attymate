@@ -10,14 +10,33 @@ const object = (v: unknown): Record<string, unknown> =>
 export const mergeDesktopTeamConfig = (
   params: Record<string, unknown>,
   injected: Record<string, unknown>
-) => ({
-  ...params,
-  config: {
-    ...object(params.config),
-    ...injected,
-    mcp_servers: { ...object(object(params.config).mcp_servers), ...object(injected.mcp_servers) },
-  },
-});
+) => {
+  const supplied = object(params.config);
+  const disabled = (value: unknown) =>
+    Object.fromEntries(Object.keys(object(value)).map((name) => [name, { enabled: false }]));
+  return {
+    ...params,
+    config: {
+      ...Object.fromEntries(
+        Object.entries(supplied).filter(
+          ([key]) => !/^(mcp_servers|plugins|apps|features)\./.test(key)
+        )
+      ),
+      ...injected,
+      mcp_servers: { ...disabled(supplied.mcp_servers), ...object(injected.mcp_servers) },
+      plugins: { ...disabled(supplied.plugins), ...object(injected.plugins) },
+      apps: {
+        ...disabled(supplied.apps),
+        ...object(injected.apps),
+        _default: {
+          enabled: false,
+          destructive_enabled: false,
+          default_tools_approval_mode: 'prompt',
+        },
+      },
+    },
+  };
+};
 
 /** Adds only the Worker-owned team configuration; all other desktop RPCs pass through. */
 export const attachDesktopTransport = (
@@ -53,7 +72,11 @@ export const attachDesktopTransport = (
             await ready;
             const message = JSON.parse(data.toString()) as Record<string, unknown>;
             const params = object(message.params);
-            if (message.method === 'thread/start' || message.method === 'thread/resume') {
+            if (
+              message.method === 'thread/start' ||
+              message.method === 'thread/resume' ||
+              message.method === 'turn/start'
+            ) {
               const prepared = await requestWorkerControl<{
                 bindingId?: string;
                 config?: Record<string, unknown>;
@@ -66,8 +89,12 @@ export const attachDesktopTransport = (
                 },
               });
               if (prepared.config) message.params = mergeDesktopTeamConfig(params, prepared.config);
+              else if (prepared.bindingId && message.method === 'turn/start') {
+                const { config: _config, ...turnParams } = params;
+                message.params = turnParams;
+              }
               if (
-                message.method === 'thread/start' &&
+                (message.method === 'thread/start' || message.method === 'thread/resume') &&
                 prepared.bindingId &&
                 (typeof message.id === 'number' || typeof message.id === 'string')
               )

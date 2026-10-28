@@ -80,14 +80,18 @@ export const JOIN_PORTAL_HTML = String.raw`<!doctype html>
     <div id="unlocked" class="unlocked" hidden>
       <p class="success" role="status">Token accepted. Choose how to connect this computer.</p>
 
-      <section class="option" id="option-installer">
-        <h3><span class="step">1</span>Install and start</h3>
-        <p class="muted">Choose an available macOS, Windows, or Linux build. Includes the team's forked Codex runtime and starts its customized App Server using your existing Codex login. If you are not signed in yet, the installer guides you through sign-in.</p>
+      <section class="option" aria-label="Local setup options">
+        <p class="muted" id="runtime-help">Choose your runtime and computer to see local startup instructions. Downloads are optional.</p>
+        <label class="field" id="runtime-field" hidden><span>Codex runtime</span><select id="runtime" aria-describedby="runtime-help"></select></label>
         <label class="field" id="platform-field" hidden>
           <span>Your computer</span>
           <select id="platform" aria-describedby="platform-help"></select>
-          <small id="platform-help">Choose the build that matches this computer. On a Mac, check Apple menu → About This Mac for its chip or processor.</small>
+          <small id="platform-help">Choose this computer to see its startup commands. On a Mac, check Apple menu → About This Mac for its chip or processor.</small>
         </label>
+      </section>
+
+      <section class="option" id="option-installer">
+        <h3><span class="step">1</span>Install and start</h3>
         <button id="download" type="button" class="primary">Download installer</button>
         <p id="download-error" class="error" role="alert" hidden></p>
         <p class="muted">After the download finishes, run this in Terminal or PowerShell. The installer reuses your Codex sign-in and starts your team member:</p>
@@ -97,7 +101,13 @@ export const JOIN_PORTAL_HTML = String.raw`<!doctype html>
       </section>
 
       <section class="option" id="option-attach">
-        <h3><span class="step">2</span>Open Codex</h3>
+        <h3><span class="step">2</span>Start your local App Server</h3>
+        <p class="muted" id="app-server-help"></p>
+        <p class="muted">For an existing team installation, run this if its server is stopped. New installations start the server automatically:</p>
+        <div class="code"><pre id="app-server-start-command"></pre><button type="button" class="copy" data-copy="app-server-start-command">Copy</button></div>
+        <p class="muted">Check this installation’s status:</p>
+        <div class="code"><pre id="app-server-status-command"></pre><button type="button" class="copy" data-copy="app-server-status-command">Copy</button></div>
+        <h3><span class="step">3</span>Open Codex</h3>
         <p class="muted">When installation reports Connected, run this in Terminal to open your team's local Codex client:</p>
         <div class="code"><pre id="attach-command"></pre><button type="button" class="copy" data-copy="attach-command">Copy</button></div>
         <div id="desktop-option" hidden>
@@ -494,6 +504,7 @@ export const JOIN_PORTAL_APP_JS = String.raw`
       'CODEX_HOME="$D/codex-home" "$CODEX" app-server --listen unix://"$D/app-server.sock"',
       '',
       '# 4. Start the worker (from the agent-teams folder, in another terminal)',
+      '# --relay is for team messages; --app-server-socket is the local Codex socket.',
       'D=~/.local/share/agent-teams/team-' + team8,
       'CODEX=/absolute/path/to/fork/bin/codex',
       'set -a; . "$D/worker.env"; set +a',
@@ -515,48 +526,65 @@ export const JOIN_PORTAL_APP_JS = String.raw`
     var team8 = current.team.teamId.slice(0, 8);
     $('unlock').hidden = true;
     $('unlocked').hidden = false;
-    $('option-installer').hidden = !body.installerAvailable;
-    $('option-attach').hidden = !body.installerAvailable;
-    current.platforms = body.installerPlatforms || [];
+    current.runtimeCatalog = Array.isArray(body.installerRuntimes);
+    current.runtimes = current.runtimeCatalog ? body.installerRuntimes : (body.installerAvailable ? [{ id: 'fork', label: 'Use bundled team runtime', installerPlatforms: body.installerPlatforms || [] }] : []);
+    var available = current.runtimes.length > 0;
+    current.downloadRuntimes = current.runtimes;
+    current.runtimes = [{ id: 'fork', label: 'Use bundled team runtime' }, { id: 'stock', label: 'Use installed Codex' }];
+    $('option-installer').hidden = !available;
+    $('option-attach').hidden = false;
+    var runtimeSelect = $('runtime');
+    runtimeSelect.replaceChildren();
+    current.runtimes.forEach(function(runtime) { var option = el('option'); option.value = runtime.id; option.textContent = runtime.label; runtimeSelect.appendChild(option); });
+    runtimeSelect.value = current.runtimes.some(function(runtime) { return runtime.id === 'fork'; }) ? 'fork' : (current.runtimes[0] || {}).id || '';
+    $('runtime-field').hidden = current.runtimes.length < 2;
+    updateRuntimeSelection();
+    $('option-clone').hidden = !body.repository || available;
+    if (body.repository) $('clone-commands').textContent = cloneCommands(body);
+    $('token').value = '';
+    (current.platforms.length > 1 ? $('platform') : available ? $('download') : $('close')).focus();
+  }
+
+  function updateRuntimeSelection() {
+    if (!current) return;
+    current.runtime = $('runtime').value || 'fork';
+    var runtime = current.downloadRuntimes.find(function(item) { return item.id === current.runtime; });
+    current.downloadPlatforms = runtime ? runtime.installerPlatforms || [] : [];
+    current.platforms = [{id:'darwin-arm64',label:'macOS · Apple Silicon'},{id:'darwin-x64',label:'macOS · Intel'},{id:'linux-arm64',label:'Linux · ARM64'},{id:'linux-x64',label:'Linux · Intel / AMD x64'},{id:'win32-x64',label:'Windows · x64'}];
     var select = $('platform');
     select.replaceChildren();
     if (current.platforms.length) {
-      var placeholder = el('option');
-      placeholder.value = '';
-      placeholder.textContent = 'Choose your computer';
-      select.appendChild(placeholder);
-      current.platforms.forEach(function (platform) {
-        var option = el('option');
-        option.value = platform.id;
-        option.textContent = platform.label;
-        select.appendChild(option);
-      });
-      if (current.platforms.length === 1) select.value = current.platforms[0].id;
+      var placeholder = el('option'); placeholder.value = ''; placeholder.textContent = 'Choose your computer'; select.appendChild(placeholder);
+      current.platforms.forEach(function(platform) { var option = el('option'); option.value = platform.id; option.textContent = platform.label; select.appendChild(option); });
+      if (current.downloadPlatforms.length === 1) select.value = current.downloadPlatforms[0].id;
     }
     $('platform-field').hidden = !current.platforms.length;
+    $('runtime-help').textContent = current.runtime === 'stock' ? 'Uses the official Codex already installed on this computer. Creates a separate team installation and guides you through its sign-in.' : 'Includes the bundled team runtime and starts its local App Server using your existing Codex login.';
     updateInstallerSelection();
-    $('attach-command').textContent = 'bash "$HOME/.local/share/agent-teams/mate-' + team8 + '/bin/attach.sh"';
-    $('option-clone').hidden = !body.repository || body.installerAvailable;
-    if (body.repository) $('clone-commands').textContent = cloneCommands(body);
-    $('token').value = '';
-    (current.platforms.length > 1 ? select : body.installerAvailable ? $('download') : $('close')).focus();
   }
 
   function installerFilename() {
     return 'agent-teams-join-' + current.team.teamId.slice(0, 8) +
-      (current.platform ? '-' + current.platform : '') + (current.platform === 'win32-x64' ? '.ps1' : '.sh');
+      (current.runtimeCatalog ? '-' + current.runtime : '') + (current.platform ? '-' + current.platform : '') + (current.platform === 'win32-x64' ? '.ps1' : '.sh');
   }
 
   function updateInstallerSelection() {
     if (!current) return;
     current.platform = $('platform').value || '';
     var ready = !current.platforms.length || Boolean(current.platform);
-    $('download').disabled = !ready;
+    var downloadable = current.downloadRuntimes.some(function(runtime) { return runtime.id === current.runtime && (!runtime.installerPlatforms || !runtime.installerPlatforms.length || runtime.installerPlatforms.some(function(platform) { return platform.id === current.platform; })); });
+    $('option-installer').hidden = !downloadable;
+    $('download').disabled = !ready || !downloadable;
     $('download').textContent = 'Download installer';
     var windows = current.platform === 'win32-x64';
     $('run-command').textContent = ready ? (windows ? 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$HOME/Downloads/' + installerFilename() + '" -Label ' + "'" + current.label.replace(/'/g,"''") + "'" : 'bash ~/Downloads/' + installerFilename() + ' --label ' + JSON.stringify(current.label).replace(/[$\x60]/g,'\\$&')) : 'Choose your computer above to get its install command.';
-    $('attach-command').textContent = windows ? '& "$env:LOCALAPPDATA/AgentTeams/mate-' + current.team.teamId.slice(0,8) + '/bin/attach.ps1"' : 'bash "$HOME/.local/share/agent-teams/mate-' + current.team.teamId.slice(0,8) + '/bin/attach.sh"';
-    $('desktop-option').hidden = !current.platform || current.platform.indexOf('darwin-') !== 0;
+    var installPath = (windows ? '$env:LOCALAPPDATA/AgentTeams/mate-' : '$HOME/.local/share/agent-teams/mate-') + current.team.teamId.slice(0, 8) + (current.runtime === 'stock' ? '-stock' : '');
+    function localCommand(mode) { return windows ? '& "' + installPath + '/bin/' + mode + '.ps1"' : 'bash "' + installPath + '/bin/' + mode + '.sh"'; }
+    $('app-server-start-command').textContent = ready ? localCommand('start') : 'Choose your computer above to get its local server command.';
+    $('app-server-status-command').textContent = ready ? localCommand('status') : 'Choose your computer above to get its status command.';
+    $('app-server-help').textContent = !ready ? 'Choose your computer above to see its local socket details.' : (windows ? 'Codex and the worker connect to an authenticated local WebSocket at ws://127.0.0.1 on this computer. The installer selects its port.' : 'Codex and the worker connect to a private local Unix socket on this computer (unix://). The installer selects its path.') + ' The online worker relay carries team messages; use the local App Server socket to connect Codex.';
+    $('attach-command').textContent = windows ? '& "$env:LOCALAPPDATA/AgentTeams/mate-' + current.team.teamId.slice(0,8) + (current.runtime === 'stock' ? '-stock' : '') + '/bin/attach.ps1"' : 'bash "$HOME/.local/share/agent-teams/mate-' + current.team.teamId.slice(0,8) + (current.runtime === 'stock' ? '-stock' : '') + '/bin/attach.sh"';
+    $('desktop-option').hidden = current.runtime === 'stock' || !current.platform || current.platform.indexOf('darwin-') !== 0;
     $('desktop-command').textContent = 'bash "$HOME/.local/share/agent-teams/mate-' + current.team.teamId.slice(0, 8) + '/bin/desktop.sh"';
   }
 
@@ -567,9 +595,11 @@ export const JOIN_PORTAL_APP_JS = String.raw`
     button.disabled = true;
     button.textContent = 'Downloading…';
     $('platform').disabled = true;
+    $('runtime').disabled = true;
     var filename = installerFilename();
     var body = { token: current.token };
     if (current.platform) body.platform = current.platform;
+    if (current.runtimeCatalog) body.runtime = current.runtime;
     $('download-error').hidden = true;
     postJson('api/teams/' + encodeURIComponent(current.team.teamId) + '/installer', body)
       .then(function (response) {
@@ -596,6 +626,7 @@ export const JOIN_PORTAL_APP_JS = String.raw`
       .then(function () {
         button.disabled = false;
         $('platform').disabled = false;
+        $('runtime').disabled = false;
         if (button.textContent === 'Downloading…') button.textContent = 'Download installer';
       });
   }
@@ -676,6 +707,7 @@ export const JOIN_PORTAL_APP_JS = String.raw`
     $('join').addEventListener('click', function (event) { if (event.target === $('join')) closeJoin(); });
     $('download').addEventListener('click', download);
     $('platform').addEventListener('change', updateInstallerSelection);
+    $('runtime').addEventListener('change', updateRuntimeSelection);
     document.addEventListener('click', copyFrom);
     loadTeams();
   });

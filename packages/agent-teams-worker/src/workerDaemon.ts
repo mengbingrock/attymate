@@ -47,6 +47,13 @@ import {
   type WorkerTeamMembershipSnapshot,
 } from './workerTeamMembershipStore';
 import { WorkspaceFileBroker } from './workspaceFileBroker';
+import { isTeamCommunicationTool, teamCommunicationMessage } from './teamCollaborationRequests';
+import { decodeTeamReply } from './teamMessageReplies';
+import {
+  teamInboxNotification,
+  runtimeInboxMessage,
+  type TeamMessageDeliveryMode,
+} from './teamMessageDelivery';
 
 export interface AgentTeamsWorkerOptions {
   readonly relayUrl: string;
@@ -64,6 +71,8 @@ export interface AgentTeamsWorkerOptions {
   readonly leaseSweepIntervalMs?: number;
   /** How often queued peer messages are re-offered to the runtime when an earlier attempt could not run. */
   readonly messageDeliveryRetryIntervalMs?: number;
+  /** Legacy inline delivery remains the default; inbox mode sends identifiers only to App Server. */
+  readonly messageDeliveryMode?: TeamMessageDeliveryMode;
   readonly desktopChat?: {
     readonly sessionFactory: WorkerCodexAppServerSessionFactory;
     readonly runtimeMcp: CodexRuntimeMcpLaunchSpec;
@@ -137,6 +146,7 @@ export const startAgentTeamsWorker = async (
   const inboxStore = new WorkerInboxStore(options.dataDir);
   const assignmentStore = new WorkerAssignmentStore(options.dataDir);
   const messageStore = new WorkerMessageStore(options.dataDir);
+  if (options.messageDeliveryMode === 'mcp-inbox') messageStore.requeueUnprocessedNotifications();
   const membershipStore = new WorkerTeamMembershipStore(options.dataDir);
   const activeMessageScope = (): WorkerMessageExecutionScope | undefined => {
     const identity = assignmentStore.activeLeaseIdentity();
@@ -164,7 +174,13 @@ export const startAgentTeamsWorker = async (
       return undefined;
     }
     if (command.envelope.type === 'team.message.deliver') {
-      if (command.envelope.teamId && desktopChats?.hasChat(command.envelope.teamId)) {
+      if (
+        command.envelope.teamId &&
+        desktopChats &&
+        (options.messageDeliveryMode === 'mcp-inbox'
+          ? command.envelope.assignmentId === undefined
+          : desktopChats.hasChat(command.envelope.teamId))
+      ) {
         const p = teamMessageDeliveryPayloadSchema.parse(command.envelope.payload);
         desktopChats.receive({
           id: p.messageId,
@@ -197,7 +213,8 @@ export const startAgentTeamsWorker = async (
         payload: command.envelope.payload,
       });
       const scope = activeMessageScope();
-      if (scope !== undefined) messageStore.reconcileActiveScope(scope);
+      if (scope !== undefined)
+        messageStore.reconcileActiveScope(scope, options.messageDeliveryMode === 'mcp-inbox');
       return assignment;
     }
     if (command.envelope.type === 'assignment.accept') {
@@ -216,6 +233,14 @@ export const startAgentTeamsWorker = async (
     nodeId: options.nodeId,
     workerInstanceId: options.workerInstanceId,
   });
+  for (const event of outboxStore.listAll()) {
+    // Historical events may refer to inboxes which predate reply association support.
+    try {
+      messageStore.recordReplyFromOutbox(event.envelope);
+    } catch {
+      /* Keep the original event. */
+    }
+  }
   for (const command of inboxStore.list()) {
     try {
       applyAssignmentCommand(command);
@@ -286,6 +311,11 @@ export const startAgentTeamsWorker = async (
             flushPendingEvents();
           },
           onRuntimeEvent: (_binding, notification) => {
+            if (
+              options.messageDeliveryMode === 'mcp-inbox' &&
+              notification.method === 'serverRequest/resolved'
+            )
+              scheduleMessageDelivery();
             emitRuntimeEvent({
               kind: 'app-server.notification',
               payload: { method: notification.method, params: notification.params },
@@ -616,6 +646,11 @@ export const startAgentTeamsWorker = async (
   let messageDeliveryRequested = false;
   const deliverPendingMessages = async (): Promise<void> => {
     if (runtimeSupervisor === undefined || stopped) return;
+    if (
+      options.messageDeliveryMode === 'mcp-inbox' &&
+      runtimeSupervisor.listPendingRequests().length > 0
+    )
+      return;
     const scope = activeMessageScope();
     const leaseIdentity = assignmentStore.activeLeaseIdentity();
     if (scope === undefined || leaseIdentity === undefined) return;
@@ -630,14 +665,19 @@ export const startAgentTeamsWorker = async (
           candidate.reconciliationState === undefined
       );
     if (binding?.threadId === undefined || binding.turnId === undefined) return;
-    const pendingMessages = messageStore.reconcileActiveScope(scope);
+    const pendingMessages = messageStore.reconcileActiveScope(
+      scope,
+      options.messageDeliveryMode === 'mcp-inbox'
+    );
     if (pendingMessages.length === 0) return;
     const messageText = (message: (typeof pendingMessages)[number]): string =>
-      [
-        `Agent Teams peer message from membership ${message.payload.senderMembershipId}:`,
-        message.payload.message,
-        `Reply routing: send any response through agent-teams-runtime.message_send with recipientMembershipId ${message.payload.senderMembershipId}. Plain assistant text stays only in this Worker console and is not delivered to the sender.`,
-      ].join('\n\n');
+      options.messageDeliveryMode === 'mcp-inbox'
+        ? teamInboxNotification([message.messageId])
+        : [
+            `Agent Teams peer message from membership ${message.payload.senderMembershipId}:`,
+            message.payload.message,
+            `Reply routing: send any response through agent-teams-runtime.message_send with recipientMembershipId ${message.payload.senderMembershipId}. Plain assistant text stays only in this Worker console and is not delivered to the sender.`,
+          ].join('\n\n');
 
     if (binding.state === 'completed') {
       const assignment = assignmentStore.get(scope.assignmentId);
@@ -651,7 +691,12 @@ export const startAgentTeamsWorker = async (
       };
       const claimedMessages = pendingMessages.filter(
         (message) =>
-          messageStore.beginSteer(message.messageId, scope, completedIdentity) !== undefined
+          messageStore.beginSteer(
+            message.messageId,
+            scope,
+            completedIdentity,
+            options.messageDeliveryMode === 'mcp-inbox'
+          ) !== undefined
       );
       if (claimedMessages.length === 0) return;
       let continued: WorkerRuntimeBinding;
@@ -666,13 +711,13 @@ export const startAgentTeamsWorker = async (
       } catch (error) {
         const reason = error instanceof Error ? error.message : 'Codex runtime continuation failed';
         for (const message of claimedMessages) {
-          messageStore.markSteerFailed(message.messageId, completedIdentity, reason);
+          messageStore.markSteerUncertain(message.messageId, completedIdentity, reason);
         }
         return;
       }
       if (continued.threadId === undefined || continued.turnId === undefined) {
         for (const message of claimedMessages) {
-          messageStore.markSteerFailed(
+          messageStore.markSteerUncertain(
             message.messageId,
             completedIdentity,
             'Codex runtime continuation returned no thread or turn'
@@ -681,7 +726,11 @@ export const startAgentTeamsWorker = async (
         return;
       }
       for (const message of claimedMessages)
-        messageStore.markSteered(message.messageId, completedIdentity);
+        messageStore.markSteered(
+          message.messageId,
+          completedIdentity,
+          options.messageDeliveryMode !== 'mcp-inbox'
+        );
       return;
     }
 
@@ -690,6 +739,32 @@ export const startAgentTeamsWorker = async (
       turnId: binding.turnId,
       appServerGeneration: binding.appServerGeneration,
     };
+    if (options.messageDeliveryMode === 'mcp-inbox') {
+      const claimed = pendingMessages.filter(
+        (message) =>
+          messageStore.beginSteer(message.messageId, scope, steerIdentity, true) !== undefined
+      );
+      if (claimed.length === 0) return;
+      try {
+        await runtimeSupervisor.steer({
+          ...leaseIdentity,
+          threadId: steerIdentity.threadId,
+          expectedTurnId: steerIdentity.turnId,
+          appServerGeneration: steerIdentity.appServerGeneration,
+          message: teamInboxNotification(claimed.map(({ messageId }) => messageId)),
+        });
+        for (const message of claimed)
+          messageStore.markSteered(message.messageId, steerIdentity, false);
+      } catch (error) {
+        for (const message of claimed)
+          messageStore.markSteerUncertain(
+            message.messageId,
+            steerIdentity,
+            error instanceof Error ? error.message : 'Codex runtime inbox notification failed'
+          );
+      }
+      return;
+    }
     for (const message of pendingMessages) {
       if (stopped) return;
       const claimed = messageStore.beginSteer(message.messageId, scope, steerIdentity);
@@ -704,7 +779,7 @@ export const startAgentTeamsWorker = async (
         });
         messageStore.markSteered(message.messageId, steerIdentity);
       } catch (error) {
-        messageStore.markSteerFailed(
+        messageStore.markSteerUncertain(
           message.messageId,
           steerIdentity,
           error instanceof Error ? error.message : 'Codex runtime steer failed'
@@ -738,8 +813,9 @@ export const startAgentTeamsWorker = async (
           memberships: membershipStore,
           factory: desktopOptions.sessionFactory,
           mcp: desktopOptions.runtimeMcp,
+          messageDeliveryMode: options.messageDeliveryMode,
           connected: () => status.state === 'connected',
-          deliverAssignment: async (message) => {
+          deliverAssignment: async (message, beforeSubmit) => {
             const scope = activeMessageScope();
             const identity = assignmentStore.activeLeaseIdentity();
             if (
@@ -760,12 +836,14 @@ export const startAgentTeamsWorker = async (
               );
             const assignment = assignmentStore.get(scope.assignmentId);
             if (!binding?.threadId || !assignment?.leaseExpiresAt) return false;
+            const text = `Agent Teams message ${message.id} from membership ${message.senderMembershipId}:\n${message.text}\nReply using agent-teams-runtime.message_send to that membership. Do not acknowledge acknowledgements.`;
+            if (!beforeSubmit(binding.threadId, text)) return false;
             await runtimeSupervisor.startTurn({
               ...identity,
               threadId: binding.threadId,
               appServerGeneration: binding.appServerGeneration,
               leaseExpiresAt: assignment.leaseExpiresAt,
-              message: `Agent Teams message ${message.id} from membership ${message.senderMembershipId}:\n${message.text}\nReply using agent-teams-runtime.message_send to that membership. Do not acknowledge acknowledgements.`,
+              message: text,
             });
             return true;
           },
@@ -803,6 +881,24 @@ export const startAgentTeamsWorker = async (
         },
       };
     }
+    if (input.toolName === 'message_list') {
+      const args = parsedArguments as { unprocessedOnly?: boolean; limit?: number };
+      return {
+        messages: messageStore
+          .listForScope(context, args.unprocessedOnly, args.limit)
+          .map(runtimeInboxMessage),
+      };
+    }
+    if (input.toolName === 'message_get' || input.toolName === 'message_ack') {
+      const { messageId } = parsedArguments as { messageId: string };
+      return {
+        message: runtimeInboxMessage(
+          input.toolName === 'message_get'
+            ? messageStore.readForScope(messageId, context)
+            : messageStore.acknowledgeForScope(messageId, context)
+        ),
+      };
+    }
     const eventTypeByTool: Partial<
       Record<
         PublicMcpToolName,
@@ -816,6 +912,8 @@ export const startAgentTeamsWorker = async (
       progress_report: 'assignment.progress',
       result_submit: 'assignment.result_submitted',
       message_send: 'team.message',
+      support_request: 'team.message',
+      review_request: 'team.message',
       team_leave: 'team.member.leave_requested',
       team_member_join: 'team.member.join_requested',
       team_member_leave: 'team.member.leave_requested',
@@ -824,8 +922,16 @@ export const startAgentTeamsWorker = async (
     if (eventType === undefined) {
       throw new Error(`Runtime MCP tool ${input.toolName} is not implemented by this Worker`);
     }
-    const projectedArguments =
-      input.toolName === 'team_leave'
+    const projectedArguments: Readonly<Record<string, unknown>> = isTeamCommunicationTool(
+      input.toolName
+    )
+      ? teamCommunicationMessage(
+          input.toolName,
+          invocation.arguments,
+          context.membershipId,
+          membershipStore.get(context.teamId)?.members
+        )
+      : input.toolName === 'team_leave'
         ? { ...invocation.arguments, membershipId: context.membershipId }
         : input.toolName === 'team_member_leave'
           ? (() => {
@@ -833,11 +939,21 @@ export const startAgentTeamsWorker = async (
               return { ...argumentsWithoutTarget, membershipId: targetMembershipId };
             })()
           : invocation.arguments;
+    if (eventType === 'team.message' && typeof projectedArguments.message === 'string') {
+      const replyTo = decodeTeamReply(projectedArguments.message).inReplyToMessageId;
+      if (replyTo)
+        messageStore.assertReplyTarget(
+          replyTo,
+          context,
+          String(projectedArguments.recipientMembershipId)
+        );
+    }
     const event = outboxStore.projectRuntimeEvent(context, {
       idempotencyKey: input.idempotencyKey,
       type: eventType,
       payload: projectedArguments,
     });
+    messageStore.recordReplyFromOutbox(event.envelope);
     flushPendingEvents();
     return { context: invocation.context, event };
   };

@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 
 import {
   installerCatalog,
+  resolveInstallerSelection,
   SECURITY_HEADERS,
   sendTeamInstaller,
   type RelayJoinPortalOptions,
@@ -35,7 +36,7 @@ export const startInstallerPortal = async (options: {
     throw new Error('Installer portal upstream must be a loopback HTTP origin');
   }
   const catalog = installerCatalog(options.joinPortal.installer);
-  if (!options.joinPortal.installer || !catalog.installerAvailable)
+  if (!options.joinPortal.installer || catalog.installerRuntimes.length === 0)
     throw new Error('Installer portal requires built installers');
   const installer = options.joinPortal.installer;
   const workerStreamUrl =
@@ -80,8 +81,10 @@ export const startInstallerPortal = async (options: {
     const installerMatch = /^\/join\/api\/account\/teams\/([a-f0-9-]+)\/installer$/.exec(
       request.url
     );
-    const body = request.body as { platform?: unknown; label?: unknown } | undefined;
-    if (installerMatch && !catalog.installerPlatforms.some((p) => p.id === body?.platform))
+    const body = request.body as
+      | { platform?: unknown; runtime?: unknown; label?: unknown }
+      | undefined;
+    if (installerMatch && !resolveInstallerSelection(installer, body?.platform, body?.runtime))
       return reply.code(400).send({ error: 'Choose an available build for your computer.' });
     const path = installerMatch
       ? '/join/api/account/teams/' + installerMatch[1] + '/installations'
@@ -112,11 +115,17 @@ export const startInstallerPortal = async (options: {
     if (installerMatch && response.ok) {
       if (typeof data.token !== 'string' || data.teamId !== installerMatch[1])
         throw new Error('Invalid device enrollment');
-      return sendTeamInstaller(reply, installer, body?.platform, {
-        relayUrl: workerStreamUrl,
-        token: data.token,
-        teamId: installerMatch[1]!,
-      });
+      return sendTeamInstaller(
+        reply,
+        installer,
+        body?.platform,
+        {
+          relayUrl: workerStreamUrl,
+          token: data.token,
+          teamId: installerMatch[1]!,
+        },
+        body?.runtime
+      );
     }
     return reply
       .code(response.status)
@@ -189,11 +198,17 @@ export const startInstallerPortal = async (options: {
       if (action === 'verify') return { ...response.body, ...catalog, workerStreamUrl };
       if (typeof body.token !== 'string')
         return reply.code(401).send({ error: 'invalid_team_token' });
-      return sendTeamInstaller(reply, installer, body.platform, {
-        relayUrl: workerStreamUrl,
-        token: body.token,
-        teamId: parsed.data,
-      });
+      return sendTeamInstaller(
+        reply,
+        installer,
+        body.platform,
+        {
+          relayUrl: workerStreamUrl,
+          token: body.token,
+          teamId: parsed.data,
+        },
+        body.runtime
+      );
     });
   }
   const httpUrl = await app.listen({ host: options.host, port: options.port });

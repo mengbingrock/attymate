@@ -1,0 +1,155 @@
+{
+  "date": "2026-10-27",
+  "platform": "darwin-arm64",
+  "osVersion": "26.6.2",
+  "model": "Deterministic loopback Responses fixture; no external provider calls",
+  "engines": [
+    {
+      "kind": "stock",
+      "version": "codex-cli 0.165.0",
+      "sha256": "a45099154d7fb4a5ed8a56f40966a95deb938e508bab23e6985035c709e9a85a"
+    },
+    {
+      "kind": "fork",
+      "version": "codex-cli 0.0.0",
+      "sha256": "66c0709834576f78acc754953f707d4546d00a8ff4a5f0d4e82bbf50fe0c599d"
+    }
+  ],
+  "nativeMatrix": {
+    "passed": true,
+    "localModelRequests": 68,
+    "modelMcpCalls": 32,
+    "membershipMessageDirections": 8,
+    "workerRestarts": 4,
+    "terminalAttachments": 2,
+    "cases": [
+      {
+        "leadKind": "stock",
+        "deliveryMode": "inline",
+        "assignedRuntime": "fork",
+        "assignmentOfferedAndAccepted": true,
+        "nativeTaskTurnCompleted": true,
+        "progressThroughNativeMcp": true,
+        "reviewReachedLead": true,
+        "reviewLeadModelObserved": true,
+        "resultCandidatePersisted": true,
+        "wrongLeaseRejected": true,
+        "nativeFollowupInterrupted": true,
+        "taskFenced": true,
+        "fencedResultRejected": true,
+        "successorTaskContextVerified": true,
+        "oldThreadDeniedSuccessorScope": true,
+        "runtimeSessionRevoked": true
+      },
+      {
+        "leadKind": "fork",
+        "deliveryMode": "inline",
+        "assignedRuntime": "stock",
+        "assignmentOfferedAndAccepted": true,
+        "nativeTaskTurnCompleted": true,
+        "progressThroughNativeMcp": true,
+        "reviewReachedLead": true,
+        "reviewLeadModelObserved": true,
+        "resultCandidatePersisted": true,
+        "wrongLeaseRejected": true,
+        "nativeFollowupInterrupted": true,
+        "taskFenced": true,
+        "fencedResultRejected": true,
+        "successorTaskContextVerified": true,
+        "oldThreadDeniedSuccessorScope": true,
+        "runtimeSessionRevoked": true
+      },
+      {
+        "leadKind": "stock",
+        "deliveryMode": "mcp-inbox",
+        "assignedRuntime": "fork",
+        "assignmentOfferedAndAccepted": true,
+        "nativeTaskTurnCompleted": true,
+        "progressThroughNativeMcp": true,
+        "reviewReachedLead": true,
+        "reviewLeadModelObserved": true,
+        "resultCandidatePersisted": true,
+        "wrongLeaseRejected": true,
+        "nativeFollowupInterrupted": true,
+        "taskFenced": true,
+        "fencedResultRejected": true,
+        "successorTaskContextVerified": true,
+        "oldThreadDeniedSuccessorScope": true,
+        "runtimeSessionRevoked": true
+      },
+      {
+        "leadKind": "fork",
+        "deliveryMode": "mcp-inbox",
+        "assignedRuntime": "stock",
+        "assignmentOfferedAndAccepted": true,
+        "nativeTaskTurnCompleted": true,
+        "progressThroughNativeMcp": true,
+        "reviewReachedLead": true,
+        "reviewLeadModelObserved": true,
+        "resultCandidatePersisted": true,
+        "wrongLeaseRejected": true,
+        "nativeFollowupInterrupted": true,
+        "taskFenced": true,
+        "fencedResultRejected": true,
+        "successorTaskContextVerified": true,
+        "oldThreadDeniedSuccessorScope": true,
+        "runtimeSessionRevoked": true
+      }
+    ]
+  },
+  "stockInstaller": {
+    "ok": true,
+    "runtime": "stock",
+    "platform": "darwin-arm64",
+    "binaryVersion": "0.165.0",
+    "binarySha256": "a45099154d7fb4a5ed8a56f40966a95deb938e508bab23e6985035c709e9a85a",
+    "nodeVersion": "v24.22.1",
+    "connectedWorkers": 1,
+    "connectOnly": true,
+    "clientRendered": true,
+    "providerAuthenticationTested": false,
+    "existingHomeUsed": false,
+    "unrelatedConfigPreserved": true,
+    "modelTurnsStarted": 0,
+    "desktopTransportTested": false,
+    "desktopGuiRendered": false
+  },
+  "rootLint": {
+    "errors": 45,
+    "warnings": 1822,
+    "errorFilesChangedByThisWork": [],
+    "errorFiles": {
+      "src/features/distributed-agent-teams/contracts/normalize.ts": 2,
+      "src/features/distributed-agent-teams/main/infrastructure/RelayHttpAdapter.ts": 1,
+      "src/main/ipc/cliInstaller.ts": 7,
+      "src/main/services/team/TeamMcpConfigBuilder.ts": 1,
+      "src/main/services/team/TeamProvisioningService.ts": 3,
+      "src/main/services/team/provisioning/__tests__/TeamProvisioningTurnComplete.test.ts": 1,
+      "src/renderer/components/dashboard/CliStatusBanner.tsx:290:7": 7,
+      "src/renderer/components/extensions/ExtensionStoreView.tsx": 2,
+      "src/renderer/components/extensions/apikeys/ApiKeysPanel.tsx": 2,
+      "src/renderer/components/extensions/mcp/McpServerDetailDialog.tsx": 1,
+      "src/renderer/components/extensions/mcp/McpServersPanel.tsx": 1,
+      "src/renderer/components/settings/sections/CliStatusSection.tsx": 3,
+      "src/renderer/components/team/dialogs/TeamModelSelector.tsx:1752:5": 8,
+      "src/renderer/hooks/useEffectiveCliProviderStatus.ts": 2,
+      "src/renderer/store/slices/cliInstallerSlice.ts": 2,
+      "src/shared/utils/mcpScopes.ts": 2
+    }
+  },
+  "platformGates": {
+    "stockDesktopGui": "Not verified; launcher gated",
+    "windows": "Contract/fixture checks only; no native stock signoff",
+    "linux": "Mixed matrix unverified: fork App Server exited139 under QEMU x86_64 on ARM; native cause not established"
+  },
+  "checks": {
+    "distributedSuites": 77,
+    "distributedTests": 309,
+    "typecheck": "passed",
+    "electronViteBuild": "passed",
+    "scopedFastLintFiles": 71,
+    "scopedFastLint": "passed",
+    "repositoryWideTests": "not run",
+    "releasePackaging": "not run"
+  }
+}

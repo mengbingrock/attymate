@@ -10,24 +10,28 @@ import { FastMCP } from 'fastmcp';
 import { z } from 'zod';
 
 import { requestWorkerControl } from './workerControlServer';
+import { collaborationRequestParameters, teamMessageParameters } from './teamCollaborationRequests';
 
 export const RUNTIME_BRIDGE_TOOL_NAMES = [
   'runtime_context',
   'progress_report',
   'message_send',
+  'support_request',
+  'review_request',
+  'message_list',
+  'message_get',
+  'message_ack',
+  'team_membership_list',
   'team_leave',
   'result_submit',
 ] as const satisfies readonly PublicMcpToolName[];
 
 export const LEAD_RUNTIME_BRIDGE_TOOL_NAMES = [
-  'team_membership_list',
   'team_member_join',
   'team_member_leave',
 ] as const satisfies readonly PublicMcpToolName[];
 
-export const runtimeBridgeToolNames = (
-  role: TeamMembershipRole
-): readonly PublicMcpToolName[] =>
+export const runtimeBridgeToolNames = (role: TeamMembershipRole): readonly PublicMcpToolName[] =>
   role === 'lead'
     ? [...RUNTIME_BRIDGE_TOOL_NAMES, ...LEAD_RUNTIME_BRIDGE_TOOL_NAMES]
     : RUNTIME_BRIDGE_TOOL_NAMES;
@@ -44,12 +48,13 @@ const progressParameters = z
     details: z.string().trim().min(1).max(20_000).optional(),
   })
   .strict();
-const messageParameters = z
+export const messageListParameters = z
   .object({
-    recipientMembershipId: z.uuid(),
-    message: z.string().trim().min(1).max(20_000),
+    unprocessedOnly: z.boolean().optional(),
+    limit: z.number().int().min(1).max(100).optional(),
   })
   .strict();
+export const messageIdParameters = z.object({ messageId: z.uuid() }).strict();
 const resultParameters = z
   .object({
     outcome: z.enum(['completed', 'blocked']),
@@ -84,7 +89,15 @@ export const parseRuntimeMcpToolArguments = (
     case 'progress_report':
       return progressParameters.parse(input);
     case 'message_send':
-      return messageParameters.parse(input);
+      return teamMessageParameters.parse(input);
+    case 'support_request':
+    case 'review_request':
+      return collaborationRequestParameters.parse(input);
+    case 'message_list':
+      return messageListParameters.parse(input);
+    case 'message_get':
+    case 'message_ack':
+      return messageIdParameters.parse(input);
     case 'result_submit':
       return resultParameters.parse(input);
     case 'team_membership_list':
@@ -138,7 +151,6 @@ export const createRuntimeSessionTokenSource = (input: {
       fromFile = '';
     }
     if (fromFile !== '') return fromFile;
-    if (token !== undefined && token !== '') return token;
     throw new Error(`Runtime session token file is empty or unreadable: ${tokenFile}`);
   };
 };
@@ -175,9 +187,48 @@ export const createRuntimeMcpToolDefinitions = (
     {
       name: 'message_send',
       description: 'Send a durable assignment-scoped message to another team membership',
-      parameters: messageParameters,
+      parameters: teamMessageParameters,
       execute: async (input) =>
-        jsonContent(await call('message_send', messageParameters.parse(input))),
+        jsonContent(await call('message_send', teamMessageParameters.parse(input))),
+    },
+    ...(['support_request', 'review_request'] as const).map((name) => ({
+      name,
+      description:
+        name === 'support_request'
+          ? 'Ask a teammate or the lead for help; optionally preserve structured task references'
+          : 'Ask a teammate or the lead to review work; this sends a request and never approves a task',
+      parameters: collaborationRequestParameters,
+      execute: async (input: unknown) =>
+        jsonContent(await call(name, collaborationRequestParameters.parse(input))),
+    })),
+    {
+      name: 'message_list',
+      description: 'Read messages delivered to this exact assignment and membership',
+      parameters: messageListParameters,
+      execute: async (input) =>
+        jsonContent(await call('message_list', messageListParameters.parse(input))),
+    },
+    {
+      name: 'message_get',
+      description: 'Read a team inbox message by ID within this authenticated assignment',
+      parameters: messageIdParameters,
+      execute: async (input) =>
+        jsonContent(await call('message_get', messageIdParameters.parse(input))),
+    },
+    {
+      name: 'message_ack',
+      description:
+        'Mark a received message processed locally without sending an acknowledgement message',
+      parameters: messageIdParameters,
+      execute: async (input) =>
+        jsonContent(await call('message_ack', messageIdParameters.parse(input))),
+    },
+    {
+      name: 'team_membership_list',
+      description: 'Discover the current team roster, lead role, and membership identifiers',
+      parameters: emptyParameters,
+      execute: async (input) =>
+        jsonContent(await call('team_membership_list', emptyParameters.parse(input))),
     },
     {
       name: 'team_leave',
@@ -196,13 +247,6 @@ export const createRuntimeMcpToolDefinitions = (
     },
     ...(teamRole === 'lead'
       ? [
-          {
-            name: 'team_membership_list' as const,
-            description: 'List the current active team roster and membership identifiers',
-            parameters: emptyParameters,
-            execute: async (input: unknown) =>
-              jsonContent(await call('team_membership_list', emptyParameters.parse(input))),
-          },
           {
             name: 'team_member_join' as const,
             description: 'Invite a connected Worker node to join this team and start its runtime',

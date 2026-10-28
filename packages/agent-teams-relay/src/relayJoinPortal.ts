@@ -23,17 +23,23 @@ export const INSTALLER_PLATFORM_LABELS = {
   'win32-x64': 'Windows · Intel / AMD x64',
 } as const;
 export type InstallerPlatform = keyof typeof INSTALLER_PLATFORM_LABELS;
+export type InstallerRuntime = 'fork' | 'stock';
+
+export interface InstallerDistribution {
+  readonly template: string;
+  readonly windowsTemplate?: string;
+  readonly workerBundleTgz?: Buffer;
+  readonly platformBundles?: Partial<Record<InstallerPlatform, Buffer>>;
+}
 
 export interface RelayJoinPortalOptions {
   readonly accounts?: AccountPortalOptions;
   /** Public base URL of this Relay, e.g. https://relay.example/next. Workers connect to its /v2/worker-stream. */
   readonly publicUrl: string;
   /** Installer template plus the gzipped worker bundle; without it the portal offers only clone steps. */
-  readonly installer?: {
-    readonly template: string;
-    readonly windowsTemplate?: string;
-    readonly workerBundleTgz?: Buffer;
-    readonly platformBundles?: Partial<Record<InstallerPlatform, Buffer>>;
+  readonly installer?: InstallerDistribution & {
+    /** Worker-only distribution that uses the recipient's installed, unmodified Codex. */
+    readonly stock?: InstallerDistribution;
   };
   /** Git repository and branch shown in the clone-and-run instructions. */
   readonly repository?: { readonly url: string; readonly branch: string };
@@ -130,13 +136,15 @@ const renderInstaller = (
   template: string,
   workerBundleTgz: Buffer,
   values: { readonly relayUrl: string; readonly token: string; readonly teamId: string },
-  trailer = ''
+  trailer = '',
+  runtime: InstallerRuntime = 'fork'
 ): { readonly stream: Readable; readonly contentLength: number } => {
   // Same substitutions and payload framing as installer/build-installer.sh.
   const script = template
     .replace('__RELAY_URL__', values.relayUrl)
     .replace('__WORKER_TOKEN__', values.token)
-    .replace('__TEAM_ID__', values.teamId);
+    .replace('__TEAM_ID__', values.teamId)
+    .replaceAll('__RUNTIME_KIND__', runtime);
   const header = script.endsWith('\n') ? script : script + '\n';
   // Keep the chunk size divisible by three so concatenated base64 has padding only at the end.
   // Encoding a native runtime as one string (then wrapping every line) can exhaust the relay heap.
@@ -158,50 +166,102 @@ const renderInstaller = (
   };
 };
 
-export const installerCatalog = (installer: RelayJoinPortalOptions['installer']) => {
+const templateMatchesRuntime = (template: string, runtime: InstallerRuntime): boolean => {
+  const declared = /^\s*(?:RUNTIME_KIND|\$runtimeKind)\s*=\s*["'](fork|stock)["']/im.exec(
+    template
+  )?.[1];
+  return declared === undefined || declared === runtime;
+};
+
+const distributionCatalog = (
+  installer: InstallerDistribution | undefined,
+  runtime: InstallerRuntime = 'fork'
+) => {
   const installerPlatforms = Object.entries(INSTALLER_PLATFORM_LABELS)
     .filter(
       ([id]) =>
         installer?.platformBundles?.[id as InstallerPlatform] !== undefined &&
-        (id !== 'win32-x64' || installer.windowsTemplate !== undefined)
+        templateMatchesRuntime(installer.template, runtime) &&
+        (id !== 'win32-x64' ||
+          (installer.windowsTemplate !== undefined &&
+            templateMatchesRuntime(installer.windowsTemplate, runtime)))
     )
     .map(([id, label]) => ({ id, label }));
   return {
     installerPlatforms,
-    installerAvailable: installer?.workerBundleTgz !== undefined || installerPlatforms.length > 0,
+    installerAvailable:
+      (installer?.workerBundleTgz !== undefined &&
+        templateMatchesRuntime(installer.template, runtime)) ||
+      installerPlatforms.length > 0,
   };
 };
 
-export const sendTeamInstaller = (
-  reply: FastifyReply,
-  installer: NonNullable<RelayJoinPortalOptions['installer']>,
+export const installerCatalog = (installer: RelayJoinPortalOptions['installer']) => ({
+  // Legacy fields always describe the fork distribution.
+  ...distributionCatalog(installer),
+  installerRuntimes: (
+    [
+      ['fork', 'Use bundled team runtime', installer],
+      ['stock', 'Use installed Codex', installer?.stock],
+    ] as const
+  )
+    .map(([id, label, distribution]) => ({ id, label, ...distributionCatalog(distribution, id) }))
+    .filter((runtime) => runtime.installerAvailable),
+});
+
+/** Resolve before enrollment so invalid runtime/platform requests create no device credential. */
+export const resolveInstallerSelection = (
+  installer: RelayJoinPortalOptions['installer'],
   platform: unknown,
-  values: { readonly relayUrl: string; readonly token: string; readonly teamId: string }
-): FastifyReply => {
+  runtime: unknown = 'fork'
+) => {
+  if (runtime !== 'fork' && runtime !== 'stock') return undefined;
+  const distribution = runtime === 'stock' ? installer?.stock : installer;
+  if (!distribution) return undefined;
   const selected =
     typeof platform === 'string' && Object.hasOwn(INSTALLER_PLATFORM_LABELS, platform)
       ? (platform as InstallerPlatform)
       : undefined;
   const bundle =
     platform === undefined
-      ? installer.workerBundleTgz
+      ? distribution.workerBundleTgz
       : selected === undefined
         ? undefined
-        : installer.platformBundles?.[selected];
+        : distribution.platformBundles?.[selected];
   const windows = selected === 'win32-x64';
-  if (bundle === undefined || (windows && installer.windowsTemplate === undefined))
+  const template = windows ? distribution.windowsTemplate : distribution.template;
+  if (bundle === undefined || template === undefined || !templateMatchesRuntime(template, runtime))
+    return undefined;
+  return { runtime, platform: selected, bundle, template, windows } as const;
+};
+
+export const sendTeamInstaller = (
+  reply: FastifyReply,
+  installer: NonNullable<RelayJoinPortalOptions['installer']>,
+  platform: unknown,
+  values: { readonly relayUrl: string; readonly token: string; readonly teamId: string },
+  runtime?: unknown
+): FastifyReply => {
+  const selection = resolveInstallerSelection(installer, platform, runtime);
+  if (selection === undefined)
     return reply
       .code(400)
       .headers(SECURITY_HEADERS)
       .send({
         error:
-          platform === undefined ? 'installer_platform_required' : 'installer_platform_unavailable',
+          runtime !== undefined && runtime !== 'fork' && runtime !== 'stock'
+            ? 'installer_runtime_unavailable'
+            : platform === undefined
+              ? 'installer_platform_required'
+              : 'installer_platform_unavailable',
       });
+  const { platform: selected, bundle, template, windows } = selection;
   const script = renderInstaller(
-    windows ? installer.windowsTemplate! : installer.template,
+    template,
     bundle,
     values,
-    windows ? '#>\n' : ''
+    windows ? '#>\n' : '',
+    selection.runtime
   );
   return reply
     .headers(SECURITY_HEADERS)
@@ -213,7 +273,7 @@ export const sendTeamInstaller = (
     .header('content-length', String(script.contentLength))
     .header(
       'content-disposition',
-      `attachment; filename="agent-teams-join-${values.teamId.slice(0, 8)}${selected === undefined ? '' : '-' + selected}.${windows ? 'ps1' : 'sh'}"`
+      `attachment; filename="agent-teams-join-${values.teamId.slice(0, 8)}${runtime === undefined ? '' : '-' + selection.runtime}${selected === undefined ? '' : '-' + selected}.${windows ? 'ps1' : 'sh'}"`
     )
     .send(script.stream);
 };
@@ -302,7 +362,7 @@ export const registerJoinPortal = (
   const failures = new FailureWindow(options.failureWindowMs ?? 10 * 60_000);
   const maxFailuresPerClient = options.maxFailuresPerClient ?? 20;
   const maxFailuresShared = options.maxFailuresShared ?? 300;
-  const { installerPlatforms, installerAvailable } = installerCatalog(options.installer);
+  const catalog = installerCatalog(options.installer);
 
   const publicTeam = (entry: RelayTeamDirectoryEntry) => {
     const connected = deps.connectedNodeIds();
@@ -395,8 +455,7 @@ export const registerJoinPortal = (
       .header('cache-control', 'no-store')
       .send({
         teams: teamDirectory.listPublic().map(publicTeam),
-        installerAvailable,
-        installerPlatforms,
+        ...catalog,
       })
   );
 
@@ -409,26 +468,31 @@ export const registerJoinPortal = (
       .send({
         team: publicTeam(authorized.entry),
         workerStreamUrl,
-        installerAvailable,
-        installerPlatforms,
+        ...catalog,
         ...(options.repository === undefined ? {} : { repository: options.repository }),
       });
   });
 
   app.post('/join/api/teams/:teamId/installer', (request, reply) => {
-    if (options.installer === undefined || !installerAvailable) {
+    if (options.installer === undefined || catalog.installerRuntimes.length === 0) {
       return reply.code(503).headers(SECURITY_HEADERS).send({ error: 'installer_not_configured' });
     }
     const authorized = authorize(request, reply);
     if (authorized === undefined) return reply;
-    const platform =
+    const input =
       typeof request.body === 'object' && request.body !== null
-        ? (request.body as { platform?: unknown }).platform
-        : undefined;
-    return sendTeamInstaller(reply, options.installer, platform, {
-      relayUrl: workerStreamUrl,
-      token: authorized.token,
-      teamId: authorized.teamId,
-    });
+        ? (request.body as { platform?: unknown; runtime?: unknown })
+        : {};
+    return sendTeamInstaller(
+      reply,
+      options.installer,
+      input.platform,
+      {
+        relayUrl: workerStreamUrl,
+        token: authorized.token,
+        teamId: authorized.teamId,
+      },
+      input.runtime
+    );
   });
 };

@@ -22,32 +22,36 @@ Directly started Workers default to a private Worker-owned `CODEX_HOME` at
 plugin/MCP configuration automatically. `--codex-home` selects an explicit private directory, and
 the Worker `status`/`diagnose` commands expose its non-secret state.
 
-The [teammate installer](../../../packages/agent-teams-worker/installer/README.md) now embeds an
-explicitly built Codex fork. Its supervisor runs the customized server on a private Unix socket;
-the installer reuses the existing `$CODEX_HOME` or `~/.codex` login by default, with
-`--private-codex-home` available for a separate sign-in. Credentials are not copied. Server and
-client use an installation-owned `sqlite_home` so the personal daemon's database stays separate;
-the Worker uses `--app-server-mode shared-daemon --app-server-connect-only --app-server-socket ...`
-and the bundled client uses `agents --remote unix://...` against that same socket. Connect-only
-requires an explicit socket and never starts another daemon. The modes below remain available
-for Workers launched directly from source.
+The [teammate installer](../../../packages/agent-teams-worker/installer/README.md) supports both
+an installed stock Codex binary with its built-in App Server and the existing bundled fork.
+`build-installer.sh --runtime fork` is still the default. `--runtime stock` produces a Worker-only
+artifact. Stock can run a supervisor-owned server or connect to an operator-started server with
+`--server-ownership external --app-server-mode shared-daemon --app-server-connect-only` and an
+explicit `--app-server-socket` and matching `--codex-home`. External mode never starts or stops
+that server. Both clients use `agents --remote <endpoint>` to attach to the same local server.
 
-By default each session is a private `codex app-server` child on stdio pipes that nothing else can
-attach to. `--app-server-mode shared-daemon` instead starts (idempotently) and connects to the
-managed App Server daemon of that same Codex home (`codex app-server daemon start`). Threads then
-live in the daemon, so the home's owner can open the running or finished threads later with
-`CODEX_HOME=<data-dir>/codex-home codex agents` (live agent command center) or
-`CODEX_HOME=<data-dir>/codex-home codex resume`. `--app-server-socket <path>` overrides the control
-socket. The runtime thread's feature disables (`apps`, `plugins`, `remote_plugin = false`) travel in each
-thread's own `thread/start` config, so the home's `config.toml` and its daemon are left as they
-are; the per-thread inventory check still fails closed if a capability leaks. That makes it safe to
-point `--codex-home` at the owner's existing `~/.codex`: team threads then appear directly in that
-person's `codex agents` and Codex app, next to their own work. Writing the disables into the home
-config remains available as an opt-in (`writeHomeFeatureDisables`) for daemons that ignore
-thread-level overrides.
-Because the daemon keeps a thread's MCP bridge process alive across turns, the Worker in this mode
-also mirrors the current runtime session token into `<data-dir>/runtime-session.token` (mode 0600)
-and the bridge reads it on every call, so token rotations after a Worker restart stay transparent.
+Both runtime kinds can run at once and participate in a mixed team. They have separate node
+identities, data directories, endpoints, services, runtime state, and control-MCP registrations.
+Stock defaults to a dedicated Codex home and its own sign-in. The fork retains its existing login
+options. New registration names include the installation ID, while legacy fork names remain valid.
+The Worker persists runtime choice, observed executable identity, process ownership, and compatibility
+checks; it does not silently switch kinds or overwrite another installation. Direct-source launches
+can still use private stdio or a shared local daemon.
+
+The CLI defaults stock to `mcp-inbox` delivery and keeps legacy fork/direct-source launches on
+`inline`; either mode can be selected explicitly with `--message-delivery-mode`. Inbox wake-ups
+carry message identifiers, and authenticated MCP supplies message bodies and local processing
+receipts. The same MCP tools handle peer messages, lead aliases, scoped support/review requests,
+and assignment progress/results. Requests never grant execution authority or approve reviews.
+Shared-daemon assignment bridges read their current session token from the installation-owned
+`runtime-session.token` file so Worker restarts do not require reusing another installation's token.
+
+Current mixed-runtime native evidence covers **darwin-arm64**: both lead orientations, both delivery
+modes, actual model-driven MCP reads/receipts, Worker restart recovery, and stock/fork terminal client
+attachment. Other platform pairs need their own native signoff; Windows contract/fixture tests do
+not establish native Windows compatibility. Stock desktop GUI attachment is separately gated on a
+verified desktop/server version pair. A2A is an optional future external-agent gateway, with no role
+in either installation's required execution or messaging path.
 
 The implementation follows
 [the distributed Codex runtime ADR](../../../docs/team-management/distributed-codex-runtime.md).

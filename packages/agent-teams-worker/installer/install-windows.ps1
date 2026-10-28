@@ -2,6 +2,10 @@ param(
   [string]$Label = $env:COMPUTERNAME,
   [string]$Dir = '',
   [string]$CodexHome = '',
+  [string]$CodexBinary = '',
+  [ValidateSet('managed','external')][string]$ServerOwnership = 'managed',
+  [string]$AppServerSocket = '',
+  [string]$AppServerTokenFile = '',
   [switch]$PrivateCodexHome,
   [switch]$NoService,
   [switch]$NoStart
@@ -10,7 +14,13 @@ $ErrorActionPreference = 'Stop'
 $relay = '__RELAY_URL__'
 $token = '__WORKER_TOKEN__'
 $team = '__TEAM_ID__'
-if (-not $Dir) { $Dir = Join-Path $env:LOCALAPPDATA "AgentTeams\mate-$($team.Substring(0,8))" }
+$runtimeKind = '__RUNTIME_KIND__'
+if ($runtimeKind.StartsWith('__')) { $runtimeKind = 'fork' }
+if ($runtimeKind -notin @('fork','stock')) { throw 'Invalid installer runtime.' }
+if (-not $Dir) {
+  $suffix = if ($runtimeKind -eq 'stock') { '-stock' } else { '' }
+  $Dir = Join-Path $env:LOCALAPPDATA "AgentTeams\mate-$($team.Substring(0,8))$suffix"
+}
 $Dir = [IO.Path]::GetFullPath($Dir)
 if ($Dir.TrimEnd('\') -eq [IO.Path]::GetPathRoot($Dir).TrimEnd('\')) { throw 'Choose a new installation directory, not a drive root.' }
 if (Test-Path (Join-Path $Dir 'config.json')) { throw 'This installation already exists. Use its bin\start.ps1 or choose another -Dir.' }
@@ -61,6 +71,11 @@ if (-not $node) {
   Remove-Item $zip
   $node = Join-Path $Dir "node\node-$version-win-x64\node.exe"
 }
+$env:AGENT_TEAMS_INSTALL_RUNTIME = $runtimeKind
+$env:AGENT_TEAMS_INSTALL_CODEX_BINARY = $CodexBinary
+$env:AGENT_TEAMS_INSTALL_SERVER_OWNERSHIP = $ServerOwnership
+$env:AGENT_TEAMS_INSTALL_APP_SERVER_SOCKET = $AppServerSocket
+$env:AGENT_TEAMS_INSTALL_APP_SERVER_TOKEN_FILE = $AppServerTokenFile
 $env:AGENT_TEAMS_INSTALL_RELAY = $relay
 $env:AGENT_TEAMS_INSTALL_TOKEN = $token
 $env:AGENT_TEAMS_INSTALL_TEAM = $team

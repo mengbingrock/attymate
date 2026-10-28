@@ -52,6 +52,100 @@ const delivery = commandEnvelopeSchema.parse({
 });
 
 describe('Worker team message inbox', () => {
+  it('separates inbox notification, reading, processing, and restart replay within exact scope', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'agent-teams-inbox-processing-'));
+    let store = new WorkerMessageStore(dataDir);
+    const scope = {
+      teamId: ids.teamId,
+      membershipId: ids.recipientMembershipId,
+      workspaceId: ids.recipientWorkspaceId,
+      assignmentId: ids.assignmentId,
+      attemptId: ids.attemptId,
+      leaseEpoch: 4,
+    };
+    const identity = { threadId: 'thread', turnId: 'turn', appServerGeneration: 1 };
+    const command = {
+      cursor: 1,
+      commandId: delivery.commandId,
+      envelope: delivery,
+      receivedAt: new Date().toISOString(),
+    };
+    try {
+      const message = store.acceptDelivery(command, scope)!;
+      store.beginSteer(message.messageId, scope, identity);
+      store.markSteered(message.messageId, identity, false);
+      expect(store.listForScope(scope)[0]).toMatchObject({ steerState: 'delivered' });
+      expect(store.listForScope(scope)[0]?.readAt).toBeUndefined();
+      expect(store.listForScope({ ...scope, leaseEpoch: 3 })).toEqual([]);
+      expect(() =>
+        store.readForScope(message.messageId, { ...scope, membershipId: ids.senderMembershipId })
+      ).toThrow('not found');
+      expect(store.readForScope(message.messageId, scope).readAt).toEqual(expect.any(String));
+      expect(store.get(message.messageId)?.processedAt).toBeUndefined();
+      store.close();
+      store = new WorkerMessageStore(dataDir);
+      store.requeueUnprocessedNotifications();
+      expect(store.listPendingFor(scope, true)).toHaveLength(0);
+      expect(store.beginSteer(message.messageId, scope, identity, true)).toBeUndefined();
+      const processed = store.acknowledgeForScope(message.messageId, scope);
+      expect(processed.processedAt).toEqual(expect.any(String));
+      expect(store.acknowledgeForScope(message.messageId, scope).processedAt).toBe(
+        processed.processedAt
+      );
+      expect(store.listForScope(scope, true)).toEqual([]);
+      store.requeueUnprocessedNotifications();
+      expect(store.listPendingFor(scope)).toEqual([]);
+      expect(store.acceptDelivery(command, scope)?.processedAt).toBe(processed.processedAt);
+    } finally {
+      store.close();
+    }
+  });
+
+  it.each([false, true])(
+    'holds potentially accepted submissions across restart (lost response: %s)',
+    async (responseLost) => {
+      const dataDir = await mkdtemp(join(tmpdir(), 'agent-teams-inbox-uncertain-'));
+      let store = new WorkerMessageStore(dataDir);
+      const scope = {
+        teamId: ids.teamId,
+        membershipId: ids.recipientMembershipId,
+        workspaceId: ids.recipientWorkspaceId,
+        assignmentId: ids.assignmentId,
+        attemptId: ids.attemptId,
+        leaseEpoch: 4,
+      };
+      const identity = { threadId: 'thread', turnId: 'turn', appServerGeneration: 1 };
+      try {
+        const message = store.acceptDelivery(
+          {
+            cursor: 1,
+            commandId: delivery.commandId,
+            envelope: delivery,
+            receivedAt: new Date().toISOString(),
+          },
+          scope
+        )!;
+        store.beginSteer(message.messageId, scope, identity, true);
+        if (responseLost)
+          store.markSteerUncertain(message.messageId, identity, 'Accepted but response lost');
+        expect(store.listPendingFor(scope, true)).toEqual([]);
+        store.close();
+        store = new WorkerMessageStore(dataDir);
+        store.requeueUnprocessedNotifications();
+        expect(store.get(message.messageId)).toMatchObject({
+          steerState: 'uncertain',
+          steerAttempts: 1,
+        });
+        expect(store.listPendingFor(scope, true)).toEqual([]);
+        expect(store.beginSteer(message.messageId, scope, identity, true)).toBeUndefined();
+        store.markSteered(message.messageId, identity, false);
+        expect(store.get(message.messageId)?.steerState).toBe('delivered');
+      } finally {
+        store.close();
+      }
+    }
+  );
+
   it('only exposes a delivery to the exact active execution scope', async () => {
     const dataDir = await mkdtemp(join(tmpdir(), 'agent-teams-message-store-'));
     const store = new WorkerMessageStore(dataDir);
@@ -135,9 +229,10 @@ describe('Worker team message inbox', () => {
         envelope: manualDelivery,
         receivedAt: '2026-08-15T20:00:03.000Z',
       });
-      expect(
-        store.markRead('00000000-0000-4000-8000-000000000013')
-      ).toMatchObject({ steerState: 'pending', readAt: expect.any(String) });
+      expect(store.markRead('00000000-0000-4000-8000-000000000013')).toMatchObject({
+        steerState: 'pending',
+        readAt: expect.any(String),
+      });
     } finally {
       store.close();
     }
@@ -160,9 +255,7 @@ describe('Worker team message inbox', () => {
       );
     `);
     database
-      .prepare(
-        `INSERT INTO team_messages VALUES (?, ?, ?, ?, ?, ?, ?, 'available_active', ?)`
-      )
+      .prepare(`INSERT INTO team_messages VALUES (?, ?, ?, ?, ?, ?, ?, 'available_active', ?)`)
       .run(
         '00000000-0000-4000-8000-000000000010',
         '00000000-0000-4000-8000-000000000008',
@@ -182,27 +275,25 @@ describe('Worker team message inbox', () => {
         }),
         '2026-08-15T20:00:01.000Z'
       );
-    database
-      .prepare(`INSERT INTO team_messages VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?)`)
-      .run(
-        '00000000-0000-4000-8000-000000000012',
-        '00000000-0000-4000-8000-000000000013',
-        ids.teamId,
-        ids.assignmentId,
-        ids.attemptId,
-        4,
-        JSON.stringify({
-          senderMembershipId: ids.senderMembershipId,
-          recipientMembershipId: ids.recipientMembershipId,
-          senderWorkspaceId: ids.senderWorkspaceId,
-          recipientWorkspaceId: ids.recipientWorkspaceId,
-          turnId: '00000000-0000-7000-8000-000000000011',
-          message: 'Queued before the steering upgrade.',
-          messageId: '00000000-0000-4000-8000-000000000012',
-          sentAt: '2026-08-15T20:00:02.000Z',
-        }),
-        '2026-08-15T20:00:03.000Z'
-      );
+    database.prepare(`INSERT INTO team_messages VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?)`).run(
+      '00000000-0000-4000-8000-000000000012',
+      '00000000-0000-4000-8000-000000000013',
+      ids.teamId,
+      ids.assignmentId,
+      ids.attemptId,
+      4,
+      JSON.stringify({
+        senderMembershipId: ids.senderMembershipId,
+        recipientMembershipId: ids.recipientMembershipId,
+        senderWorkspaceId: ids.senderWorkspaceId,
+        recipientWorkspaceId: ids.recipientWorkspaceId,
+        turnId: '00000000-0000-7000-8000-000000000011',
+        message: 'Queued before the steering upgrade.',
+        messageId: '00000000-0000-4000-8000-000000000012',
+        sentAt: '2026-08-15T20:00:02.000Z',
+      }),
+      '2026-08-15T20:00:03.000Z'
+    );
     database.close();
 
     const store = new WorkerMessageStore(dataDir);

@@ -55,6 +55,10 @@ const runtimeTools = [
   'task_add_comment',
   'task_complete',
   'message_send',
+  'message_list',
+  'message_get',
+  'message_ack',
+  'team_membership_list',
   'team_leave',
   'progress_report',
   'result_submit',
@@ -69,11 +73,7 @@ const runtimeTools = [
   'calendar_change_request',
 ] as const;
 
-const leadRuntimeTools = [
-  'team_membership_list',
-  'team_member_join',
-  'team_member_leave',
-] as const;
+const leadRuntimeTools = ['team_member_join', 'team_member_leave'] as const;
 
 const managerOnlyTools = [
   'team_launch',
@@ -135,10 +135,7 @@ export const canProfileInvokeTool = (
   toolName: string
 ): toolName is PublicMcpToolName => publicToolsByProfile[profile].has(toolName);
 
-export const assertSessionCanInvokeTool = (
-  context: McpSessionContext,
-  toolName: string
-): void => {
+export const assertSessionCanInvokeTool = (context: McpSessionContext, toolName: string): void => {
   if (
     context.profile === 'agent-teams-runtime' &&
     context.teamRole === 'lead' &&
@@ -154,10 +151,7 @@ export const assertSessionCanInvokeTool = (
 export const listRuntimeToolsForRole = (
   role: 'lead' | 'member'
 ): readonly (RuntimeToolName | LeadRuntimeToolName)[] =>
-  Object.freeze([
-    ...runtimeTools,
-    ...(role === 'lead' ? leadRuntimeTools : []),
-  ].sort());
+  Object.freeze([...runtimeTools, ...(role === 'lead' ? leadRuntimeTools : [])].sort());
 
 export const canRuntimeRoleInvokeTool = (
   role: 'lead' | 'member',

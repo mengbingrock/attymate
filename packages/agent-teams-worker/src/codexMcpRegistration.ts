@@ -1,27 +1,43 @@
-import { randomUUID } from 'node:crypto';
-import { chmod, lstat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { resolve } from 'node:path';
 
 import { parse as parseToml } from 'smol-toml';
 
+import {
+  readCodexConfig,
+  withCodexConfigLock,
+  writeCodexConfigAtomically,
+} from './codexConfigTransaction';
 import { OWNER_CONTROL_BRIDGE_TOOL_NAMES } from './controlMcpServer';
+import {
+  LEGACY_OWNER_CONTROL_SERVER_NAME,
+  validateCodexMcpServerName,
+} from './codexMcpServerNames';
 
-const SERVER_NAME = 'agent-teams-control';
-const START_MARKER = '# >>> agent-teams-worker managed: agent-teams-control';
-const END_MARKER = '# <<< agent-teams-worker managed: agent-teams-control';
-const UNMANAGED_TABLE_PATTERN = /^\s*\[mcp_servers\.(?:agent-teams-control|"agent-teams-control")\]\s*(?:#.*)?$/m;
+export {
+  controlMcpServerNameForInstallation,
+  isOwnerControlServerName,
+  LEGACY_OWNER_CONTROL_SERVER_NAME,
+  validateCodexMcpServerName,
+} from './codexMcpServerNames';
 
 export interface CodexMcpRegistrationSpec {
   readonly command: string;
   readonly args: readonly string[];
   readonly cwd?: string;
+  readonly serverName?: string;
 }
 
 export type CodexMcpRegistrationState =
   | { readonly status: 'absent' }
   | { readonly status: 'managed'; readonly block: string }
-  | { readonly status: 'conflict'; readonly reason: 'unmanaged_server_table' }
-  | { readonly status: 'invalid'; readonly reason: 'unbalanced_managed_markers' };
+  | {
+      readonly status: 'conflict';
+      readonly reason: 'unmanaged_server_table' | 'managed_target_mismatch';
+    }
+  | {
+      readonly status: 'invalid';
+      readonly reason: 'unbalanced_managed_markers' | 'invalid_managed_block';
+    };
 
 export interface CodexMcpRegistrationChange {
   readonly configPath: string;
@@ -29,139 +45,173 @@ export interface CodexMcpRegistrationChange {
   readonly state: CodexMcpRegistrationState;
 }
 
-const tomlString = (value: string): string => JSON.stringify(value);
+const marker = (side: 'start' | 'end', name: string): string =>
+  `# ${side === 'start' ? '>>>' : '<<<'} agent-teams-worker managed: ${name}`;
+const escapeRegex = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const tomlStringArray = (values: readonly string[]): string =>
-  `[${values.map(tomlString).join(', ')}]`;
+  `[${values.map((value) => JSON.stringify(value)).join(', ')}]`;
 
 export const buildCodexMcpRegistrationBlock = (spec: CodexMcpRegistrationSpec): string => {
-  const lines = [
-    START_MARKER,
-    `[mcp_servers.${SERVER_NAME}]`,
-    `command = ${tomlString(spec.command)}`,
+  const name = validateCodexMcpServerName(spec.serverName);
+  return [
+    marker('start', name),
+    `[mcp_servers.${name}]`,
+    `command = ${JSON.stringify(spec.command)}`,
     `args = ${tomlStringArray(spec.args)}`,
-    ...(spec.cwd === undefined ? [] : [`cwd = ${tomlString(spec.cwd)}`]),
+    ...(spec.cwd === undefined ? [] : [`cwd = ${JSON.stringify(spec.cwd)}`]),
     'enabled = true',
     'required = false',
     'startup_timeout_sec = 10',
     'tool_timeout_sec = 30',
     'default_tools_approval_mode = "prompt"',
     `enabled_tools = ${tomlStringArray(OWNER_CONTROL_BRIDGE_TOOL_NAMES)}`,
-    END_MARKER,
-  ];
-  return `${lines.join('\n')}\n`;
+    marker('end', name),
+    '',
+  ].join('\n');
 };
 
-const findManagedRange = (
-  content: string
-): { readonly start: number; readonly end: number; readonly block: string } | undefined => {
-  const start = content.indexOf(START_MARKER);
-  const endMarkerStart = content.indexOf(END_MARKER);
-  if (start < 0 || endMarkerStart < 0) return undefined;
-  const markerEnd = endMarkerStart + END_MARKER.length;
+const markerMatches = (content: string, side: 'start' | 'end', name: string) => [
+  ...content.matchAll(new RegExp(`^${escapeRegex(marker(side, name))}\\r?$`, 'gm')),
+];
+
+const findManagedRange = (content: string, name: string) => {
+  const start = markerMatches(content, 'start', name)[0]?.index;
+  const endMatch = markerMatches(content, 'end', name)[0];
+  if (start === undefined || endMatch?.index === undefined) return undefined;
+  const markerEnd = endMatch.index + endMatch[0].length;
   const end = content[markerEnd] === '\n' ? markerEnd + 1 : markerEnd;
   return { start, end, block: content.slice(start, end) };
 };
 
-export const inspectCodexMcpRegistration = (content: string): CodexMcpRegistrationState => {
-  const startCount = content.split(START_MARKER).length - 1;
-  const endCount = content.split(END_MARKER).length - 1;
-  if (startCount !== endCount || startCount > 1) {
+const managedTarget = (block: string, name: string): Record<string, unknown> | undefined => {
+  try {
+    const parsed = parseToml(block) as Record<string, unknown>;
+    const servers = parsed.mcp_servers as Record<string, Record<string, unknown>> | undefined;
+    if (
+      Object.keys(parsed).length !== 1 ||
+      !servers ||
+      Object.keys(servers).length !== 1 ||
+      !Object.hasOwn(servers, name)
+    )
+      return undefined;
+    const target = servers[name];
+    if (
+      !target ||
+      typeof target.command !== 'string' ||
+      !Array.isArray(target.args) ||
+      !target.args.every((value) => typeof value === 'string')
+    )
+      return undefined;
+    return target;
+  } catch {
+    return undefined;
+  }
+};
+
+export const inspectCodexMcpRegistration = (
+  content: string,
+  serverName = LEGACY_OWNER_CONTROL_SERVER_NAME
+): CodexMcpRegistrationState => {
+  const name = validateCodexMcpServerName(serverName);
+  const starts = markerMatches(content, 'start', name);
+  const ends = markerMatches(content, 'end', name);
+  if (
+    starts.length !== ends.length ||
+    starts.length > 1 ||
+    (starts[0] && ends[0] && starts[0].index! >= ends[0].index!)
+  ) {
     return { status: 'invalid', reason: 'unbalanced_managed_markers' };
   }
-  const managed = findManagedRange(content);
-  if (managed !== undefined) {
-    const outsideManagedBlock = `${content.slice(0, managed.start)}${content.slice(managed.end)}`;
-    if (UNMANAGED_TABLE_PATTERN.test(outsideManagedBlock)) {
-      return { status: 'conflict', reason: 'unmanaged_server_table' };
-    }
-    return { status: 'managed', block: managed.block };
+  const managed = findManagedRange(content, name);
+  if (managed && !managedTarget(managed.block, name)) {
+    return { status: 'invalid', reason: 'invalid_managed_block' };
   }
-  if (UNMANAGED_TABLE_PATTERN.test(content)) {
-    return { status: 'conflict', reason: 'unmanaged_server_table' };
-  }
-  return { status: 'absent' };
+  const outside = managed ? content.slice(0, managed.start) + content.slice(managed.end) : content;
+  const table = new RegExp(
+    `^\\s*\\[mcp_servers\\.(?:${escapeRegex(name)}|"${escapeRegex(name)}"|'${escapeRegex(name)}')\\]\\s*(?:#.*)?$`,
+    'm'
+  );
+  if (table.test(outside)) return { status: 'conflict', reason: 'unmanaged_server_table' };
+  return managed ? { status: 'managed', block: managed.block } : { status: 'absent' };
 };
 
-const readConfig = async (configPath: string): Promise<string> => {
-  try {
-    return await readFile(configPath, 'utf8');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return '';
-    throw error;
-  }
-};
-
-const writeConfigAtomically = async (configPath: string, content: string): Promise<void> => {
-  parseToml(content);
-  await mkdir(dirname(configPath), { recursive: true, mode: 0o700 });
-  let existingMode = 0o600;
-  try {
-    const stat = await lstat(configPath);
-    if (stat.isSymbolicLink()) {
-      throw new Error(`Refusing to replace symlinked Codex config: ${configPath}`);
-    }
-    if (!stat.isFile()) throw new Error(`Codex config path is not a file: ${configPath}`);
-    existingMode = stat.mode & 0o777;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-  }
-
-  const temporaryPath = `${configPath}.agent-teams-${randomUUID()}.tmp`;
-  try {
-    await writeFile(temporaryPath, content, { encoding: 'utf8', mode: existingMode });
-    await chmod(temporaryPath, existingMode);
-    await rename(temporaryPath, configPath);
-  } catch (error) {
-    await unlink(temporaryPath).catch(() => undefined);
-    throw error;
-  }
+const matchesTarget = (
+  block: string,
+  name: string,
+  expected: CodexMcpRegistrationSpec
+): boolean => {
+  const target = managedTarget(block, name);
+  return (
+    target?.command === expected.command &&
+    JSON.stringify(target.args) === JSON.stringify(expected.args) &&
+    target.cwd === expected.cwd
+  );
 };
 
 export const installCodexMcpRegistration = async (
   configPath: string,
   spec: CodexMcpRegistrationSpec
 ): Promise<CodexMcpRegistrationChange> => {
-  const content = await readConfig(configPath);
-  const state = inspectCodexMcpRegistration(content);
-  if (state.status === 'conflict' || state.status === 'invalid') {
-    return { configPath, changed: false, state };
-  }
-
-  const nextBlock = buildCodexMcpRegistrationBlock(spec);
-  let nextContent: string;
-  if (state.status === 'managed') {
-    const range = findManagedRange(content);
-    if (range === undefined) throw new Error('Managed Codex MCP block disappeared during update');
-    if (range.block === nextBlock) return { configPath, changed: false, state };
-    nextContent = `${content.slice(0, range.start)}${nextBlock}${content.slice(range.end)}`;
-  } else {
+  const name = validateCodexMcpServerName(spec.serverName);
+  return withCodexConfigLock(resolve(configPath), async () => {
+    const content = await readCodexConfig(configPath);
+    const state = inspectCodexMcpRegistration(content, name);
+    if (state.status === 'conflict' || state.status === 'invalid')
+      return { configPath, changed: false, state };
+    const nextBlock = buildCodexMcpRegistrationBlock(spec);
+    if (
+      state.status === 'managed' &&
+      name !== LEGACY_OWNER_CONTROL_SERVER_NAME &&
+      !matchesTarget(state.block, name, spec)
+    ) {
+      return {
+        configPath,
+        changed: false,
+        state: { status: 'conflict', reason: 'managed_target_mismatch' },
+      };
+    }
+    const range = findManagedRange(content, name);
+    if (range?.block === nextBlock) return { configPath, changed: false, state };
     const separator = content.length === 0 ? '' : content.endsWith('\n') ? '\n' : '\n\n';
-    nextContent = `${content}${separator}${nextBlock}`;
-  }
-
-  await writeConfigAtomically(configPath, nextContent);
-  return {
-    configPath,
-    changed: true,
-    state: { status: 'managed', block: nextBlock },
-  };
+    const next = range
+      ? content.slice(0, range.start) + nextBlock + content.slice(range.end)
+      : content + separator + nextBlock;
+    await writeCodexConfigAtomically(configPath, content, next);
+    return { configPath, changed: true, state: { status: 'managed', block: nextBlock } };
+  });
 };
 
 export const removeCodexMcpRegistration = async (
-  configPath: string
+  configPath: string,
+  serverName = LEGACY_OWNER_CONTROL_SERVER_NAME,
+  expectedTarget?: CodexMcpRegistrationSpec
 ): Promise<CodexMcpRegistrationChange> => {
-  const content = await readConfig(configPath);
-  const state = inspectCodexMcpRegistration(content);
-  if (state.status !== 'managed') return { configPath, changed: false, state };
-  const range = findManagedRange(content);
-  if (range === undefined) throw new Error('Managed Codex MCP block disappeared during removal');
-
-  let start = range.start;
-  if (start > 0 && content[start - 1] === '\n') start -= 1;
-  await writeConfigAtomically(configPath, `${content.slice(0, start)}${content.slice(range.end)}`);
-  return { configPath, changed: true, state: { status: 'absent' } };
+  const name = validateCodexMcpServerName(serverName);
+  return withCodexConfigLock(resolve(configPath), async () => {
+    const content = await readCodexConfig(configPath);
+    const state = inspectCodexMcpRegistration(content, name);
+    if (state.status !== 'managed') return { configPath, changed: false, state };
+    if (expectedTarget && !matchesTarget(state.block, name, expectedTarget)) {
+      return {
+        configPath,
+        changed: false,
+        state: { status: 'conflict', reason: 'managed_target_mismatch' },
+      };
+    }
+    const range = findManagedRange(content, name)!;
+    const start =
+      range.start > 0 && content[range.start - 1] === '\n' ? range.start - 1 : range.start;
+    await writeCodexConfigAtomically(
+      configPath,
+      content,
+      content.slice(0, start) + content.slice(range.end)
+    );
+    return { configPath, changed: true, state: { status: 'absent' } };
+  });
 };
 
 export const readCodexMcpRegistrationState = async (
-  configPath: string
-): Promise<CodexMcpRegistrationState> => inspectCodexMcpRegistration(await readConfig(configPath));
+  configPath: string,
+  serverName = LEGACY_OWNER_CONTROL_SERVER_NAME
+): Promise<CodexMcpRegistrationState> =>
+  inspectCodexMcpRegistration(await readCodexConfig(configPath), serverName);

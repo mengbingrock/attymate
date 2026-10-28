@@ -3,12 +3,53 @@ import {
   buildRestrictedRuntimeMcpConfig,
   readConfiguredMcpServerNames,
   readConfiguredPluginNames,
-  runtimeConnectionPolicySchema,
   RUNTIME_BRIDGE_TOOL_NAMES,
+  runtimeConnectionPolicySchema,
 } from '@claude-teams/agent-teams-worker';
 import { describe, expect, it } from 'vitest';
 
 describe('Codex runtime MCP profile', () => {
+  it('disables every installation control entry and rejects leaking its tools', () => {
+    const ownerName = 'agent_teams_control_stock123';
+    const config = buildRestrictedRuntimeMcpConfig({ command: 'node', args: [] }, 'token', [
+      ownerName,
+      'agent-teams-control',
+    ]);
+    expect(config.mcp_servers).toMatchObject({
+      [ownerName]: { enabled: false },
+      'agent-teams-control': { enabled: false },
+    });
+    const runtime = {
+      name: 'agent-teams-runtime',
+      tools: Object.fromEntries(RUNTIME_BRIDGE_TOOL_NAMES.map((name) => [name, {}])),
+    };
+    expect(() =>
+      assertRestrictedRuntimeMcpInventory({
+        data: [
+          runtime,
+          {
+            name: ownerName,
+            tools: { approval_respond: {} },
+          },
+        ],
+      })
+    ).toThrow('leaked capabilities');
+    expect(() =>
+      runtimeConnectionPolicySchema.parse({
+        mcpServers: { [ownerName]: { enabledTools: ['approval_respond'] } },
+      })
+    ).toThrow('Reserved MCP server');
+    expect(() =>
+      runtimeConnectionPolicySchema.parse({
+        plugins: {
+          'custom@local': {
+            mcpServers: { owner: { inventoryName: ownerName, enabledTools: ['worker_enable'] } },
+          },
+        },
+      })
+    ).toThrow('Reserved MCP server');
+  });
+
   it('loads an owner selected native transport and disables injected native servers', () => {
     const config = buildRestrictedRuntimeMcpConfig(
       {

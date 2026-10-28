@@ -19,6 +19,7 @@ describe('Worker diagnostics', () => {
   it('correlates Codex registration, persisted status, and the live control socket', async () => {
     const testDir = await mkdtemp(join(tmpdir(), 'agent-teams-diagnose-'));
     const configPath = join(testDir, 'codex', 'config.toml');
+    const serverName = 'agent_teams_control_diagnostic';
     const statusPath = join(testDir, 'worker-status.json');
     const socketPath = join(testDir, 'control.sock');
     const codexHomePath = join(testDir, 'worker', 'codex-home');
@@ -41,6 +42,7 @@ describe('Worker diagnostics', () => {
       runtimeCapabilities: [],
     };
     await installCodexMcpRegistration(configPath, {
+      serverName,
       command: 'agent-teams-worker',
       args: ['control-mcp', '--socket', socketPath],
     });
@@ -75,6 +77,7 @@ describe('Worker diagnostics', () => {
         statusPath,
         controlSocketPath: socketPath,
         codexHomePath,
+        codexMcpServerName: serverName,
       });
       expect(report).toMatchObject({
         ok: true,
@@ -84,7 +87,7 @@ describe('Worker diagnostics', () => {
           private: true,
           authJsonPresent: true,
         },
-        codexMcp: { state: { status: 'managed' } },
+        codexMcp: { serverName, state: { status: 'managed' } },
         persistedStatus: { available: true, status: { nodeId: status.nodeId } },
         controlSocket: { reachable: true, status: { nodeId: status.nodeId } },
       });
@@ -97,6 +100,7 @@ describe('Worker diagnostics', () => {
       statusPath,
       controlSocketPath: socketPath,
       codexHomePath,
+      codexMcpServerName: serverName,
     });
     expect(stoppedReport.ok).toBe(false);
     expect(stoppedReport.controlSocket).toMatchObject({ reachable: false });

@@ -1,4 +1,7 @@
+import { attemptIdSchema } from '@claude-teams/agent-teams-protocol';
+
 import { runtimeBridgeToolNames } from './runtimeMcpServer';
+import { isOwnerControlServerName } from './codexMcpServerNames';
 import {
   runtimeConnectionFeatures,
   type CodexRuntimeConnectionPolicy,
@@ -16,11 +19,15 @@ export interface CodexRuntimeMcpLaunchSpec {
   readonly cwd?: string;
   readonly env?: Readonly<Record<string, string>>;
   /**
-   * Worker-owned file (mode 0600) holding the current session token. Set for shared-daemon
-   * runtimes, where the daemon keeps the bridge process alive across turns and token rotations.
+   * Worker-owned token-file base (mode 0600). The supervisor adds the attempt ID before
+   * exposing it to a bridge, so a long-lived bridge can rotate only its own attempt's token.
    */
   readonly tokenFile?: string;
 }
+
+/** Stable across rotations of one attempt, distinct for every other attempt. */
+export const runtimeMcpTokenFileForAttempt = (base: string, attemptId: string): string =>
+  `${base}.${attemptIdSchema.parse(attemptId)}`;
 
 export const readConfiguredMcpServerNames = (response: unknown): readonly string[] => {
   if (typeof response !== 'object' || response === null || Array.isArray(response)) return [];
@@ -74,6 +81,13 @@ export const buildRestrictedRuntimeMcpConfig = (
   additionalServerNames: readonly string[] = []
 ): Readonly<Record<string, unknown>> => {
   const connections = spec.connections;
+  const selectedControl = [
+    ...Object.keys(connections?.mcpServers ?? {}),
+    ...Object.values(connections?.plugins ?? {}).flatMap((plugin) =>
+      Object.values(plugin.mcpServers).map((server) => server.inventoryName)
+    ),
+  ].find(isOwnerControlServerName);
+  if (selectedControl) throw new Error(`Reserved MCP server ${selectedControl}`);
   for (const name of Object.keys(connections?.mcpServers ?? {})) {
     if (
       !configuredServerNames.includes(name) &&
@@ -233,6 +247,18 @@ export const assertRestrictedRuntimeMcpInventory = (
   }
   const leakedServers = servers.filter((server) => {
     if (server.name === RUNTIME_MCP_SERVER_NAME) return false;
+    if (typeof server.name === 'string' && isOwnerControlServerName(server.name)) {
+      return (
+        typeof server.tools !== 'object' ||
+        server.tools === null ||
+        Array.isArray(server.tools) ||
+        Object.keys(server.tools).length > 0 ||
+        (server.resources !== undefined &&
+          (!Array.isArray(server.resources) || server.resources.length > 0)) ||
+        (server.resourceTemplates !== undefined &&
+          (!Array.isArray(server.resourceTemplates) || server.resourceTemplates.length > 0))
+      );
+    }
     let allowedTools = connections?.mcpServers[String(server.name)]?.enabledTools;
     const selectedMcp = Object.hasOwn(connections?.mcpServers ?? {}, String(server.name));
     for (const plugin of Object.values(connections?.plugins ?? {})) {

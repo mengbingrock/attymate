@@ -10,7 +10,7 @@ short-lived Relay capability scoped to the exact team, node, assignment attempt,
 
 ```text
 renderer -> validated IPC -> Electron main -> authenticated Relay
-         -> Worker outbound WebSocket -> local Codex App Server stdio
+         -> Worker outbound WebSocket -> local Codex App Server (stdio or private socket)
 ```
 
 The Worker projects App Server notifications, approval requests, diffs, and command output into a
@@ -30,18 +30,60 @@ lease, and stays in Electron main. It is not returned through preload or rendere
   not own an already-running distributed session because doing so would create a competing App
   Server lifecycle.
 
-App Server remains private to the Worker over stdio. The Relay does not expose App Server's
-experimental WebSocket listener directly.
+App Server is reached locally over Worker-owned stdio, an owner-scoped Unix socket, or an
+authenticated loopback WebSocket on Windows. Socket-backed servers also accept terminal-client
+connections; private stdio sessions cannot be attached to. The Relay carries validated team traffic
+and does not expose the App Server listener.
 
-Each Worker launches App Server with a dedicated `CODEX_HOME`, defaulting to
-`<worker-data-dir>/codex-home`. The Worker creates it with mode `0700`, rejects files, symbolic
-links, and pre-existing group/world-accessible directories, and passes the override only to the
-App Server child. This keeps the operator's personal plugins, MCP servers, skills, history, and
-configuration out of distributed execution. The Worker never copies or rewrites credentials.
+Direct-source Workers default to a dedicated `CODEX_HOME` at `<worker-data-dir>/codex-home`.
+The Worker creates it with mode `0700` and rejects files, symbolic links, and pre-existing
+group/world-accessible directories. External-server connections require an explicit home that
+matches that server. Home-owned configuration, history, and credentials remain separate; Codex
+can also load instruction and skill sources according to its own project and OS-user rules.
+The Worker never copies credentials between homes.
 By default it starts Codex with `apps`, `plugins`, and `remote_plugin` disabled;
 the assignment-scoped Worker MCP bridge is then the only permitted external tool server.
 An owner can opt in to selected existing connections with `--connections-config`.
 This changes connection access without changing the Relay, Worker, or lease architecture.
+
+## Stock and fork installations
+
+Distributed installations support two explicit runtime kinds. `build-installer.sh --runtime fork`
+remains the build default, preserves bundled package verification, and keeps existing fork install
+and login behavior. `--runtime stock` builds a Worker-only artifact and selects an installed
+unmodified Codex executable using `--codex-binary` or PATH. Runtime failures never switch kinds.
+See the [installer instructions](../../packages/agent-teams-worker/installer/README.md) for both paths.
+
+Stock can run in managed mode, where its supervisor starts a dedicated `codex app-server`, or in
+external mode, where the operator starts the server and supplies `--server-ownership external`,
+`--app-server-mode shared-daemon`, `--app-server-connect-only`, and `--app-server-socket`. External
+mode requires the matching explicit `--codex-home`. Its Worker never starts, stops, or removes
+that server. Stock terminal attachment uses `codex agents --remote <local-endpoint>`.
+
+Stock and fork installations can run concurrently and join the same Relay team. Each installation
+has a separate node identity, data directory, endpoints, services, pairing code, and runtime state.
+New control MCP entries use `agent_teams_control_<installation-id>`; existing fork entries preserve
+`agent-teams-control`. Setup and uninstall modify only their own registration. Assignment bridges
+exclude every owner-control registration, including those belonging to another installation.
+Never start concurrent Workers using the same node/data directory or execution lease.
+
+Managed stock installs use a dedicated Codex home with a normal independent sign-in. They reject
+sharing the personal home used by a different runtime version; `sqlite_home` alone does not isolate
+rollout/session files. External mode accepts the operator's explicit home and reports that storage
+isolation is operator-managed. Installation descriptors persist kind, executable identity, endpoint,
+ownership, message-delivery mode, and compatibility checks. `status` and `diagnose` expose this
+non-secret state. The stock compatibility probe runs before the Worker accepts assignments.
+
+The current mixed-runtime native evidence is **darwin-arm64**, with stock `0.165.0` and the tested
+fork `0.0.0` artifact. The [native smoke](../../scripts/smoke/stock-forked-codex.ts) covers both lead
+orientations, inline and inbox delivery, model-driven MCP reads/receipts, both Worker restart paths,
+and actual terminal clients sharing their App Servers. It also covers model-issued progress,
+review requests and result candidates, lease fencing, and denial of old-thread calls during a
+successor assignment. See the [recorded validation](stock-fork-validation.md). It uses a deterministic loopback model
+fixture and disposable homes/projects. Windows contract/fixture checks are not native Windows
+signoff, and other platform pairs require their own native runs before being advertised.
+Stock desktop GUI attachment remains gated on a verified desktop/server pair. Existing fork GUI
+attachment retains its separate compatibility requirements. Neither path depends on A2A.
 
 ### Owner local access and native UI tools
 
@@ -265,8 +307,18 @@ missing or unavailable platform returns 400. Legacy single-archive downloads rem
 Installer responses stream base64 in bounded chunks with an exact content length, avoiding a
 second complete in-memory copy of a native runtime's shell installer.
 
-The published page is [relay.truegrit.dev/next/join/](https://relay.truegrit.dev/next/join/);
-the domain root redirects there. It offers the tested Intel Mac and Linux x64 builds. Users pick
+Stock distributions use `--join-stock-installer-template` with `--join-stock-worker-bundle` or
+repeated `--join-stock-worker-bundle-platform <platform>=<archive>` flags. Windows stock artifacts
+also need `--join-stock-windows-installer-template`. `installerRuntimes` describes availability
+per runtime and platform; legacy `installerAvailable` and `installerPlatforms` continue describing
+the fork. Download requests may add `"runtime":"stock"` or `"runtime":"fork"`; omission keeps the
+fork path and its legacy filename. Runtime/platform validation occurs before account enrollment
+allocates a device credential. Both direct Relay and standalone installer portals use the same
+selection rules, and an unavailable stock build never falls back to a fork artifact.
+
+The existing fork portal is [relay.truegrit.dev/next/join/](https://relay.truegrit.dev/next/join/);
+the domain root redirects there. Its previously published Intel Mac and Linux x64 artifacts are
+separate from the new mixed-runtime native verification. Users pick
 a team, enter their join token and member name, select their computer, download and run the
 installer, then copy the displayed `attach.sh` command to open the customized local Codex client.
 The installer reuses the current `$CODEX_HOME` or `~/.codex` sign-in by default without copying
@@ -357,11 +409,12 @@ CODEX_HOME="$WORKER_DATA_DIR/codex-home" codex agents    # live view of running 
 CODEX_HOME="$WORKER_DATA_DIR/codex-home" codex resume    # reopen or continue a thread
 ```
 
-Trade-offs: feature disables are passed per thread (`features` in the `thread/start` config), so
-the home's `config.toml` and daemon stay untouched and the home may be the owner's own `~/.codex`;
-the per-thread inventory check still fails closed with `Codex runtime MCP inventory leaked
-capabilities: ...` if a capability leaks. Anything the owner types into an attached thread is
-visible to the Worker's next turn on that thread.
+Feature disables are passed per thread (`features` in the `thread/start` config), and the
+per-thread inventory check fails closed with `Codex runtime MCP inventory leaked capabilities: ...`
+if another installation's owner-control tools or unselected capabilities leak. Home selection must
+also satisfy the runtime-state isolation rules above; a common login home is not evidence that
+different versions can safely share session storage. Anything the owner types into an attached
+thread is visible to the Worker's next turn on that thread.
 
 Token lifecycle differs from private-stdio runtimes: the daemon keeps the thread's bridge process
 alive, so the assignment's session token is no longer revoked when a turn completes, and the Worker
@@ -392,9 +445,9 @@ The public directory does not expose node identifiers or pairing hashes. The sta
 portal forwards these operations to the core relay, which remains the membership authority.
 
 Bindings persist in `desktop-chats.sqlite` with a separate credential per chat. The tools exposed
-under `agent-teams-runtime` are `runtime_context`, `team_membership_list`, `message_send`, and
-`message_list`. They use membership scope, never a fabricated task/lease. Task progress and result
-submission remain in the existing leased-assignment MCP profile. Every invocation checks current
+under `agent-teams-runtime` include `runtime_context`, `team_membership_list`, `message_send`,
+`message_list`, `message_get`, `message_ack`, `support_request`, and `review_request`. They use
+membership scope, never a fabricated task/lease. Task progress and result submission remain in the existing leased-assignment MCP profile. Every invocation checks current
 membership, and the bridge fails closed while disconnected. Role changes are read from the latest
 membership snapshot rather than a stale credential payload.
 
@@ -407,13 +460,29 @@ resume, without fabricating a user turn or model response.
 
 Membership messages are validated at the relay against the authenticated sender node and both
 active memberships. Both ends persist messages; reconnect retries use stable message IDs.
+The CLI defaults new stock installations to `--message-delivery-mode mcp-inbox`; legacy fork
+and untyped direct-source launches retain `inline`. Either kind can explicitly select either mode,
+and the selected mode persists in its descriptor. In inbox mode the App Server wake turn contains
+message IDs and an inbox-read instruction. Actual bodies, sender metadata, and processing receipts
+travel through authenticated MCP reads and `message_ack`. Marking a message processed is a local
+receipt and does not send another peer message. In inline mode the existing full-message turn input
+is retained. Delivery, read, and processed states remain distinct.
+
 Incoming messages enter the most recently created bound chat for that membership when it is idle.
-The model is told not to acknowledge acknowledgements. If there is no desktop chat, a completed
-active assignment can receive the message using its existing supervisor. Replies from leased
-assignments use the original message route and are diverted to a selected desktop chat locally.
+Inbox mode can create a membership conversation when none exists, without fabricating an assignment
+lease. Ordinary messages remain queued while a conversation is active or awaiting approval. The
+model is told not to acknowledge acknowledgements. Inline mode retains its completed-assignment
+fallback when no membership chat exists. Replies from leased assignments retain the existing route.
 Delivery is at least once across a crash between submitting a turn and recording its receipt;
-the injected message includes its ID for duplicate recognition. It does not promise exactly-once
-model execution.
+message IDs support duplicate recognition without promising exactly-once model execution.
+
+`message_send` accepts an explicit `recipientMembershipId` or `recipient: "lead"`. Support and review
+requests accept `summary`, optional `details`, `taskRefs`, and `artifacts`; if no recipient is supplied,
+they resolve the current single active lead. Leaderless teams require an explicit recipient. The
+Worker resolves roles from its authenticated current roster and validates scope on every call.
+A request is carried as a typed team message: it cannot approve a review, change task status, grant
+filesystem/process access, or bypass assignment leases. Membership conversations and leased runtime
+sessions use their respective existing authorization boundaries for these tools.
 
 Verification: `desktopTeamChats.test.ts`, `desktopTransport.test.ts`, and `joinPortal.test.ts` cover
 binding persistence, scoped tools, revoked/cross-team access, paired routing, acknowledgements,

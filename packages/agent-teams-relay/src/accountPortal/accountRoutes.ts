@@ -5,6 +5,7 @@ import { desktopChatActionSchema, teamIdSchema } from '@claude-teams/agent-teams
 
 import {
   installerCatalog,
+  resolveInstallerSelection,
   sendTeamInstaller,
   SECURITY_HEADERS,
   type RelayJoinPortalOptions,
@@ -347,6 +348,7 @@ export const registerAccountRoutes = (deps: {
       const input = z
         .object({
           platform: z.string(),
+          runtime: z.enum(['stock', 'fork']).optional(),
           label: z
             .string()
             .trim()
@@ -354,15 +356,24 @@ export const registerAccountRoutes = (deps: {
         })
         .strict()
         .parse(request.body);
-      const catalog = installerCatalog(options.installer);
-      if (!options.installer || !catalog.installerPlatforms.some((p) => p.id === input.platform))
+      if (
+        !options.installer ||
+        !resolveInstallerSelection(options.installer, input.platform, input.runtime)
+      )
         throw new AccountPortalError(400, 'Choose an available build for your computer.');
       const { token } = store.createDevice(teamId, user.id, input.label);
-      return sendTeamInstaller(reply, options.installer, input.platform, {
-        relayUrl: options.publicUrl.replace(/\/$/, '').replace(/^http/, 'ws') + '/v2/worker-stream',
-        token,
-        teamId,
-      });
+      return sendTeamInstaller(
+        reply,
+        options.installer,
+        input.platform,
+        {
+          relayUrl:
+            options.publicUrl.replace(/\/$/, '').replace(/^http/, 'ws') + '/v2/worker-stream',
+          token,
+          teamId,
+        },
+        input.runtime
+      );
     })
   );
   // The installer gateway owns native archives; the relay issues only this user's device credential.
