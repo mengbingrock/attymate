@@ -79,6 +79,11 @@ alongside the original Teams and Worker-stream paths. Owner signing and revocati
 local IPC only; manager APIs remain unpublished. All components must be upgraded together: legacy
 Workers without owner keys do not receive a permissive compatibility fallback.
 
+Public owner routes use the [Fastify rate limiter](https://github.com/fastify/fastify-rate-limit)
+before authorization: 60 openings, 120 controls and 600 event reads per minute per socket peer.
+Forwarded headers do not reset these budgets; clients behind the local pilot gateway share them.
+Excess requests receive HTTP 429 and Retry-After. Other team-manager routes retain their behavior.
+
 See [owner-boundary validation](owner-boundary-validation.md) for automated coverage and the
 separate native, independent-account acceptance procedure.
 

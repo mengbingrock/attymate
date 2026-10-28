@@ -49,13 +49,13 @@ import type { DistributedRelayPort } from '../../core/application/ports/Distribu
 // Keep the timeout bounded, but long enough that detail-view polling does not degrade on WAN links.
 const REQUEST_TIMEOUT_MS = 15_000;
 
-type CachedRuntimeSession = {
+interface CachedRuntimeSession {
   readonly sessionId: string;
   readonly sessionToken: string;
   readonly scope: DistributedRuntimeSessionDto['scope'];
   readonly capabilities: DistributedRuntimeSessionDto['capabilities'];
   readonly expiresAt: string;
-};
+}
 
 class RelayHttpError extends Error {
   constructor(readonly status: number) {

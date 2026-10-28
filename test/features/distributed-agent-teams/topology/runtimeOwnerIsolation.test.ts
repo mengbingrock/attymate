@@ -237,6 +237,46 @@ describe('personal Worker owner isolation', () => {
       });
       sendSpy.mockRestore();
 
+      // Revocation stops subsequent private deltas and requires a newly opened owner session.
+      worker.revokeOwnerRuntimeAccess();
+      for (const listener of notifications)
+        listener({
+          method: 'item/agentMessage/delta',
+          params: {
+            threadId: 'employee-thread',
+            turnId: 'employee-turn',
+            delta: 'private-after-owner-revocation',
+          },
+        });
+      const revokedControlId = randomUUID();
+      await ownerClient.control({
+        controlId: revokedControlId,
+        type: 'filesystem.read',
+        payload: { path: 'private.txt' },
+      });
+      await vi.waitFor(async () => {
+        const result = (await ownerClient.read()) as {
+          events: Array<{ event: { kind: string; payload: { controlId?: string; ok?: boolean } } }>;
+        };
+        expect(
+          result.events.some(
+            ({ event }) =>
+              event.payload.controlId === revokedControlId && event.payload.ok === false
+          )
+        ).toBe(true);
+        expect(JSON.stringify(result)).not.toContain('private-after-owner-revocation');
+        expect(JSON.stringify(result)).not.toContain('employee-private-fixture');
+      });
+      expect(
+        JSON.stringify(
+          await localOwner.control({
+            controlId: randomUUID(),
+            type: 'filesystem.read',
+            payload: { path: 'private.txt' },
+          })
+        )
+      ).toContain('employee-private-fixture');
+
       const sessionId = randomUUID();
       const wrongOwnerProof = managerOwner.sign({ operation: 'session.open', sessionId, scope });
       const wrongOwnerOpen = await fetch(`${relay.httpUrl}/v2/runtime-sessions`, {

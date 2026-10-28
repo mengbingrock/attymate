@@ -40,6 +40,10 @@ Focused regression coverage:
   task, attempt, lease epoch and session. Replayed, expired and revoked proofs are rejected.
 - Replay and revocation state survives restarts. Same-owner public-key pairing works; relabeling an
   existing private key for another owner fails.
+- Revocation stops further private deltas and controls on existing owner sessions while preserving
+  owner-local access. Queued events are checked again before transmission.
+- Repeated opening/control failures receive HTTP 429. Spoofed forwarding headers and rotating
+  session IDs do not reset the budget or block the separate manager API.
 - Existing peer messaging, membership, task lifecycle and owner-approved controls remain covered.
 
 These tests use synthetic data and App Server fixtures. They are not native Windows or Microsoft

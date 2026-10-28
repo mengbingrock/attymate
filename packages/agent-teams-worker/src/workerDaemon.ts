@@ -512,15 +512,29 @@ export const startAgentTeamsWorker = async (
         message.event.kind === 'control.result' &&
         (message.event.payload as { ok?: boolean })?.ok === false;
       const scope = currentRuntimeScope();
-      if (
-        !denied &&
-        (!scope ||
-          !scopeMatches(scope, message.scope) ||
-          !message.sessionId ||
-          !runtimeOwner.hasSession(message.sessionId, scope))
-      )
-        continue;
-      socket.send(JSON.stringify(message));
+      const authorized =
+        scope !== undefined &&
+        scopeMatches(scope, message.scope) &&
+        message.sessionId !== undefined &&
+        runtimeOwner.hasSession(message.sessionId, scope);
+      if (!denied && !authorized) continue;
+      socket.send(
+        JSON.stringify(
+          !authorized
+            ? {
+                ...message,
+                event: {
+                  kind: 'control.result',
+                  payload: {
+                    controlId: (message.event.payload as { controlId?: string })?.controlId,
+                    ok: false,
+                    error: 'Device-owner authorization is required for private runtime access',
+                  },
+                },
+              }
+            : message
+        )
+      );
     }
   };
   const emitScopedRuntimeEvent = (
