@@ -52,7 +52,13 @@ uses a background supervisor. If either child exits, it stops its other child an
 launchd/systemd restart the installation. Cleanup targets only its own child processes.
 Each installation has its own socket and service identity. Rerunning the Unix installer calls
 that installation's existing `bin/stop.sh` before replacing runtime files, then starts it again.
-It preserves the installation identity, login, and data. Other installations and external App
+With the same credential, team, and relay, it preserves the installation identity, login, and data;
+an explicit `--label` updates the device's roster name. A new credential, team, or relay creates
+a fresh Worker identity and archives the previous `data/` and `config.env` under the private
+`retired-enrollments/<id>/` directory. This lets a removed device enroll again without reusing
+its revoked identity. The local MCP installation identity, Codex login, and Codex chat files are
+retained; open a new team chat to establish membership under the new enrollment.
+Other installations and external App
 Servers remain running. If shutdown fails or a managed socket remains, the update stops without
 replacing the runtime. `bin/status.sh` reports Worker state, and
 `logs/app-server.log` holds server output.

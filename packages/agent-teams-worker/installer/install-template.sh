@@ -19,6 +19,7 @@ case "$APP_SERVER_START_TIMEOUT_SECONDS" in ''|*[!0-9]*) echo 'App Server startu
 APP_SERVER_START_TIMEOUT_SECONDS=$((10#$APP_SERVER_START_TIMEOUT_SECONDS))
 
 LABEL="$(hostname -s 2>/dev/null || hostname)"
+LABEL_SET=0
 DIR="${HOME}/.local/share/agent-teams/mate-${TEAM_ID:0:8}"
 [ "$RUNTIME_KIND" != stock ] || DIR="${DIR}-stock"
 SERVICE=1
@@ -32,7 +33,7 @@ SERVER_OWNERSHIP=managed
 EXTERNAL_SOCKET=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --label) LABEL="$2"; shift 2 ;;
+    --label) LABEL="$2"; LABEL_SET=1; shift 2 ;;
     --dir) DIR="$2"; shift 2 ;;
     --codex-binary) SELECTED_CODEX="$2"; shift 2 ;;
     --server-ownership) SERVER_OWNERSHIP="$2"; shift 2 ;;
@@ -230,6 +231,35 @@ process.stdout.write(descriptor.installationId + " " + descriptor.controlMcpName
 ' "$DIR/installation.json" "$RUNTIME_KIND" "$LEGACY_INSTALL")
 read -r INSTALLATION_ID CONTROL_MCP_NAME <<< "$INSTALLATION_META"
 ENV_FILE="$DIR/config.env"
+# A newly downloaded credential represents a new enrollment. Never silently reuse a
+# revoked credential or its node identity (the relay retains removed-device tombstones).
+if [ -s "$ENV_FILE" ] && ! (
+  source "$ENV_FILE"
+  [ "${AGENT_TEAMS_RELAY_WORKER_TOKEN:-}" = "$WORKER_TOKEN" ] &&
+  [ "${AGENT_TEAMS_AUTO_JOIN_TEAM_ID:-}" = "$TEAM_ID" ] &&
+  [ "${AGENT_TEAMS_RELAY_URL:-}" = "$RELAY_URL" ]
+); then
+  "$NODE" - "$DIR/data/worker-process.lock" <<'CHECK_RETIRED_WORKER'
+const { readFileSync, lstatSync } = require('node:fs');
+const path = process.argv[2];
+try {
+  if (lstatSync(path).isSymbolicLink()) throw new Error('Worker lock must not be a symlink');
+  const { pid } = JSON.parse(readFileSync(path, 'utf8'));
+  if (!Number.isSafeInteger(pid) || pid <= 1) throw new Error('Invalid Worker lock owner');
+  try { process.kill(pid, 0); }
+  catch (error) { if (error.code === 'ESRCH') process.exit(0); throw error; }
+  throw new Error('The previous Worker is still running; stop it before enrolling this device');
+} catch (error) { if (error.code !== 'ENOENT') throw error; }
+CHECK_RETIRED_WORKER
+  [ ! -L "$DIR/retired-enrollments" ] && [ ! -L "$DIR/data" ] && [ ! -L "$ENV_FILE" ] || die "Enrollment state must not be a symlink"
+  ARCHIVE_DIR="$DIR/retired-enrollments/$(uuid)"
+  mkdir -p "$ARCHIVE_DIR"
+  chmod 700 "$DIR/retired-enrollments" "$ARCHIVE_DIR"
+  mv "$DIR/data" "$ARCHIVE_DIR/data"
+  mv "$ENV_FILE" "$ARCHIVE_DIR/config.env"
+  mkdir -m 700 "$DIR/data"
+  say "New device enrollment: retired Worker state saved in $ARCHIVE_DIR. Codex login and chats are retained."
+fi
 if [ ! -s "$ENV_FILE" ]; then
   {
     printf 'AGENT_TEAMS_RELAY_WORKER_TOKEN=%q\n' "$WORKER_TOKEN"
@@ -242,6 +272,18 @@ if [ ! -s "$ENV_FILE" ]; then
     printf 'AGENT_TEAMS_WORKER_INSTANCE_ID=%q\n' "$(uuid)"
   } >"$ENV_FILE"
   chmod 600 "$ENV_FILE"
+elif [ "$LABEL_SET" = 1 ]; then
+  # Same credential means an update: preserve identity but honor the requested label.
+  LABEL_LINE=$(printf 'AGENT_TEAMS_LABEL=%q' "$LABEL")
+  "$NODE" - "$ENV_FILE" "$LABEL_LINE" <<'UPDATE_INSTALL_LABEL'
+const { readFileSync, writeFileSync, renameSync, unlinkSync } = require('node:fs');
+const { randomUUID } = require('node:crypto');
+const [path, label] = process.argv.slice(2);
+const content = readFileSync(path, 'utf8').split('\n').filter(line => !line.startsWith('AGENT_TEAMS_LABEL=')).join('\n').trimEnd() + '\n' + label + '\n';
+const temporary = path + '.' + randomUUID() + '.tmp';
+try { writeFileSync(temporary, content, { mode: 0o600, flag: 'wx' }); renameSync(temporary, path); }
+finally { try { unlinkSync(temporary); } catch (error) { if (error.code !== 'ENOENT') throw error; } }
+UPDATE_INSTALL_LABEL
 fi
 
 {

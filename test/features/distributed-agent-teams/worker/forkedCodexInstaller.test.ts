@@ -1,6 +1,15 @@
 // @vitest-environment node
 import { execFile, spawn } from 'node:child_process';
-import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -99,7 +108,7 @@ setInterval(() => {}, 1000);
     await rm(root, { recursive: true, force: true });
   });
 
-  const stageAndBuild = async () => {
+  const stageAndBuild = async (token = 'test-token', runtime = 'fork') => {
     await exec(process.execPath, [
       join(installerRoot, 'stage-codex-runtime.mjs'),
       '--source',
@@ -118,7 +127,9 @@ setInterval(() => {}, 1000);
       '--relay',
       'wss://relay.example.test/v2/worker-stream',
       '--token',
-      'test-token',
+      token,
+      '--runtime',
+      runtime,
       '--team',
       team,
       '--out',
@@ -314,6 +325,49 @@ fetch(new URL('/', endpoint.replace(/^ws:/, 'http:'))).then(async response => {
       JSON.parse((await exec('bash', [join(install, 'bin/attach.sh')])).stdout).result.userAgent
     ).toBe('test-fork');
   });
+
+  it.each(['fork', 'stock'])(
+    'reenrolls a retired %s installation with the new credential while preserving archived data and login',
+    async (runtime) => {
+      await stageAndBuild('old-token', runtime);
+      const extra = runtime === 'stock' ? ['--codex-binary', join(source, 'bin/codex')] : [];
+      await installFork(extra);
+      supervisorPid = JSON.parse(await readFile(join(root, 'worker.json'), 'utf8')).parent;
+      const before = await readFile(join(install, 'config.env'), 'utf8');
+      const installation = await readFile(join(install, 'installation.json'), 'utf8');
+      await writeFile(join(install, 'data/saved-chat-fixture'), 'keep this saved state');
+      await rm(join(bundle, 'codex-runtime'), { recursive: true });
+      await stageAndBuild('new-token', runtime);
+      const changed = await installFork([...extra, '--label', 'mac1']);
+      supervisorPid = JSON.parse(await readFile(join(root, 'worker.json'), 'utf8')).parent;
+      const after = await readFile(join(install, 'config.env'), 'utf8');
+      expect(after).toContain('AGENT_TEAMS_RELAY_WORKER_TOKEN=new-token');
+      expect(after).toContain('AGENT_TEAMS_LABEL=mac1');
+      const nodeLine = (text: string) =>
+        text.split('\n').find((line) => line.startsWith('AGENT_TEAMS_NODE_ID='));
+      expect(nodeLine(after)).not.toBe(nodeLine(before));
+      expect(await readFile(join(install, 'installation.json'), 'utf8')).toBe(installation);
+      expect(changed.stdout).toContain('New device enrollment');
+      const archives = await readdir(join(install, 'retired-enrollments'));
+      expect(archives).toHaveLength(1);
+      expect(
+        await readFile(
+          join(install, 'retired-enrollments', archives[0]!, 'data/saved-chat-fixture'),
+          'utf8'
+        )
+      ).toBe('keep this saved state');
+      expect(await readFile(join(root, '.codex/auth.json'), 'utf8')).toBe(
+        '{"testCredential":"do-not-copy"}'
+      );
+      await installFork([...extra, '--label', 'renamed mac']);
+      supervisorPid = JSON.parse(await readFile(join(root, 'worker.json'), 'utf8')).parent;
+      const renamed = await readFile(join(install, 'config.env'), 'utf8');
+      expect(nodeLine(renamed)).toBe(nodeLine(after));
+      expect(renamed).toContain('AGENT_TEAMS_LABEL=renamed\\ mac');
+      expect(await readdir(join(install, 'retired-enrollments'))).toEqual(archives);
+    },
+    60000
+  );
 
   it('keeps an explicit private-home option for a separate sign-in', async () => {
     await stageAndBuild();
