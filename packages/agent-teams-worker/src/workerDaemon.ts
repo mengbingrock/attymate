@@ -1,9 +1,9 @@
-import { DesktopChatService } from './desktopChatService';
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
+  PRESENCE_HEADER,
   assignmentAcceptPayloadSchema,
   teamMessageDeliveryPayloadSchema,
   relayToWorkerMessageSchema,
@@ -22,6 +22,7 @@ import {
 } from '@claude-teams/agent-teams-protocol';
 import WebSocket from 'ws';
 
+import { DesktopChatService } from './desktopChatService';
 import type { WorkerCodexAppServerSessionFactory } from './codexAppServerClient';
 import type { CodexRuntimeMcpLaunchSpec } from './codexRuntimeMcpProfile';
 import type { LocalAccessPolicy } from './localAccessPolicy';
@@ -355,6 +356,9 @@ export const startAgentTeamsWorker = async (
   let socket: WebSocket | undefined;
   let heartbeatTimer: NodeJS.Timeout | undefined;
   let heartbeatSequence = 0;
+  let presenceNegotiated = false;
+  let lastHeartbeatAck = 0;
+  let heartbeatAckDeadlineMs = Infinity;
   let reconnectTimer: NodeJS.Timeout | undefined;
   let stopped = false;
   let readyResolved = false;
@@ -404,12 +408,17 @@ export const startAgentTeamsWorker = async (
   };
 
   const sendHeartbeat = (): void => {
-    if (socket?.readyState !== WebSocket.OPEN) return;
+    if (status.state !== 'connected' || socket?.readyState !== WebSocket.OPEN) return;
+    if (performance.now() - lastHeartbeatAck >= heartbeatAckDeadlineMs) {
+      socket.terminate();
+      return;
+    }
     heartbeatSequence += 1;
     const activeLease = assignmentStore.activeLeaseIdentity();
     socket.send(
       JSON.stringify({
         type: 'worker.heartbeat',
+        ...(presenceNegotiated ? { sessions: desktopChats?.presenceSnapshot() ?? [] } : {}),
         protocolVersion: 2,
         sequence: heartbeatSequence,
         sentAt: new Date().toISOString(),
@@ -1012,10 +1021,14 @@ export const startAgentTeamsWorker = async (
   const connect = (): void => {
     if (stopped) return;
     updateStatus({ state: readyResolved ? 'reconnecting' : 'connecting' });
+    presenceNegotiated = false;
     socket = new WebSocket(options.relayUrl, {
-      ...(options.relayToken === undefined
-        ? {}
-        : { headers: { authorization: `Bearer ${options.relayToken}` } }),
+      headers: {
+        [PRESENCE_HEADER]: '1',
+        ...(options.relayToken === undefined
+          ? {}
+          : { authorization: `Bearer ${options.relayToken}` }),
+      },
     });
 
     socket.on('open', () => {
@@ -1088,6 +1101,9 @@ export const startAgentTeamsWorker = async (
         return;
       }
       if (message.type === 'relay.welcome') {
+        presenceNegotiated = message.presenceVersion === 1;
+        lastHeartbeatAck = performance.now();
+        heartbeatAckDeadlineMs = message.heartbeatIntervalMs * 3;
         updateStatus({
           state: 'connected',
           connectedAt: message.connectedAt,
@@ -1163,6 +1179,9 @@ export const startAgentTeamsWorker = async (
         flushPendingEvents();
         return;
       }
+      if (message.sequence <= status.lastHeartbeatSequence || message.sequence > heartbeatSequence)
+        return;
+      lastHeartbeatAck = performance.now();
       if (message.leaseReconciliation.action === 'renewed') {
         const renewed = assignmentStore.renewLease(
           message.leaseReconciliation,
@@ -1230,7 +1249,16 @@ export const startAgentTeamsWorker = async (
         ? {
             desktopChatAction: (input: unknown) => desktopChats.action(input),
             desktopChatPrepare: (input: unknown) => desktopChats.prepare(input),
-            desktopChatBind: (input: unknown) => desktopChats.bind(input),
+            desktopChatBind: async (input: unknown) => {
+              const result = await desktopChats.bind(input);
+              sendHeartbeat();
+              return result;
+            },
+            desktopChatPresence: (input: unknown) => {
+              const result = desktopChats.updatePresence(input);
+              sendHeartbeat();
+              return result;
+            },
             desktopChatTool: (token: string, tool: string, input: unknown) =>
               desktopChats.tool(token, tool, input),
           }

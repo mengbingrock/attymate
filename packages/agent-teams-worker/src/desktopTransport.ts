@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { createConnection } from 'node:net';
 import type { Server } from 'node:http';
+
+import { SESSION_HEARTBEAT_MS, SESSION_EXPIRES_MS } from '@claude-teams/agent-teams-protocol';
 import WebSocket, { WebSocketServer } from 'ws';
+
 import { requestWorkerControl } from './workerControlServer';
 import { localAppServerWebSocket } from './localAppServerWebSocket';
 
@@ -63,7 +66,58 @@ export const attachDesktopTransport = (
         upstream.once('error', reject);
       });
       void ready.catch(() => client.close());
-      const pending = new Map<string | number, string>();
+      const connectionId = randomUUID();
+      let closed = false;
+      let registered = false;
+      let lastClientPong = performance.now();
+      let lastUpstreamPong = performance.now();
+      let ping = '';
+      client.on('pong', (data) => {
+        if (data.toString() === ping) lastClientPong = performance.now();
+      });
+      upstream.on('pong', (data) => {
+        if (data.toString() === ping) lastUpstreamPong = performance.now();
+      });
+      const detach = (threadId?: string) =>
+        requestWorkerControl(controlSocket, '/v2/desktop-chat/presence', {
+          method: 'POST',
+          body: { action: 'detach', connectionId, ...(threadId ? { threadId } : {}) },
+        });
+      let checking = false;
+      const healthTimer = setInterval(() => {
+        if (closed) return;
+        const ageMs = Math.max(0, performance.now() - Math.min(lastClientPong, lastUpstreamPong));
+        if (ageMs >= SESSION_EXPIRES_MS) {
+          client.terminate();
+          upstream.terminate();
+          return;
+        }
+        if (client.readyState !== WebSocket.OPEN || upstream.readyState !== WebSocket.OPEN) return;
+        ping = randomUUID();
+        client.ping(ping);
+        upstream.ping(ping);
+        if (!registered || checking) return;
+        checking = true;
+        void requestWorkerControl(controlSocket, '/v2/desktop-chat/presence', {
+          method: 'POST',
+          body: { action: 'heartbeat', connectionId, ageMs },
+        })
+          .catch(() => {
+            client.close(1011, 'Team presence unavailable');
+          })
+          .finally(() => {
+            checking = false;
+          });
+      }, SESSION_HEARTBEAT_MS);
+      healthTimer.unref();
+      const disconnected = () => {
+        if (closed) return;
+        closed = true;
+        clearInterval(healthTimer);
+        if (registered) void detach().catch(() => undefined);
+      };
+      const pending = new Map<string | number, { bindingId: string; presence: boolean }>();
+      const detaching = new Map<string | number, string>();
       let incoming = Promise.resolve();
       let outgoing = Promise.resolve();
       client.on('message', (data) => {
@@ -79,6 +133,7 @@ export const attachDesktopTransport = (
             ) {
               const prepared = await requestWorkerControl<{
                 bindingId?: string;
+                presenceVersion?: number;
                 config?: Record<string, unknown>;
               }>(controlSocket, '/v2/desktop-chat/prepare', {
                 method: 'POST',
@@ -98,8 +153,17 @@ export const attachDesktopTransport = (
                 prepared.bindingId &&
                 (typeof message.id === 'number' || typeof message.id === 'string')
               )
-                pending.set(message.id, prepared.bindingId);
+                pending.set(message.id, {
+                  bindingId: prepared.bindingId,
+                  presence: prepared.presenceVersion === 1,
+                });
             }
+            if (
+              (message.method === 'thread/unsubscribe' || message.method === 'thread/archive') &&
+              typeof params.threadId === 'string' &&
+              (typeof message.id === 'string' || typeof message.id === 'number')
+            )
+              detaching.set(message.id, params.threadId);
             upstream.send(JSON.stringify(message));
           })
           .catch(() => {
@@ -128,24 +192,63 @@ export const attachDesktopTransport = (
           .then(async () => {
             const message = object(JSON.parse(data.toString()));
             const id = message.id as string | number;
-            const bindingId = pending.get(id);
-            if (bindingId) {
+            const detachedThread = detaching.get(id);
+            detaching.delete(id);
+            if (detachedThread && !message.error && registered) await detach(detachedThread);
+            const binding = pending.get(id);
+            if (binding) {
               pending.delete(id);
               const threadId = object(object(message.result).thread).id;
-              if (typeof threadId === 'string')
+              if (typeof threadId === 'string' && !closed) {
                 await requestWorkerControl(controlSocket, '/v2/desktop-chat/bind', {
                   method: 'POST',
-                  body: { bindingId, threadId },
+                  body: {
+                    bindingId: binding.bindingId,
+                    threadId,
+                    ...(binding.presence ? { connectionId } : {}),
+                  },
                 });
+                if (binding.presence) {
+                  registered = true;
+                  // A close racing the async validation must not resurrect presence.
+                  if (closed) await detach();
+                  else {
+                    const ageMs = Math.max(
+                      0,
+                      performance.now() - Math.min(lastClientPong, lastUpstreamPong)
+                    );
+                    if (ageMs >= SESSION_EXPIRES_MS) {
+                      await detach();
+                      client.close();
+                    } else
+                      await requestWorkerControl(controlSocket, '/v2/desktop-chat/presence', {
+                        method: 'POST',
+                        body: { action: 'heartbeat', connectionId, ageMs },
+                      });
+                  }
+                }
+              }
             }
             if (client.readyState === WebSocket.OPEN) client.send(data.toString());
           })
           .catch(() => client.close(1011, 'Could not persist team chat binding'));
       });
-      client.on('close', () => upstream.close());
-      upstream.on('close', () => client.close());
-      client.on('error', () => upstream.close());
-      upstream.on('error', () => client.close());
+      client.on('close', () => {
+        disconnected();
+        upstream.close();
+      });
+      upstream.on('close', () => {
+        disconnected();
+        client.close();
+      });
+      client.on('error', () => {
+        disconnected();
+        upstream.close();
+      });
+      upstream.on('error', () => {
+        disconnected();
+        client.close();
+      });
     });
   });
   return () => {

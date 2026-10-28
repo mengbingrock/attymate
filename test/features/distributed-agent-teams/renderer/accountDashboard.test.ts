@@ -31,6 +31,156 @@ const mount = (b: Window) => {
   b.document.dispatchEvent(new b.Event('DOMContentLoaded'));
 };
 
+it('keeps Open team chat available for a connected computer without claiming its member is online', async () => {
+  const b = browserFor(base + '/join/?team=' + team.teamId);
+  const device = {
+    id: 'connected',
+    nodeId: 'node',
+    label: 'Connected fixture',
+    online: false,
+    computerConnected: true,
+    state: 'offline',
+    reason: 'session_disconnected',
+    validForMs: 6000,
+  };
+  b.fetch = vi.fn(
+    async (url) =>
+      new b.Response(
+        JSON.stringify(
+          String(url).endsWith('/session')
+            ? { configured: true, user, csrf: 'csrf' }
+            : { teams: [{ ...team, devices: [device], agents: [{ ...device, role: 'member' }] }] }
+        )
+      )
+  ) as typeof b.fetch;
+  try {
+    mount(b);
+    await vi.waitFor(() => expect(b.document.querySelector('.device-card')).not.toBeNull());
+    expect(b.document.querySelector('.device-card')!.textContent).toContain('Computer connected');
+    expect(b.document.querySelector('.device-card .presence-badge')!.textContent).toBe(
+      'Offline · Open team chat'
+    );
+    expect(
+      [...b.document.querySelectorAll('.device-card button')].some(
+        (button) => button.textContent === 'Open team chat'
+      )
+    ).toBe(true);
+    expect(b.document.querySelectorAll('.presence-badge.online')).toHaveLength(0);
+  } finally {
+    await b.happyDOM.close();
+  }
+});
+
+it('expires green badges without another response and marks failed refreshes unavailable', async () => {
+  const b = browserFor(base + '/join/?team=' + team.teamId);
+  const device = {
+    id: 'live',
+    nodeId: 'node',
+    label: 'Live fixture',
+    online: true,
+    computerConnected: true,
+    state: 'online',
+    validForMs: 300,
+  };
+  let reads = 0;
+  b.fetch = vi.fn(async (url) => {
+    if (String(url).endsWith('/session'))
+      return new b.Response(JSON.stringify({ configured: true, user, csrf: 'csrf' }));
+    if (++reads > 1) throw new Error('Fixture network failure');
+    return new b.Response(
+      JSON.stringify({
+        teams: [{ ...team, devices: [device], agents: [{ ...device, role: 'member' }] }],
+      })
+    );
+  }) as typeof b.fetch;
+  try {
+    mount(b);
+    await vi.waitFor(() =>
+      expect(b.document.querySelectorAll('.presence-badge.online')).toHaveLength(2)
+    );
+    await vi.waitFor(
+      () => expect(b.document.querySelectorAll('.presence-badge.online')).toHaveLength(0),
+      { timeout: 1800 }
+    );
+    expect(b.document.querySelector('.device-card .presence-badge')!.textContent).toBe(
+      'Status unavailable'
+    );
+    expect(
+      (b.document.querySelector('.requires-connection') as unknown as HTMLButtonElement).disabled
+    ).toBe(true);
+    await vi.waitFor(() => expect(reads).toBeGreaterThan(1), { timeout: 2000 });
+    expect(b.document.querySelector('.device-card .presence-badge')!.textContent).toBe(
+      'Status unavailable'
+    );
+  } finally {
+    await b.happyDOM.close();
+  }
+});
+
+it('updates the agent roster and counts when a new team session becomes live', async () => {
+  const b = browserFor(base + '/join/?team=' + team.teamId);
+  let live = false;
+  const device = {
+    id: 'connected',
+    nodeId: 'node',
+    label: 'Presence fixture',
+    computerConnected: true,
+    validForMs: 6000,
+  };
+  b.fetch = vi.fn(
+    async (url) =>
+      new b.Response(
+        JSON.stringify(
+          String(url).endsWith('/session')
+            ? { configured: true, user, csrf: 'csrf' }
+            : {
+                teams: [
+                  {
+                    ...team,
+                    devices: [{ ...device, online: live, state: live ? 'online' : 'offline' }],
+                    agents: [
+                      {
+                        ...device,
+                        online: live,
+                        state: live ? 'online' : 'offline',
+                        role: 'member',
+                      },
+                    ],
+                  },
+                ],
+              }
+        )
+      )
+  ) as typeof b.fetch;
+  try {
+    mount(b);
+    await vi.waitFor(() =>
+      expect(b.document.querySelector('#team-agents .presence-badge')?.textContent).toBe(
+        'Offline · Open team chat'
+      )
+    );
+    // A refresh must preserve text being entered while updating presence elsewhere.
+    const input = b.document.querySelector('#my-devices input')! as unknown as HTMLInputElement;
+    input.value = 'unsaved-chat-id';
+    input.focus();
+    live = true;
+    await vi.waitFor(
+      () =>
+        expect(b.document.querySelector('#team-agents .presence-badge')?.textContent).toBe(
+          'Online'
+        ),
+      { timeout: 3000 }
+    );
+    expect(b.document.querySelector('#detail-summary')!.textContent).toContain('1agents online');
+    expect(
+      (b.document.querySelector('#my-devices input')! as unknown as HTMLInputElement).value
+    ).toBe('unsaved-chat-id');
+    expect(b.document.querySelector('.device-card .presence-badge')!.textContent).toBe('Online');
+  } finally {
+    await b.happyDOM.close();
+  }
+});
+
 it('requires confirmation to remove a device and preserves other devices after refresh', async () => {
   const b = browserFor(base + '/join/?team=' + team.teamId);
   const pending = { id: 'pending-device', label: 'old download', nodeId: null, online: false };

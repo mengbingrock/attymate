@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 
+import { PRESENCE_HEADER } from '@claude-teams/agent-teams-protocol';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
 const MAX_BUFFERED_BYTES = 32 * 1024 * 1024;
@@ -58,7 +59,10 @@ export const startLocalWorkerRelay = async (options: {
     }
     gateway.handleUpgrade(request, socket, head, (worker) => {
       const upstream = new WebSocket(upstreamUrl, {
-        headers: { authorization: `Bearer ${options.token}` },
+        headers: {
+          authorization: `Bearer ${options.token}`,
+          ...(request.headers[PRESENCE_HEADER] === '1' ? { [PRESENCE_HEADER]: '1' } : {}),
+        },
         maxPayload: limit,
         handshakeTimeout: 10_000,
         followRedirects: false,

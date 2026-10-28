@@ -54,6 +54,45 @@ removed membership cannot automatically rejoin. Local files, Codex login, and ch
 use that installation's `bin/uninstall.sh` locally to remove its service and owned MCP registration.
 Reconnect a removed installation with a fresh installation directory and credential.
 
+## Live team presence
+
+The account dashboard separates **Computer connected** from **Online**. Online requires an
+authorized active membership, a fresh Worker heartbeat, and a fresh live client attachment to
+that membership's team chat. Stored chats, MCP configuration, background message delivery,
+and the dashboard being open do not establish session presence. Idle attached clients count;
+presence does not imply that a person is viewing the chat or that the model is running.
+
+The desktop bridge validates the team binding and MCP inventory after thread start/resume,
+then reports an ephemeral connection ID through the private Worker control socket. It checks
+both client and App Server transports with WebSocket ping/pong every five seconds. Session
+evidence expires after fifteen seconds. Closing either transport, successful thread unsubscribe
+or archive, or loss of the Worker's App Server connection clears the attachment. Worker restart
+requires a new client attachment. Multiple sessions are scoped independently by team and membership.
+
+Worker heartbeats retain the relay-advertised interval (two seconds by default; stale after six).
+They carry the age of independently observed session health, never refreshing it just because
+the Worker itself is alive. Both ends use monotonic elapsed time for expiry. A missing heartbeat
+acknowledgement makes the Worker reconnect. Presence expiry does not change execution leases,
+delete memberships, cancel tasks, or launch model turns.
+
+Presence is negotiated using the authenticated WebSocket upgrade header
+`x-agent-teams-presence: 1` and `relay.welcome.presenceVersion`. The local relay forwards this
+capability. Old Workers receive the unchanged welcome shape; new Workers omit session fields
+when talking to an old relay. Older installations display session status unavailable. Rebuild
+and ship the Worker, local relay, and desktop bridge together for either stock or bundled Codex.
+Clients connecting directly to App Server (including the optional direct terminal attachment)
+bypass this bridge and cannot establish verified session presence.
+
+The portal polls every two seconds, expires displayed evidence independently of polling, and
+shows status unavailable after refresh failures. Open team chat remains available when the
+computer is connected but the member is offline. Removing a device immediately revokes presence.
+This implementation covers the account dashboard and its team roster; legacy directory APIs
+continue exposing their existing connection semantics.
+
+Verification includes `teamPresence.test.ts`, `sessionPresence.test.ts`, desktop bridge and
+chat service tests, and the dashboard tests. All runtime fixtures use disposable projects and
+identities; heartbeat tests require no model calls or user login.
+
 ## Configuration
 
 Use the downloaded Google **Web application** OAuth JSON, stored outside the repository with

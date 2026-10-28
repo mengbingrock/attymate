@@ -11,9 +11,14 @@ import WebSocket, { WebSocketServer } from 'ws';
 
 import { attachDesktopTransport } from '../../../../packages/agent-teams-worker/src/desktopTransport';
 
-it.each(['socket', 'websocket'])(
-  'injects the selected team and saves its binding over %s',
-  async (transport) => {
+it.each([
+  ['socket', false],
+  ['websocket', false],
+  ['socket', true],
+  ['websocket', true],
+] as const)(
+  'injects the selected team and saves its binding over %s (presence=%s)',
+  async (transport, presence) => {
     const root = await mkdtemp(join(tmpdir(), 'desktop-ws-'));
     const upstreamServer = createServer();
     const upstream = new WebSocketServer({ server: upstreamServer });
@@ -34,14 +39,21 @@ it.each(['socket', 'websocket'])(
     await once(upstreamServer, 'listening');
     let bindingSaved = false;
     let denyTurn = false;
+    let deferBind = false;
+    let finishBind: (() => void) | undefined;
     const preparedMethods: string[] = [];
+    const presenceEvents: { action: string; connectionId: string; ageMs?: number }[] = [];
+    let presenceConnectionId: string | undefined;
     const control = createServer((req, res) => {
       let body = '';
       req.on('data', (data) => {
         body += data;
       });
       req.on('end', () => {
-        if (req.url?.endsWith('/prepare')) {
+        if (req.url?.endsWith('/presence')) {
+          presenceEvents.push(JSON.parse(body));
+          res.end('{"ok":true}');
+        } else if (req.url?.endsWith('/prepare')) {
           const { method } = JSON.parse(body) as { method: string };
           preparedMethods.push(method);
           if (method === 'turn/start' && denyTurn) {
@@ -52,13 +64,16 @@ it.each(['socket', 'websocket'])(
           res.end(
             JSON.stringify({
               bindingId: 'binding',
+              ...(presence ? { presenceVersion: 1 } : {}),
               config: { mcp_servers: { 'agent-teams-runtime': { enabled: true } } },
             })
           );
         } else {
           expect(JSON.parse(body).threadId).toBe(threadId);
+          presenceConnectionId = JSON.parse(body).connectionId;
           bindingSaved = true;
-          res.end('{"ok":true}');
+          if (deferBind) finishBind = () => res.end('{"ok":true}');
+          else res.end('{"ok":true}');
         }
       });
     });
@@ -90,6 +105,7 @@ it.each(['socket', 'websocket'])(
       const [bytes, binary] = await response;
       expect(binary).toBe(false);
       expect(bindingSaved).toBe(true);
+      expect(typeof presenceConnectionId).toBe(presence ? 'string' : 'undefined');
       expect(authorization).toBe(transport === 'websocket' ? `Bearer ${token}` : undefined);
       expect(JSON.parse(bytes.toString()).result.thread.id).toBe(threadId);
       expect(received).toMatchObject({
@@ -111,7 +127,48 @@ it.each(['socket', 'websocket'])(
       const denied = new WebSocket(`ws://127.0.0.1:${port}/wrong`);
       const [error] = await once(denied, 'error');
       expect(error.message).toContain('401');
+      if (presence) {
+        await vi.waitFor(
+          () =>
+            expect(presenceEvents.filter((e) => e.action === 'heartbeat').length).toBeGreaterThan(
+              1
+            ),
+          { timeout: 6500 }
+        );
+        expect(presenceEvents[0]).toMatchObject({ connectionId: presenceConnectionId });
+        const detached = once(client, 'message');
+        client.send(JSON.stringify({ id: 3, method: 'thread/unsubscribe', params: { threadId } }));
+        await detached;
+        expect(presenceEvents.some((e) => e.action === 'detach')).toBe(true);
+        const count = presenceEvents.filter((e) => e.action === 'detach').length;
+        if (transport === 'socket') {
+          deferBind = true;
+          client.send(JSON.stringify({ id: 4, method: 'thread/resume', params: { threadId } }));
+          await vi.waitFor(() => expect(finishBind).toBeDefined());
+          const closed = once(client, 'close');
+          client.close();
+          await closed;
+          await vi.waitFor(() =>
+            expect(presenceEvents.filter((e) => e.action === 'detach').length).toBeGreaterThan(
+              count
+            )
+          );
+          finishBind!();
+          await vi.waitFor(() =>
+            expect(presenceEvents.filter((e) => e.action === 'detach').length).toBeGreaterThan(
+              count + 1
+            )
+          );
+        } else {
+          // App Server loss must also detach, even when the client did not close itself.
+          for (const socket of upstream.clients) socket.terminate();
+        }
+        await vi.waitFor(() =>
+          expect(presenceEvents.filter((e) => e.action === 'detach').length).toBeGreaterThan(count)
+        );
+      } else expect(presenceEvents).toEqual([]);
     } finally {
+      finishBind?.();
       client.terminate();
       close();
       for (const socket of upstream.clients) socket.terminate();
@@ -123,5 +180,6 @@ it.each(['socket', 'websocket'])(
       ]);
       vi.unstubAllEnvs();
     }
-  }
+  },
+  10_000
 );

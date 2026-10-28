@@ -1,7 +1,11 @@
 import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { desktopChatActionSchema, teamIdSchema } from '@claude-teams/agent-teams-protocol';
+import {
+  desktopChatActionSchema,
+  teamIdSchema,
+  type TeamPresence,
+} from '@claude-teams/agent-teams-protocol';
 
 import {
   installerCatalog,
@@ -55,7 +59,7 @@ export const registerAccountRoutes = (deps: {
   directory: RelayTeamDirectoryStore;
   routes: RelayMembershipRouteStore;
   desktop: RelayDesktopChats;
-  online: () => ReadonlySet<string>;
+  presence: (teamId: string, nodeId: string | null, membershipId?: string) => TeamPresence;
   removeDevice: (device: AccountDevice) => void;
   setCoordination: (
     teamId: ReturnType<typeof teamIdSchema.parse>,
@@ -134,13 +138,17 @@ export const registerAccountRoutes = (deps: {
     store
       .devices(userId)
       .filter((d) => !d.revokedAt)
-      .map((d) => ({ ...d, online: !!d.nodeId && deps.online().has(d.nodeId) }));
+      .map((d) => ({ ...d, ...deps.presence(d.teamId, d.nodeId) }));
   const teamView = (teamId: string, userId: string) => {
     const team = requireTeam(teamId, userId);
     const agents = routes
       .listAll()
       .filter((r) => r.teamId === teamId && r.status === 'active')
-      .map((r) => ({ label: r.label, role: r.role, online: deps.online().has(r.nodeId) }));
+      .map((r) => ({
+        label: r.label,
+        role: r.role,
+        ...deps.presence(r.teamId, r.nodeId, r.membershipId),
+      }));
     const membership = store.requireMember(teamId, userId);
     return {
       ...team,

@@ -8,3 +8,4 @@ export * from './sessionContext';
 export * from './teamMembership';
 export * from './teamMessaging';
 export * from './desktopChat';
+export * from './presence';

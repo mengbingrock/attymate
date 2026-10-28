@@ -80,11 +80,47 @@ const fixture = async () => {
     request,
     options,
     inventory,
+    session,
     ownerConfig,
   };
 };
 
 describe('desktop team bindings', () => {
+  it('advertises only validated live attachments, clearing them on detach, revocation and App Server loss', async () => {
+    const f = await fixture();
+    const service = new DesktopChatService(f.options);
+    try {
+      const result = (await service.action({
+        action: 'open',
+        requestId: randomUUID(),
+        teamId: f.teamId,
+      })) as { threadId: string };
+      expect(service.presenceSnapshot()).toEqual([]);
+      const binding = service.store.byThread(result.threadId)!;
+      const connectionId = randomUUID();
+      await service.bind({ bindingId: binding.id, threadId: result.threadId, connectionId });
+      service.updatePresence({ action: 'heartbeat', connectionId, ageMs: 0 });
+      expect(service.presenceSnapshot()).toMatchObject([
+        { teamId: f.teamId, membershipId: f.membershipId, connectionId },
+      ]);
+      f.members[0]!.status = 'left';
+      expect(service.presenceSnapshot()).toEqual([]);
+      f.members[0]!.status = 'active';
+      service.updatePresence({ action: 'detach', connectionId });
+      service.updatePresence({ action: 'heartbeat', connectionId, ageMs: 0 });
+      expect(service.presenceSnapshot()).toEqual([]);
+      await service.bind({ bindingId: binding.id, threadId: result.threadId, connectionId });
+      vi.mocked(f.session.onClose).mock.calls[0]![0]({
+        error: new Error('Fixture App Server stopped'),
+      });
+      service.updatePresence({ action: 'heartbeat', connectionId, ageMs: 0 });
+      expect(service.presenceSnapshot()).toEqual([]);
+      expect(f.request.mock.calls.filter(([method]) => method === 'turn/start')).toHaveLength(0);
+    } finally {
+      await service.close();
+    }
+  });
+
   it('restricts inherited integrations on open, attach, and default-thread preparation', async () => {
     const f = await fixture();
     const service = new DesktopChatService(f.options);

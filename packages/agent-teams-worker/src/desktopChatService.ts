@@ -3,6 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 import {
+  SESSION_EXPIRES_MS,
   desktopChatActionSchema,
   desktopMessageSchema,
   type DesktopTeamMessage,
@@ -13,6 +14,7 @@ import type {
 } from './codexAppServerClient';
 import type { WorkerTeamMembershipStore } from './workerTeamMembershipStore';
 import type { CodexRuntimeMcpLaunchSpec } from './codexRuntimeMcpProfile';
+import { SessionPresence } from './sessionPresence';
 import { DesktopChatStore, type DesktopChatBinding } from './desktopChatStore';
 import { isTeamCommunicationTool, teamCommunicationMessage } from './teamCollaborationRequests';
 import { messageIdParameters, messageListParameters } from './runtimeMcpServer';
@@ -30,6 +32,7 @@ const threadSchema = z.object({
 /** A membership-scoped chat, deliberately independent of task execution leases. */
 export class DesktopChatService {
   readonly store: DesktopChatStore;
+  readonly presence = new SessionPresence();
   private session?: Promise<WorkerCodexAppServerSession>;
   private delivery?: Promise<void>;
   private deliveryRequested = false;
@@ -68,6 +71,7 @@ export class DesktopChatService {
       .then((session) => {
         session.onClose(() => {
           this.session = undefined;
+          this.presence.clear();
         });
         return session;
       })
@@ -205,21 +209,68 @@ export class DesktopChatService {
       await assertMembershipMcpInventory(await this.connection(), binding.threadId!);
       return { bindingId: binding.id };
     }
-    return { bindingId: binding.id, config: await this.config(binding) };
+    return { bindingId: binding.id, config: await this.config(binding), presenceVersion: 1 };
   }
   async bind(input: unknown) {
     const p = z
-      .object({ bindingId: z.uuid(), threadId: z.string().regex(/^[a-zA-Z0-9-]{1,100}$/) })
+      .object({
+        bindingId: z.uuid(),
+        threadId: z.string().regex(/^[a-zA-Z0-9-]{1,100}$/),
+        connectionId: z.uuid().optional(),
+      })
       .strict()
       .parse(input);
     const binding = this.store.get(p.bindingId);
     if (!binding || (binding.threadId && binding.threadId !== p.threadId))
       throw new Error('Chat binding conflict');
     this.membership(binding.teamId, binding.membershipId);
-    await assertMembershipMcpInventory(await this.connection(), p.threadId);
+    const connection = await this.connection();
+    await assertMembershipMcpInventory(connection, p.threadId);
+    if ((await this.session) !== connection) throw new Error('App Server connection changed');
     this.store.bind(p.bindingId, p.threadId);
     if (!binding.threadId) await this.persistSelection(p.threadId);
+    if ((await this.session) !== connection) throw new Error('App Server connection changed');
+    this.membership(binding.teamId, binding.membershipId);
+    if (p.connectionId)
+      this.presence.attach(p.connectionId, p.bindingId, {
+        teamId: binding.teamId,
+        membershipId: binding.membershipId,
+        threadId: p.threadId,
+      });
     return { ok: true };
+  }
+  updatePresence(input: unknown) {
+    const request = z
+      .discriminatedUnion('action', [
+        z
+          .object({
+            action: z.literal('heartbeat'),
+            connectionId: z.uuid(),
+            ageMs: z.number().finite().nonnegative().max(SESSION_EXPIRES_MS),
+          })
+          .strict(),
+        z
+          .object({
+            action: z.literal('detach'),
+            connectionId: z.uuid(),
+            threadId: z.string().max(100).optional(),
+          })
+          .strict(),
+      ])
+      .parse(input);
+    if (request.action === 'detach') this.presence.detach(request.connectionId, request.threadId);
+    else this.presence.renew(request.connectionId, request.ageMs);
+    return { ok: true };
+  }
+  presenceSnapshot() {
+    return this.presence.snapshot((binding) => {
+      try {
+        this.membership(binding.teamId, binding.membershipId);
+        return true;
+      } catch {
+        return false;
+      }
+    });
   }
   private async persistSelection(threadId: string) {
     // A fresh legacy thread has no durable rollout until it records an item.
@@ -423,6 +474,7 @@ export class DesktopChatService {
   }
   async close() {
     this.stopped = true;
+    this.presence.clear();
     clearInterval(this.timer);
     await this.delivery;
     await (await this.session)?.close();

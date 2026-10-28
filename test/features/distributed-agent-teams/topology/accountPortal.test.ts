@@ -373,7 +373,11 @@ it('runs Google login, scoped team creation, invitation acceptance, dashboard an
       const d = (
         await gateway.app.inject({ url: '/join/api/account/dashboard', headers: member })
       ).json();
-      expect(d.devices[0].online).toBe(true);
+      expect(d.devices[0]).toMatchObject({
+        online: false,
+        computerConnected: true,
+        reason: 'session_disconnected',
+      });
       expect(d.teams[0].agents).toHaveLength(1);
     });
     const enrollment = (
@@ -456,7 +460,10 @@ it('runs Google login, scoped team creation, invitation acceptance, dashboard an
       expect(
         view.devices.some((d: { id: string }) => [waiting.id, enrollment.id].includes(d.id))
       ).toBe(false);
-      expect(view.devices.find((d: { id: string }) => d.id === second.device.id).online).toBe(true);
+      expect(view.devices.find((d: { id: string }) => d.id === second.device.id)).toMatchObject({
+        online: false,
+        computerConnected: true,
+      });
       expect(view.teams[0].agents).toHaveLength(1);
       expect(worker.getStatus().state).toBe('reconnecting');
       expect(survivor.getStatus().state).toBe('connected');

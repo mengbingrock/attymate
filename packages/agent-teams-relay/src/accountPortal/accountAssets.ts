@@ -30,6 +30,7 @@ export const ACCOUNT_PORTAL_JS = String.raw`
   var session = null, teams = [], selectedTeam = null, inviteToken = new URLSearchParams(location.search).get('invite');
   var selectedRuntime = 'fork', selectedPlatform = '';
   var instructionPlatforms = [{id:'darwin-arm64',label:'macOS · Apple Silicon'},{id:'darwin-x64',label:'macOS · Intel'},{id:'linux-arm64',label:'Linux · ARM64'},{id:'linux-x64',label:'Linux · Intel / AMD x64'},{id:'win32-x64',label:'Windows · x64'}];
+  var viewRevision = 0;
   var busy = false, deviceChats = new Map(), joinedInviteTeam = null, removingDeviceId = null, removingDeviceNodeId = null;
   function $(id) { return document.getElementById(id); }
   function node(tag, cls, text) { var n = document.createElement(tag); if(cls)n.className=cls; if(text!==undefined)n.textContent=text; return n; }
@@ -38,27 +39,51 @@ export const ACCOUNT_PORTAL_JS = String.raw`
   function show(id) { ['loading','welcome','invite-view','dashboard','team-detail'].forEach(function(v){$(v).hidden=v!==id;}); }
   function initials(name) { return name.trim().split(/\s+/).slice(0,2).map(function(v){return v.charAt(0);}).join('').toUpperCase(); }
   function summary(root, items) { root.replaceChildren();items.forEach(function(x){var p=node('span','');p.append(node('strong','',String(x[0])),document.createTextNode(x[1]));root.appendChild(p);}); }
-  async function request(path,body,blob) {
-    var response=await fetch(base+'api/account/'+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',headers:body===undefined?{}:{'content-type':'application/json','x-csrf-token':session.csrf},body:body===undefined?undefined:JSON.stringify(body)});
-    if(!response.ok){var error;try{error=await response.json();}catch(e){}if(response.status===401){notice('Your session expired. Sign in again.',true);show('welcome');}throw new Error(error&&error.error||'This action could not be completed. Try again.');}
-    return blob?response:response.json();
+  function rememberPresence(data,started) {
+    if(!data||typeof data!=='object')return data;
+    if(Object.prototype.hasOwnProperty.call(data,'online'))data.presenceReceivedAt=started;
+    Object.keys(data).forEach(function(key){if(typeof data[key]==='object')rememberPresence(data[key],started);});return data;
   }
-  async function action(work) { if(busy)return;busy=true;var controls=Array.from(document.querySelectorAll('button:not(:disabled)'));controls.forEach(function(b){b.disabled=true;});try{await work();}catch(e){notice(e.message,true);}finally{busy=false;controls.forEach(function(b){b.disabled=false;});if(selectedTeam)renderInstallerChoices();} }
+  function presenceOf(data) {
+    var age=data.presenceReceivedAt===undefined?Infinity:performance.now()-data.presenceReceivedAt;
+    var fresh=age<data.validForMs;
+    var computer=!!data.computerConnected&&age<(data.computerValidForMs===undefined?data.validForMs:data.computerValidForMs);
+    return {online:computer&&fresh&&data.state==='online',computer:computer,label:data.statusUnavailable?'Status unavailable':data.nodeId===null?'Waiting for setup':!computer&&data.computerConnected?'Status unavailable':!computer?'Offline · Computer disconnected':data.state==='unavailable'?'Session status unavailable':data.state==='online'?(fresh?'Online':'Offline · Session disconnected'):'Offline · Open team chat'};
+  }
+  function presenceBadge(data) { var badge=node('span','badge presence-badge');badge.presenceData=data;updatePresenceBadge(badge);return badge; }
+  function updatePresenceBadge(badge) {var p=presenceOf(badge.presenceData);badge.textContent=p.label;badge.classList.toggle('online',p.online);}
+  function updateConnectionButtons(){document.querySelectorAll('.requires-connection').forEach(function(b){b.disabled=busy||!presenceOf(b.presenceData).computer;});}
+  function markUnavailable() { teams.forEach(function(t){t.agents.concat(t.devices).forEach(function(d){d.statusUnavailable=true;d.online=false;d.computerConnected=false;});});if(selectedTeam)selectedTeam.agents.concat(selectedTeam.devices).forEach(function(d){d.statusUnavailable=true;d.online=false;d.computerConnected=false;});document.querySelectorAll('.presence-badge').forEach(updatePresenceBadge); }
+  async function request(path,body,blob) {
+    var started=performance.now();
+    var response=await fetch(base+'api/account/'+path,{signal:body===undefined?AbortSignal.timeout(10000):undefined,method:body===undefined?'GET':'POST',credentials:'same-origin',headers:body===undefined?{}:{'content-type':'application/json','x-csrf-token':session.csrf},body:body===undefined?undefined:JSON.stringify(body)});
+    if(!response.ok){var error;try{error=await response.json();}catch(e){}if(response.status===401){notice('Your session expired. Sign in again.',true);show('welcome');}throw new Error(error&&error.error||'This action could not be completed. Try again.');}
+    return blob?response:rememberPresence(await response.json(),started);
+  }
+  async function action(work) { if(busy)return;viewRevision++;busy=true;var controls=Array.from(document.querySelectorAll('button:not(:disabled)'));controls.forEach(function(b){b.disabled=true;});try{await work();}catch(e){notice(e.message,true);}finally{viewRevision++;busy=false;controls.forEach(function(b){b.disabled=false;});if(selectedTeam)renderInstallerChoices();} }
   function updateLocation(teamId) { var url=new URL(location.href);url.search='';if(teamId)url.searchParams.set('team',teamId);history.replaceState(null,'',url);inviteToken=null; }
   async function refresh(teamId) { var data=await request('dashboard');teams=data.teams;renderNav();if(teamId){var t=teams.find(function(t){return t.teamId===teamId;});if(t){renderTeam(t);return;}}renderDashboard(); }
   function renderNav() { $('nav-count').textContent=String(teams.length);$('team-nav').replaceChildren();teams.forEach(function(t){$('team-nav').appendChild(button(t.name,'nav-button',function(){updateLocation(t.teamId);renderTeam(t);}));}); }
+  function agentCount(t){var count=node('span','agent-online-count',t.agents.filter(function(a){return presenceOf(a).online;}).length+' agents online');count.dataset.teamId=t.teamId;return count;}
+  function updateDashboardPresence(){
+    summary($('dashboard-summary'),[[teams.length,teams.length===1?'team':'teams'],[teams.filter(function(t){return t.role==='owner';}).length,'created by you'],[teams.reduce(function(n,t){return n+t.devices.filter(function(d){return presenceOf(d).online;}).length;},0),'your devices online']]);
+    document.querySelectorAll('.agent-online-count').forEach(function(count){var t=teams.find(function(t){return t.teamId===count.dataset.teamId;});if(t)count.textContent=t.agents.filter(function(a){return presenceOf(a).online;}).length+' agents online';});
+  }
   function renderDashboard() {
     selectedTeam=null;$('breadcrumb').textContent='Your workspace / Teams';show('dashboard');
-    summary($('dashboard-summary'),[[teams.length,teams.length===1?'team':'teams'],[teams.filter(function(t){return t.role==='owner';}).length,'created by you'],[teams.reduce(function(n,t){return n+t.devices.filter(function(d){return d.online;}).length;},0),'your devices online']]);
+    summary($('dashboard-summary'),[[teams.length,teams.length===1?'team':'teams'],[teams.filter(function(t){return t.role==='owner';}).length,'created by you'],[teams.reduce(function(n,t){return n+t.devices.filter(function(d){return presenceOf(d).online;}).length;},0),'your devices online']]);
     var grid=$('team-grid');grid.replaceChildren();$('empty-teams').hidden=teams.length!==0;
-    teams.forEach(function(t){var card=node('article','panel team-card'),head=node('div','team-card-head');head.append(node('span','team-icon','✳'),node('span','badge '+(t.role==='owner'?'owner':''),t.role==='owner'?'Owner':'Member'));card.append(head,node('h2','',t.name),node('p','',t.description||'A private workspace for your people and agents.'));var foot=node('div','team-card-footer'),counts=node('span','card-counts');counts.append(node('span','',t.members.length+' people'),node('span','',t.agents.filter(function(a){return a.online;}).length+' agents online'));foot.append(counts,button('Open team →','text-button',function(){updateLocation(t.teamId);renderTeam(t);}));card.appendChild(foot);grid.appendChild(card);});
+    teams.forEach(function(t){var card=node('article','panel team-card'),head=node('div','team-card-head');head.append(node('span','team-icon','✳'),node('span','badge '+(t.role==='owner'?'owner':''),t.role==='owner'?'Owner':'Member'));card.append(head,node('h2','',t.name),node('p','',t.description||'A private workspace for your people and agents.'));var foot=node('div','team-card-footer'),counts=node('span','card-counts');counts.append(node('span','',t.members.length+' people'),agentCount(t));foot.append(counts,button('Open team →','text-button',function(){updateLocation(t.teamId);renderTeam(t);}));card.appendChild(foot);grid.appendChild(card);});
+  }
+  function renderAgentPresence(t) {
+    summary($('detail-summary'),[[t.members.length,t.members.length===1?'person':'people'],[t.agents.filter(function(a){return presenceOf(a).online;}).length,'agents online'],[t.coordination==='leaderless'?'Peer':'Led','coordination']]);
+    $('team-agents').replaceChildren();if(!t.agents.length)$('team-agents').appendChild(node('p','muted','No agents connected yet. Follow the setup steps to connect the first one.'));
+    t.agents.forEach(function(a){var row=node('div','agent-row'),info=node('div','member-info');info.append(node('strong','',a.label),node('small','',a.role==='lead'?'Agent lead':'Agent member'));row.append(node('span','avatar','✳'),info,presenceBadge(a));$('team-agents').appendChild(row);});
   }
   function renderTeam(t) {
     selectedTeam=t;show('team-detail');$('breadcrumb').textContent='Your workspace / '+t.name;$('detail-name').textContent=t.name;$('detail-description').textContent=t.description||'A private place to work together.';$('detail-role').textContent=t.role==='owner'?'Team owner':'Team member';$('detail-role').className='badge '+(t.role==='owner'?'owner':'');
-    summary($('detail-summary'),[[t.members.length,t.members.length===1?'person':'people'],[t.agents.filter(function(a){return a.online;}).length,'agents online'],[t.coordination==='leaderless'?'Peer':'Led','coordination']]);
-    $('invite-result').hidden=true;renderRoster(t);
-    $('team-agents').replaceChildren();if(!t.agents.length)$('team-agents').appendChild(node('p','muted','No agents connected yet. Follow the setup steps to connect the first one.'));
-    t.agents.forEach(function(a){var row=node('div','agent-row'),info=node('div','member-info');info.append(node('strong','',a.label),node('small','',a.role==='lead'?'Agent lead':'Agent member'));row.append(node('span','avatar','✳'),info,node('span','badge '+(a.online?'online':''),a.online?'Online':'Offline'));$('team-agents').appendChild(row);});
+
+    $('invite-result').hidden=true;renderRoster(t);renderAgentPresence(t);
     renderInstallerChoices();
     renderDevices(t);
   }
@@ -95,16 +120,18 @@ export const ACCOUNT_PORTAL_JS = String.raw`
     t.invites.forEach(function(i){var used=!!i.acceptedBy,expired=i.expiresAt<Date.now(),revoked=!!i.revokedAt;var row=node('div','invite-row'),text=node('span','',i.email||'Invitation link');row.append(text,node('span','badge',used?'Accepted':revoked?'Revoked':expired?'Expired':'Pending'));if(!used&&!revoked&&!expired)row.appendChild(button('Revoke','text-button',function(){action(async function(){await request('teams/'+t.teamId+'/invites/'+i.id+'/revoke',{});await refresh(t.teamId);notice('Invitation revoked.');});}));$('pending-invites').appendChild(row);});
   }
   function renderDevices(t) {
-    $('device-step').classList.toggle('complete',t.devices.some(function(d){return d.online;}));$('my-devices').replaceChildren();
+    $('device-step').classList.toggle('complete',t.devices.some(function(d){return presenceOf(d).computer;}));$('my-devices').replaceChildren();
     if(!t.devices.length)$('my-devices').appendChild(node('p','muted','Your connected devices will appear here after installation.'));
-    var hasChat=false;
-    t.devices.forEach(function(d){var card=node('div','device-card'),head=node('div','device-head');card.dataset.deviceId=d.id;head.append(node('strong','',d.label),node('span','badge '+(d.online?'online':''),d.online?'Online':d.nodeId?'Offline':'Waiting for setup'));card.appendChild(head);
-      if(d.online){card.appendChild(button('Open team chat','primary',function(){action(async function(){var result=await chat(d,{action:'open',teamId:t.teamId});deviceChats.set(d.id,result);renderDevices(t);notice(result.desktopOpened?'Team chat opened on '+d.label+'.':'Team chat created. Open it from your Codex client.');});}));
+
+    t.devices.forEach(function(d){var card=node('div','device-card'),head=node('div','device-head');card.dataset.deviceId=d.id;head.append(node('strong','',d.label),presenceBadge(d));card.appendChild(head);
+      var devicePresence=presenceOf(d);
+      if(devicePresence.computer){card.appendChild(node('p','fine','Computer connected')); card.appendChild(button('Open team chat','primary',function(){action(async function(){var result=await chat(d,{action:'open',teamId:t.teamId});deviceChats.set(d.id,result);renderDevices(t);notice(result.desktopOpened?'Team chat opened on '+d.label+'.':'Team chat created. Open it from your Codex client.');});}));
         var label=node('label','','Attach the chat you already use'),input=node('input','');input.placeholder='Paste a Codex chat link or chat ID';input.setAttribute('aria-label','Chat link for '+d.label);label.appendChild(input);card.appendChild(label);
         card.appendChild(button('Attach this chat','secondary',function(){action(async function(){var value=input.value.trim();if(value.indexOf('codex://threads/')===0){try{value=new URL(value).pathname.slice(1);}catch(e){value='';}}if(!/^[a-zA-Z0-9-]{1,100}$/.test(value))throw new Error('Paste a valid Codex chat link or chat ID.');var result=await chat(d,{action:'attach',teamId:t.teamId,threadId:value});deviceChats.set(d.id,result);renderDevices(t);notice('Chat attached. Incoming team messages now arrive in that chat.');});}));
         card.appendChild(button('Use this team for new desktop chats','text-button',function(){action(async function(){var result=await chat(d,{action:'default',teamId:t.teamId});deviceChats.set(d.id,result);renderDevices(t);notice('New chats in the connected desktop window will use this team.');});}));
-        var context=deviceChats.get(d.id);var chats=context&&(context.chats||[]).filter(function(c){return c.teamId===t.teamId;});if(chats&&chats.length){hasChat=true;var binding=node('div','chat-binding','Automatic replies arrive in your latest attached team chat.');binding.appendChild(node('code','',chats[chats.length-1].threadId));card.appendChild(binding);}
+        var context=deviceChats.get(d.id);var chats=context&&(context.chats||[]).filter(function(c){return c.teamId===t.teamId;});if(chats&&chats.length){var binding=node('div','chat-binding','Automatic replies arrive in your latest attached team chat.');binding.appendChild(node('code','',chats[chats.length-1].threadId));card.appendChild(binding);}
         card.appendChild(button('Refresh chat connection','text-button',function(){action(async function(){deviceChats.set(d.id,await chat(d,{action:'context'}));renderDevices(t);});}));
+        card.querySelectorAll('button').forEach(function(b){b.classList.add('requires-connection');b.presenceData=d;});
       }else card.appendChild(node('p','fine',d.nodeId?'Start this device’s Worker to reconnect.':'Run the downloaded installer on this computer.'));
       if(removingDeviceId===d.id){
         card.appendChild(node('p','fine','Remove '+d.label+' from this team? Its installer credential will be revoked and its team connection disconnected. Your Codex login and local chats are kept.'));
@@ -112,7 +139,7 @@ export const ACCOUNT_PORTAL_JS = String.raw`
         card.appendChild(button('Cancel','text-button',function(){removingDeviceId=null;renderDevices(t);}));
       }else card.appendChild(button('Remove device','text-button',function(){removingDeviceId=d.id;removingDeviceNodeId=d.nodeId||null;renderDevices(t);}));
       $('my-devices').appendChild(card);
-    });$('chat-step').classList.toggle('complete',hasChat);
+    });$('chat-step').classList.toggle('complete',t.devices.some(function(d){return presenceOf(d).online;}));
   }
   async function chat(device,requestBody) { requestBody.requestId=crypto.randomUUID();var data=await request('devices/'+device.id+'/chat',requestBody);return data.result; }
   async function install(platform,runtime) {
@@ -150,7 +177,16 @@ export const ACCOUNT_PORTAL_JS = String.raw`
     $('download-installer').addEventListener('click',function(){action(function(){return install(selectedPlatform,selectedRuntime);});});
     $('pair-device').addEventListener('submit',function(e){e.preventDefault();action(async function(){var code=$('pairing-code').value.trim();$('pairing-code').value='';await request('teams/'+selectedTeam.teamId+'/devices/pair',{pairingCode:code});await refresh(selectedTeam.teamId);notice('Device linked. Open a team chat or attach the chat you already use.');});});
     $('refresh-devices').addEventListener('click',function(){action(async function(){await refresh(selectedTeam.teamId);});});start();
-    setInterval(function(){if(!busy&&session&&session.user&&selectedTeam&&document.visibilityState==='visible'&&!document.querySelector('#my-devices input:focus')){request('teams/'+selectedTeam.teamId).then(function(data){selectedTeam=data.team;renderRoster(selectedTeam);renderDevices(selectedTeam);}).catch(function(){});}},15000);
+    var presencePolling=false;
+    setInterval(function(){document.querySelectorAll('.presence-badge').forEach(updatePresenceBadge);updateConnectionButtons();if(!busy&&!selectedTeam&&!$('dashboard').hidden)updateDashboardPresence();if(!busy&&selectedTeam&&document.visibilityState==='visible')renderAgentPresence(selectedTeam);},1000);
+    async function pollPresence(){
+      if(busy||presencePolling||!session||!session.user||document.visibilityState!=='visible')return;
+      presencePolling=true;var revision=viewRevision;var teamId=selectedTeam&&selectedTeam.teamId;
+      try{var data=await request('dashboard');if(revision!==viewRevision)return;teams=data.teams;if(teamId&&selectedTeam&&selectedTeam.teamId===teamId){var current=teams.find(function(t){return t.teamId===teamId;});if(current){selectedTeam=current;renderAgentPresence(current);if(!busy&&!document.querySelector('#my-devices :focus'))renderDevices(current);else document.querySelectorAll('.presence-badge,.requires-connection').forEach(function(badge){var d=current.devices.find(function(d){return d.id===badge.presenceData.id;});if(d)badge.presenceData=d;if(badge.classList.contains('presence-badge'))updatePresenceBadge(badge);});}}else if(!teamId&&!selectedTeam&&!$('dashboard').hidden)updateDashboardPresence();}
+      catch(e){if(revision===viewRevision)markUnavailable();}finally{presencePolling=false;}
+    }
+    setInterval(pollPresence,2000);
+    document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'){document.querySelectorAll('.presence-badge').forEach(updatePresenceBadge);void pollPresence();}});
   });
 })();
 `;

@@ -3,6 +3,10 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
+  PRESENCE_HEADER,
+  SESSION_EXPIRES_MS,
+  projectTeamPresence,
+  type TeamSessionObservation,
   assignmentOfferPayloadSchema,
   assignmentStateChangedPayloadSchema,
   commandEnvelopeSchema,
@@ -133,6 +137,9 @@ interface MutableWorkerSession {
   connectedAt: string;
   lastHeartbeatAt: string;
   lastHeartbeatSequence: number;
+  heartbeatReceivedAt: number;
+  presenceSupported: boolean;
+  presence: { observation: TeamSessionObservation; expiresAt: number; verifiedAt: string }[];
   lastEventSequence: number;
   activeLease?: {
     readonly assignmentId: string;
@@ -908,7 +915,6 @@ export const startAgentTeamsRelay = async (
   };
 
   const listWorkers = (): readonly ConnectedWorkerProjection[] => {
-    const now = Date.now();
     return [...sessions.values()]
       .map(
         (session): ConnectedWorkerProjection => ({
@@ -925,7 +931,8 @@ export const startAgentTeamsRelay = async (
             ? {}
             : { autoJoinTeamId: session.hello.autoJoinTeamId }),
           runtimeCapabilities: session.hello.runtimeCapabilities ?? [],
-          status: now - Date.parse(session.lastHeartbeatAt) <= staleAfterMs ? 'connected' : 'stale',
+          status:
+            performance.now() - session.heartbeatReceivedAt < staleAfterMs ? 'connected' : 'stale',
         })
       )
       .sort((left, right) => left.label.localeCompare(right.label));
@@ -1176,12 +1183,16 @@ export const startAgentTeamsRelay = async (
             connectedAt,
             lastHeartbeatAt: connectedAt,
             lastHeartbeatSequence: 0,
+            heartbeatReceivedAt: -Infinity,
+            presenceSupported: request.headers[PRESENCE_HEADER] === '1',
+            presence: [],
             lastEventSequence: eventStore.lastSequenceForNode(hello.nodeId),
           });
           commandStore.acknowledgeThrough(hello.nodeId, hello.lastInboundCursor);
           socket.send(
             JSON.stringify({
               type: 'relay.welcome',
+              ...(request.headers[PRESENCE_HEADER] === '1' ? { presenceVersion: 1 } : {}),
               protocolVersion: 2,
               insecureLanMode,
               heartbeatIntervalMs,
@@ -1393,6 +1404,14 @@ export const startAgentTeamsRelay = async (
           socket.close(4003, 'Heartbeat sequence must increase');
           return;
         }
+        if (heartbeat.sessions !== undefined && !session.presenceSupported)
+          throw new TypeError('Session presence was not negotiated');
+        session.heartbeatReceivedAt = performance.now();
+        session.presence = (heartbeat.sessions ?? []).map((observation) => ({
+          observation,
+          expiresAt: session.heartbeatReceivedAt + SESSION_EXPIRES_MS - observation.ageMs,
+          verifiedAt: new Date(Date.now() - observation.ageMs).toISOString(),
+        }));
         session.lastHeartbeatAt = new Date().toISOString();
         session.lastHeartbeatSequence = heartbeat.sequence;
         session.activeLease = heartbeat.activeLease;
@@ -1444,6 +1463,45 @@ export const startAgentTeamsRelay = async (
     });
   });
 
+  const presenceFor = (teamId: string, nodeId: string | null, membershipId?: string) => {
+    const session = nodeId ? sessions.get(nodeIdSchema.parse(nodeId)) : undefined;
+    const memberships = membershipRouteStore
+      .listAll()
+      .filter(
+        (route) =>
+          route.teamId === teamId &&
+          route.nodeId === nodeId &&
+          route.status === 'active' &&
+          (!membershipId || route.membershipId === membershipId)
+      );
+    const evidence = session?.presence
+      .filter(
+        (item) =>
+          item.observation.teamId === teamId &&
+          memberships.some((member) => member.membershipId === item.observation.membershipId)
+      )
+      .sort((a, b) => b.expiresAt - a.expiresAt)[0];
+    return projectTeamPresence({
+      now: performance.now(),
+      workerExpiresAt:
+        session?.socket.readyState === WebSocket.OPEN
+          ? session.heartbeatReceivedAt + staleAfterMs
+          : 0,
+      sessionExpiresAt: evidence?.expiresAt,
+      supported: session?.presenceSupported ?? false,
+      authorized:
+        memberships.length > 0 && (!session?.teamScope || session.teamScope.teamId === teamId),
+      lastVerifiedAt: evidence?.verifiedAt,
+    });
+  };
+  // Expiry affects presence only; assignment leases keep their existing lifecycle.
+  const presenceSweep = setInterval(() => {
+    const now = performance.now();
+    for (const session of sessions.values())
+      session.presence = session.presence.filter((item) => item.expiresAt > now);
+  }, 1_000);
+  presenceSweep.unref();
+
   const portalDependencies = {
     app,
     teamDirectory,
@@ -1470,7 +1528,7 @@ export const startAgentTeamsRelay = async (
       directory: teamDirectory,
       routes: membershipRouteStore,
       desktop: desktopChats,
-      online: () => new Set(sessions.keys()),
+      presence: presenceFor,
       removeDevice: (device) => {
         if (!device.nodeId) return;
         for (const membership of membershipRouteStore.listActiveForTeam(device.teamId)) {
@@ -1510,6 +1568,7 @@ export const startAgentTeamsRelay = async (
     listLeases: () => leaseStore.listAll(),
     listMembershipRoutes: () => membershipRouteStore.listAll(),
     close: async () => {
+      clearInterval(presenceSweep);
       desktopChats.close();
       for (const session of sessions.values()) {
         session.socket.close(1001, 'Relay shutting down');

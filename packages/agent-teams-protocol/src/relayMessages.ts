@@ -1,4 +1,6 @@
 import { z } from 'zod';
+
+import { teamSessionObservationSchema } from './presence';
 import {
   relayDesktopControlSchema,
   relayDesktopMessageSchema,
@@ -75,6 +77,7 @@ export const workerHelloMessageSchema = z
 export const workerHeartbeatMessageSchema = z
   .object({
     type: z.literal('worker.heartbeat'),
+    sessions: z.array(teamSessionObservationSchema).max(128).optional(),
     protocolVersion: z.literal(2),
     sequence: z.number().int().nonnegative(),
     sentAt: timestampSchema,
@@ -85,6 +88,7 @@ export const workerHeartbeatMessageSchema = z
 export const relayWelcomeMessageSchema = z
   .object({
     type: z.literal('relay.welcome'),
+    presenceVersion: z.literal(1).optional(),
     protocolVersion: z.literal(2),
     insecureLanMode: z.boolean(),
     heartbeatIntervalMs: z.number().int().positive(),

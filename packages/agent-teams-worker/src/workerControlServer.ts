@@ -24,6 +24,7 @@ const MAX_CONTROL_REQUEST_BYTES = 64 * 1024;
 export interface WorkerControlSnapshotProvider {
   readonly desktopChatAction?: (input: unknown) => Promise<unknown>;
   readonly desktopChatPrepare?: (input: unknown) => unknown;
+  readonly desktopChatPresence?: (input: unknown) => unknown;
   readonly desktopChatBind?: (input: unknown) => unknown;
   readonly desktopChatTool?: (token: string, tool: string, input: unknown) => unknown;
   readonly getStatus: () => AgentTeamsWorkerStatus;
@@ -225,6 +226,8 @@ const handleControlRequest = async (
       jsonResponse(response, await provider.desktopChatAction(body));
     else if (action === 'prepare' && provider.desktopChatPrepare)
       jsonResponse(response, await provider.desktopChatPrepare(body));
+    else if (action === 'presence' && provider.desktopChatPresence)
+      jsonResponse(response, await provider.desktopChatPresence(body));
     else if (action === 'bind' && provider.desktopChatBind)
       jsonResponse(response, await provider.desktopChatBind(body));
     else if (action === 'tool' && provider.desktopChatTool && typeof body.tool === 'string')
@@ -360,7 +363,7 @@ const closeServer = async (server: Server): Promise<void> => {
 export const requestWorkerControl = async <T>(
   socketPath: string,
   path:
-    | `/v2/desktop-chat/${'action' | 'prepare' | 'bind' | 'tool'}`
+    | `/v2/desktop-chat/${'action' | 'prepare' | 'bind' | 'tool' | 'presence'}`
     | '/v2/agent-context'
     | '/v2/worker-status'
     | '/v2/assignments'
