@@ -257,7 +257,7 @@ it.each(['darwin-x64', 'linux-x64', 'win32-x64'])(
         windows ? 'ws://127.0.0.1' : 'unix://'
       );
       expect(browser.document.getElementById('app-server-help')!.textContent).toContain(
-        'online worker relay carries team messages'
+        'local relay on 127.0.0.1, which forwards team messages to the AWS relay'
       );
       button.click();
       await vi.waitFor(() => expect(click).toHaveBeenCalled());

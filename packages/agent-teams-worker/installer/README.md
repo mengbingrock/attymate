@@ -15,6 +15,16 @@ bash ~/.local/share/agent-teams/mate-<team-prefix>/bin/attach.sh
 The Unix fork installer requires macOS or Linux, network reach to the Relay, and a matching fork
 package in the installer. Node 24 is used if available; otherwise a private copy is downloaded.
 
+The installed connection path is `Worker → local relay (ws://127.0.0.1:<port>/v2/worker-stream)
+→ AWS relay (wss://…)`. The local gateway binds an automatically selected loopback port and
+requires the Worker credential; browser-origin upgrades are rejected. Its outbound connection
+uses TLS for a remote relay, with the existing team-scoped credential. Team state, leases, and
+replay cursors remain on the AWS relay. If the upstream disconnects, the local connection closes
+so the Worker reconnects using its durable inbox/outbox. No offline acknowledgement is fabricated.
+The separate Codex App Server continues using its local Unix socket (or authenticated Windows
+loopback WebSocket). The installation supervisor starts `localWorkerCli.js`, which starts the
+local relay and loads the existing sibling `cli.js` in the same process. Both stop together.
+
 An existing sign-in is reused directly from the selected Codex home. Authentication is never
 copied into another home. If no sign-in exists, the installer guides login in the browser or with
 `--device-auth`. Use `--private-codex-home` for a separate sign-in at `<dir>/codex-home`, or
@@ -29,6 +39,12 @@ explicit socket. This fork launcher cannot start or adopt a different stock daem
 uses the bundled client's `agents --remote unix://PATH` against the same endpoint. Both processes receive a
 `sqlite_home` override pointing to `<dir>/codex-state`; the server's logs go to `<dir>/logs`.
 This keeps a different fork version from migrating the personal daemon's state database.
+
+Initial metadata backfill can take minutes when the selected Codex home has a large session
+history. The Unix launcher waits up to 30 minutes and prints progress instead of killing the
+server after ten seconds. Set `AGENT_TEAMS_APP_SERVER_START_TIMEOUT_SECONDS` (1–7200) when
+installing to select a different persistent deadline. The installer allows the same startup
+window plus a minute for the Worker handshake. Logs remain under `logs/app-server.log`.
 
 On macOS the supervisor runs under launchd; on Linux under systemd user services. `--no-service`
 uses a background supervisor. If either child exits, it stops its other child and exits;
@@ -69,6 +85,10 @@ For separate platform downloads, repeat `--join-worker-bundle-platform darwin-x6
 and `--join-worker-bundle-platform linux-x64=<linux archive>` instead. Each archive needs only its
 own staged platform. The web page offers the available builds after the team token is checked.
 The live entry point is [relay.truegrit.dev](https://relay.truegrit.dev/).
+
+The build script compiles `localWorkerCli.js` into the archive. The canonical
+`node scripts/build/distributed-worker-bundle.mjs OUTPUT_DIRECTORY` command also builds it.
+The wrapper keeps the existing Worker CLI and native runtime files separate.
 
 The output embeds the team credential; distribute it only to that team's members.
 

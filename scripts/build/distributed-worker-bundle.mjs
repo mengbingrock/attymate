@@ -19,6 +19,11 @@ for (const name of ['cli', 'controlMcpCli', 'runtimeMcpCli', 'desktopBridgeCli']
     banner: { js: 'import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);' },
   });
 }
+await build({
+  entryPoints: ['packages/agent-teams-worker/src/localWorkerCli.ts'], outfile: join(dir, 'localWorkerCli.js'),
+  bundle: true, platform: 'node', format: 'esm', target: 'node24', external: ['./cli.js'],
+  banner: { js: 'import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);' },
+});
 await copyFile('packages/agent-teams-worker/installer/windows-install.mjs', join(dir, 'windows-install.mjs'));
 await build({
   entryPoints: ['packages/agent-teams-relay/src/cli.ts'], outfile: join(dir, 'mac-relay-test.mjs'),

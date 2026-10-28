@@ -13,6 +13,10 @@ case "$RUNTIME_KIND" in __*) RUNTIME_KIND=fork ;; esac
 case "$RUNTIME_KIND" in fork|stock) ;; *) echo "Invalid installer runtime" >&2; exit 2 ;; esac
 NODE_MAJOR="24"
 NODE_MIN="24.15.0"
+APP_SERVER_START_TIMEOUT_SECONDS="${AGENT_TEAMS_APP_SERVER_START_TIMEOUT_SECONDS:-1800}"
+case "$APP_SERVER_START_TIMEOUT_SECONDS" in ''|*[!0-9]*) echo 'App Server startup timeout must be an integer from 1 to 7200 seconds' >&2; exit 2 ;; esac
+[ "$APP_SERVER_START_TIMEOUT_SECONDS" -ge 1 ] && [ "$APP_SERVER_START_TIMEOUT_SECONDS" -le 7200 ] || { echo 'App Server startup timeout must be from 1 to 7200 seconds' >&2; exit 2; }
+APP_SERVER_START_TIMEOUT_SECONDS=$((10#$APP_SERVER_START_TIMEOUT_SECONDS))
 
 LABEL="$(hostname -s 2>/dev/null || hostname)"
 DIR="${HOME}/.local/share/agent-teams/mate-${TEAM_ID:0:8}"
@@ -95,7 +99,7 @@ else [ ! -e "$APP_SERVER_SOCK" ] && [ ! -L "$APP_SERVER_SOCK" ] || die "Stop thi
 say "Unpacking worker bundle"
 PAYLOAD_LINE=$(awk '/^__PAYLOAD_BELOW__$/ { print NR + 1; exit 0; }' "$0")
 tail -n +"$PAYLOAD_LINE" "$0" | base64 -d | tar -xzf - -C "$DIR/worker"
-[ -s "$DIR/worker/cli.js" ] || die "bundle extraction failed"
+[ -s "$DIR/worker/cli.js" ] && [ -s "$DIR/worker/localWorkerCli.js" ] || die "Worker bundle is missing its local relay launcher"
 
 # --- node ---------------------------------------------------------------------
 NODE=""
@@ -235,6 +239,7 @@ fi
   printf 'NODE=%q\nCODEX=%q\nCODEX_HOME=%q\nAPP_SERVER_SOCK=%q\nCONTROL_SOCK=%q\nDIR=%q\nENV_FILE=%q\n' \
     "$NODE" "$CODEX" "$CODEX_HOME_DIR" "$APP_SERVER_SOCK" "$CONTROL_SOCK" "$DIR" "$ENV_FILE"
   printf 'RUNTIME_KIND=%q\nSERVER_OWNERSHIP=%q\nINSTALLATION_ID=%q\nCONTROL_MCP_NAME=%q\n' "$RUNTIME_KIND" "$SERVER_OWNERSHIP" "$INSTALLATION_ID" "$CONTROL_MCP_NAME"
+  printf 'APP_SERVER_START_TIMEOUT_SECONDS=%q\n' "$APP_SERVER_START_TIMEOUT_SECONDS"
   cat <<'START_WORKER'
 export CODEX_HOME
 # macOS launchd defaults to 256 descriptors; persistent chats each keep MCP pipes open.
@@ -347,16 +352,22 @@ LOG_CONFIG=$("$NODE" -e 'process.stdout.write("log_dir=" + JSON.stringify(proces
 if [ "$SERVER_OWNERSHIP" = managed ]; then
 "$CODEX" -c "$SQLITE_CONFIG" -c "$LOG_CONFIG" app-server --listen "unix://$APP_SERVER_SOCK" >>"$DIR/logs/app-server.log" 2>&1 &
 server_pid=$!
-for _ in $(seq 1 100); do
-  kill -0 "$server_pid" 2>/dev/null || { echo 'Customized App Server exited during startup' >&2; exit 1; }
-  [ ! -S "$APP_SERVER_SOCK" ] || break
-  sleep 0.1
+# Initial rollout backfill can take minutes; killing it early leaves a 15-minute lease.
+startup_deadline=$((SECONDS + APP_SERVER_START_TIMEOUT_SECONDS))
+next_startup_notice=$((SECONDS + 10))
+while [ ! -S "$APP_SERVER_SOCK" ]; do
+  kill -0 "$server_pid" 2>/dev/null || { echo "App Server exited during startup; inspect $DIR/logs/app-server.log" >&2; exit 1; }
+  [ "$SECONDS" -lt "$startup_deadline" ] || { echo "App Server socket did not become ready after ${APP_SERVER_START_TIMEOUT_SECONDS}s; inspect $DIR/logs/app-server.log" >&2; exit 1; }
+  if [ "$SECONDS" -ge "$next_startup_notice" ]; then
+    echo "Waiting for the local App Server socket; database backfill may still be running. Log: $DIR/logs/app-server.log"
+    next_startup_notice=$((SECONDS + 30))
+  fi
+  sleep 0.2
 done
-[ -S "$APP_SERVER_SOCK" ] || { echo 'App Server socket did not become ready' >&2; exit 1; }
 fi
 EXTRA_WORKER_ARGS=(--runtime-kind "$RUNTIME_KIND" --server-ownership "$SERVER_OWNERSHIP" --installation-id "$INSTALLATION_ID" --control-mcp-name "$CONTROL_MCP_NAME")
 [ "$RUNTIME_KIND" != fork ] || EXTRA_WORKER_ARGS+=(--desktop-launcher "$DIR/bin/desktop.sh")
-"$NODE" "$DIR/worker/cli.js" start --app-server-mode shared-daemon --app-server-connect-only \
+"$NODE" "$DIR/worker/localWorkerCli.js" start --app-server-mode shared-daemon --app-server-connect-only \
   --app-server-socket "$APP_SERVER_SOCK" \
   --relay "$AGENT_TEAMS_RELAY_URL" --data-dir "$DIR/data" --control-socket "$CONTROL_SOCK" \
   --codex-home "$CODEX_HOME" --runtime-cwd "$DIR/workspace" --codex-binary "$CODEX" \
@@ -556,8 +567,20 @@ UNINSTALL_INSTALLATION
 chmod 700 "$DIR/bin/stop.sh" "$DIR/bin/uninstall.sh"
 
 # --- wait for the relay handshake --------------------------------------------
-say "Waiting for the worker to connect to ${RELAY_URL}"
-for _ in $(seq 1 30); do
+say "Local App Server: unix://${APP_SERVER_SOCK}"
+say "AWS relay upstream: ${RELAY_URL}"
+say "Waiting for the worker to connect to its local relay on 127.0.0.1"
+app_server_connect_deadline=$((SECONDS + APP_SERVER_START_TIMEOUT_SECONDS))
+worker_connect_deadline=0
+while true; do
+  if [ -S "$APP_SERVER_SOCK" ] && [ "$worker_connect_deadline" -eq 0 ]; then
+    worker_connect_deadline=$((SECONDS + 60))
+  fi
+  if [ "$worker_connect_deadline" -eq 0 ]; then
+    [ "$SECONDS" -lt "$app_server_connect_deadline" ] || break
+  else
+    [ "$SECONDS" -lt "$worker_connect_deadline" ] || break
+  fi
   sleep 2
   if grep -q '"state": *"connected"' "$DIR/data/worker-status.json" 2>/dev/null; then
     if [ -f "$DIR/worker/desktopBridgeCli.js" ]; then
@@ -565,6 +588,8 @@ for _ in $(seq 1 30); do
     say "Pair this device in the Web UI with this private code:"
     cat "$DIR/data/desktop-pairing-code"
   fi
+    LOCAL_RELAY_URL=$("$NODE" -e 'const s=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(s.relayUrl || "local relay")' "$DIR/data/worker-status.json")
+    say "Worker connected to ${LOCAL_RELAY_URL}; the local relay forwards team traffic to AWS."
     say "Connected. Team ${TEAM_ID} will enroll '${LABEL}' as a member (right away in a leaderless team, otherwise once the team has an active lead)."
     echo "  status:  bash $DIR/bin/status.sh"
     echo "  stop:    bash $DIR/bin/stop.sh"

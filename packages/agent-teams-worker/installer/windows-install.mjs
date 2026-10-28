@@ -247,11 +247,14 @@ if (command === 'install') {
   console.log('Using existing Codex login at ' + home);
   if (env.AGENT_TEAMS_INSTALL_NO_START !== 'True') {
     run(process.execPath, [self, 'start', dir]);
+    console.log('Waiting for the Worker to connect to its local relay on 127.0.0.1');
+    console.log('AWS relay upstream: ' + config.relay);
     let connected = false;
     for (let i = 0; i < 300; i++) {
       try {
         const status = JSON.parse(readFileSync(join(dir, 'data', 'worker-status.json'), 'utf8'));
         if (status.state === 'connected') {
+          console.log('Worker connected to ' + status.relayUrl + '; the local relay forwards team traffic to AWS.');
           connected = true;
           break;
         }
@@ -561,7 +564,7 @@ if (command === 'start') {
   const workerProcess = spawn(
     process.execPath,
     [
-      join(worker, 'cli.js'),
+      join(worker, 'localWorkerCli.js'),
       'start',
       '--app-server-mode',
       'shared-daemon',

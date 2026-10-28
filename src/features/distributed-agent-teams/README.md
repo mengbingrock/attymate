@@ -11,6 +11,13 @@ The Relay is configured with `AGENT_TEAMS_RELAY_URL` and defaults to
 `http://127.0.0.1:43170`. This feature never exposes the Relay URL as an arbitrary
 renderer-supplied network target.
 
+Packaged Workers now connect through a local gateway: `localWorkerCli.js` starts an authenticated
+loopback WebSocket relay, then loads the existing Worker CLI with that local URL. The gateway
+forwards frames to the configured AWS relay over TLS. It keeps no separate team database or
+leases, and disconnects the Worker on upstream failure so durable message replay stays with the
+existing Worker/AWS protocol. This gateway serves Worker WebSockets only; manager HTTP requests
+still use the configured Relay URL above. The Codex App Server retains its own local socket.
+
 Interactive Codex runtime sessions additionally require
 `AGENT_TEAMS_RELAY_MANAGER_TOKEN` in Electron and `AGENT_TEAMS_RELAY_WORKER_TOKEN` in the Relay and
 Workers. Session capability tokens stay inside the main-process Relay adapter. The renderer sees

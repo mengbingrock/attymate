@@ -10,6 +10,10 @@ startup and explicit connection to an operator-owned server; external mode never
 See [teammate installer](../packages/agent-teams-worker/installer/README.md). These distributions do
 not change the Electron packaging below, and neither path depends on A2A.
 
+Worker archives also include `localWorkerCli.js`, an authenticated loopback relay launcher that
+forwards to the AWS relay. Keep its sibling `cli.js` and native runtime files alongside it. Build
+the wrapper with `node scripts/build/local-worker-relay.mjs OUTPUT_FILE`.
+
 Keep fork and stock artifacts and catalog entries distinct. Existing requests without a runtime
 selection continue receiving the fork. New stock CLI installations default to MCP-inbox delivery;
 legacy fork installations retain inline delivery. Both modes need regression coverage. Before

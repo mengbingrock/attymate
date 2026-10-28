@@ -81,15 +81,16 @@ export const JOIN_PORTAL_HTML = String.raw`<!doctype html>
       <p class="success" role="status">Token accepted. Choose how to connect this computer.</p>
 
       <section class="option" aria-label="Local setup options">
-        <p class="muted" id="runtime-help">Choose your runtime and computer to see local startup instructions. Downloads are optional.</p>
+        <p class="muted" id="runtime-help">Choose your runtime and computer, then download and run the team installer.</p>
         <label class="field" id="runtime-field" hidden><span>Codex runtime</span><select id="runtime" aria-describedby="runtime-help"></select></label>
         <label class="field" id="platform-field" hidden>
           <span>Your computer</span>
           <select id="platform" aria-describedby="platform-help"></select>
-          <small id="platform-help">Choose this computer to see its startup commands. On a Mac, check Apple menu → About This Mac for its chip or processor.</small>
+          <small id="platform-help">Choose the computer where you will install the team connection. On a Mac, check Apple menu → About This Mac for its chip or processor.</small>
         </label>
       </section>
 
+      <p id="installer-unavailable" class="warn" role="status" hidden></p>
       <section class="option" id="option-installer">
         <h3><span class="step">1</span>Install and start</h3>
         <button id="download" type="button" class="primary">Download installer</button>
@@ -100,10 +101,11 @@ export const JOIN_PORTAL_HTML = String.raw`<!doctype html>
         <p class="muted">For a separate Codex sign-in, add <code>--private-codex-home</code> to the install command.</p>
       </section>
 
-      <section class="option" id="option-attach">
-        <h3><span class="step">2</span>Start your local App Server</h3>
+      <details class="option" id="option-attach">
+        <summary>Already installed? Start or reconnect</summary>
+        <h3>Start your team connection</h3>
         <p class="muted" id="app-server-help"></p>
-        <p class="muted">For an existing team installation, run this if its server is stopped. New installations start the server automatically:</p>
+        <p class="muted">These commands work only after the team installer has completed on this computer. Installing Codex alone does not create these scripts:</p>
         <div class="code"><pre id="app-server-start-command"></pre><button type="button" class="copy" data-copy="app-server-start-command">Copy</button></div>
         <p class="muted">Check this installation’s status:</p>
         <div class="code"><pre id="app-server-status-command"></pre><button type="button" class="copy" data-copy="app-server-status-command">Copy</button></div>
@@ -115,7 +117,7 @@ export const JOIN_PORTAL_HTML = String.raw`<!doctype html>
           <div class="code"><pre id="desktop-command"></pre><button type="button" class="copy" data-copy="desktop-command">Copy</button></div>
           <p class="muted">Uses a separate app window and profile. Install Codex desktop separately; the launcher also detects Codex in the ChatGPT desktop app.</p>
         </div>
-      </section>
+      </details>
 
       <section class="option" id="option-clone">
         <h3><span class="step">2</span>From a clone</h3>
@@ -527,7 +529,7 @@ export const JOIN_PORTAL_APP_JS = String.raw`
     $('unlock').hidden = true;
     $('unlocked').hidden = false;
     current.runtimeCatalog = Array.isArray(body.installerRuntimes);
-    current.runtimes = current.runtimeCatalog ? body.installerRuntimes : (body.installerAvailable ? [{ id: 'fork', label: 'Use bundled team runtime', installerPlatforms: body.installerPlatforms || [] }] : []);
+    current.runtimes = current.runtimeCatalog ? body.installerRuntimes : (body.installerAvailable ? [{ id: 'fork', label: 'Use bundled team runtime', installerAvailable: true, installerPlatforms: body.installerPlatforms || [] }] : []);
     var available = current.runtimes.length > 0;
     current.downloadRuntimes = current.runtimes;
     current.runtimes = [{ id: 'fork', label: 'Use bundled team runtime' }, { id: 'stock', label: 'Use installed Codex' }];
@@ -572,8 +574,12 @@ export const JOIN_PORTAL_APP_JS = String.raw`
     if (!current) return;
     current.platform = $('platform').value || '';
     var ready = !current.platforms.length || Boolean(current.platform);
-    var downloadable = current.downloadRuntimes.some(function(runtime) { return runtime.id === current.runtime && (!runtime.installerPlatforms || !runtime.installerPlatforms.length || runtime.installerPlatforms.some(function(platform) { return platform.id === current.platform; })); });
+    var runtime = current.downloadRuntimes.find(function(item) { return item.id === current.runtime; });
+    var platforms = runtime && runtime.installerPlatforms || [];
+    var downloadable = Boolean(runtime && runtime.installerAvailable !== false && ready && (platforms.length ? platforms.some(function(platform) { return platform.id === current.platform; }) : runtime.installerAvailable === true && current.platform !== 'win32-x64'));
     $('option-installer').hidden = !downloadable;
+    $('installer-unavailable').hidden = !ready || downloadable;
+    $('installer-unavailable').textContent = (current.runtime === 'stock' ? 'The stock Codex installer' : 'The bundled runtime installer') + ' is not available for this computer. Ask your team administrator to provide it, or choose an available runtime. Installing Codex alone does not install the team connection.';
     $('download').disabled = !ready || !downloadable;
     $('download').textContent = 'Download installer';
     var windows = current.platform === 'win32-x64';
@@ -582,14 +588,14 @@ export const JOIN_PORTAL_APP_JS = String.raw`
     function localCommand(mode) { return windows ? '& "' + installPath + '/bin/' + mode + '.ps1"' : 'bash "' + installPath + '/bin/' + mode + '.sh"'; }
     $('app-server-start-command').textContent = ready ? localCommand('start') : 'Choose your computer above to get its local server command.';
     $('app-server-status-command').textContent = ready ? localCommand('status') : 'Choose your computer above to get its status command.';
-    $('app-server-help').textContent = !ready ? 'Choose your computer above to see its local socket details.' : (windows ? 'Codex and the worker connect to an authenticated local WebSocket at ws://127.0.0.1 on this computer. The installer selects its port.' : 'Codex and the worker connect to a private local Unix socket on this computer (unix://). The installer selects its path.') + ' The online worker relay carries team messages; use the local App Server socket to connect Codex.';
+    $('app-server-help').textContent = !ready ? 'Choose your computer above to see its local socket details.' : (windows ? 'Codex and the worker connect to an authenticated local WebSocket at ws://127.0.0.1 on this computer. The installer selects its port.' : 'Codex and the worker connect to a private local Unix socket on this computer (unix://). The installer selects its path.') + ' The worker connects to a local relay on 127.0.0.1, which forwards team messages to the AWS relay. Codex uses the local App Server socket.';
     $('attach-command').textContent = windows ? '& "$env:LOCALAPPDATA/AgentTeams/mate-' + current.team.teamId.slice(0,8) + (current.runtime === 'stock' ? '-stock' : '') + '/bin/attach.ps1"' : 'bash "$HOME/.local/share/agent-teams/mate-' + current.team.teamId.slice(0,8) + (current.runtime === 'stock' ? '-stock' : '') + '/bin/attach.sh"';
     $('desktop-option').hidden = current.runtime === 'stock' || !current.platform || current.platform.indexOf('darwin-') !== 0;
     $('desktop-command').textContent = 'bash "$HOME/.local/share/agent-teams/mate-' + current.team.teamId.slice(0, 8) + '/bin/desktop.sh"';
   }
 
   function download() {
-    if (!current || !current.verified) return;
+    if (!current || !current.verified || $('download').disabled) return;
     if (current.platforms.length && !current.platform) return;
     var button = $('download');
     button.disabled = true;
@@ -598,7 +604,8 @@ export const JOIN_PORTAL_APP_JS = String.raw`
     $('runtime').disabled = true;
     var filename = installerFilename();
     var body = { token: current.token };
-    if (current.platform) body.platform = current.platform;
+    var runtime = current.downloadRuntimes.find(function(item) { return item.id === current.runtime; });
+    if (current.platform && (runtime.installerPlatforms || []).length) body.platform = current.platform;
     if (current.runtimeCatalog) body.runtime = current.runtime;
     $('download-error').hidden = true;
     postJson('api/teams/' + encodeURIComponent(current.team.teamId) + '/installer', body)

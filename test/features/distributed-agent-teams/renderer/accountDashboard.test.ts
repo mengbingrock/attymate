@@ -254,7 +254,7 @@ it.each(['darwin-x64', 'linux-x64', 'win32-x64'])(
         windows ? 'ws://127.0.0.1' : 'unix://'
       );
       expect(b.document.getElementById('app-server-help')!.textContent).toContain(
-        'online worker relay carries team messages'
+        'local relay on 127.0.0.1, which forwards team messages to the AWS relay'
       );
       expect(b.document.getElementById('install-command')!.textContent).toContain(
         '-stock-' + platform + (platform === 'win32-x64' ? '.ps1' : '.sh')

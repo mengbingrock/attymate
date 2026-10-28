@@ -17,7 +17,7 @@
   "scripts": {
     "control:mcp": "tsx src/controlMcpCli.ts",
     "runtime:mcp": "tsx src/runtimeMcpCli.ts",
-    "dev": "tsx src/cli.ts",
+    "dev": "tsx src/localWorkerCli.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -197,6 +197,11 @@ describe('Windows installer runtime contracts', () => {
     const home = join(root, 'custom-dedicated-home');
     await execute('install', { AGENT_TEAMS_INSTALL_CODEX_HOME: home });
     await execute('run', { CODEX_HOME: home });
+    const workerStart = calls.find(
+      ({ args }) => args[0] === join(root, 'worker', 'localWorkerCli.js')
+    );
+    expect(workerStart?.args).toContain('--relay');
+    expect(workerStart?.args).toContain('wss://relay.example.test/v2/worker-stream');
     expect(JSON.parse(await readFile(join(root, 'data/supervisor.pid'), 'utf8')).pid).toBe(123456);
     callbacks.get('exit')?.();
   });

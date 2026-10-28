@@ -56,7 +56,7 @@ else if (args[0] === 'app-server') {
     const message = JSON.parse(data.toString());
     client.send(JSON.stringify({ id: message.id, result: { userAgent: 'test-fork' } }));
   }));
-  server.listen(socket);
+  setTimeout(() => server.listen(socket), Number(process.env.TEST_FORK_SERVER_DELAY_MS || 0));
   process.on('SIGTERM', () => { fs.appendFileSync(${JSON.stringify(join(root, 'server-stopped'))}, 'stopped'); process.exit(0); });
 } else if (args[0] === 'agents') {
   if (args[1] !== '--remote') throw new Error('Client did not explicitly attach');
@@ -77,7 +77,7 @@ const data = args[args.indexOf('--data-dir') + 1];
 if (args[0] !== 'start') { fs.writeFileSync(${JSON.stringify(join(root, 'control-operation.json'))}, JSON.stringify(args)); process.exit(0); }
 fs.writeFileSync(${JSON.stringify(join(root, 'worker.json'))}, JSON.stringify({args, parent: process.ppid}));
 fs.writeFileSync(data + '/worker-args.json', JSON.stringify({args, parent: process.ppid}));
-fs.writeFileSync(data + '/worker-status.json', JSON.stringify({state: 'connected'}));
+fs.writeFileSync(data + '/worker-status.json', JSON.stringify({state: 'connected', relayUrl: args[args.indexOf('--relay') + 1]}));
 fs.writeFileSync(data + '/desktop-pairing-code', 'test-only-pairing-code');
 setInterval(() => {}, 1000);
 `
@@ -126,7 +126,7 @@ setInterval(() => {}, 1000);
     ]);
   };
 
-  const installFork = (extraArgs: string[] = []) =>
+  const installFork = (extraArgs: string[] = [], extraEnv: Record<string, string> = {}) =>
     exec(
       'bash',
       [installer, '--dir', install, '--label', 'Test member', '--no-service', ...extraArgs],
@@ -136,10 +136,36 @@ setInterval(() => {}, 1000);
           HOME: root,
           CODEX_HOME: join(root, '.codex'),
           TMPDIR: longTemporaryDirectory,
+          ...extraEnv,
         },
-        timeout: 15_000,
+        timeout: 30_000,
       }
     );
+
+  it('allows database initialization beyond the former ten-second startup deadline', async () => {
+    await stageAndBuild();
+    const installing = installFork([], { TEST_FORK_SERVER_DELAY_MS: '12000' });
+    void installing.catch(() => undefined);
+    await vi.waitFor(
+      async () => {
+        supervisorPid = Number(
+          (await readFile(join(install, 'data/supervisor.pid'), 'utf8')).trim()
+        );
+        expect(supervisorPid).toBeGreaterThan(1);
+      },
+      { timeout: 5_000 }
+    );
+    const result = await installing;
+    const worker = JSON.parse(await readFile(join(root, 'worker.json'), 'utf8'));
+    expect(worker.parent).toBe(supervisorPid);
+    expect(result.stdout).toContain('Worker connected to ws://127.0.0.1:');
+    expect(await readFile(join(install, 'logs/worker.log'), 'utf8')).toContain(
+      'database backfill may still be running'
+    );
+    expect(await readFile(join(install, 'bin/start.sh'), 'utf8')).toContain(
+      'APP_SERVER_START_TIMEOUT_SECONDS=1800'
+    );
+  }, 30_000);
 
   it('packages the fork, starts its server, and attaches the client to the worker socket', async () => {
     await stageAndBuild();
@@ -150,6 +176,13 @@ setInterval(() => {}, 1000);
     };
     supervisorPid = worker.parent;
     expect(result.stdout).toContain('Codex fork: test-fork-123');
+    expect(worker.args[worker.args.indexOf('--relay') + 1]).toMatch(
+      /^ws:\/\/127\.0\.0\.1:\d+\/v2\/worker-stream$/
+    );
+    expect(result.stdout).toContain(
+      'Waiting for the worker to connect to its local relay on 127.0.0.1'
+    );
+    expect(result.stdout).toContain('Worker connected to ws://127.0.0.1:');
     expect(worker.args).toContain('--app-server-connect-only');
     expect(worker.args[worker.args.indexOf('--codex-home') + 1]).toBe(join(root, '.codex'));
     expect(worker.args[worker.args.indexOf('--codex-binary') + 1]).toBe(

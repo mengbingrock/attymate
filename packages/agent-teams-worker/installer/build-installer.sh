@@ -14,9 +14,10 @@ done
 case "$RUNTIME" in fork|stock) ;; *) echo "--runtime must be fork or stock" >&2; exit 2 ;; esac
 [ "$RUNTIME" = stock ] || [ -d "$BUNDLE/codex-runtime" ] || { echo "Stage the fork with stage-codex-runtime.mjs before building the installer" >&2; exit 2; }
 HERE="$(cd "$(dirname "$0")" && pwd)"
+node "$HERE/../../../scripts/build/local-worker-relay.mjs" "$BUNDLE/localWorkerCli.js"
 umask 077
 sed -e "s|__RELAY_URL__|$RELAY|" -e "s|__WORKER_TOKEN__|$TOKEN|" -e "s|__TEAM_ID__|$TEAM|" -e "s|__RUNTIME_KIND__|$RUNTIME|" "$HERE/install-template.sh" >"$OUT"
-set -- cli.js controlMcpCli.js runtimeMcpCli.js
+set -- cli.js localWorkerCli.js controlMcpCli.js runtimeMcpCli.js
 [ "$RUNTIME" != fork ] || set -- "$@" codex-runtime
 [ ! -f "$BUNDLE/desktopBridgeCli.js" ] || set -- "$@" desktopBridgeCli.js
 tar -czf - -C "$BUNDLE" "$@" | base64 >>"$OUT"
