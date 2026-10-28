@@ -237,7 +237,9 @@ it.each(['darwin-x64', 'linux-x64', 'win32-x64'])(
       expect(writes).toEqual([{ platform, runtime: 'stock', label: 'stock-mac' }]);
       await vi.waitFor(() =>
         expect(b.document.getElementById('desktop-launch-command')!.textContent).toContain(
-          'mate-40000000-stock/bin/attach.' + (platform === 'win32-x64' ? 'ps1' : 'sh')
+          'mate-40000000-stock/bin/' +
+            (platform.startsWith('linux-') ? 'attach.' : 'desktop.') +
+            (platform === 'win32-x64' ? 'ps1' : 'sh')
         )
       );
       const windows = platform === 'win32-x64';

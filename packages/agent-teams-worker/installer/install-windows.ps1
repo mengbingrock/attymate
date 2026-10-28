@@ -3,12 +3,14 @@ param(
   [string]$Dir = '',
   [string]$CodexHome = '',
   [string]$CodexBinary = '',
+  [string]$DesktopApp = '',
   [ValidateSet('managed','external')][string]$ServerOwnership = 'managed',
   [string]$AppServerSocket = '',
   [string]$AppServerTokenFile = '',
   [switch]$PrivateCodexHome,
   [switch]$NoService,
-  [switch]$NoStart
+  [switch]$NoStart,
+  [switch]$NoDesktop
 )
 $ErrorActionPreference = 'Stop'
 $relay = '__RELAY_URL__'
@@ -73,6 +75,7 @@ if (-not $node) {
 }
 $env:AGENT_TEAMS_INSTALL_RUNTIME = $runtimeKind
 $env:AGENT_TEAMS_INSTALL_CODEX_BINARY = $CodexBinary
+$env:AGENT_TEAMS_INSTALL_DESKTOP_APP = $DesktopApp
 $env:AGENT_TEAMS_INSTALL_SERVER_OWNERSHIP = $ServerOwnership
 $env:AGENT_TEAMS_INSTALL_APP_SERVER_SOCKET = $AppServerSocket
 $env:AGENT_TEAMS_INSTALL_APP_SERVER_TOKEN_FILE = $AppServerTokenFile
@@ -84,6 +87,7 @@ $env:AGENT_TEAMS_INSTALL_CODEX_HOME = $CodexHome
 $env:AGENT_TEAMS_INSTALL_PRIVATE_HOME = [string][bool]$PrivateCodexHome
 $env:AGENT_TEAMS_INSTALL_NO_SERVICE = [string][bool]$NoService
 $env:AGENT_TEAMS_INSTALL_NO_START = [string][bool]$NoStart
+$env:AGENT_TEAMS_INSTALL_NO_DESKTOP = [string][bool]$NoDesktop
 try {
   & $node (Join-Path $worker 'windows-install.mjs') install $Dir
   if ($LASTEXITCODE -ne 0) { throw 'Installation did not complete. See the error above.' }

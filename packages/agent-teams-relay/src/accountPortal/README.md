@@ -35,7 +35,9 @@ available when no installer build is published for the selection. Downloads are 
 action. macOS/Linux use a private Unix socket; Windows uses an authenticated loopback WebSocket
 with an installer-selected port. The Worker connects to a local relay on loopback, which forwards
 team messaging to the AWS relay. This relay connection is separate from the local Codex App
-Server socket. Switching runtime/platform selections updates the installation commands, including
+Server socket. Stock reuses the existing Codex login and opens the desktop app by default on macOS.
+Terminal attachment is optional; no new sign-in is started by the stock installer.
+Switching runtime/platform selections updates the installation commands, including
 the separate `-stock` installation directory.
 
 Automatic messages currently enter the most recently attached chat for that membership. The UI

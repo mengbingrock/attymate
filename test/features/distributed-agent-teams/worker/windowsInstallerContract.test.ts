@@ -18,6 +18,7 @@ describe('Windows installer runtime contracts', () => {
   let children: (EventEmitter & { kill: ReturnType<typeof vi.fn> })[];
   let callbacks: Map<string, () => void>;
   let livePids: Set<number>;
+  let loginStatus: number;
   let killHook: ((pid: number) => void) | undefined;
   let spawnHook:
     | ((
@@ -40,6 +41,7 @@ describe('Windows installer runtime contracts', () => {
     children = [];
     callbacks = new Map();
     livePids = new Set([123456]);
+    loginStatus = 0;
     killHook = undefined;
     spawnHook = undefined;
   });
@@ -64,7 +66,11 @@ describe('Windows installer runtime contracts', () => {
     };
     const spawnSync = (binary: string, args: string[]) => {
       calls.push({ binary, args });
-      return { status: 0, stdout: '--listen --remote --ws-auth', stderr: '' };
+      return {
+        status: args[0] === 'login' && args[1] === 'status' ? loginStatus : 0,
+        stdout: '--listen --remote --ws-auth',
+        stderr: '',
+      };
     };
     const spawn = (binary: string, args: string[]) => {
       calls.push({ binary, args });
@@ -146,7 +152,7 @@ describe('Windows installer runtime contracts', () => {
       serverOwnership: 'managed',
       binary: executable,
     });
-    expect(config.home).toBe(join(root, 'codex-home'));
+    expect(config.home).toBe(join(root, 'personal-home'));
     expect(config.controlMcpName).toBe(
       'agent_teams_control_' + config.installationId.replaceAll('-', '')
     );
@@ -157,16 +163,43 @@ describe('Windows installer runtime contracts', () => {
       calls.filter(({ args }) => args[0] === 'login').every(({ binary }) => binary === executable)
     ).toBe(true);
     await expect(readFile(join(root, 'bin', 'attach.ps1'), 'utf8')).resolves.toContain('attach');
-    await expect(execute('desktop')).rejects.toThrow(/not verified/);
+    await expect(execute('desktop')).rejects.toThrow(/installed Codex desktop/);
   });
 
-  it('refuses a personal home for managed stock before using its login', async () => {
-    await expect(
-      execute('install', {
-        AGENT_TEAMS_INSTALL_CODEX_HOME: join(root, 'personal-home'),
-      })
-    ).rejects.toThrow('requires a dedicated Codex home');
-    expect(calls.some(({ args }) => args[0] === 'login')).toBe(false);
+  it('reuses an explicit existing stock login without launching authentication', async () => {
+    await execute('install', {
+      AGENT_TEAMS_INSTALL_CODEX_HOME: join(root, 'personal-home'),
+    });
+    expect(calls.filter(({ args }) => args[0] === 'login').map(({ args }) => args)).toEqual([
+      ['login', 'status'],
+    ]);
+    await expect(readFile(join(root, 'codex-home/auth.json'))).rejects.toThrow();
+  });
+
+  it('does not start a new sign-in when the existing stock login cannot be used', async () => {
+    loginStatus = 1;
+    await expect(execute('install')).rejects.toThrow('No new sign-in was started');
+    expect(calls.filter(({ args }) => args[0] === 'login').map(({ args }) => args)).toEqual([
+      ['login', 'status'],
+    ]);
+  });
+
+  it('launches stock desktop with the selected existing login and App Server endpoint', async () => {
+    await execute('install');
+    const app = join(root, 'local-data', 'Programs', 'Codex', 'Codex.exe');
+    await mkdir(join(root, 'local-data', 'Programs', 'Codex'), { recursive: true });
+    await writeFile(app, 'desktop executable fixture');
+    await writeFile(
+      join(root, 'data', 'app-server.json'),
+      JSON.stringify({ url: 'ws://127.0.0.1:45678' })
+    );
+    await execute('desktop');
+    const desktop = calls.find(
+      ({ args }) => args[0] === join(root, 'worker', 'desktopBridgeCli.js')
+    );
+    expect(desktop?.args).toContain('ws://127.0.0.1:45678');
+    expect(desktop?.args).toContain(join(root, 'personal-home'));
+    expect(desktop?.args).toContain(app);
   });
 
   it('passes the exact control socket to uninstall even before its first Worker start', async () => {

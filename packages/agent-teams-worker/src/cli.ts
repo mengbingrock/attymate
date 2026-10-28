@@ -273,7 +273,7 @@ const runWorker = async (): Promise<void> => {
   const workerCodexHome = await prepareWorkerCodexHome({
     dataDir,
     codexHome: valueAfter('--codex-home', previousInstallation?.codexHome),
-    managedStock: runtimeKind === 'stock' && serverOwnership === 'managed',
+    reuseExistingLogin: runtimeKind === 'stock',
   });
   const identity = await prepareWorkerIdentity(dataDir, {
     ...(valueAfter('--organization-id')

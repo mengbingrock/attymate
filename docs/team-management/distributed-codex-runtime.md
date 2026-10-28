@@ -67,10 +67,11 @@ New control MCP entries use `agent_teams_control_<installation-id>`; existing fo
 exclude every owner-control registration, including those belonging to another installation.
 Never start concurrent Workers using the same node/data directory or execution lease.
 
-Managed stock installs use a dedicated Codex home with a normal independent sign-in. They reject
-sharing the personal home used by a different runtime version; `sqlite_home` alone does not isolate
-rollout/session files. External mode accepts the operator's explicit home and reports that storage
-isolation is operator-managed. Installation descriptors persist kind, executable identity, endpoint,
+Stock installs reuse the existing Codex home and cached login by default, without copying
+credentials or initiating a new sign-in. `--private-codex-home` is opt-in. SQLite databases, logs,
+sockets and GUI profiles remain installation-specific; configuration and rollout history in the
+selected Codex home are shared. This choice does not claim complete writable-state isolation.
+External mode accepts the operator's matching explicit home. Installation descriptors persist kind, executable identity, endpoint,
 ownership, message-delivery mode, and compatibility checks. `status` and `diagnose` expose this
 non-secret state. The stock compatibility probe runs before the Worker accepts assignments.
 
@@ -82,8 +83,10 @@ review requests and result candidates, lease fencing, and denial of old-thread c
 successor assignment. See the [recorded validation](stock-fork-validation.md). It uses a deterministic loopback model
 fixture and disposable homes/projects. Windows contract/fixture checks are not native Windows
 signoff, and other platform pairs require their own native runs before being advertised.
-Stock desktop GUI attachment remains gated on a verified desktop/server pair. Existing fork GUI
-attachment retains its separate compatibility requirements. Neither path depends on A2A.
+Stock macOS installs open Codex desktop by default using the existing login; terminal attachment
+is optional. The verified startup pair is stock `0.165.0` with ChatGPT desktop `26.1016.51333`.
+An isolated GUI profile can show first-run work preferences; that is separate from sign-in.
+Windows desktop remains subject to native platform verification before publishing. Neither path depends on A2A.
 
 ### Owner local access and native UI tools
 

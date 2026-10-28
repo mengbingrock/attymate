@@ -5,7 +5,8 @@ native mixed-runtime evidence covers macOS arm64, stock Codex `0.165.0` and the 
 `0.0.0` artifact. Exact executable hashes and sanitized results are in the
 [evidence record](validation/stock-fork-darwin-arm64-2026-10-27.json).
 
-The complete distributed-agent regression suite passed: **77 suites, 309 tests**. `pnpm typecheck`,
+The complete distributed-agent regression suite passed after the desktop/login update:
+**81 suites, 336 tests**. `pnpm typecheck`,
 scoped fast lint across the 71 touched TypeScript files, and `pnpm exec electron-vite build` passed.
 The production compile ran directly, avoiding the unrelated prebuild pricing refresh. Full root
 lint was run and has the existing-source failures listed below; a complete repository-wide test
@@ -45,7 +46,19 @@ supports `--runtime stock --codex-binary PATH`; its default remains the existing
 
 Release limits remain explicit:
 
-- Stock desktop GUI attachment is gated. Terminal compatibility does not establish GUI compatibility.
+- Model-free native probes returned valid `configRequirements/read` responses for installed
+  stock `0.165.0`, the desktop-bundled official `0.163.0-alpha.11`, and the installed fork.
+  The desktop launcher now validates this response before opening the GUI. Installer regression
+  tests use fake apps or explicit missing paths, including the old stock-desktop rejection test
+  that could otherwise discover and open a real app against its fake server.
+- The Mac stock installer also passed with the desktop-bundled official `0.163.0-alpha.11`
+  server and a pre-existing inert login fixture. It reused that home, connected through the local
+  relay, rendered the optional terminal client, and passed the compiled desktop bridge's
+  requirements/config checks. No GUI or model turn was started in this installer check.
+
+- Stock desktop startup and cached-login reuse were additionally verified with stock `0.165.0`
+  and ChatGPT desktop `26.1016.51333`. The isolated profile reached first-run work preferences;
+  that check does not claim completed onboarding or team-chat navigation.
 - Windows has contract and installer-fixture coverage, without native stock signoff.
 - Linux mixed verification remains incomplete. An amd64 container under QEMU on an ARM host
   started stock App Server, but the fork exited with code 139 before opening its socket. The

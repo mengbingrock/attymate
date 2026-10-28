@@ -4,10 +4,20 @@ import { createServer } from 'node:http';
 import { writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { attachDesktopTransport } from './desktopTransport';
+import { CodexAppServerDaemonFactory } from './codexAppServerClient';
+import { checkDesktopCompatibility } from './desktopCompatibility';
 
 const [socket, control, home, userData, executable, ...args] = process.argv.slice(2);
 if (!socket || !control || !home || !userData || !executable)
   throw new Error('Desktop launcher arguments missing');
+await checkDesktopCompatibility(
+  new CodexAppServerDaemonFactory({
+    binaryPath: process.execPath,
+    codexHome: home,
+    socketPath: socket,
+    ensureDaemon: false,
+  })
+);
 const capability = '/' + randomBytes(32).toString('hex');
 const server = createServer((_req, res) => {
   res.writeHead(404);

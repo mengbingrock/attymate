@@ -13,7 +13,6 @@ import {
   writeFileSync,
   readdirSync,
   lstatSync,
-  realpathSync,
   unlinkSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
@@ -37,23 +36,11 @@ const run = (binary, args, env = process.env) => {
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`Command failed: ${binary} (exit ${result.status})`);
 };
-const assertManagedStockHome = (runtimeKind, serverOwnership, home, env) => {
-  if (runtimeKind !== 'stock' || serverOwnership === 'external') return;
-  const canonical = (path) => {
-    try {
-      return realpathSync(path).toLowerCase();
-    } catch {
-      return resolve(path).toLowerCase();
-    }
-  };
-  const selected = canonical(home);
-  if (selected === canonical(join(dir, 'codex-home'))) return;
-  const personal = [join(homedir(), '.codex'), ...(env.CODEX_HOME ? [env.CODEX_HOME] : [])];
-  if (personal.some((path) => canonical(path) === selected))
-    throw new Error(
-      'Managed stock runtime requires a dedicated Codex home; shared personal-home isolation is not verified.'
-    );
-};
+const desktopExecutable = (config, explicit) => [
+  explicit, config.desktopApp,
+  join(process.env.LOCALAPPDATA, 'Programs', 'Codex', 'Codex.exe'),
+  join(process.env.LOCALAPPDATA, 'Programs', 'ChatGPT', 'ChatGPT.exe'),
+].filter(Boolean).find(existsSync);
 const verify = (root) => {
   const manifest = JSON.parse(readFileSync(join(root, 'runtime-manifest.json'), 'utf8'));
   if (
@@ -152,17 +139,19 @@ if (command === 'install') {
   }
   const home = resolve(
     env.AGENT_TEAMS_INSTALL_CODEX_HOME ||
-      (env.AGENT_TEAMS_INSTALL_PRIVATE_HOME === 'True' || runtimeKind === 'stock'
+      (env.AGENT_TEAMS_INSTALL_PRIVATE_HOME === 'True'
         ? join(dir, 'codex-home')
         : env.CODEX_HOME || join(homedir(), '.codex'))
   );
-  assertManagedStockHome(runtimeKind, serverOwnership, home, env);
   if (existsSync(home) && (!lstatSync(home).isDirectory() || lstatSync(home).isSymbolicLink()))
     throw new Error('Codex home must be a directory, not a link.');
   mkdirSync(home, { recursive: true });
   const loginEnv = { ...env, CODEX_HOME: home };
-  if (spawnSync(binary, ['login', 'status'], { env: loginEnv, stdio: 'ignore' }).status !== 0)
+  if (spawnSync(binary, ['login', 'status'], { env: loginEnv, stdio: 'ignore' }).status !== 0) {
+    if (runtimeKind === 'stock')
+      throw new Error('No existing Codex login is available. Open Codex and sign in there, then rerun this installer. No new sign-in was started.');
     run(binary, ['login', '--device-auth'], loginEnv);
+  }
   let config;
   if (existsSync(configPath)) config = JSON.parse(readFileSync(configPath, 'utf8'));
   else {
@@ -181,6 +170,7 @@ if (command === 'install') {
       installationId: randomUUID(),
       binary,
       home,
+      ...(env.AGENT_TEAMS_INSTALL_DESKTOP_APP ? { desktopApp: env.AGENT_TEAMS_INSTALL_DESKTOP_APP } : {}),
       relay: env.AGENT_TEAMS_INSTALL_RELAY,
       token: env.AGENT_TEAMS_INSTALL_TOKEN,
       team: env.AGENT_TEAMS_INSTALL_TEAM,
@@ -272,15 +262,25 @@ if (command === 'install') {
   }
   console.log(
     'Installed. Open PowerShell and run: & ' +
-      psQuote(join(dir, 'bin', runtimeKind === 'stock' ? 'attach.ps1' : 'desktop.ps1'))
+      psQuote(join(dir, 'bin', 'desktop.ps1'))
   );
+  if (env.AGENT_TEAMS_INSTALL_NO_START !== 'True' && env.AGENT_TEAMS_INSTALL_NO_DESKTOP !== 'True') {
+    if (desktopExecutable(config)) {
+      const log = openSync(join(dir, 'logs', 'desktop.log'), 'a');
+      try {
+        const app = spawn(process.execPath, [self, 'desktop', dir], {
+          env, detached: true, windowsHide: true, stdio: ['ignore', log, log],
+        });
+        app.unref();
+        console.log('Opening Codex desktop with your existing login.');
+      } finally { closeSync(log); }
+    } else console.log('Install Codex desktop, then run bin/desktop.ps1 to open it.');
+  }
   process.exit(0);
 }
 
 const config = JSON.parse(readFileSync(configPath, 'utf8'));
-// The child receives CODEX_HOME=config.home intentionally. Ambient-home validation
-// already ran at installation; do not mistake this private override for a personal home.
-assertManagedStockHome(config.runtimeKind, config.serverOwnership, config.home, {});
+// Reuse the selected login home directly; credentials are never copied between homes.
 const pidFile = join(dir, 'data', 'supervisor.pid');
 const endpointPath = join(dir, 'data', 'app-server.json');
 const statusPath = join(dir, 'data', 'worker-status.json');
@@ -671,14 +671,7 @@ if (command === 'start') {
     childEnv
   );
 } else if (command === 'desktop') {
-  if (config.runtimeKind === 'stock')
-    throw new Error('Stock desktop attachment is not verified; use bin/attach.ps1.');
-  const candidates = [
-    extra[0],
-    join(process.env.LOCALAPPDATA, 'Programs', 'Codex', 'Codex.exe'),
-    join(process.env.LOCALAPPDATA, 'Programs', 'ChatGPT', 'ChatGPT.exe'),
-  ].filter(Boolean);
-  const executable = candidates.find(existsSync);
+  const executable = desktopExecutable(config, extra[0]);
   if (!executable)
     throw new Error('Pass your installed Codex desktop .exe path as the first argument.');
   run(

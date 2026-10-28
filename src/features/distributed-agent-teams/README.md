@@ -39,8 +39,9 @@ that server. Both clients use `agents --remote <endpoint>` to attach to the same
 
 Both runtime kinds can run at once and participate in a mixed team. They have separate node
 identities, data directories, endpoints, services, runtime state, and control-MCP registrations.
-Stock defaults to a dedicated Codex home and its own sign-in. The fork retains its existing login
-options. New registration names include the installation ID, while legacy fork names remain valid.
+Stock reuses the existing Codex home and cached login by default, without starting another
+sign-in. Separate homes remain opt-in; SQLite state, logs and GUI profiles stay per installation,
+while configuration and rollout history in the selected home are shared. New registration names include the installation ID, while legacy fork names remain valid.
 The Worker persists runtime choice, observed executable identity, process ownership, and compatibility
 checks; it does not silently switch kinds or overwrite another installation. Direct-source launches
 can still use private stdio or a shared local daemon.
@@ -56,8 +57,8 @@ Shared-daemon assignment bridges read their current session token from the insta
 Current mixed-runtime native evidence covers **darwin-arm64**: both lead orientations, both delivery
 modes, actual model-driven MCP reads/receipts, Worker restart recovery, and stock/fork terminal client
 attachment. Other platform pairs need their own native signoff; Windows contract/fixture tests do
-not establish native Windows compatibility. Stock desktop GUI attachment is separately gated on a
-verified desktop/server version pair. A2A is an optional future external-agent gateway, with no role
+not establish native Windows compatibility. macOS stock installs open the desktop app by default; terminal attachment is optional.
+The tested startup pair is stock `0.165.0` and ChatGPT desktop `26.1016.51333`. A2A is an optional future external-agent gateway, with no role
 in either installation's required execution or messaging path.
 
 The implementation follows

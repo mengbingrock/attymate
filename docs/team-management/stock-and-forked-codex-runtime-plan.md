@@ -3,6 +3,10 @@
 Status: Implemented; critical feature validation passed on macOS arm64. Plan date: 2026-10-26.
 See the [validation record](stock-fork-validation.md) for evidence and remaining platform/release gates.
 
+Updated user preference: stock uses the existing cached Codex login and opens the desktop app
+by default. This supersedes the original private-home and terminal-first defaults below. Separate
+SQLite/log/socket/GUI state remains; the selected login home also shares config and rollout history.
+
 Add an installation path that runs the official, unmodified Codex binary, its built-in App Server,
 and its terminal client against the existing Agent Teams Worker and Relay. Maintain the bundled
 fork as a supported option. Both kinds of installation must run concurrently on one computer and

@@ -69,7 +69,7 @@ export const ACCOUNT_PORTAL_JS = String.raw`
     $('runtime-buttons').replaceChildren();$('platform-buttons').replaceChildren();
     runtimes.forEach(function(r){var b=button(r.label,'secondary',function(){if(selectedRuntime!==r.id)$('install-result').hidden=true;selectedRuntime=r.id;renderInstallerChoices('runtime-buttons');});b.setAttribute('aria-pressed',String(r.id===selectedRuntime));$('runtime-buttons').appendChild(b);});
     instructionPlatforms.forEach(function(p){var b=button(p.label,'secondary',function(){if(selectedPlatform!==p.id)$('install-result').hidden=true;selectedPlatform=p.id;renderInstallerChoices('platform-buttons');});b.setAttribute('aria-pressed',String(p.id===selectedPlatform));$('platform-buttons').appendChild(b);});
-    $('runtime-choice-help').textContent=selectedRuntime==='stock'?'Uses official Codex installed on this computer, with a separate team installation and sign-in.':'Includes the bundled team runtime using your existing Codex sign-in.';
+    $('runtime-choice-help').textContent=selectedRuntime==='stock'?'Uses your installed Codex, reuses its existing login, and opens the desktop app.':'Includes the bundled team runtime using your existing Codex sign-in.';
     var runtime=installerRuntimes().find(function(r){return r.id===selectedRuntime;});
     var downloadable=canDownload(runtime,selectedPlatform);
     $('download-installer').disabled=!downloadable;
@@ -84,7 +84,7 @@ export const ACCOUNT_PORTAL_JS = String.raw`
     $('app-server-start-command').textContent=ready?localCommand('start'):'Choose your computer above to see its local server command.';
     $('app-server-status-command').textContent=ready?localCommand('status'):'Choose your computer above to see its status command.';
     $('app-server-help').textContent=!ready?'Choose your computer above to see its local socket details.':(windows?'Codex and the worker connect to an authenticated local WebSocket at ws://127.0.0.1 on this computer. The installer selects its port.':'Codex and the worker connect to a private local Unix socket on this computer (unix://). The installer selects its path.')+' The worker connects to a local relay on 127.0.0.1, which forwards team messages to the AWS relay. Codex uses the local App Server socket.';
-    var client=selectedRuntime==='stock'||selectedPlatform.indexOf('linux-')===0?'attach':'desktop';
+    var client=selectedPlatform.indexOf('linux-')===0?'attach':'desktop';
     $('client-launch-label').textContent=client==='attach'?'Open the connected Codex terminal client:':'Launch your connected desktop:';
     $('desktop-launch-command').textContent=ready?localCommand(client):'Choose your computer above to see its client command.';
     ['copy-app-server-start','copy-app-server-status','copy-desktop-launch'].forEach(function(id){$(id).disabled=!ready;});

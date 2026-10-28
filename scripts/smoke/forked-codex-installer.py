@@ -52,8 +52,8 @@ def main():
     parser.add_argument('--codex-binary', type=Path)
     parser.add_argument('--existing-login', action='store_true')
     args = parser.parse_args()
-    if args.runtime == 'stock' and (not args.codex_binary or args.existing_login):
-        parser.error('Stock smoke requires --codex-binary and an isolated login home')
+    if args.runtime == 'stock' and not args.codex_binary:
+        parser.error('Stock smoke requires --codex-binary')
     root = args.root.resolve()
     if root.parent != Path('/private/tmp').resolve() or not root.name.startswith('agent-teams-'):
         raise RuntimeError('Use a new agent-teams-* directory under /private/tmp')
@@ -105,7 +105,7 @@ def main():
                  '--relay', address['wsUrl'], '--token', worker_token, '--team', str(uuid.uuid4()),
                  '--out', str(installer), '--runtime', args.runtime], env=env, timeout=180)
             print('Built native installer; testing install and private Node selection', flush=True)
-            install_args = ['bash', str(installer), '--dir', str(install), '--label', 'Mac reverse SSH smoke', '--no-service']
+            install_args = ['bash', str(installer), '--dir', str(install), '--label', 'Mac reverse SSH smoke', '--no-service', '--no-desktop']
             if not args.existing_login: install_args.append('--private-codex-home')
             if args.runtime == 'stock':
                 install_args.extend(['--codex-binary', str(args.codex_binary.resolve())])
@@ -181,22 +181,16 @@ client.onmessage = event => {
 };
 client.onerror = () => { console.error('Desktop transport failed'); process.exit(1); };
 ''')
-            if args.runtime == 'fork':
-                try:
-                    desktop = run([node, str(install / 'bin/desktop-bridge.mjs'), socket, binary,
-                                   str(home), str(install / 'desktop-data'), node, str(desktop_probe)],
-                                  env=env, cwd=root, timeout=20)
-                except subprocess.CalledProcessError as error:
-                    raise RuntimeError('Desktop transport failed: ' + error.stderr[-2000:]) from error
-                if not json.loads(desktop.stdout)['configRead']:
-                    raise RuntimeError('Desktop transport could not read daemon config')
-            else:
-                desktop_launcher = install / 'bin/desktop.sh'
-                if desktop_launcher.exists():
-                    desktop = subprocess.run(['bash', str(desktop_launcher)], env=env,
-                                             cwd=root, text=True, capture_output=True, timeout=10)
-                    if desktop.returncode == 0:
-                        raise RuntimeError('Unverified stock GUI launcher was enabled')
+            try:
+                (install / 'desktop-data').mkdir(mode=0o700, exist_ok=True)
+                desktop = run([node, str(install / 'worker/desktopBridgeCli.js'), socket,
+                               shell_value(script, 'CONTROL_SOCK'),
+                               str(home), str(install / 'desktop-data'), node, str(desktop_probe)],
+                              env=env, cwd=root, timeout=20)
+            except subprocess.CalledProcessError as error:
+                raise RuntimeError('Desktop transport failed: ' + error.stderr[-2000:]) from error
+            if not json.loads(desktop.stdout)['configRead']:
+                raise RuntimeError('Desktop transport could not read daemon config')
             descriptor = json.loads((install / 'data/runtime-installation.json').read_text())
             config_after = (home / 'config.toml').read_text()
             if config_before_text.strip() not in config_after:
@@ -213,7 +207,7 @@ client.onerror = () => { console.error('Desktop transport failed'); process.exit
                       'configUnchanged': config_before == hashlib.sha256((home / 'config.toml').read_bytes()).hexdigest(),
                       'unrelatedConfigPreserved': True,
                       'modelTurnsStarted': 0, 'testDirectory': str(root)}
-            report['desktopTransportTested'] = args.runtime == 'fork'
+            report['desktopTransportTested'] = True
             report['desktopGuiRendered'] = False
             (root / 'mac-smoke-result.json').write_text(json.dumps(report, indent=2) + '\n')
             print(json.dumps(report), flush=True)

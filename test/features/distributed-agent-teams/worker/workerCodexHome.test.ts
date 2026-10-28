@@ -1,22 +1,38 @@
 // @vitest-environment node
 
-import { chmod, lstat, mkdir, mkdtemp, readdir, symlink, writeFile } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
+import {
+  chmod,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { prepareWorkerCodexHome } from '@claude-teams/agent-teams-worker';
 import { describe, expect, it } from 'vitest';
 
 describe('prepareWorkerCodexHome', () => {
-  it('rejects the personal Codex home before managed stock can modify it', async () => {
+  it('reuses the selected existing login home for stock without copying credentials', async () => {
     const root = await mkdtemp(join(tmpdir(), 'agent-teams-stock-home-'));
-    await expect(
-      prepareWorkerCodexHome({
-        dataDir: root,
-        codexHome: join(homedir(), '.codex'),
-        managedStock: true,
-      })
-    ).rejects.toThrow('requires a dedicated --codex-home');
+    const home = join(root, 'existing-codex');
+    await mkdir(home, { mode: 0o700 });
+    await writeFile(join(home, 'auth.json'), '{"fixture":"existing-login"}');
+    const prepared = await prepareWorkerCodexHome({
+      dataDir: root,
+      processEnv: { CODEX_HOME: home },
+      reuseExistingLogin: true,
+    });
+    expect(prepared.codexHome).toBe(home);
+    expect(prepared.env.CODEX_HOME).toBe(home);
+    expect(await readdir(home)).toEqual(['auth.json']);
+    await expect(readFile(join(home, 'auth.json'), 'utf8')).resolves.toBe(
+      '{"fixture":"existing-login"}'
+    );
   });
   it('creates a private empty Codex home under Worker data without copying credentials', async () => {
     const root = await mkdtemp(join(tmpdir(), 'agent-teams-worker-codex-home-'));

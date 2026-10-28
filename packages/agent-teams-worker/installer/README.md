@@ -27,7 +27,8 @@ local relay and loads the existing sibling `cli.js` in the same process. Both st
 
 An existing sign-in is reused directly from the selected Codex home. Authentication is never
 copied into another home. If no sign-in exists, the installer guides login in the browser or with
-`--device-auth`. Use `--private-codex-home` for a separate sign-in at `<dir>/codex-home`, or
+`--device-auth` for the bundled fork. Stock never starts another login by default. Use
+`--private-codex-home` for a separate home at `<dir>/codex-home`, or
 `--codex-home DIR` to choose a specific home. Existing directories must have mode 0700; their
 permissions are not changed. Setup adds only this installation's owned MCP registration to
 `config.toml`, preserving unrelated settings and registrations. `--existing-codex-home` remains a compatibility
@@ -131,13 +132,13 @@ A stock artifact contains Worker code without any bundled Codex runtime. The sto
 accepts `--codex-binary /absolute/path/to/codex`, or resolves `codex` from PATH. It records the
 selected path in its launch script and fails if that binary is missing or incompatible.
 
-Stock installs default to `mate-<team-prefix>-stock` and a private `codex-home` requiring its own
-normal Codex sign-in. Fork installs keep their previous directory and login behavior. Each new
-installation has its own node identity, service, sockets, runtime state, and control-MCP name.
-Managed stock installs reject `--existing-codex-home` and an explicit personal Codex home because
-shared rollout/session storage has not been verified across runtime versions. A custom dedicated
-home can be selected with `--codex-home`; external-server mode accepts the operator's explicit
-home and reports that its storage isolation is managed by the operator.
+Stock installs default to `mate-<team-prefix>-stock` and reuse the existing Codex login from
+`CODEX_HOME` or `~/.codex`. Credentials are read directly, never copied. The installer checks
+`login status` and does not initiate another stock sign-in; if the cache is unavailable it asks
+the user to restore the login in Codex. `--codex-home` selects an existing home, while
+`--private-codex-home` remains an explicit separate-home option. Each installation keeps its own
+node identity, service, sockets, SQLite database, logs and control-MCP name. The selected home
+shares credentials, configuration and rollout history; this is not complete session-storage isolation.
 Installing a different runtime kind into an existing directory is rejected; use another `--dir`.
 Existing fork directories preserve the legacy MCP registration name on upgrade. New installations
 use `agent_teams_control_<installation-id>` so registering another installation cannot replace it.
@@ -160,8 +161,16 @@ that server. The normal managed mode starts a dedicated stock App Server and sup
 the Worker. In both cases `bin/attach.sh` connects the selected stock terminal client to that
 exact endpoint. `bin/stop.sh` stops this installation; `bin/uninstall.sh` also removes only its
 service and control-MCP entry while retaining runtime data and login. Select a Worker-created team
-thread; an arbitrary new chat is not enrolled by merely connecting to the server. Stock `bin/desktop.sh` is gated until a desktop/server version
-pair has been verified. Existing fork desktop attachment continues to work.
+thread; an arbitrary new chat is not enrolled by merely connecting to the server. On macOS,
+the installer opens the Codex desktop app by default, connected to the same server. Use
+`--no-desktop` for headless setup or `--desktop-app /path/to/Codex.app` to choose the app.
+`bin/desktop.sh` opens the app later; `bin/attach.sh` is the optional terminal client.
+On macOS, a default desktop installation prefers the official Codex server bundled with the
+selected app, so its protocol matches the GUI. An explicit `--codex-binary` still takes precedence;
+`--no-desktop` uses the selected binary or `codex` on PATH. Before opening the GUI, the compiled
+launcher validates the server's real `configRequirements/read` application-network policy.
+An unavailable or malformed response stops the launch with recovery instructions; the bridge
+does not replace missing requirements with an unrestricted policy.
 
 Running directly from source also bypasses the fork installer:
 
@@ -205,11 +214,12 @@ If an App Server accepts a turn but its response is lost, delivery reconciles th
 thread before retrying. Outcomes that cannot be established remain uncertain and require
 reconciliation; restarting the Worker does not automatically resubmit them.
 
-On Windows the stock template accepts `-CodexBinary`, defaults to a private home and a separate
-`-stock` directory, and uses an authenticated loopback WebSocket. External mode additionally
+On Windows the stock template accepts `-CodexBinary`, reuses the existing Codex login, keeps a
+separate `-stock` directory, and uses an authenticated loopback WebSocket. External mode additionally
 requires `-ServerOwnership external`, `-AppServerSocket ws://127.0.0.1:<port>`, `-CodexHome`, and
 `-AppServerTokenFile` pointing to the server capability token. Stock terminal attachment uses
-`attach.ps1`; stock GUI attachment remains gated. Publish a platform/runtime pair only after its
+`attach.ps1` optionally. Desktop launch is the default; `-NoDesktop` opts out and `-DesktopApp`
+selects an executable. Publish a platform/runtime pair only after its
 native smoke test passes; syntax and fixture checks do not establish native Windows compatibility.
 
 ## Mixed runtime native verification
@@ -225,8 +235,10 @@ and rejection of old-thread calls during a successor assignment. See the
 [validation record](../../../docs/team-management/stock-fork-validation.md) for exact hashes and limits.
 
 The matrix does not certify other operating systems or architectures. In particular, Windows
-contract and installer-fixture checks are not native Windows signoff. Stock GUI attachment remains
-gated separately from terminal verification. The historical fork-only verification below applies
+contract and installer-fixture checks are not native Windows signoff. Stock desktop startup and
+cached-login reuse were additionally verified with stock `0.165.0` and ChatGPT desktop
+`26.1016.51333`; the isolated GUI profile reached first-run work preferences. That startup check
+does not claim completed onboarding or team-chat navigation. The historical fork-only verification below applies
 to its recorded artifacts and does not certify a new stock platform pair.
 
 ## Native Mac verification

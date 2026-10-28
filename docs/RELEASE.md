@@ -28,8 +28,9 @@ Worker restarts, and actual terminal clients using disposable homes and a loopba
 The current [validation record](team-management/stock-fork-validation.md) also covers native task
 reporting, lead review receipt, fencing, and isolation from a successor assignment.
 Windows contract and fixture checks are not native Windows signoff. Other advertised pairs require
-their own native verification. Stock desktop GUI attachment remains a separate capability gate;
-a successful terminal smoke does not enable it automatically. Historical fork-only verification
+their own native verification. macOS stock installs reuse cached login and open the desktop app by default. The verified
+startup pair is stock `0.165.0` with ChatGPT desktop `26.1016.51333`; other pairs require
+their own desktop verification. Historical fork-only verification
 continues to apply to its recorded artifact/version, without certifying new stock distributions.
 
 ## Before creating a release

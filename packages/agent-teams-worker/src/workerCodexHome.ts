@@ -1,4 +1,4 @@
-import { chmod, lstat, mkdir, realpath } from 'node:fs/promises';
+import { chmod, lstat, mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, parse, resolve } from 'node:path';
 
@@ -14,19 +14,18 @@ export const prepareWorkerCodexHome = async (options: {
   readonly dataDir: string;
   readonly codexHome?: string;
   readonly processEnv?: NodeJS.ProcessEnv;
-  readonly managedStock?: boolean;
+  readonly reuseExistingLogin?: boolean;
 }): Promise<PreparedWorkerCodexHome> => {
-  const codexHome = resolveWorkerCodexHomePath(options.dataDir, options.codexHome);
+  const processEnv = options.processEnv ?? process.env;
+  const codexHome = resolveWorkerCodexHomePath(
+    options.dataDir,
+    options.codexHome ??
+      (options.reuseExistingLogin
+        ? processEnv.CODEX_HOME?.trim() || join(homedir(), '.codex')
+        : undefined)
+  );
   if (codexHome === parse(codexHome).root) {
     throw new Error('Worker Codex home must not be a filesystem root');
-  }
-  if (options.managedStock) {
-    const canonical = async (path: string) => realpath(path).catch(() => resolve(path));
-    if ((await canonical(codexHome)) === (await canonical(join(homedir(), '.codex')))) {
-      throw new Error(
-        'Managed stock runtime requires a dedicated --codex-home; the personal Codex home shares sessions and runtime state'
-      );
-    }
   }
 
   let created = false;
@@ -40,7 +39,9 @@ export const prepareWorkerCodexHome = async (options: {
 
   const stat = await lstat(codexHome);
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
-    throw new Error(`Worker Codex home must be a directory, not a file or symbolic link: ${codexHome}`);
+    throw new Error(
+      `Worker Codex home must be a directory, not a file or symbolic link: ${codexHome}`
+    );
   }
   if (process.platform !== 'win32') {
     if (created) {
@@ -52,6 +53,6 @@ export const prepareWorkerCodexHome = async (options: {
 
   return {
     codexHome,
-    env: { ...(options.processEnv ?? process.env), CODEX_HOME: codexHome },
+    env: { ...processEnv, CODEX_HOME: codexHome },
   };
 };

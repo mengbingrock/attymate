@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { execFile, spawn } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -129,7 +129,16 @@ setInterval(() => {}, 1000);
   const installFork = (extraArgs: string[] = [], extraEnv: Record<string, string> = {}) =>
     exec(
       'bash',
-      [installer, '--dir', install, '--label', 'Test member', '--no-service', ...extraArgs],
+      [
+        installer,
+        '--dir',
+        install,
+        '--label',
+        'Test member',
+        '--no-service',
+        '--no-desktop',
+        ...extraArgs,
+      ],
       {
         env: {
           ...process.env,
@@ -445,14 +454,12 @@ fetch(new URL('/', endpoint.replace(/^ws:/, 'http:'))).then(async response => {
     return stock;
   };
 
-  it('requires a dedicated managed stock home and keeps personal authentication untouched', async () => {
+  it('uses the existing stock login by default without copying credentials or signing in again', async () => {
     const stock = await buildStock();
-    await expect(installFork(['--codex-binary', stock, '--existing-codex-home'])).rejects.toThrow(
-      /not verified for stock/
-    );
-    await expect(
-      installFork(['--codex-binary', stock, '--codex-home', join(root, '.codex')])
-    ).rejects.toThrow(/requires a dedicated Codex home/);
+    await installFork(['--codex-binary', stock]);
+    const worker = JSON.parse(await readFile(join(root, 'worker.json'), 'utf8'));
+    supervisorPid = worker.parent;
+    expect(worker.args[worker.args.indexOf('--codex-home') + 1]).toBe(join(root, '.codex'));
     expect(await readFile(join(root, '.codex/auth.json'), 'utf8')).toBe(
       '{"testCredential":"do-not-copy"}'
     );
@@ -460,8 +467,65 @@ fetch(new URL('/', endpoint.replace(/^ws:/, 'http:'))).then(async response => {
       .trim()
       .split('\n')
       .map((line) => JSON.parse(line));
-    expect(calls.some((call) => call.args[0] === 'login')).toBe(false);
+    expect(calls.filter((call) => call.args[0] === 'login').map((call) => call.args)).toEqual([
+      ['login', 'status'],
+    ]);
+    await expect(readFile(join(install, 'codex-home/auth.json'))).rejects.toThrow();
   });
+
+  it('does not initiate another stock sign-in when the existing login is unavailable', async () => {
+    const stock = await buildStock();
+    const source = await readFile(stock, 'utf8');
+    await writeFile(
+      stock,
+      source.replace(
+        "else if (args[0] === 'login') process.exit(0);",
+        "else if (args[0] === 'login') process.exit(1);"
+      )
+    );
+    await expect(installFork(['--codex-binary', stock])).rejects.toThrow(
+      'No new sign-in was started'
+    );
+    const calls = (await readFile(join(root, 'fork-calls.jsonl'), 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(calls.filter((call) => call.args[0] === 'login').map((call) => call.args)).toEqual([
+      ['login', 'status'],
+    ]);
+  });
+
+  it.runIf(process.platform === 'darwin')(
+    'uses the desktop app bundled stock server and existing login when opening the app',
+    async () => {
+      const stock = await buildStock();
+      const app = join(root, 'Stock desktop.app');
+      const executable = join(app, 'Contents/MacOS/Probe');
+      await mkdir(join(app, 'Contents/MacOS'), { recursive: true });
+      const bundledCodex = join(app, 'Contents/Resources/codex-cli/bin/codex');
+      await mkdir(join(app, 'Contents/Resources/codex-cli/bin'), { recursive: true });
+      await copyFile(stock, bundledCodex);
+      await writeFile(
+        join(app, 'Contents/Info.plist'),
+        '<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleExecutable</key><string>Probe</string></dict></plist>'
+      );
+      await writeFile(
+        executable,
+        `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(join(root, 'auto-desktop.json'))}, JSON.stringify({home:process.env.CODEX_HOME,endpoint:process.env.CODEX_APP_SERVER_WS_URL}));\n`
+      );
+      await chmod(executable, 0o700);
+      await installFork(['--desktop-app', app]);
+      const worker = JSON.parse(await readFile(join(root, 'worker.json'), 'utf8'));
+      supervisorPid = worker.parent;
+      expect(worker.args[worker.args.indexOf('--codex-binary') + 1]).toBe(bundledCodex);
+      expect(worker.args).toContain('--desktop-launcher');
+      await vi.waitFor(async () => {
+        const desktop = JSON.parse(await readFile(join(root, 'auto-desktop.json'), 'utf8'));
+        expect(desktop.home).toBe(join(root, '.codex'));
+        expect(desktop.endpoint).toMatch(/^ws:\/\/127\.0\.0\.1:/);
+      });
+    }
+  );
 
   it('quotes systemd launcher paths and escapes literal specifiers and environment syntax', async () => {
     const stock = await buildStock();
@@ -524,8 +588,8 @@ if (process.argv.includes('enable')) {
     supervisorPid = worker.parent;
     expect(worker.args[worker.args.indexOf('--codex-binary') + 1]).toBe(stock);
     expect(worker.args[worker.args.indexOf('--runtime-kind') + 1]).toBe('stock');
-    expect(worker.args[worker.args.indexOf('--codex-home') + 1]).toBe(join(install, 'codex-home'));
-    expect(worker.args).not.toContain('--desktop-launcher');
+    expect(worker.args[worker.args.indexOf('--codex-home') + 1]).toBe(join(root, '.codex'));
+    expect(worker.args.includes('--desktop-launcher')).toBe(process.platform === 'darwin');
     const metadata = JSON.parse(await readFile(join(install, 'installation.json'), 'utf8'));
     expect(metadata.runtimeKind).toBe('stock');
     expect(metadata.controlMcpName).toMatch(/^agent_teams_control_[a-f0-9]{32}$/);
@@ -534,7 +598,9 @@ if (process.argv.includes('enable')) {
     ).rejects.toThrow();
     const attached = await exec('bash', [join(install, 'bin/attach.sh')]);
     expect(JSON.parse(attached.stdout).result.userAgent).toBe('test-fork');
-    await expect(exec('bash', [join(install, 'bin/desktop.sh')])).rejects.toThrow(/not verified/);
+    await expect(
+      exec('bash', [join(install, 'bin/desktop.sh'), join(root, 'Missing desktop.app')])
+    ).rejects.toThrow(/Install Codex desktop|supports macOS/);
     await stageAndBuild();
     await expect(installFork()).rejects.toThrow(/runtime differs/);
   });

@@ -272,7 +272,7 @@ it.each(['darwin-x64', 'linux-x64', 'win32-x64'])(
   }
 );
 
-it('selects stock artifacts independently and shows only the supported terminal attachment', async () => {
+it('selects stock artifacts independently and offers the desktop with the existing login', async () => {
   const browser = new Window({
     url: 'https://relay.example/next/join/',
     settings: { disableJavaScriptFileLoading: true, disableCSSFileLoading: true },
@@ -339,7 +339,10 @@ it('selects stock artifacts independently and shows only the supported terminal 
     expect(
       (browser.document.getElementById('platform') as unknown as HTMLSelectElement).value
     ).toBe('darwin-x64');
-    expect(browser.document.getElementById('desktop-option')!.hasAttribute('hidden')).toBe(true);
+    expect(browser.document.getElementById('desktop-option')!.hasAttribute('hidden')).toBe(false);
+    expect(browser.document.getElementById('desktop-command')!.textContent).toContain(
+      'mate-40000000-stock/bin/desktop.sh'
+    );
     expect(browser.document.getElementById('attach-command')!.textContent).toContain(
       'mate-40000000-stock/bin/attach.sh'
     );

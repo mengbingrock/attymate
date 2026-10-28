@@ -95,7 +95,7 @@ export const JOIN_PORTAL_HTML = String.raw`<!doctype html>
         <h3><span class="step">1</span>Install and start</h3>
         <button id="download" type="button" class="primary">Download installer</button>
         <p id="download-error" class="error" role="alert" hidden></p>
-        <p class="muted">After the download finishes, run this in Terminal or PowerShell. The installer reuses your Codex sign-in and starts your team member:</p>
+        <p class="muted">After the download finishes, run this in Terminal or PowerShell. The installer reuses your Codex sign-in, connects your team member, and opens the desktop app:</p>
         <div class="code"><pre id="run-command"></pre><button type="button" class="copy" data-copy="run-command">Copy</button></div>
         <p class="warn">The installer contains your join token. Keep it to yourself.</p>
         <p class="muted">For a separate Codex sign-in, add <code>--private-codex-home</code> to the install command.</p>
@@ -110,7 +110,7 @@ export const JOIN_PORTAL_HTML = String.raw`<!doctype html>
         <p class="muted">Check this installation’s status:</p>
         <div class="code"><pre id="app-server-status-command"></pre><button type="button" class="copy" data-copy="app-server-status-command">Copy</button></div>
         <h3><span class="step">3</span>Open Codex</h3>
-        <p class="muted">When installation reports Connected, run this in Terminal to open your team's local Codex client:</p>
+        <p class="muted">The installer opens Codex desktop automatically. To use the optional terminal client, run:</p>
         <div class="code"><pre id="attach-command"></pre><button type="button" class="copy" data-copy="attach-command">Copy</button></div>
         <div id="desktop-option" hidden>
           <p class="muted">On macOS, open your installed Codex desktop app with the same App Server:</p>
@@ -561,7 +561,7 @@ export const JOIN_PORTAL_APP_JS = String.raw`
       if (current.downloadPlatforms.length === 1) select.value = current.downloadPlatforms[0].id;
     }
     $('platform-field').hidden = !current.platforms.length;
-    $('runtime-help').textContent = current.runtime === 'stock' ? 'Uses the official Codex already installed on this computer. Creates a separate team installation and guides you through its sign-in.' : 'Includes the bundled team runtime and starts its local App Server using your existing Codex login.';
+    $('runtime-help').textContent = current.runtime === 'stock' ? 'Uses your installed Codex and its existing login. Opens the desktop app after connecting.' : 'Includes the bundled team runtime and starts its local App Server using your existing Codex login.';
     updateInstallerSelection();
   }
 
@@ -590,8 +590,8 @@ export const JOIN_PORTAL_APP_JS = String.raw`
     $('app-server-status-command').textContent = ready ? localCommand('status') : 'Choose your computer above to get its status command.';
     $('app-server-help').textContent = !ready ? 'Choose your computer above to see its local socket details.' : (windows ? 'Codex and the worker connect to an authenticated local WebSocket at ws://127.0.0.1 on this computer. The installer selects its port.' : 'Codex and the worker connect to a private local Unix socket on this computer (unix://). The installer selects its path.') + ' The worker connects to a local relay on 127.0.0.1, which forwards team messages to the AWS relay. Codex uses the local App Server socket.';
     $('attach-command').textContent = windows ? '& "$env:LOCALAPPDATA/AgentTeams/mate-' + current.team.teamId.slice(0,8) + (current.runtime === 'stock' ? '-stock' : '') + '/bin/attach.ps1"' : 'bash "$HOME/.local/share/agent-teams/mate-' + current.team.teamId.slice(0,8) + (current.runtime === 'stock' ? '-stock' : '') + '/bin/attach.sh"';
-    $('desktop-option').hidden = current.runtime === 'stock' || !current.platform || current.platform.indexOf('darwin-') !== 0;
-    $('desktop-command').textContent = 'bash "$HOME/.local/share/agent-teams/mate-' + current.team.teamId.slice(0, 8) + '/bin/desktop.sh"';
+    $('desktop-option').hidden = !current.platform || current.platform.indexOf('darwin-') !== 0;
+    $('desktop-command').textContent = 'bash "$HOME/.local/share/agent-teams/mate-' + current.team.teamId.slice(0, 8) + (current.runtime === 'stock' ? '-stock' : '') + '/bin/desktop.sh"';
   }
 
   function download() {
