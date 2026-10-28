@@ -10,6 +10,7 @@ import {
   joinTeamMemberRequestSchema,
   leaveTeamMemberRequestSchema,
   membershipIdSchema,
+  nodeIdSchema,
   runtimeControlSchema,
   runtimeSessionCreateRequestSchema,
   runtimeSessionIdSchema,
@@ -1470,6 +1471,20 @@ export const startAgentTeamsRelay = async (
       routes: membershipRouteStore,
       desktop: desktopChats,
       online: () => new Set(sessions.keys()),
+      removeDevice: (device) => {
+        if (!device.nodeId) return;
+        for (const membership of membershipRouteStore.listActiveForTeam(device.teamId)) {
+          if (membership.nodeId === device.nodeId)
+            leaveTeamMember(device.teamId, { membershipId: membership.membershipId });
+        }
+        const session = sessions.get(nodeIdSchema.parse(device.nodeId));
+        if (session) {
+          // Remove authorization immediately; queued frames cannot act while close completes.
+          sessions.delete(nodeIdSchema.parse(device.nodeId));
+          session.socket.close(4011, 'Device removed from the team');
+          void persistProjection();
+        }
+      },
       setCoordination: portalDependencies.setCoordination,
     });
 

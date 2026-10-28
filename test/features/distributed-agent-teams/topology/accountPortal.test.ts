@@ -30,6 +30,36 @@ const provider = {
   })),
 };
 
+it('revokes only an owned, unchanged device credential and persists removal', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'accounts-revoke-'));
+  let store = new RelayAccountStore(root);
+  try {
+    const a = store.signIn({ sub: 'a', email: 'a@example.test', name: 'A' });
+    const b = store.signIn({ sub: 'b', email: 'b@example.test', name: 'B' });
+    const teamId = randomUUID();
+    store.addOwner(teamId, a.user.id);
+    const { token, device } = store.createDevice(teamId, a.user.id, 'waiting');
+    expect(() => store.revokeDevice(b.user.id, device.id, null)).toThrow('Device not found');
+    const nodeId = randomUUID();
+    expect(store.bindDevice(device.id, nodeId)).toBe(true);
+    expect(() => store.revokeDevice(a.user.id, device.id, null)).toThrow('This device changed');
+    expect(store.resolveDevice(token)).toBeDefined();
+    store.revokeDevice(a.user.id, device.id, nodeId);
+    expect(store.resolveDevice(token)).toBeUndefined();
+    expect(store.bindDevice(device.id, nodeId)).toBe(false);
+    const removedAt = store.device(device.id)!.revokedAt;
+    store.revokeDevice(a.user.id, device.id, nodeId);
+    expect(store.device(device.id)!.revokedAt).toBe(removedAt);
+    store.close();
+    store = new RelayAccountStore(root);
+    expect(store.resolveDevice(token)).toBeUndefined();
+    expect(store.device(device.id)!.revokedAt).toBe(removedAt);
+    expect(store.membership(teamId, a.user.id)).toBeDefined();
+  } finally {
+    store.close();
+  }
+});
+
 it('persists sessions and memberships, consumes bound login state once, and rejects reused/expired/revoked invitations', async () => {
   let now = Date.now();
   const root = await mkdtemp(join(tmpdir(), 'accounts-store-'));
@@ -370,6 +400,67 @@ it('runs Google login, scoped team creation, invitation acceptance, dashboard an
       expect(stockInstaller.body).toContain('RUNTIME_KIND="stock"');
       expect(stockInstaller.headers['content-disposition']).toContain('-stock-darwin-x64.sh');
     }
+    const devicesBeforeRemoval = (
+      await gateway.app.inject({ url: '/join/api/account/dashboard', headers: member })
+    ).json().devices;
+    const waiting = devicesBeforeRemoval.find((d: { nodeId: string | null }) => !d.nodeId);
+    const remove = (id: string, headers: typeof member, expectedNodeId: string | null) =>
+      gateway.app.inject({
+        method: 'POST',
+        url: '/join/api/account/devices/' + id + '/remove',
+        headers,
+        payload: { expectedNodeId },
+      });
+    expect((await remove(waiting.id, owner, null)).statusCode).toBe(404);
+    expect(
+      (await remove(waiting.id, { cookie: member.cookie } as typeof member, null)).statusCode
+    ).toBe(403);
+    expect((await remove(waiting.id, member, null)).statusCode).toBe(200);
+    expect((await remove(enrollment.id, member, null)).statusCode).toBe(409);
+    expect(worker.getStatus().state).toBe('connected');
+    const second = (
+      await gateway.app.inject({
+        method: 'POST',
+        url: '/join/api/account/teams/' + team.teamId + '/installations',
+        headers: member,
+        payload: { label: 'keep-online' },
+      })
+    ).json();
+    const survivor = await startAgentTeamsWorker({
+      relayUrl: relay.wsUrl,
+      relayToken: second.token,
+      dataDir: join(root, 'surviving-worker'),
+      organizationId: organizationIdSchema.parse(randomUUID()),
+      personId: personIdSchema.parse(randomUUID()),
+      nodeId: nodeIdSchema.parse(randomUUID()),
+      workerInstanceId: workerInstanceIdSchema.parse(randomUUID()),
+      workerGeneration: 1,
+      label: 'keep-online',
+      autoJoinTeamId: teamIdSchema.parse(team.teamId),
+      reconnectDelayMs: 100,
+    });
+    workers.push(survivor);
+    await survivor.ready;
+    await vi.waitFor(async () => {
+      const view = (
+        await gateway.app.inject({ url: '/join/api/account/dashboard', headers: member })
+      ).json();
+      expect(view.teams[0].agents).toHaveLength(2);
+    });
+    expect((await remove(enrollment.id, outsider, enrollment.nodeId)).statusCode).toBe(404);
+    expect((await remove(enrollment.id, member, enrollment.nodeId)).statusCode).toBe(200);
+    await vi.waitFor(async () => {
+      const view = (
+        await gateway.app.inject({ url: '/join/api/account/dashboard', headers: member })
+      ).json();
+      expect(
+        view.devices.some((d: { id: string }) => [waiting.id, enrollment.id].includes(d.id))
+      ).toBe(false);
+      expect(view.devices.find((d: { id: string }) => d.id === second.device.id).online).toBe(true);
+      expect(view.teams[0].agents).toHaveLength(1);
+      expect(worker.getStatus().state).toBe('reconnecting');
+      expect(survivor.getStatus().state).toBe('connected');
+    });
     await gateway.app.inject({
       method: 'POST',
       url: '/join/api/account/logout',

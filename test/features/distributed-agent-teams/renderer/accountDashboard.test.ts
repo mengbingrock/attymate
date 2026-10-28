@@ -31,6 +31,60 @@ const mount = (b: Window) => {
   b.document.dispatchEvent(new b.Event('DOMContentLoaded'));
 };
 
+it('requires confirmation to remove a device and preserves other devices after refresh', async () => {
+  const b = browserFor(base + '/join/?team=' + team.teamId);
+  const pending = { id: 'pending-device', label: 'old download', nodeId: null, online: false };
+  const online = { id: 'online-device', label: 'keep online', nodeId: 'node', online: true };
+  let removed = false;
+  const writes: unknown[] = [];
+  b.fetch = vi.fn(async (url, options) => {
+    const path = String(url).split('api/account/')[1];
+    if (path === 'session')
+      return new b.Response(
+        JSON.stringify({ configured: true, user, csrf: 'csrf', installerPlatforms: [] })
+      );
+    if (path === 'dashboard')
+      return new b.Response(
+        JSON.stringify({ teams: [{ ...team, devices: removed ? [online] : [pending, online] }] })
+      );
+    if (path === 'devices/pending-device/remove') {
+      expect(options?.method).toBe('POST');
+      expect((options?.headers as Record<string, string>)['x-csrf-token']).toBe('csrf');
+      writes.push(JSON.parse(String(options?.body)));
+      removed = true;
+      return new b.Response('{"removed":true}');
+    }
+    throw new Error('Unexpected API: ' + path);
+  }) as typeof b.fetch;
+  const click = (label: string) => {
+    const button = [
+      ...b.document.querySelectorAll('[data-device-id="pending-device"] button'),
+    ].find((el) => el.textContent === label);
+    expect(button).toBeDefined();
+    (button as unknown as HTMLButtonElement).click();
+  };
+  try {
+    mount(b);
+    await vi.waitFor(() => expect(b.document.querySelectorAll('.device-card')).toHaveLength(2));
+    click('Remove device');
+    expect(writes).toEqual([]);
+    expect(b.document.getElementById('my-devices')!.textContent).toContain(
+      'Codex login and local chats are kept'
+    );
+    click('Cancel');
+    expect(writes).toEqual([]);
+    click('Remove device');
+    click('Confirm removal');
+    await vi.waitFor(() => expect(b.document.querySelectorAll('.device-card')).toHaveLength(1));
+    expect(writes).toEqual([{ expectedNodeId: null }]);
+    expect(b.document.getElementById('my-devices')!.textContent).toContain('keep online');
+    expect(b.document.getElementById('notice')!.textContent).toContain('bin/uninstall.sh');
+    expect(b.localStorage.length).toBe(0);
+  } finally {
+    await b.happyDOM.close();
+  }
+});
+
 it('shows Google sign-in without persisting credentials in browser storage', async () => {
   const b = browserFor();
   b.fetch = vi.fn(

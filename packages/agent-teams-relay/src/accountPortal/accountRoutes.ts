@@ -13,7 +13,12 @@ import {
 import type { RelayTeamDirectoryStore } from '../relayTeamDirectoryStore';
 import type { RelayMembershipRouteStore } from '../relayMembershipRouteStore';
 import type { RelayDesktopChats } from '../relayDesktopChats';
-import { AccountPortalError, type AccountSession, type RelayAccountStore } from './accountStore';
+import {
+  AccountPortalError,
+  type AccountDevice,
+  type AccountSession,
+  type RelayAccountStore,
+} from './accountStore';
 import {
   createGoogleSignInProvider,
   type GoogleSignInConfig,
@@ -51,6 +56,7 @@ export const registerAccountRoutes = (deps: {
   routes: RelayMembershipRouteStore;
   desktop: RelayDesktopChats;
   online: () => ReadonlySet<string>;
+  removeDevice: (device: AccountDevice) => void;
   setCoordination: (
     teamId: ReturnType<typeof teamIdSchema.parse>,
     coordination: 'led' | 'leaderless'
@@ -417,6 +423,30 @@ export const registerAccountRoutes = (deps: {
           'Check the pairing code and make sure this device is connected to this team.'
         );
       return { device: store.claimDevice(teamId, user.id, device.nodeId, device.label) };
+    })
+  );
+  app.post(
+    '/join/api/account/devices/:deviceId/remove',
+    safe((request) => {
+      const { user } = signedIn(request, true);
+      const id = z.uuid().parse((request.params as { deviceId: string }).deviceId);
+      const { expectedNodeId } = z
+        .object({ expectedNodeId: z.uuid().nullable() })
+        .strict()
+        .parse(request.body);
+      const device = store.device(id);
+      if (!device || device.userId !== user.id)
+        throw new AccountPortalError(404, 'Device not found.');
+      requireTeam(device.teamId, user.id);
+      const active = routes.listActiveForTeam(device.teamId);
+      if (
+        active.some((route) => route.nodeId === device.nodeId && route.role === 'lead') &&
+        active.length > 1
+      )
+        throw new AccountPortalError(409, 'Transfer the team lead before removing this device.');
+      const removed = store.revokeDevice(user.id, id, expectedNodeId);
+      deps.removeDevice(removed);
+      return { removed: true };
     })
   );
   app.post(

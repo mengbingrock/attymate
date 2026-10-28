@@ -310,6 +310,22 @@ export class RelayAccountStore {
       )
       .all(userId) as unknown as AccountDevice[];
   }
+  revokeDevice(userId: string, id: string, expectedNodeId: string | null) {
+    return this.transaction(() => {
+      const device = this.device(id);
+      if (!device || device.userId !== userId)
+        throw new AccountPortalError(404, 'Device not found.');
+      if (device.nodeId !== expectedNodeId)
+        throw new AccountPortalError(
+          409,
+          'This device changed. Refresh and review it before removing it.'
+        );
+      this.db
+        .prepare('UPDATE account_devices SET revokedAt=COALESCE(revokedAt,?) WHERE id=?')
+        .run(this.now(), id);
+      return device;
+    });
+  }
   close() {
     this.db.close();
   }

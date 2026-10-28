@@ -30,7 +30,7 @@ export const ACCOUNT_PORTAL_JS = String.raw`
   var session = null, teams = [], selectedTeam = null, inviteToken = new URLSearchParams(location.search).get('invite');
   var selectedRuntime = 'fork', selectedPlatform = '';
   var instructionPlatforms = [{id:'darwin-arm64',label:'macOS · Apple Silicon'},{id:'darwin-x64',label:'macOS · Intel'},{id:'linux-arm64',label:'Linux · ARM64'},{id:'linux-x64',label:'Linux · Intel / AMD x64'},{id:'win32-x64',label:'Windows · x64'}];
-  var busy = false, deviceChats = new Map(), joinedInviteTeam = null;
+  var busy = false, deviceChats = new Map(), joinedInviteTeam = null, removingDeviceId = null, removingDeviceNodeId = null;
   function $(id) { return document.getElementById(id); }
   function node(tag, cls, text) { var n = document.createElement(tag); if(cls)n.className=cls; if(text!==undefined)n.textContent=text; return n; }
   function button(text, cls, action) { var b=node('button',cls,text);b.type='button';b.addEventListener('click',action);return b; }
@@ -98,7 +98,7 @@ export const ACCOUNT_PORTAL_JS = String.raw`
     $('device-step').classList.toggle('complete',t.devices.some(function(d){return d.online;}));$('my-devices').replaceChildren();
     if(!t.devices.length)$('my-devices').appendChild(node('p','muted','Your connected devices will appear here after installation.'));
     var hasChat=false;
-    t.devices.forEach(function(d){var card=node('div','device-card'),head=node('div','device-head');head.append(node('strong','',d.label),node('span','badge '+(d.online?'online':''),d.online?'Online':d.nodeId?'Offline':'Waiting for setup'));card.appendChild(head);
+    t.devices.forEach(function(d){var card=node('div','device-card'),head=node('div','device-head');card.dataset.deviceId=d.id;head.append(node('strong','',d.label),node('span','badge '+(d.online?'online':''),d.online?'Online':d.nodeId?'Offline':'Waiting for setup'));card.appendChild(head);
       if(d.online){card.appendChild(button('Open team chat','primary',function(){action(async function(){var result=await chat(d,{action:'open',teamId:t.teamId});deviceChats.set(d.id,result);renderDevices(t);notice(result.desktopOpened?'Team chat opened on '+d.label+'.':'Team chat created. Open it from your Codex client.');});}));
         var label=node('label','','Attach the chat you already use'),input=node('input','');input.placeholder='Paste a Codex chat link or chat ID';input.setAttribute('aria-label','Chat link for '+d.label);label.appendChild(input);card.appendChild(label);
         card.appendChild(button('Attach this chat','secondary',function(){action(async function(){var value=input.value.trim();if(value.indexOf('codex://threads/')===0){try{value=new URL(value).pathname.slice(1);}catch(e){value='';}}if(!/^[a-zA-Z0-9-]{1,100}$/.test(value))throw new Error('Paste a valid Codex chat link or chat ID.');var result=await chat(d,{action:'attach',teamId:t.teamId,threadId:value});deviceChats.set(d.id,result);renderDevices(t);notice('Chat attached. Incoming team messages now arrive in that chat.');});}));
@@ -106,6 +106,11 @@ export const ACCOUNT_PORTAL_JS = String.raw`
         var context=deviceChats.get(d.id);var chats=context&&(context.chats||[]).filter(function(c){return c.teamId===t.teamId;});if(chats&&chats.length){hasChat=true;var binding=node('div','chat-binding','Automatic replies arrive in your latest attached team chat.');binding.appendChild(node('code','',chats[chats.length-1].threadId));card.appendChild(binding);}
         card.appendChild(button('Refresh chat connection','text-button',function(){action(async function(){deviceChats.set(d.id,await chat(d,{action:'context'}));renderDevices(t);});}));
       }else card.appendChild(node('p','fine',d.nodeId?'Start this device’s Worker to reconnect.':'Run the downloaded installer on this computer.'));
+      if(removingDeviceId===d.id){
+        card.appendChild(node('p','fine','Remove '+d.label+' from this team? Its installer credential will be revoked and its team connection disconnected. Your Codex login and local chats are kept.'));
+        card.appendChild(button('Confirm removal','secondary',function(){action(async function(){await request('devices/'+d.id+'/remove',{expectedNodeId:removingDeviceNodeId});removingDeviceId=null;deviceChats.delete(d.id);await refresh(t.teamId);notice('Device removed. To uninstall its local service, run bin/uninstall.sh in that installation on the computer. Your Codex login and chats are kept.');});}));
+        card.appendChild(button('Cancel','text-button',function(){removingDeviceId=null;renderDevices(t);}));
+      }else card.appendChild(button('Remove device','text-button',function(){removingDeviceId=d.id;removingDeviceNodeId=d.nodeId||null;renderDevices(t);}));
       $('my-devices').appendChild(card);
     });$('chat-step').classList.toggle('complete',hasChat);
   }

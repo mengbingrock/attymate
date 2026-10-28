@@ -44,6 +44,16 @@ Automatic messages currently enter the most recently attached chat for that memb
 shows this explicitly; another unbound personal chat does not acquire incoming messages merely
 by inspecting the team tools. Devices and the active team's roster refresh while the page is open.
 
+Each device card has **Remove device**, followed by an explicit confirmation. The authenticated
+POST checks ownership, CSRF/Origin, and the node binding shown at confirmation; a device that
+connected after a waiting entry was selected must be reviewed again. Removal revokes the stored
+installation credential, marks its team memberships left, releases their assignments, and closes
+that node's current relay connection. Other devices and account membership are retained. An active
+lead with teammates must be transferred first. Shared legacy credentials are not rotated; the
+removed membership cannot automatically rejoin. Local files, Codex login, and chats are retained;
+use that installation's `bin/uninstall.sh` locally to remove its service and owned MCP registration.
+Reconnect a removed installation with a fresh installation directory and credential.
+
 ## Configuration
 
 Use the downloaded Google **Web application** OAuth JSON, stored outside the repository with
