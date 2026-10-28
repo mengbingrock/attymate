@@ -1913,12 +1913,14 @@ async function initializeServices(): Promise<void> {
   const configuredRelayManagerToken = process.env.AGENT_TEAMS_RELAY_MANAGER_TOKEN?.trim();
   try {
     distributedAgentTeamsFeature = createDistributedAgentTeamsFeature({
+      ownerControlSocketPath: process.env.AGENT_TEAMS_OWNER_CONTROL_SOCKET?.trim(),
       relayUrl: configuredRelayUrl,
       ...(configuredRelayManagerToken ? { managerToken: configuredRelayManagerToken } : {}),
     });
   } catch (error) {
     logger.error('Invalid AGENT_TEAMS_RELAY_URL; using the loopback Relay default', error);
     distributedAgentTeamsFeature = createDistributedAgentTeamsFeature({
+      ownerControlSocketPath: process.env.AGENT_TEAMS_OWNER_CONTROL_SOCKET?.trim(),
       relayUrl: 'http://127.0.0.1:43170',
       ...(configuredRelayManagerToken ? { managerToken: configuredRelayManagerToken } : {}),
     });

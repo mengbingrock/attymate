@@ -7,6 +7,33 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { dirname } from 'node:path';
+import {
+  runtimeOwnerRequestSchema,
+  type RuntimeOwnerRequest,
+  type RuntimeOwnerProof,
+  type RuntimeControl,
+  runtimeControlSchema,
+} from '@claude-teams/agent-teams-protocol';
+
+/** Local IPC only. No owner private key is returned or sent to the Relay. */
+export const createLocalRuntimeOwnerAuthorizer =
+  (socketPath: string) =>
+  async (input: RuntimeOwnerRequest): Promise<RuntimeOwnerProof> => {
+    const request = runtimeOwnerRequestSchema.parse({
+      ...input,
+      scope: {
+        teamId: input.scope.teamId,
+        nodeId: input.scope.nodeId,
+        assignmentId: input.scope.assignmentId,
+        attemptId: input.scope.attemptId,
+        leaseEpoch: input.scope.leaseEpoch,
+      },
+    });
+    return requestWorkerControl<RuntimeOwnerProof>(socketPath, '/v2/runtime-owner/authorize', {
+      method: 'POST',
+      body: request,
+    });
+  };
 
 import type { AgentTeamsWorkerStatus } from './workerDaemon';
 import type {
@@ -22,6 +49,10 @@ const MAX_CONTROL_RESPONSE_BYTES = 2 * 1024 * 1024;
 const MAX_CONTROL_REQUEST_BYTES = 64 * 1024;
 
 export interface WorkerControlSnapshotProvider {
+  readonly getOwnerRuntimeSnapshot?: () => unknown;
+  readonly executeOwnerRuntimeControl?: (control: RuntimeControl) => Promise<unknown>;
+  readonly authorizeOwnerRuntimeRequest?: (request: RuntimeOwnerRequest) => RuntimeOwnerProof;
+  readonly revokeOwnerRuntimeAccess?: () => void;
   readonly desktopChatAction?: (input: unknown) => Promise<unknown>;
   readonly desktopChatPrepare?: (input: unknown) => unknown;
   readonly desktopChatPresence?: (input: unknown) => unknown;
@@ -174,6 +205,47 @@ const handleControlRequest = async (
 ): Promise<void> => {
   const url = new URL(request.url ?? '/', 'http://worker.local');
   const status = provider.getStatus();
+
+  if (request.method === 'GET' && url.pathname === '/v2/runtime-owner/snapshot') {
+    if (!provider.getOwnerRuntimeSnapshot) {
+      jsonResponse(response, { error: 'Owner runtime unavailable' }, 404);
+      return;
+    }
+    jsonResponse(response, provider.getOwnerRuntimeSnapshot());
+    return;
+  }
+  if (request.method === 'POST' && url.pathname === '/v2/runtime-owner/control') {
+    if (!provider.executeOwnerRuntimeControl) {
+      jsonResponse(response, { error: 'Owner runtime unavailable' }, 404);
+      return;
+    }
+    jsonResponse(
+      response,
+      await provider.executeOwnerRuntimeControl(
+        runtimeControlSchema.parse(await readJsonBody(request))
+      )
+    );
+    return;
+  }
+
+  if (request.method === 'POST' && url.pathname === '/v2/runtime-owner/authorize') {
+    if (!provider.authorizeOwnerRuntimeRequest) {
+      jsonResponse(response, { error: 'Owner runtime access unavailable' }, 404);
+      return;
+    }
+    const input = runtimeOwnerRequestSchema.parse(await readJsonBody(request));
+    jsonResponse(response, provider.authorizeOwnerRuntimeRequest(input));
+    return;
+  }
+  if (request.method === 'POST' && url.pathname === '/v2/runtime-owner/revoke') {
+    if (!provider.revokeOwnerRuntimeAccess) {
+      jsonResponse(response, { error: 'Owner runtime access unavailable' }, 404);
+      return;
+    }
+    provider.revokeOwnerRuntimeAccess();
+    jsonResponse(response, { revoked: true });
+    return;
+  }
 
   if (request.method === 'GET' && url.pathname === '/v2/agent-context') {
     const context: WorkerAgentContextProjection = {
@@ -363,6 +435,10 @@ const closeServer = async (server: Server): Promise<void> => {
 export const requestWorkerControl = async <T>(
   socketPath: string,
   path:
+    | '/v2/runtime-owner/authorize'
+    | '/v2/runtime-owner/revoke'
+    | '/v2/runtime-owner/snapshot'
+    | '/v2/runtime-owner/control'
     | `/v2/desktop-chat/${'action' | 'prepare' | 'bind' | 'tool' | 'presence'}`
     | '/v2/agent-context'
     | '/v2/worker-status'

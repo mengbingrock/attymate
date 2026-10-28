@@ -14,6 +14,36 @@ const scope = runtimeSessionScopeSchema.parse({
 });
 
 describe('RelayRuntimeSessionStore', () => {
+  it('does not map turn.start to the filesystem.read capability', () => {
+    const store = new RelayRuntimeSessionStore();
+    const created = store.create(scope, new Date(Date.now() + 60_000).toISOString(), [
+      'events.read',
+      'filesystem.read',
+    ]);
+    expect(() =>
+      store.authorizeControl(created.sessionId, created.sessionToken, {
+        controlId: '00000000-0000-4000-8000-000000000008',
+        type: 'turn.start',
+        payload: { threadId: 'thread', appServerGeneration: 1, message: 'Use local tools' },
+      })
+    ).toThrow('invalid, expired, or revoked');
+  });
+
+  it('does not replace an existing session when an opening request is replayed', () => {
+    const store = new RelayRuntimeSessionStore();
+    const id = '00000000-0000-4000-8000-000000000009';
+    const created = store.create(
+      scope,
+      new Date(Date.now() + 60_000).toISOString(),
+      ['events.read'],
+      id
+    );
+    expect(() =>
+      store.create(scope, new Date(Date.now() + 60_000).toISOString(), ['events.read'], id)
+    ).toThrow();
+    expect(store.listEvents(id, created.sessionToken, 0).events).toEqual([]);
+  });
+
   it('uses hashed expiring bearer capabilities and isolates event replay by lease scope', () => {
     let now = Date.parse('2026-08-24T08:00:00.000Z');
     const store = new RelayRuntimeSessionStore({ now: () => now, maxEventsPerSession: 2 });

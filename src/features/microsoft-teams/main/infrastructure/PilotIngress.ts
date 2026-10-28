@@ -31,17 +31,25 @@ export const createPilotIngress = ({ teamsPort, relayPort }: PilotIngressOptions
     const update =
       (incoming.method === 'GET' || incoming.method === 'HEAD') &&
       /^\/pilot-updates\/[a-f0-9]{64}\.zip$/.test(incoming.url ?? '');
-    if (!messages && !notice && !update) {
+    const ownerRuntime =
+      (incoming.method === 'POST' && incoming.url === '/v2/runtime-sessions') ||
+      (incoming.method === 'POST' &&
+        /^\/v2\/runtime-sessions\/[a-f0-9-]{36}\/controls$/.test(incoming.url ?? '')) ||
+      (incoming.method === 'GET' &&
+        /^\/v2\/runtime-sessions\/[a-f0-9-]{36}\/events(?:\?after=\d{1,12})?$/.test(
+          incoming.url ?? ''
+        ));
+    if (!messages && !notice && !update && !ownerRuntime) {
       outgoing.writeHead(404).end();
       return;
     }
     const upstream = request(
       {
         hostname: '127.0.0.1',
-        port: teamsPort,
+        port: ownerRuntime ? relayPort : teamsPort,
         path: incoming.url,
         method: incoming.method,
-        headers: { ...incoming.headers, host: `127.0.0.1:${teamsPort}` },
+        headers: { ...incoming.headers, host: `127.0.0.1:${ownerRuntime ? relayPort : teamsPort}` },
       },
       (response) => {
         outgoing.writeHead(response.statusCode ?? 502, response.headers);

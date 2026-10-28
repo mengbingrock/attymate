@@ -64,6 +64,7 @@ import { RelayDesktopChats } from './relayDesktopChats';
 import { RelayTeamDirectoryStore } from './relayTeamDirectoryStore';
 import { RelayAccountStore } from './accountPortal/accountStore';
 import { registerAccountRoutes } from './accountPortal/accountRoutes';
+import { verifyRuntimeOwnerAuthorization } from './runtimeOwnerAuthorization';
 
 export interface AgentTeamsRelayOptions {
   readonly host: string;
@@ -183,6 +184,7 @@ const bearerValue = (authorization: string | undefined): string | undefined =>
   authorization?.startsWith('Bearer ') ? authorization.slice('Bearer '.length) : undefined;
 
 const isRuntimeCapabilityPath = (url: string): boolean =>
+  /^\/v2\/runtime-sessions(?:[?]|$)/.test(url) ||
   /^\/v2\/runtime-sessions\/[^/?]+\/(events|controls)(?:[?]|$)/.test(url);
 
 const peerDeliveryCommandId = (eventId: string, recipientMembershipId: string): string => {
@@ -249,6 +251,7 @@ export const startAgentTeamsRelay = async (
   const insecureLanMode = auth === undefined;
 
   app.addHook('onRequest', async (request, reply) => {
+    if (isRuntimeCapabilityPath(request.url)) reply.header('cache-control', 'no-store');
     if (
       !request.url.startsWith('/v2/') ||
       isRuntimeCapabilityPath(request.url) ||
@@ -999,7 +1002,27 @@ export const startAgentTeamsRelay = async (
     if (auth === undefined) {
       return reply.code(409).send({ error: 'authenticated_runtime_sessions_required' });
     }
-    const requested = runtimeSessionCreateRequestSchema.parse(request.body);
+    const parsed = runtimeSessionCreateRequestSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_runtime_session_request' });
+    const requested = parsed.data;
+    const { sessionId, ownerAuthorization, ...requestedScope } = requested;
+    const ownerWorker = sessions.get(requested.nodeId);
+    if (
+      !sessionId ||
+      !verifyRuntimeOwnerAuthorization(
+        {
+          operation: 'session.open',
+          sessionId,
+          scope: requestedScope,
+        },
+        ownerAuthorization,
+        (ownerWorker?.hello.runtimeOwnerKeys ?? []).filter(
+          (key) => key.personId === ownerWorker?.hello.personId
+        )
+      )
+    ) {
+      return reply.code(403).send({ error: 'device_owner_authorization_required' });
+    }
     leaseStore.expireThrough();
     const lease = leaseStore
       .listAll()
@@ -1020,17 +1043,27 @@ export const startAgentTeamsRelay = async (
     ) {
       return reply.code(409).send({ error: 'runtime_lease_not_active' });
     }
-    const created = runtimeSessionStore.create(
-      { ...requested, leaseId: lease.leaseId },
-      lease.expiresAt,
-      workerSession.hello.runtimeCapabilities
-    );
+    let created: ReturnType<RelayRuntimeSessionStore['create']>;
+    try {
+      created = runtimeSessionStore.create(
+        { ...requestedScope, leaseId: lease.leaseId },
+        lease.expiresAt,
+        workerSession.hello.runtimeCapabilities,
+        sessionId
+      );
+    } catch (error) {
+      if (error instanceof RelayRuntimeSessionAuthorizationError)
+        return reply.code(409).send({ error: 'runtime_session_unavailable' });
+      throw error;
+    }
     workerSession.socket.send(
       JSON.stringify({
         type: 'relay.runtime_control',
         protocolVersion: 2,
         sessionId: created.sessionId,
         scope: created.scope,
+        ownerAuthorization,
+        ownerOperation: 'session.open',
         control: {
           controlId: randomUUID(),
           type: 'runtime.snapshot',
@@ -1072,6 +1105,8 @@ export const startAgentTeamsRelay = async (
       if (error instanceof RelayRuntimeSessionAuthorizationError) {
         return reply.code(401).send({ error: error.code });
       }
+      if (error instanceof Error && error.name === 'ZodError')
+        return reply.code(400).send({ error: 'invalid_runtime_request' });
       throw error;
     }
   });
@@ -1082,7 +1117,11 @@ export const startAgentTeamsRelay = async (
       );
       const token = bearerValue(request.headers.authorization);
       if (token === undefined) throw new RelayRuntimeSessionAuthorizationError();
-      const control = runtimeControlSchema.parse(request.body);
+      if (typeof request.body !== 'object' || request.body === null || Array.isArray(request.body))
+        return reply.code(400).send({ error: 'invalid_runtime_control' });
+      const body = request.body as Record<string, unknown>;
+      const { ownerAuthorization, ...controlInput } = body;
+      const control = runtimeControlSchema.parse(controlInput);
       const scope = runtimeSessionStore.authorizeControl(sessionId, token, control);
       leaseStore.expireThrough();
       const currentLease = leaseStore
@@ -1102,6 +1141,17 @@ export const startAgentTeamsRelay = async (
         runtimeSessionStore.revokeScope(scope);
         return reply.code(409).send({ error: 'runtime_lease_not_active' });
       }
+      if (
+        !verifyRuntimeOwnerAuthorization(
+          { operation: 'runtime.control', sessionId, scope, control },
+          ownerAuthorization,
+          (workerSession.hello.runtimeOwnerKeys ?? []).filter(
+            (key) => key.personId === workerSession.hello.personId
+          )
+        )
+      ) {
+        return reply.code(403).send({ error: 'device_owner_authorization_required' });
+      }
       workerSession.socket.send(
         JSON.stringify({
           type: 'relay.runtime_control',
@@ -1109,6 +1159,8 @@ export const startAgentTeamsRelay = async (
           sessionId,
           scope,
           control,
+          ownerAuthorization,
+          ownerOperation: 'runtime.control',
         })
       );
       return reply.code(202).send({ accepted: true, controlId: control.controlId });
@@ -1116,6 +1168,8 @@ export const startAgentTeamsRelay = async (
       if (error instanceof RelayRuntimeSessionAuthorizationError) {
         return reply.code(401).send({ error: error.code });
       }
+      if (error instanceof Error && error.name === 'ZodError')
+        return reply.code(400).send({ error: 'invalid_runtime_control' });
       throw error;
     }
   });

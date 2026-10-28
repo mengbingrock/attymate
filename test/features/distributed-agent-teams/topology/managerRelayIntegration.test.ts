@@ -58,12 +58,14 @@ describe('Manager, Relay, and headless Workers', () => {
       await Promise.all(workers.map((worker) => worker.ready));
       const manager = createDistributedAgentTeamsFeature({ relayUrl: relay.httpUrl });
 
-      await expect(manager.getTopology()).resolves.toMatchObject({
-        degraded: false,
-        workers: [
-          { label: 'Alice Worker', status: 'connected' },
-          { label: 'Bob Worker', status: 'connected' },
-        ],
+      await vi.waitFor(async () => {
+        await expect(manager.getTopology()).resolves.toMatchObject({
+          degraded: false,
+          workers: [
+            { label: 'Alice Worker', status: 'connected' },
+            { label: 'Bob Worker', status: 'connected' },
+          ],
+        });
       });
       await manager.createRemoteAssignment({
         targetNodeId: '66666666-6666-4666-8666-666666666666',

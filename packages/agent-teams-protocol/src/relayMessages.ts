@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { runtimeOwnerKeySchema } from './runtimeOwner';
 
 import { teamSessionObservationSchema } from './presence';
 import {
@@ -69,6 +70,7 @@ export const workerHelloMessageSchema = z
       .optional(),
     autoJoinTeamId: teamIdSchema.optional(),
     runtimeCapabilities: z.array(runtimeSessionCapabilitySchema).max(32).optional(),
+    runtimeOwnerKeys: z.array(runtimeOwnerKeySchema).min(1).max(16).optional(),
     lastInboundCursor: z.number().int().nonnegative(),
     sentAt: timestampSchema,
   })

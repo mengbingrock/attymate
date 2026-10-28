@@ -9,6 +9,10 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "exports": {
+    "./owner-control": {
+      "types": "./src/workerControlServer.ts",
+      "default": "./src/workerControlServer.ts"
+    },
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"

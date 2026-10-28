@@ -123,6 +123,9 @@ importers:
       '@claude-teams/agent-teams-protocol':
         specifier: workspace:*
         version: link:packages/agent-teams-protocol
+      '@claude-teams/agent-teams-worker':
+        specifier: workspace:*
+        version: link:packages/agent-teams-worker
       '@codemirror/autocomplete':
         specifier: ^6.20.0
         version: 6.20.0

@@ -31,6 +31,10 @@ export default defineConfig({
         __dirname,
         'packages/agent-teams-relay/src/index.ts'
       ),
+      '@claude-teams/agent-teams-worker/owner-control': resolve(
+        __dirname,
+        'packages/agent-teams-worker/src/workerControlServer.ts'
+      ),
       '@claude-teams/agent-teams-worker': resolve(
         __dirname,
         'packages/agent-teams-worker/src/index.ts'

@@ -22,6 +22,7 @@ for (const name of ['CLIENT_ID', 'CLIENT_SECRET', 'TENANT_ID', 'TEAMS_PILOT_CONF
 const config = JSON.parse(readFileSync(resolve(process.env.TEAMS_PILOT_CONFIG!), 'utf8')) as {
   relayUrl: string;
   managerToken: string;
+  ownerControlSocketPath?: string;
   journalPath: string;
   bindings: TeamsBinding[];
 };
@@ -32,6 +33,7 @@ if (
   throw new Error('Configure explicit bindings in the registered tenant');
 }
 const framework = createDistributedAgentTeamsFeature({
+  ownerControlSocketPath: config.ownerControlSocketPath,
   relayUrl: config.relayUrl,
   managerToken: config.managerToken,
 });
@@ -40,6 +42,7 @@ const gateway = new TeamsGateway(config.bindings, new RelayTeamsRuntime(framewor
 const app = new App();
 const results = new TeamsResultDelivery(
   createDistributedAgentTeamsFeature({
+    ownerControlSocketPath: config.ownerControlSocketPath,
     relayUrl: config.relayUrl,
     managerToken: config.managerToken,
   }),
@@ -53,6 +56,7 @@ const results = new TeamsResultDelivery(
 );
 const approvals = new TeamsApprovalDelivery(
   createDistributedAgentTeamsFeature({
+    ownerControlSocketPath: config.ownerControlSocketPath,
     relayUrl: config.relayUrl,
     managerToken: config.managerToken,
   }),

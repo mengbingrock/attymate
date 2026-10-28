@@ -13,6 +13,8 @@ import {
   membershipIdSchema,
   nodeIdSchema,
   runtimeControlSchema,
+  type RuntimeOwnerProof,
+  type RuntimeOwnerRequest,
   runtimeSessionCapabilitySchema,
   runtimeSessionCreatedSchema,
   runtimeSessionEventRecordSchema,
@@ -184,7 +186,8 @@ export class RelayHttpAdapter implements DistributedRelayPort {
   constructor(
     relayUrl: string,
     private readonly fetchImpl: typeof fetch = fetch,
-    private readonly managerToken?: string
+    private readonly managerToken?: string,
+    private readonly ownerAuthorize?: (request: RuntimeOwnerRequest) => Promise<RuntimeOwnerProof>
   ) {
     this.relayUrl = normalizeRelayBaseUrl(relayUrl);
     this.insecureLanMode = managerToken === undefined;
@@ -488,13 +491,22 @@ export class RelayHttpAdapter implements DistributedRelayPort {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const session = await this.ensureRuntimeSession(request.session);
       try {
+        const ownerAuthorization = await this.ownerAuthorize?.({
+          operation: 'runtime.control',
+          sessionId: session.sessionId,
+          scope: session.scope,
+          control,
+        });
         const payload = asRecord(
           await this.request(
             `/v2/runtime-sessions/${encodeURIComponent(session.sessionId)}/controls`,
             {
               method: 'POST',
               headers: { authorization: `Bearer ${session.sessionToken}` },
-              body: JSON.stringify(control),
+              body: JSON.stringify({
+                ...control,
+                ...(ownerAuthorization ? { ownerAuthorization } : {}),
+              }),
             }
           ),
           'Runtime control response'
@@ -634,10 +646,24 @@ export class RelayHttpAdapter implements DistributedRelayPort {
     if (pending !== undefined) return await pending;
 
     const creation = (async (): Promise<CachedRuntimeSession> => {
+      const sessionId = randomUUID();
+      const scope = {
+        teamId: request.teamId,
+        nodeId: request.nodeId,
+        assignmentId: request.assignmentId,
+        attemptId: request.attemptId,
+        leaseEpoch: request.leaseEpoch,
+      };
+      const ownerAuthorization = await this.ownerAuthorize?.({
+        operation: 'session.open',
+        sessionId,
+        scope,
+      });
       const created = runtimeSessionCreatedSchema.parse(
         await this.request('/v2/runtime-sessions', {
           method: 'POST',
           body: JSON.stringify({
+            ...(ownerAuthorization ? { sessionId, ownerAuthorization } : {}),
             teamId: request.teamId,
             nodeId: request.nodeId,
             assignmentId: request.assignmentId,

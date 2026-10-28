@@ -1,3 +1,5 @@
+import { createLocalRuntimeOwnerAuthorizer } from '@claude-teams/agent-teams-worker/owner-control';
+
 import { CreateRemoteAssignmentUseCase } from '../../core/application/use-cases/CreateRemoteAssignmentUseCase';
 import { GetDistributedAssignmentEventsUseCase } from '../../core/application/use-cases/GetDistributedAssignmentEventsUseCase';
 import { GetDistributedDebugSnapshotUseCase } from '../../core/application/use-cases/GetDistributedDebugSnapshotUseCase';
@@ -34,6 +36,7 @@ import type {
   UpdateDistributedTeamSettingsRequest,
 } from '../../contracts';
 import type { DistributedLocalLeadRecoveryPort } from '../../core/application/ports/DistributedLocalLeadRecoveryPort';
+import type { RuntimeOwnerProof, RuntimeOwnerRequest } from '@claude-teams/agent-teams-protocol';
 
 export interface DistributedAgentTeamsFeatureFacade {
   getTopology(): Promise<DistributedTopologyDto>;
@@ -67,9 +70,21 @@ export const createDistributedAgentTeamsFeature = (input: {
   readonly relayUrl: string;
   readonly fetchImpl?: typeof fetch;
   readonly managerToken?: string;
+  readonly ownerAuthorize?: (request: RuntimeOwnerRequest) => Promise<RuntimeOwnerProof>;
+  readonly ownerControlSocketPath?: string;
   readonly localLeadRecovery?: DistributedLocalLeadRecoveryPort;
 }): DistributedAgentTeamsFeatureFacade => {
-  const relay = new RelayHttpAdapter(input.relayUrl, input.fetchImpl, input.managerToken);
+  const ownerAuthorize =
+    input.ownerAuthorize ??
+    (input.ownerControlSocketPath
+      ? createLocalRuntimeOwnerAuthorizer(input.ownerControlSocketPath)
+      : undefined);
+  const relay = new RelayHttpAdapter(
+    input.relayUrl,
+    input.fetchImpl,
+    input.managerToken,
+    ownerAuthorize
+  );
   const getTopology = new GetDistributedTopologyUseCase(relay);
   const getAssignmentEvents = new GetDistributedAssignmentEventsUseCase(relay);
   const getDebugSnapshot = new GetDistributedDebugSnapshotUseCase(relay);

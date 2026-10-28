@@ -28,6 +28,10 @@ import { prepareWorkerCodexHome, resolveWorkerCodexHomePath } from './workerCode
 import { diagnoseAgentTeamsWorker } from './workerDiagnostics';
 import { readRuntimeConnectionPolicy } from './codexRuntimeConnections';
 import { readLocalAccessPolicy } from './localAccessPolicy';
+import { readRuntimeOwnerKeyring } from './runtimeOwnerAuthorization';
+import { createOwnerRuntimeClient } from './ownerRuntimeClient';
+import { readFile } from 'node:fs/promises';
+import { runtimeControlSchema } from '@claude-teams/agent-teams-protocol';
 import { nativeComputerUseEnvironment, withNativeComputerUse } from './nativeComputerUse';
 import {
   inspectRuntimeBinary,
@@ -147,7 +151,7 @@ const runSetup = async (): Promise<void> => {
   ) {
     await saveRuntimeControlMcpTarget(dataDir, installation.controlMcpName, {
       command: spec.command,
-      args: spec.args,
+      args: [...spec.args],
     });
   }
   printJson({ command: 'setup', controlSocketPath, ...result });
@@ -366,6 +370,9 @@ const runWorker = async (): Promise<void> => {
       ? undefined
       : await readLocalAccessPolicy(resolve(localAccessPath));
   const worker = await startAgentTeamsWorker({
+    ...(valueAfter('--owner-keyring')
+      ? { runtimeOwnerKeys: await readRuntimeOwnerKeyring(resolve(valueAfter('--owner-keyring')!)) }
+      : {}),
     relayUrl,
     ...(relayToken === undefined ? {} : { relayToken }),
     dataDir,
@@ -373,6 +380,10 @@ const runWorker = async (): Promise<void> => {
     label,
     controlSocketPath,
     ...identity,
+    organizationId: organizationIdSchema.parse(identity.organizationId),
+    personId: personIdSchema.parse(identity.personId),
+    nodeId: nodeIdSchema.parse(identity.nodeId),
+    workerInstanceId: workerInstanceIdSchema.parse(identity.workerInstanceId),
     workerGeneration: 1,
     ...(autoJoinTeamId === undefined ? {} : { autoJoinTeamId }),
     reconnectDelayMs: 1_000,
@@ -447,6 +458,26 @@ switch (command) {
   case 'mcp-remove':
     await runMcpRemove();
     break;
+  case 'owner-runtime': {
+    const dataDir = defaultDataDir();
+    const installation = await readRuntimeInstallation(dataDir);
+    const client = await createOwnerRuntimeClient(
+      valueAfter('--control-socket', installation?.controlSocketPath) ??
+        defaultControlSocketPath(dataDir),
+      valueAfter('--relay-http-url')
+    );
+    const controlFile = valueAfter('--control-file');
+    if (controlFile) {
+      const control = runtimeControlSchema.parse(
+        JSON.parse(await readFile(resolve(controlFile), 'utf8'))
+      );
+      printJson(await client.control(control));
+    } else {
+      // This is the device owner's local interface, not a shared management projection.
+      printJson(await client.read());
+    }
+    break;
+  }
   case 'start':
     await runWorker();
     break;

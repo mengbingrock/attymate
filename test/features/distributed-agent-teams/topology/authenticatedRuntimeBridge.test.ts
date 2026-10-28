@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +9,7 @@ import {
   nodeIdSchema,
   organizationIdSchema,
   personIdSchema,
+  type RuntimeOwnerRequest,
   type RuntimeSessionCreated,
   teamIdSchema,
   workerInstanceIdSchema,
@@ -66,16 +68,6 @@ class InteractiveCodexSession implements WorkerCodexAppServerSession {
   }
 }
 
-const jsonRequest = async (url: string, token: string, init: RequestInit = {}): Promise<Response> =>
-  await fetch(url, {
-    ...init,
-    headers: {
-      authorization: `Bearer ${token}`,
-      'content-type': 'application/json',
-      ...init.headers,
-    },
-  });
-
 describe('authenticated remote Codex runtime bridge', () => {
   it('streams App Server events and steers only the exact active lease', async () => {
     const dataRoot = await mkdtemp(join(tmpdir(), 'agent-teams-runtime-bridge-'));
@@ -114,6 +106,51 @@ describe('authenticated remote Codex runtime bridge', () => {
       },
     });
     let workerStopped = false;
+    const ownerScopes = new Map<string, RuntimeOwnerRequest['scope']>();
+    const jsonRequest = async (
+      url: string,
+      token: string,
+      init: RequestInit = {}
+    ): Promise<Response> => {
+      let body = init.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : undefined;
+      if (init.method === 'POST' && body) {
+        if (url.endsWith('/v2/runtime-sessions')) {
+          const sessionId = randomUUID();
+          const scope = body as unknown as RuntimeOwnerRequest['scope'];
+          ownerScopes.set(sessionId, scope);
+          body = {
+            ...body,
+            sessionId,
+            ownerAuthorization: worker.authorizeOwnerRuntimeRequest({
+              operation: 'session.open',
+              sessionId,
+              scope,
+            }),
+          };
+        } else {
+          const sessionId = /runtime-sessions\/([^/]+)\/controls$/.exec(url)?.[1];
+          if (sessionId)
+            body = {
+              ...body,
+              ownerAuthorization: worker.authorizeOwnerRuntimeRequest({
+                operation: 'runtime.control',
+                sessionId,
+                scope: ownerScopes.get(sessionId)!,
+                control: body,
+              }),
+            };
+        }
+      }
+      return fetch(url, {
+        ...init,
+        ...(body ? { body: JSON.stringify(body) } : {}),
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          ...init.headers,
+        },
+      });
+    };
 
     try {
       await worker.ready;

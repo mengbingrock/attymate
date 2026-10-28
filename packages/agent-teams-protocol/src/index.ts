@@ -4,6 +4,7 @@ export * from './ids';
 export * from './mcpCapabilities';
 export * from './relayMessages';
 export * from './runtimeSession';
+export * from './runtimeOwner';
 export * from './sessionContext';
 export * from './teamMembership';
 export * from './teamMessaging';

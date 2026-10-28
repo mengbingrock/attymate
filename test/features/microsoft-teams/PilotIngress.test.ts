@@ -64,6 +64,9 @@ describe('single-domain pilot ingress', () => {
     for (const path of [
       '/v2/debug/snapshot',
       '/v2/runtime-sessions',
+      '/v2/runtime-owner/authorize',
+      '/v2/runtime-owner/revoke',
+      '/v2/runtime-sessions/not-a-session/controls',
       '/api/messages?extra=1',
       '/pilot-info/other.html',
       '/%61pi/messages',
@@ -85,6 +88,38 @@ describe('single-domain pilot ingress', () => {
     expect(await (await fetch(url)).text()).toBe('code-only zip');
     expect((await fetch(url, { method: 'HEAD' })).status).toBe(200);
     expect((await fetch(url, { method: 'POST' })).status).toBe(404);
+  });
+
+  it('forwards only owner-runtime routes to the Relay with their authorization intact', async () => {
+    const relay = await listen(
+      createServer((request, response) => {
+        if (request.headers.authorization !== 'Bearer owner-session-capability') {
+          response.writeHead(403).end();
+          return;
+        }
+        request.pipe(response);
+      })
+    );
+    const port = await listen(createPilotIngress({ teamsPort: 1, relayPort: relay }));
+    const base = `http://127.0.0.1:${port}`;
+    const session = '42000000-0000-4000-8000-000000000001';
+    for (const path of ['/v2/runtime-sessions', `/v2/runtime-sessions/${session}/controls`]) {
+      expect((await fetch(base + path, { method: 'POST' })).status).toBe(403);
+      const result = await fetch(base + path, {
+        method: 'POST',
+        headers: { authorization: 'Bearer owner-session-capability' },
+        body: 'signed-fixture',
+      });
+      expect(await result.text()).toBe('signed-fixture');
+    }
+    expect(
+      (
+        await fetch(`${base}/v2/runtime-sessions/${session}/events?after=0`, {
+          headers: { authorization: 'Bearer owner-session-capability' },
+        })
+      ).status
+    ).toBe(200);
+    expect((await fetch(`${base}/v2/runtime-sessions/${session}/events?extra=1`)).status).toBe(404);
   });
 
   it('forwards authenticated WebSocket frames and preserves unauthorized upgrade rejection', async () => {
