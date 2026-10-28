@@ -105,8 +105,16 @@ the default smoke uses `--private-codex-home` and an inert test API key. A separ
 smoke on the same Mac used `~/.codex`, detected its ChatGPT account, and completed an ephemeral,
 tool-free model turn returning `LOGIN_REUSE_OK`. No credentials were copied. The personal
 daemon's version/socket metadata and `config.toml` were unchanged.
-Apple Silicon (`darwin-arm64`) packaging is supported by staging; a native fork build must be
-provided separately before distributing to that platform.
+Apple Silicon was built in [fork Actions run 40287076765](https://github.com/TrueGrit-AI/codex/actions/runs/40287076765)
+at `b8acb4804c5a7e353c67323b1fbb60f6711b266d`. The existing Intel build comes from
+[fork Actions run 40268806254](https://github.com/TrueGrit-AI/codex/actions/runs/40268806254)
+at `a3799dc38fd180bced3234e567ae75cd56edf956`. Both packages' three binaries were signed locally
+with `Developer ID Application: Mengbing Wang (W3X4ZUG72V)`, hardened-runtime entitlements,
+and Apple secure timestamps. Signed installer smoke tests passed on the local ARM Mac and remote
+Intel Mac using fresh test homes and relays, with zero model turns. The tests covered Worker
+connection, the interactive CLI session browser, and desktop transport; they did not render a GUI.
+No notarization profile was found in this Mac's login or iCloud keychain, so the manifests record
+these builds as signed and not notarized.
 
 ## GitHub Actions builds and signing
 
@@ -147,6 +155,8 @@ entrypoints, `windows-install.mjs`, and `codex-runtime/win32-x64/` containing `b
 Windows is listed only when both its template and archive are available. The download is a `.ps1`
 with a framed payload; the Web UI supplies a command for that downloaded file. Its PowerShell
 execution-policy override applies to that one process, without changing the machine's policy.
+Payload extraction explicitly uses Windows' `System32/tar.exe`, avoiding Git/MSYS tar's treatment
+of a drive letter as a remote hostname. Existing nonempty installation directories are refused.
 
 The installer protects its directory with a current-user/SYSTEM ACL, verifies native file hashes,
 reuses `$CODEX_HOME` or the existing user's `.codex`, and creates a private Node 24 copy if needed.
@@ -160,6 +170,13 @@ The installation lives at `$env:LOCALAPPDATA/AgentTeams/mate-<team-prefix>`. Its
 the installed desktop `.exe` path as an optional argument and preserves the app's bundled policy
 reader. Windows can attach chats and select their team from the dashboard; automatic foreground
 opening of a specific desktop chat remains macOS-only.
+
+Windows x64 was built in [fork Actions run 40289772370](https://github.com/TrueGrit-AI/codex/actions/runs/40289772370)
+at `de2b2f9d58f2b2bf27b69a9d6b369f0daa7d3d12`. The packaged Worker passed
+[native installer run 40622425379](https://github.com/mengbingrock/attymate/actions/runs/40622425379):
+installation in a path with spaces, reuse of an existing test Codex home, relay enrollment,
+two authenticated clients of the shared App Server, rejection of a client without its token,
+and device pairing-code creation. No model calls or real user projects were used.
 
 The existing EC2 fork was located at `/data/agent-teams/codex` (also `~/agent-teams/codex`), with
 base fork commit `831737cdcdc1d04ccdf6f6eb0b081388a5a2f034` and additional uncommitted changes.
