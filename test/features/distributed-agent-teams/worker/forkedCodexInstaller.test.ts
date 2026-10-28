@@ -304,7 +304,15 @@ fetch(new URL('/', endpoint.replace(/^ws:/, 'http:'))).then(async response => {
       '{"testCredential":"do-not-copy"}'
     );
     await expect(readFile(join(install, 'codex-home/auth.json'))).rejects.toThrow();
-    await expect(installFork()).rejects.toThrow(/Stop this installation before updating/);
+    const oldSupervisor = supervisorPid;
+    const updated = await installFork();
+    const restarted = JSON.parse(await readFile(join(install, 'data/worker-args.json'), 'utf8'));
+    supervisorPid = restarted.parent;
+    expect(updated.stdout).toContain('Stopping the existing installation before updating');
+    expect(supervisorPid).not.toBe(oldSupervisor);
+    expect(
+      JSON.parse((await exec('bash', [join(install, 'bin/attach.sh')])).stdout).result.userAgent
+    ).toBe('test-fork');
   });
 
   it('keeps an explicit private-home option for a separate sign-in', async () => {
@@ -402,6 +410,15 @@ fetch(new URL('/', endpoint.replace(/^ws:/, 'http:'))).then(async response => {
     try {
       await writeFile(join(install, 'data/supervisor.pid'), String(unrelated.pid) + '\n');
       await expect(exec('bash', [join(install, 'bin/stop.sh')])).rejects.toThrow(/does not belong/);
+      const before = await readFile(join(install, 'worker/cli.js'), 'utf8');
+      await writeFile(
+        join(bundle, 'cli.js'),
+        '// replacement must not be unpacked when shutdown fails'
+      );
+      await rm(join(bundle, 'codex-runtime'), { recursive: true });
+      await stageAndBuild();
+      await expect(installFork()).rejects.toThrow(/Could not stop this installation/);
+      expect(await readFile(join(install, 'worker/cli.js'), 'utf8')).toBe(before);
       process.kill(unrelated.pid!, 0);
     } finally {
       unrelated.kill('SIGTERM');
@@ -628,6 +645,19 @@ if (process.argv.includes('enable')) {
       ]);
       const worker = JSON.parse(await readFile(join(install, 'data/worker-args.json'), 'utf8'));
       expect(worker.args[worker.args.indexOf('--server-ownership') + 1]).toBe('external');
+      await installFork([
+        '--codex-binary',
+        stock,
+        '--server-ownership',
+        'external',
+        '--app-server-socket',
+        socket,
+        '--codex-home',
+        join(root, '.codex'),
+      ]);
+      const restarted = JSON.parse(await readFile(join(install, 'data/worker-args.json'), 'utf8'));
+      expect(restarted.parent).not.toBe(worker.parent);
+      process.kill(server.pid!, 0);
       await exec('bash', [join(install, 'bin/stop.sh')]);
       await vi.waitFor(async () =>
         expect(readFile(join(install, 'data/supervisor.pid'))).rejects.toThrow()
@@ -671,6 +701,17 @@ if (process.argv.includes('enable')) {
           fork.args[fork.args.indexOf(flag) + 1]
         );
       }
+      const metadata = await readFile(join(install, 'installation.json'), 'utf8');
+      await installFork(['--codex-binary', stock]);
+      const restarted = JSON.parse(await readFile(join(install, 'data/worker-args.json'), 'utf8'));
+      stockPid = restarted.parent;
+      expect(restarted.parent).not.toBe(other.parent);
+      expect(await readFile(join(install, 'installation.json'), 'utf8')).toBe(metadata);
+      for (const flag of ['--node-id', '--control-mcp-name', '--app-server-socket'])
+        expect(restarted.args[restarted.args.indexOf(flag) + 1]).toBe(
+          other.args[other.args.indexOf(flag) + 1]
+        );
+      process.kill(fork.parent, 0);
       await exec('bash', [join(install, 'bin/uninstall.sh')]);
       await vi.waitFor(async () =>
         expect(readFile(join(install, 'data/supervisor.pid'))).rejects.toThrow()

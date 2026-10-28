@@ -80,12 +80,17 @@ umask 077
 mkdir -p "$DIR/worker" "$DIR/data" "$DIR/workspace" "$DIR/logs" "$DIR/bin" "$DIR/codex-state"
 DIR="$(cd "$DIR" && pwd)"
 chmod 700 "$DIR" "$DIR/data" "$DIR/workspace"
-# Refuse to replace an executable underneath an active customized server.
+# Stop the previous installation before replacing any of its executable files.
 # macOS TMPDIR paths can exceed the Unix socket limit before the socket name is appended.
 SOCK_DIR="/tmp/agent-teams-$(id -u)"; mkdir -p "$SOCK_DIR"; chmod 700 "$SOCK_DIR"
 DIR_SUM=$(printf '%s' "$DIR" | cksum | cut -d' ' -f1)
 CONTROL_SOCK="$SOCK_DIR/mate-${TEAM_ID:0:8}-${DIR_SUM}.sock"
 APP_SERVER_SOCK="$SOCK_DIR/codex-${TEAM_ID:0:8}-${DIR_SUM}.sock"
+if [ -f "$DIR/bin/stop.sh" ] && [ ! -L "$DIR/bin/stop.sh" ]; then
+  say "Stopping the existing installation before updating"
+  bash "$DIR/bin/stop.sh" || die "Could not stop this installation; inspect its logs before updating"
+fi
+# An unsuccessful stop must never authorize overwriting a live runtime or adopting its socket.
 if [ -f "$DIR/data/supervisor.pid" ]; then
   SUPERVISOR_PID=$(cat "$DIR/data/supervisor.pid")
   case "$SUPERVISOR_PID" in ''|*[!0-9]*) die "Invalid supervisor PID; inspect $DIR/data/supervisor.pid" ;; esac

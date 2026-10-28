@@ -51,6 +51,7 @@ def main():
     parser.add_argument('--runtime', choices=['stock', 'fork'], default='fork')
     parser.add_argument('--codex-binary', type=Path)
     parser.add_argument('--existing-login', action='store_true')
+    parser.add_argument('--reinstall', action='store_true', help='Rerun the installer while its test-owned installation is running')
     args = parser.parse_args()
     if args.runtime == 'stock' and not args.codex_binary:
         parser.error('Stock smoke requires --codex-binary')
@@ -116,6 +117,20 @@ def main():
             if result.returncode != 0:
                 raise RuntimeError('Installer failed: ' + (result.stdout + result.stderr)[-3500:])
             supervisor = int((install / 'data/supervisor.pid').read_text())
+            if args.reinstall:
+                previous_supervisor = supervisor
+                previous_identity = (install / 'installation.json').read_bytes()
+                supervisor = None
+                updated = subprocess.run(install_args, env=env, cwd=root, stdin=subprocess.DEVNULL,
+                                         text=True, capture_output=True, timeout=240)
+                (root / 'reinstaller-output.log').write_text(updated.stdout + updated.stderr)
+                if updated.returncode != 0:
+                    raise RuntimeError('Reinstall failed: ' + (updated.stdout + updated.stderr)[-3500:])
+                supervisor = int((install / 'data/supervisor.pid').read_text())
+                if supervisor == previous_supervisor or 'Stopping the existing installation' not in updated.stdout:
+                    raise RuntimeError('Reinstall did not replace its running supervisor')
+                if previous_identity != (install / 'installation.json').read_bytes():
+                    raise RuntimeError('Reinstall changed the installation identity')
             script = (install / 'bin/start.sh').read_text()
             node = shell_value(script, 'NODE')
             binary = shell_value(script, 'CODEX')
@@ -209,6 +224,7 @@ client.onerror = () => { console.error('Desktop transport failed'); process.exit
                       'modelTurnsStarted': 0, 'testDirectory': str(root)}
             report['desktopTransportTested'] = True
             report['desktopGuiRendered'] = False
+            report['runningInstallationUpdated'] = args.reinstall
             (root / 'mac-smoke-result.json').write_text(json.dumps(report, indent=2) + '\n')
             print(json.dumps(report), flush=True)
             if not args.existing_login:

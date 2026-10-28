@@ -23,6 +23,7 @@ run and release packaging were not performed.
 | Stock and fork terminal clients alongside App Server observers | Both actual PTY clients attached |
 | Stock installer without a fork archive | Native install, private home, connected Worker and terminal passed |
 | Stop/uninstall and external-server ownership | Installer regression fixtures cover independent cleanup and retention of an external server |
+| Reinstall while running | Unix fixtures cover automatic stock/fork shutdown, preserved installation identity, another installation staying live, and refusing unrelated PIDs before unpacking. Native Mac stock reinstall also passed with an inert cached login, zero model turns, and desktop transport checks. |
 | Control registration, durable delivery, reply association, portal compatibility | Covered by the distributed regression suite |
 
 The native matrix used 68 deterministic loopback Responses requests and 32 model-issued MCP

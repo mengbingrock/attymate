@@ -50,8 +50,11 @@ window plus a minute for the Worker handshake. Logs remain under `logs/app-serve
 On macOS the supervisor runs under launchd; on Linux under systemd user services. `--no-service`
 uses a background supervisor. If either child exits, it stops its other child and exits;
 launchd/systemd restart the installation. Cleanup targets only its own child processes.
-Each installation has its own socket and service identity. Stop it before replacing its runtime;
-the installer refuses an existing App Server socket. `bin/status.sh` reports Worker state, and
+Each installation has its own socket and service identity. Rerunning the Unix installer calls
+that installation's existing `bin/stop.sh` before replacing runtime files, then starts it again.
+It preserves the installation identity, login, and data. Other installations and external App
+Servers remain running. If shutdown fails or a managed socket remains, the update stops without
+replacing the runtime. `bin/status.sh` reports Worker state, and
 `logs/app-server.log` holds server output.
 The supervisor writes its PID to `data/supervisor.pid` and removes it on shutdown. Socket paths
 use the short `/tmp/agent-teams-<uid>/` directory, including on macOS where `TMPDIR` is often too long.
