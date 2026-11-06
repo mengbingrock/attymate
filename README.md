@@ -30,6 +30,10 @@ Pick the Codex provider and the team runs entirely on the **stock `codex` CLI** 
 - **Real model picker and auth** — team dialogs list actual Codex models from the Codex app-server catalog and show your ChatGPT/API-key connection state
 - **Uses your Codex login** — ChatGPT account or API key from `~/.codex`, nothing extra to configure
 
+### Dictation with OpenWhispr
+
+Focus a text field and click **Dictate**, speak, then click **Stop** to insert the transcript at your cursor. This works across messages, forms, search fields, and rich text editors. OpenWhispr must be running with a downloaded local speech model (Base is recommended). Audio stays on your device; no API key is needed, and dictated messages are never submitted automatically. See the [dictation guide](src/features/dictation/README.md).
+
 ### Stock Claude Code teams, interactive by default
 
 - **Claude teams launch on your installed `claude` CLI** with the login and subscription you already have

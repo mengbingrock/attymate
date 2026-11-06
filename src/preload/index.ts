@@ -1,6 +1,7 @@
 import { createAppCloseCoordinationBridge } from '@features/app-close-coordination/preload';
 import { createCodexAccountBridge } from '@features/codex-account/preload';
 import { createCodexRuntimeInstallerBridge } from '@features/codex-runtime-installer/preload';
+import { createDictationBridge } from '@features/dictation/preload';
 import { createInteractiveTeamRuntimeBridge } from '@features/interactive-team-runtime/preload';
 import { createMatterBridge } from '@features/matter-dashboard/preload';
 import { createMemberLogStreamBridge } from '@features/member-log-stream/preload';
@@ -596,6 +597,7 @@ const electronAPI: ElectronAPI = {
   organizations: createOrganizationsBridge(ipcRenderer),
   terminalWorkspace: createTerminalWorkspaceBridge(ipcRenderer),
   interactiveTeamRuntime: createInteractiveTeamRuntimeBridge(ipcRenderer),
+  dictation: createDictationBridge(ipcRenderer),
   tokenUsage: createTokenUsageBridge(ipcRenderer),
   matter: createMatterBridge(ipcRenderer),
   telemetry: {

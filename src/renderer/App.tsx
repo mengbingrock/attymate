@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 
+import { DictationOverlay } from '@features/dictation/renderer';
 import { LocalizationProvider } from '@features/localization/renderer';
 import { TooltipProvider } from '@renderer/components/ui/tooltip';
 
@@ -113,6 +114,7 @@ export const App = (): React.JSX.Element => {
           <TabbedLayout />
           <ConfirmDialog />
           <ToolApprovalSheet />
+          <DictationOverlay />
         </TooltipProvider>
       </ErrorBoundary>
     </LocalizationProvider>
