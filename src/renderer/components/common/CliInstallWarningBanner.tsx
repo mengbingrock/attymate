@@ -17,6 +17,15 @@ export const CliInstallWarningBanner = (): React.JSX.Element | null => {
   const cliStatus = useStore(useShallow((s) => s.cliStatus));
   const cliStatusLoading = useStore((s) => s.cliStatusLoading);
   const openDashboard = useStore((s) => s.openDashboard);
+  const isCodexTeamFocused = useStore((s) => {
+    const pane = s.paneLayout.panes.find((p) => p.id === s.paneLayout.focusedPaneId);
+    const tab = pane?.tabs.find((item) => item.id === pane.activeTabId);
+    return (
+      tab?.type === 'team' &&
+      Boolean(tab.teamName) &&
+      s.launchParamsByTeam[tab.teamName!]?.providerId === 'codex'
+    );
+  });
 
   // Returns a primitive boolean — minimizes re-renders
   const isDashboardFocused = useStore((s) => {
@@ -32,6 +41,7 @@ export const CliInstallWarningBanner = (): React.JSX.Element | null => {
     cliStatusLoading ||
     !cliStatus ||
     cliStatus.installed ||
+    isCodexTeamFocused ||
     isDashboardFocused
   ) {
     return null;

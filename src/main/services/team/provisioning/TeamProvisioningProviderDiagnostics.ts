@@ -180,7 +180,7 @@ export async function probeClaudeRuntime({
   ports: TeamProvisioningProviderDiagnosticsPorts;
 }): Promise<{ warning?: string }> {
   const resolvedProviderId = resolveTeamProviderId(providerId);
-  const cliCommandLabel = getConfiguredCliCommandLabel();
+  const cliCommandLabel = resolvedProviderId === 'codex' ? 'codex' : getConfiguredCliCommandLabel();
   if (!(await ports.pathExistsAsDirectory(cwd))) {
     return {
       warning: `Working directory does not exist: ${cwd}`,

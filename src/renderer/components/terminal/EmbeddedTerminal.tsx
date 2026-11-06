@@ -10,6 +10,7 @@ import { Terminal } from '@xterm/xterm';
 import type { PtySpawnOptions } from '@shared/types/terminal';
 
 interface EmbeddedTerminalProps {
+  managedSessionId?: string;
   /** Command to run (if not provided, opens default shell) */
   command?: string;
   /** Arguments for the command */
@@ -25,6 +26,7 @@ interface EmbeddedTerminalProps {
 }
 
 export const EmbeddedTerminal = ({
+  managedSessionId,
   command,
   args,
   cwd,
@@ -68,6 +70,7 @@ export const EmbeddedTerminal = ({
       if (disposed) return;
 
       const spawnOptions: PtySpawnOptions = {
+        ...(managedSessionId ? { managedSessionId } : {}),
         ...(command ? { command } : {}),
         ...(args ? { args } : {}),
         ...(cwd ? { cwd } : {}),

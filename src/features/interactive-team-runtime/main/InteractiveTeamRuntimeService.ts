@@ -17,6 +17,7 @@ import {
 } from '../core/domain/sessionNaming';
 
 import { isPaneSafeLauncherEnvKey } from './launcherEnv';
+import { nativeCodexLanes } from './NativeCodexLanes';
 import {
   clearRuntimeBinding,
   readRuntimeBinding,
@@ -472,6 +473,12 @@ export class InteractiveTeamRuntimeService {
     this.#watchAborts.get(teamName)?.abort();
     this.#watchAborts.delete(teamName);
 
+    if (binding.backend === 'native-pty') {
+      nativeCodexLanes.stop(binding.tmuxSessionName);
+      await this.clearBinding(teamName);
+      return true;
+    }
+
     const tmux = getTmuxSessionCommandExecutor();
     if (await tmux.hasSession(binding.tmuxSessionName)) {
       if (binding.runtime === 'codex-lanes') {
@@ -511,6 +518,9 @@ export class InteractiveTeamRuntimeService {
   async getStatus(teamName: string): Promise<InteractiveRuntimeStatusDto> {
     const binding = await this.readBinding(teamName);
     if (!binding) return { active: false };
+    if (binding.backend === 'native-pty') {
+      return { active: nativeCodexLanes.hasSession(binding.tmuxSessionName) };
+    }
     const tmux = getTmuxSessionCommandExecutor();
     const alive = await tmux.hasSession(binding.tmuxSessionName);
     return {
@@ -524,6 +534,9 @@ export class InteractiveTeamRuntimeService {
   async listConsoleTargets(teamName: string): Promise<ConsoleTargetDto[]> {
     const binding = await this.readBinding(teamName);
     if (!binding) return [];
+    if (binding.backend === 'native-pty') {
+      return nativeCodexLanes.listLanes(binding.tmuxSessionName);
+    }
     const tmux = getTmuxSessionCommandExecutor();
     const panes = await tmux.listSessionPanes(binding.tmuxSessionName);
     if (panes.length === 0) return [];
@@ -573,6 +586,14 @@ export class InteractiveTeamRuntimeService {
         : undefined);
     if (!target) {
       throw new Error(`No console target for "${memberName}" in team "${teamName}"`);
+    }
+    if (binding.backend === 'native-pty') {
+      return {
+        command: '',
+        args: [],
+        managedSessionId: target.paneId,
+        viewerSessionName: `native-view-${++this.#viewerSequence}`,
+      };
     }
     const tmux = getTmuxSessionCommandExecutor();
     this.#viewerSequence += 1;

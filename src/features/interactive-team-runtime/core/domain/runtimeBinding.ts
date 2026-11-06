@@ -5,6 +5,7 @@ export interface RuntimeLaneBinding {
   isLead: boolean;
   paneId: string;
   windowIndex: number;
+  pid?: number;
 }
 
 /**
@@ -15,6 +16,7 @@ export interface RuntimeLaneBinding {
 export interface InteractiveRuntimeBinding {
   version: 1 | 2;
   runtime: InteractiveRuntimeKind;
+  backend?: 'tmux' | 'native-pty';
   teamName: string;
   runId: string;
   tmuxSessionName: string;
@@ -39,6 +41,9 @@ function normalizeLanes(raw: unknown): RuntimeLaneBinding[] {
       isLead: lane.isLead === true,
       paneId: lane.paneId,
       windowIndex: typeof lane.windowIndex === 'number' ? lane.windowIndex : 0,
+      ...(typeof lane.pid === 'number' && Number.isInteger(lane.pid) && lane.pid > 0
+        ? { pid: lane.pid }
+        : {}),
     });
   }
   return lanes;
@@ -62,6 +67,7 @@ export function parseRuntimeBinding(raw: string): InteractiveRuntimeBinding | nu
   return {
     version: candidate.version,
     runtime,
+    backend: candidate.backend === 'native-pty' ? 'native-pty' : 'tmux',
     teamName: candidate.teamName,
     runId: candidate.runId,
     tmuxSessionName: candidate.tmuxSessionName,

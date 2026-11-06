@@ -34,7 +34,11 @@ For a headless fallback, confirm the lead process is alive and stdin delivery is
 
 ## Stock Codex
 
-Codex teams use one interactive stock `codex` TUI per lane. Inspect `interactive-runtime.json`, then verify every declared tmux window exists and its latest pane lines show a usable prompt rather than a trust dialog, authentication failure, or exited process.
+Codex teams use one interactive stock `codex` TUI per lane and do not require Claude CLI. Inspect `interactive-runtime.json`. On macOS/Linux, verify every declared tmux window exists and its latest pane lines show a usable prompt rather than a trust dialog, authentication failure, or exited process.
+
+On Windows, `backend: "native-pty"` identifies app-owned ConPTY sessions. No tmux or WSL installation is needed. Check the member PIDs and open their live consoles in the app. Closing a console detaches its view; stopping the team terminates its owned processes. Recent Codex builds that support `--no-daemon` are launched with it so app-bundled CLIs can run independently. The app probes this flag before using it, preserving compatibility with older CLIs.
+
+Preflight and model validation must use the Codex binary and its app-server catalog/account. A Codex-only team must not resolve Claude, call the fork's `model list` or `runtime status` commands, or show the global missing-Claude banner for its selected team tab.
 
 Inbound app messages are pasted into the recipient lane. If a message stalls, compare the app inbox state with the target pane and the lane message-pump diagnostics.
 

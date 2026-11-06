@@ -21,10 +21,9 @@ describe('providerModelProbe', () => {
     expect(buildProviderPreflightPingArgs('codex')).toContain('gpt-5.6-sol');
   });
 
-  it('builds direct Codex exec probes that ignore user config', () => {
+  it('builds direct Codex exec probes using the selected model and existing configuration', () => {
     expect(buildCodexExecModelProbeArgs('gpt-5.4')).toEqual([
       'exec',
-      '--ignore-user-config',
       '--json',
       '--skip-git-repo-check',
       '--ephemeral',
@@ -32,5 +31,12 @@ describe('providerModelProbe', () => {
       'gpt-5.4',
       'Output only the single word PONG.',
     ]);
+  });
+
+  it('inherits the configured Codex model when none is explicitly selected', () => {
+    const args = buildCodexExecModelProbeArgs();
+    expect(args).not.toContain('--model');
+    expect(args).not.toContain('--ignore-user-config');
+    expect(args).toContain('--ephemeral');
   });
 });

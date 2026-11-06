@@ -79,7 +79,6 @@ import { type AttachmentPayload, DEFAULT_TOOL_APPROVAL_SETTINGS } from '@shared/
 import { resolveLanguageName } from '@shared/utils/agentLanguage';
 import { resolveAnthropicLaunchModel } from '@shared/utils/anthropicLaunchModel';
 import { parseCliArgs } from '@shared/utils/cliArgsParser';
-import { isUsableCodexModelCatalog } from '@shared/utils/codexModelCatalog';
 import { deriveContextMetrics } from '@shared/utils/contextMetrics';
 import { getErrorMessage } from '@shared/utils/errorHandling';
 import {
@@ -137,10 +136,7 @@ import {
 import { mergeJsonSettingsArgs } from '../runtime/cliSettingsArgs';
 import { buildProviderControlPlaneCliCommandArgs } from '../runtime/providerCliCommandArgs';
 import { ProviderConnectionService } from '../runtime/ProviderConnectionService';
-import {
-  buildCodexExecModelProbeArgs,
-  getProviderPreflightModel,
-} from '../runtime/providerModelProbe';
+import { buildCodexExecModelProbeArgs } from '../runtime/providerModelProbe';
 import { resolveTeamProviderId, stripMultimodelRoutingEnv } from '../runtime/providerRuntimeEnv';
 import { type TeamRuntimeSettingsJson } from '../runtime/teamRuntimeSettingsBundle';
 
@@ -1119,8 +1115,9 @@ function getRunRuntimeFailureLabel(run: ProvisioningRun): string {
   return getCliFlavorUiOptions(getConfiguredCliFlavor()).displayName;
 }
 
-function buildMissingCliError(): Error {
-  return new Error('Claude CLI not found; install it or provide a valid path');
+function buildMissingCliError(providerId?: TeamProviderId): Error {
+  const runtime = resolveTeamProviderId(providerId) === 'codex' ? 'Codex' : 'Claude';
+  return new Error(`${runtime} CLI not found; install it or provide a valid path`);
 }
 
 function looksLikeClaudeStdoutJsonFragment(text: string): boolean {
@@ -3103,6 +3100,48 @@ export class TeamProvisioningService {
     providerArgs?: string[];
     limitContext?: boolean;
   }): Promise<RuntimeProviderLaunchFacts> {
+    if (params.providerId === 'codex') {
+      // Stock Codex exposes its catalog/account through app-server, not the
+      // removed fork's `model list` and `runtime status` CLI subcommands.
+      const [modelCatalog, connection] = await Promise.all([
+        this.providerConnectionService.getCodexModelCatalog({ cwd: params.cwd }),
+        this.providerConnectionService.getConnectionInfo('codex'),
+      ]);
+      const modelIds = new Set<string>();
+      if (modelCatalog) addModelCatalogLaunchModels(modelIds, modelCatalog);
+      const runtimeCapabilities: CliProviderRuntimeCapabilities = {
+        modelCatalog: {
+          dynamic: modelCatalog?.source === 'app-server',
+          source: modelCatalog?.source,
+        },
+        reasoningEffort: {
+          supported: true,
+          configPassthrough: true,
+          values: [
+            ...new Set(
+              modelCatalog?.models.flatMap((model) => model.supportedReasoningEfforts) ?? []
+            ),
+          ],
+        },
+      };
+      return {
+        defaultModel: modelCatalog?.defaultLaunchModel ?? null,
+        modelIds,
+        modelCatalog,
+        modelListParsed: Boolean(modelCatalog),
+        runtimeCapabilities,
+        providerStatus: {
+          providerId: 'codex',
+          authenticated: connection.codex?.launchAllowed ?? false,
+          authMethod: connection.codex?.effectiveAuthMode ?? null,
+          connection,
+          modelCatalog,
+          runtimeCapabilities,
+          selectedBackendId: 'codex-native',
+          resolvedBackendId: 'codex-native',
+        },
+      };
+    }
     const providerArgs = params.providerArgs ?? [];
     const modelListPromise = execCli(
       params.claudePath,
@@ -3120,7 +3159,7 @@ export class TeamProvisioningService {
       }
     );
     const runtimeStatusPromise =
-      params.providerId === 'codex' || params.providerId === 'anthropic'
+      params.providerId === 'anthropic'
         ? execCli(
             params.claudePath,
             buildProviderControlPlaneCliCommandArgs(providerArgs, [
@@ -3203,22 +3242,6 @@ export class TeamProvisioningService {
     if (modelCatalog) {
       addModelCatalogLaunchModels(modelIds, modelCatalog);
       defaultModel = modelCatalog.defaultLaunchModel?.trim() || defaultModel;
-    }
-
-    if (
-      params.providerId === 'codex' &&
-      !isUsableCodexModelCatalog(modelCatalog) &&
-      runtimeCapabilities?.modelCatalog?.dynamic === true
-    ) {
-      const codexCatalog = await this.providerConnectionService.getCodexModelCatalog({
-        cwd: params.cwd,
-      });
-      if (isUsableCodexModelCatalog(codexCatalog)) {
-        addModelCatalogLaunchModels(modelIds, codexCatalog);
-
-        modelCatalog = codexCatalog;
-        defaultModel = codexCatalog.defaultLaunchModel?.trim() || defaultModel;
-      }
     }
 
     return {
@@ -10219,7 +10242,7 @@ export class TeamProvisioningService {
       const cached = this.getFreshCachedProbeResult(targetCwdForValidation, providerId);
       const probeResult = cached ?? (await this.getCachedOrProbeResult(targetCwd, providerId));
       if (!probeResult?.claudePath) {
-        throw buildMissingCliError();
+        throw buildMissingCliError(providerId);
       }
 
       const providerLabel = getTeamProviderLabel(providerId);
@@ -10934,7 +10957,10 @@ export class TeamProvisioningService {
     }
 
     const probePromise = (async () => {
-      const claudePath = await ClaudeBinaryResolver.resolve();
+      const claudePath =
+        resolveTeamProviderId(providerId) === 'codex'
+          ? await CodexBinaryResolver.resolve()
+          : await ClaudeBinaryResolver.resolve();
       if (!claudePath) return null;
 
       const {
@@ -11205,10 +11231,8 @@ export class TeamProvisioningService {
     run.codexLanesReady = new Promise<boolean>((resolve) => {
       resolveCodexLanesReady = resolve;
     });
-    if (!(await interactiveTeamRuntimeService.isEligible())) {
-      throw new Error(
-        'Codex teams run as interactive tmux lanes and require tmux (not supported on Windows). Install tmux and try again.'
-      );
+    if (process.platform !== 'win32' && !(await interactiveTeamRuntimeService.isEligible())) {
+      throw new Error('Codex teams require tmux on macOS/Linux. Install tmux and try again.');
     }
     const codexPath = await CodexBinaryResolver.resolve();
     if (!codexPath) {
@@ -11278,6 +11302,7 @@ export class TeamProvisioningService {
             }
           },
           onFailed: (reason) => {
+            if (run.cancelRequested || run.processKilled) return;
             resolveCodexLanesReady(false);
             if (run.provisioningComplete && run.progress.state === 'ready') {
               logger.warn(`[${teamName}] codex lane runtime ended: ${reason}`);
@@ -11935,9 +11960,12 @@ export class TeamProvisioningService {
 
       await ensureCwdExists(request.cwd);
 
-      const claudePath = await ClaudeBinaryResolver.resolve();
+      const claudePath =
+        resolveTeamProviderId(request.providerId) === 'codex'
+          ? await CodexBinaryResolver.resolve()
+          : await ClaudeBinaryResolver.resolve();
       if (!claudePath) {
-        throw buildMissingCliError();
+        throw buildMissingCliError(request.providerId);
       }
 
       const runtimeAuthMaterialId = randomUUID();
@@ -14217,9 +14245,12 @@ export class TeamProvisioningService {
       try {
         await ensureCwdExists(request.cwd);
 
-        claudePath = await ClaudeBinaryResolver.resolve();
+        claudePath =
+          resolveTeamProviderId(request.providerId) === 'codex'
+            ? await CodexBinaryResolver.resolve()
+            : await ClaudeBinaryResolver.resolve();
         if (!claudePath) {
-          throw buildMissingCliError();
+          throw buildMissingCliError(request.providerId);
         }
       } catch (error) {
         // Restore pre-launch backup so config.json is not left in normalized (lead-only) state
@@ -24123,9 +24154,10 @@ export class TeamProvisioningService {
       probeOverride = {
         binaryPath: codexPath,
         args: buildCodexExecModelProbeArgs(
-          getProviderPreflightModel('codex', {
-            modelOverride: ports.getConfiguredCodexCustomProviderModel(),
-          })
+          ports.getConfiguredCodexCustomProviderModel() ??
+            (await this.providerConnectionService.getCodexModelCatalog({ cwd }))
+              ?.defaultLaunchModel ??
+            undefined
         ),
       };
     }

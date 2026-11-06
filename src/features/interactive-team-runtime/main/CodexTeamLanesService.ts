@@ -10,6 +10,7 @@ import { detectCodexPaneState } from '../core/domain/codexPaneState';
 import { buildInteractiveTmuxSessionName } from '../core/domain/sessionNaming';
 
 import { isPaneSafeLauncherEnvKey } from './launcherEnv';
+import { nativeCodexLanes } from './NativeCodexLanes';
 import { readRuntimeBinding, writeRuntimeBinding } from './runtimeBindingStore';
 
 import type { InteractiveRuntimeBinding, RuntimeLaneBinding } from '../core/domain/runtimeBinding';
@@ -59,7 +60,7 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * Runs every codex team member — lead included — as its own interactive stock
- * `codex` TUI inside one tmux session (one window per member). The app is the
+ * `codex` TUI in tmux windows or native Windows PTYs. The app is the
  * team fabric: coordination happens through the agent-teams MCP tools each
  * lane is configured with, and inbound messages are pasted into lanes.
  */
@@ -70,6 +71,7 @@ export class CodexTeamLanesService {
    * roster is live before delegation starts.
    */
   async launchCodexLanes(input: CodexLanesLaunchInput): Promise<InteractiveRuntimeBinding> {
+    if (process.platform === 'win32') return this.launchNativeLanes(input);
     const tmux = getTmuxSessionCommandExecutor();
     const tmuxSessionName = buildInteractiveTmuxSessionName(input.teamName, input.runId);
     const leadLane = input.lanes.find((lane) => lane.isLead);
@@ -180,9 +182,10 @@ export class CodexTeamLanesService {
     input: CodexLanesLaunchInput,
     tmuxSessionName: string,
     lane: CodexLaneSpec,
-    paneId: string
+    paneId: string,
+    nativePty = false
   ): Promise<void> {
-    const tmux = getTmuxSessionCommandExecutor();
+    const tmux = nativePty ? nativeCodexLanes : getTmuxSessionCommandExecutor();
     const deadline = Date.now() + LANE_READY_TIMEOUT_MS;
     let stableReadyPolls = 0;
     let lastTail = '';
@@ -191,7 +194,12 @@ export class CodexTeamLanesService {
       const state = detectCodexPaneState(lastTail);
       if (state === 'trust-dialog') {
         // "1. Yes, continue" is the highlighted default (codex-cli 0.145.0).
-        await tmux.execTmux(['send-keys', '-t', paneId, 'Enter'], 3_000);
+        if (nativePty) nativeCodexLanes.pressEnter(paneId);
+        else
+          await getTmuxSessionCommandExecutor().execTmux(
+            ['send-keys', '-t', paneId, 'Enter'],
+            3_000
+          );
         stableReadyPolls = 0;
       } else if (state === 'login-required') {
         throw new Error(
@@ -230,7 +238,8 @@ export class CodexTeamLanesService {
       binding.lanes.find((entry) => entry.memberName === memberName) ??
       (memberName === 'team-lead' ? binding.lanes.find((entry) => entry.isLead) : undefined);
     if (!lane) return false;
-    const tmux = getTmuxSessionCommandExecutor();
+    const tmux =
+      binding.backend === 'native-pty' ? nativeCodexLanes : getTmuxSessionCommandExecutor();
     if (!(await tmux.hasSession(binding.tmuxSessionName))) return false;
     const tail = await tmux.capturePaneTail(lane.paneId, 20);
     const paneState = detectCodexPaneState(tail);
@@ -244,6 +253,57 @@ export class CodexTeamLanesService {
       logger.warn(`[${teamName}] lane paste for "${memberName}" failed: ${String(error)}`);
       return false;
     }
+  }
+
+  private async launchNativeLanes(
+    input: CodexLanesLaunchInput
+  ): Promise<InteractiveRuntimeBinding> {
+    const lead = input.lanes.find((lane) => lane.isLead);
+    if (!lead) throw new Error('Codex lane launch requires a lead lane');
+    const sessionName = buildInteractiveTmuxSessionName(input.teamName, input.runId);
+    input.callbacks.checkpoint('Starting native Windows Codex sessions');
+    const lanes = await nativeCodexLanes.launch(sessionName, input);
+    const binding: InteractiveRuntimeBinding = {
+      version: 2,
+      runtime: 'codex-lanes',
+      backend: 'native-pty',
+      teamName: input.teamName,
+      runId: input.runId,
+      tmuxSessionName: sessionName,
+      leadSessionId: null,
+      sessionTeamName: null,
+      leadPaneId: lanes.find((lane) => lane.isLead)?.paneId ?? null,
+      lanes,
+      launchedAt: new Date().toISOString(),
+    };
+    try {
+      await writeRuntimeBinding(binding);
+    } catch (error) {
+      nativeCodexLanes.stop(sessionName);
+      throw error;
+    }
+    void (async () => {
+      try {
+        await Promise.all(
+          input.lanes
+            .filter((lane) => !lane.isLead)
+            .map((lane) =>
+              this.#driveLaneToReady(
+                input,
+                sessionName,
+                lane,
+                lanes.find((entry) => entry.memberName === lane.memberName)!.paneId,
+                true
+              )
+            )
+        );
+        await this.#driveLaneToReady(input, sessionName, lead, binding.leadPaneId!, true);
+      } catch (error) {
+        nativeCodexLanes.stop(sessionName);
+        input.callbacks.onFailed(error instanceof Error ? error.message : String(error));
+      }
+    })();
+    return binding;
   }
 
   /**
@@ -277,7 +337,11 @@ export class CodexTeamLanesService {
         );
         if (existing) {
           existing.tmuxPaneId = lane.paneId;
-          existing.backendType = 'tmux';
+          existing.backendType = binding.backend === 'native-pty' ? 'process' : 'tmux';
+          if (lane.pid) {
+            existing.pid = lane.pid;
+            existing.runtimePid = lane.pid;
+          }
           existing.isActive = true;
           existing.provider = 'codex';
           existing.providerId = 'codex';
@@ -291,7 +355,8 @@ export class CodexTeamLanesService {
             provider: 'codex',
             providerId: 'codex',
             tmuxPaneId: lane.paneId,
-            backendType: 'tmux',
+            backendType: binding.backend === 'native-pty' ? 'process' : 'tmux',
+            ...(lane.pid ? { pid: lane.pid, runtimePid: lane.pid } : {}),
             isActive: true,
             ...(lane.isLead ? { agentType: 'team-lead' } : {}),
           });

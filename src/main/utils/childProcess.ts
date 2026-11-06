@@ -361,7 +361,7 @@ function resolveNpmNativeShim(content: string, launcherDir: string): DirectWindo
  * Running that entrypoint directly with an argv array avoids cmd.exe's
  * percent expansion, which cannot safely represent args like `%PATH%`.
  */
-function resolveDirectWindowsLauncher(binaryPath: string): DirectWindowsLauncher | null {
+export function resolveDirectWindowsLauncher(binaryPath: string): DirectWindowsLauncher | null {
   if (process.platform !== 'win32' || !isWindowsBatchLauncher(binaryPath)) {
     return null;
   }

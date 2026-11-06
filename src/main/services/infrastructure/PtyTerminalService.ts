@@ -15,6 +15,8 @@ import { createLogger } from '@shared/utils/logger';
 
 import { buildProviderAwareCliEnv } from '../runtime/providerAwareCliEnv';
 
+import { managedTerminalRegistry } from './ManagedTerminalRegistry';
+
 import type { PtySpawnOptions } from '@shared/types/terminal';
 import type { BrowserWindow } from 'electron';
 
@@ -36,6 +38,7 @@ try {
 
 export class PtyTerminalService {
   private ptys = new Map<string, IPty>();
+  private readonly managedViews = new Map<string, { sessionId: string; detach: () => void }>();
   private mainWindow: BrowserWindow | null = null;
 
   setMainWindow(window: BrowserWindow | null): void {
@@ -48,6 +51,24 @@ export class PtyTerminalService {
    * @throws If node-pty native module is not available.
    */
   async spawn(options?: PtySpawnOptions): Promise<string> {
+    if (options?.managedSessionId) {
+      const terminal = managedTerminalRegistry.get(options.managedSessionId);
+      if (!terminal) throw new Error('The agent terminal has exited');
+      const id = crypto.randomUUID();
+      const offData = terminal.onData((data) => this.send(TERMINAL_DATA, id, data));
+      const offExit = terminal.onExit((exitCode) => {
+        this.send(TERMINAL_EXIT, id, exitCode);
+        this.kill(id);
+      });
+      this.managedViews.set(id, {
+        sessionId: options.managedSessionId,
+        detach: () => {
+          offData();
+          offExit();
+        },
+      });
+      return id;
+    }
     if (!nodePty) {
       throw new Error(
         'Terminal not available: node-pty native module not found. Run: pnpm install'
@@ -87,14 +108,37 @@ export class PtyTerminalService {
   }
 
   write(id: string, data: string): void {
+    const view = this.managedViews.get(id);
+    if (view) {
+      managedTerminalRegistry.get(view.sessionId)?.write(data);
+      return;
+    }
     this.ptys.get(id)?.write(data);
   }
 
   resize(id: string, cols: number, rows: number): void {
+    const view = this.managedViews.get(id);
+    if (view) {
+      const terminal = managedTerminalRegistry.get(view.sessionId);
+      terminal?.resize(cols, rows);
+      void terminal
+        ?.snapshot()
+        .then((data) => {
+          if (this.managedViews.has(id)) this.send(TERMINAL_DATA, id, data);
+        })
+        .catch(() => undefined);
+      return;
+    }
     this.ptys.get(id)?.resize(cols, rows);
   }
 
   kill(id: string): void {
+    const view = this.managedViews.get(id);
+    if (view) {
+      view.detach();
+      this.managedViews.delete(id);
+      return;
+    }
     const pty = this.ptys.get(id);
     if (pty) {
       pty.kill();
@@ -105,6 +149,8 @@ export class PtyTerminalService {
 
   /** Kill all PTY processes. Called on app shutdown. */
   killAll(): void {
+    for (const id of this.managedViews.keys()) this.kill(id);
+    managedTerminalRegistry.killAll();
     const count = this.ptys.size;
     if (count > 0) {
       logger.info(`Killing ${count} PTY processes on shutdown`);

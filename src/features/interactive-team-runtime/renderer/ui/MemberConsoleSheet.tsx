@@ -78,6 +78,7 @@ export function MemberConsoleSheet({
           <div className="p-4 text-sm text-red-400">{error}</div>
         ) : target ? (
           <EmbeddedTerminal
+            managedSessionId={target.managedSessionId}
             command={target.command}
             args={target.args}
             onExit={handleExit}

@@ -24,9 +24,9 @@ This fork removes the upstream closed-source multimodel runtime entirely: teams 
 
 Pick the Codex provider and the team runs entirely on the **stock `codex` CLI** — no forked runtime involved:
 
-- **Every member is a real interactive Codex session** — the lead and each teammate run as their own `codex` TUI in a window of one app-managed tmux session ("codex lanes")
+- **Every member is a real interactive Codex session** — the lead and each teammate run as their own `codex` TUI, using app-managed tmux lanes on macOS/Linux and native ConPTY sessions on Windows. Codex teams do not require Claude CLI.
 - **The app is the team fabric** — lanes get the built-in agent-teams MCP tools via `-c` config overrides, so the kanban board, task tools, and messaging work exactly like Claude teams; inbound messages are pasted straight into the member's pane (Codex queues input even mid-turn)
-- **Open a console on any member** — watch an agent live and type to it directly, or attach from any terminal with `tmux`
+- **Open a console on any member** — watch an agent live and type to it directly. On macOS/Linux you can also attach from another terminal with `tmux`. Closing a Windows console detaches the view while the agent keeps running.
 - **Real model picker and auth** — team dialogs list actual Codex models from the Codex app-server catalog and show your ChatGPT/API-key connection state
 - **Uses your Codex login** — ChatGPT account or API key from `~/.codex`, nothing extra to configure
 

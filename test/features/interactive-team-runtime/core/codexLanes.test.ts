@@ -81,6 +81,20 @@ describe('detectCodexPaneState', () => {
     expect(detectCodexPaneState(tail)).toBe('ready');
   });
 
+  it('does not mistake the current Windows folder trust dialog for a composer', () => {
+    expect(
+      detectCodexPaneState(
+        [
+          'Folder access',
+          'Trust this folder?',
+          '› 1. Trust and continue',
+          '  2. Back to Agent Command Center',
+          'enter continue · esc back',
+        ].join('\n')
+      )
+    ).toBe('trust-dialog');
+  });
+
   it('classifies login-required and unknown states', () => {
     expect(detectCodexPaneState('Sign in with ChatGPT to continue')).toBe('login-required');
     expect(detectCodexPaneState('random shell output\n$')).toBe('unknown');
