@@ -124,6 +124,7 @@ import type {
 } from '@features/change-review-history/contracts';
 import type { CodexAccountElectronApi } from '@features/codex-account/contracts';
 import type { CodexRuntimeAPI } from '@features/codex-runtime-installer/contracts';
+import type { DictationApi } from '@features/dictation/contracts';
 import type { InteractiveTeamRuntimeElectronApi } from '@features/interactive-team-runtime/contracts';
 import type { MatterElectronApi } from '@features/matter-dashboard/contracts';
 import type { MemberLogStreamApi } from '@features/member-log-stream/contracts';
@@ -1131,6 +1132,8 @@ export interface ElectronAPI
 
   // Interactive tmux team runtime (stock Claude leads with attachable consoles)
   interactiveTeamRuntime: InteractiveTeamRuntimeElectronApi;
+  /** Desktop integration with the locally installed OpenWhispr application. */
+  dictation?: DictationApi;
 
   // Embedded Terminal API (xterm.js + node-pty)
   terminal: TerminalAPI;

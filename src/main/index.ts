@@ -30,6 +30,7 @@ import type {
   AppCloseReason,
 } from '@features/app-close-coordination/contracts';
 import { RendererCloseReadinessCoordinator } from '@features/app-close-coordination/main';
+import { registerDictationIpc } from '@features/dictation/main';
 import {
   type CodexAccountFeatureFacade,
   createCodexAccountFeature,
@@ -2508,6 +2509,7 @@ async function initializeServices(): Promise<void> {
     launchIoGovernor ?? undefined
   );
   registerCodexAccountIpc(ipcMain, codexAccountFeature);
+  registerDictationIpc(ipcMain);
   registerRecentProjectsIpc(ipcMain, recentProjectsFeature);
   registerTeamImportIpc(ipcMain, teamImportFeature);
   registerTeamExportIpc(ipcMain, teamExportFeature);

@@ -362,6 +362,9 @@
       "notarize": true,
       "entitlements": "resources/entitlements.mac.plist",
       "entitlementsInherit": "resources/entitlements.mac.inherit.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Use your microphone to dictate into text fields with OpenWhispr."
+      },
       "icon": "resources/icons/mac/icon.icns"
     },
     "dmg": {
