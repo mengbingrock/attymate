@@ -20,6 +20,8 @@ export interface OpenConsoleResultDto {
   args: string[];
   /** Viewer tmux session backing this console; pass back on close. */
   viewerSessionName: string;
+  /** Existing app-owned native terminal; closing its view does not stop the agent. */
+  managedSessionId?: string;
 }
 
 export interface InteractiveTeamRuntimeElectronApi {

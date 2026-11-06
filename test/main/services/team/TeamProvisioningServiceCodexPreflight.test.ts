@@ -10,6 +10,9 @@ const addTeamNotificationMock = vi.fn().mockResolvedValue(null);
 vi.mock('@main/services/team/ClaudeBinaryResolver', () => ({
   ClaudeBinaryResolver: { resolve: vi.fn() },
 }));
+vi.mock('@main/services/infrastructure/codexAppServer', () => ({
+  CodexBinaryResolver: { resolve: vi.fn() },
+}));
 
 vi.mock('@main/utils/shellEnv', () => ({
   resolveInteractiveShellEnv: vi.fn(),
@@ -35,6 +38,7 @@ vi.mock('@main/services/infrastructure/NotificationManager', () => ({
   },
 }));
 
+import { CodexBinaryResolver } from '@main/services/infrastructure/codexAppServer';
 import { ClaudeBinaryResolver } from '@main/services/team/ClaudeBinaryResolver';
 import { TeamProvisioningService } from '@main/services/team/TeamProvisioningService';
 import { resolveInteractiveShellEnvBestEffort } from '@main/utils/shellEnv';
@@ -62,7 +66,8 @@ describe('TeamProvisioningService Codex create-team preflight', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-team-codex-preflight-'));
-    vi.mocked(ClaudeBinaryResolver.resolve).mockResolvedValue('/fake/claude');
+    vi.mocked(ClaudeBinaryResolver.resolve).mockResolvedValue(null);
+    vi.mocked(CodexBinaryResolver.resolve).mockResolvedValue('/fake/codex');
     vi.mocked(resolveInteractiveShellEnvBestEffort).mockResolvedValue({
       PATH: '/usr/bin',
       SHELL: '/bin/zsh',
@@ -86,7 +91,7 @@ describe('TeamProvisioningService Codex create-team preflight', () => {
     fs.rmSync(tempRoot, { force: true, recursive: true });
   });
 
-  it('uses refreshed Codex provider env for both runtime probe and deep one-shot preflight', async () => {
+  it('preflights stock Codex without resolving or requiring Claude', async () => {
     const service = new TeamProvisioningService();
     const harness = service as unknown as CodexProbeHarness;
     const probeClaudeRuntime = vi
@@ -114,7 +119,7 @@ describe('TeamProvisioningService Codex create-team preflight', () => {
     expect(result.message).toBe('CLI is warmed up and ready to launch');
     expect(result.warnings?.join('\n') ?? '').not.toContain('Codex CLI not found');
     expect(probeClaudeRuntime).toHaveBeenCalledWith(
-      '/fake/claude',
+      '/fake/codex',
       tempRoot,
       expect.objectContaining({
         CODEX_CLI_PATH: '/Users/tester/.local/bin/codex',
@@ -125,7 +130,7 @@ describe('TeamProvisioningService Codex create-team preflight', () => {
       ['-c', 'forced_login_method="chatgpt"']
     );
     expect(runProviderOneShotDiagnostic).toHaveBeenCalledWith(
-      '/fake/claude',
+      '/fake/codex',
       tempRoot,
       expect.objectContaining({
         CODEX_CLI_PATH: '/Users/tester/.local/bin/codex',
@@ -136,5 +141,18 @@ describe('TeamProvisioningService Codex create-team preflight', () => {
       ['-c', 'forced_login_method="chatgpt"']
     );
     expect(buildProviderAwareCliEnvMock).toHaveBeenCalledTimes(2);
+    expect(ClaudeBinaryResolver.resolve).not.toHaveBeenCalled();
+    expect(CodexBinaryResolver.resolve).toHaveBeenCalled();
+  });
+
+  it('reports a missing Codex executable with a Codex-specific error', async () => {
+    vi.mocked(CodexBinaryResolver.resolve).mockResolvedValue(null);
+    await expect(
+      new TeamProvisioningService().prepareForProvisioning(tempRoot, {
+        forceFresh: true,
+        providerId: 'codex',
+      })
+    ).rejects.toThrow('Codex CLI not found');
+    expect(ClaudeBinaryResolver.resolve).not.toHaveBeenCalled();
   });
 });

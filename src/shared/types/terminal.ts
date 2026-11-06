@@ -12,6 +12,8 @@
  * Options for spawning a new PTY process.
  */
 export interface PtySpawnOptions {
+  /** Attach a view to an app-owned terminal instead of creating a process. */
+  managedSessionId?: string;
   /** Command to run (default: user's shell) */
   command?: string;
   /** Arguments for the command */

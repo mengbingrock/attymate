@@ -88,15 +88,13 @@ export function buildProviderModelProbeArgs(modelId: string): string[] {
   ];
 }
 
-export function buildCodexExecModelProbeArgs(modelId: string): string[] {
+export function buildCodexExecModelProbeArgs(modelId?: string): string[] {
   return [
     'exec',
-    '--ignore-user-config',
     '--json',
     '--skip-git-repo-check',
     '--ephemeral',
-    '--model',
-    modelId,
+    ...(modelId?.trim() ? ['--model', modelId.trim()] : []),
     getProviderModelProbePrompt(),
   ];
 }

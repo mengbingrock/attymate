@@ -34,7 +34,11 @@ export function detectCodexPaneState(tail: string): CodexPaneState {
   // Trust dialog bottom: "› 1. Yes, continue / 2. No, quit / Press enter to continue"
   if (
     /Press enter to continue/i.test(last) ||
-    lastFew.some((line) => /Do you trust the contents of this directory/i.test(line))
+    lastFew.some((line) =>
+      /Do you trust the contents of this directory|Trust this folder\?|Trust and continue/i.test(
+        line
+      )
+    )
   ) {
     return 'trust-dialog';
   }

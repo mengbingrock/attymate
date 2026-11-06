@@ -13,6 +13,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@main/services/team/ClaudeBinaryResolver', () => ({
   ClaudeBinaryResolver: { resolve: vi.fn() },
 }));
+vi.mock('@main/services/infrastructure/codexAppServer', () => ({
+  CodexBinaryResolver: { resolve: vi.fn() },
+}));
 
 vi.mock('@main/utils/shellEnv', () => ({
   resolveInteractiveShellEnv: vi.fn(),
@@ -108,6 +111,7 @@ vi.mock('@main/utils/childProcess', () => ({
   killProcessTree: vi.fn(),
 }));
 
+import { CodexBinaryResolver } from '@main/services/infrastructure/codexAppServer';
 import { ProviderConnectionService } from '@main/services/runtime/ProviderConnectionService';
 import { ClaudeBinaryResolver } from '@main/services/team/ClaudeBinaryResolver';
 import {
@@ -363,6 +367,34 @@ function asPrivateService(svc: TeamProvisioningService): TeamProvisioningService
   return svc as unknown as TeamProvisioningServicePrivate;
 }
 
+function stockCodexCatalog(modelIds = ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex']) {
+  const defaultModel = modelIds.includes('gpt-5.4-mini') ? 'gpt-5.4-mini' : modelIds[0];
+  return {
+    schemaVersion: 1 as const,
+    providerId: 'codex' as const,
+    source: 'app-server' as const,
+    status: 'ready' as const,
+    fetchedAt: '2026-11-06T00:00:00Z',
+    staleAt: null,
+    defaultModelId: defaultModel,
+    defaultLaunchModel: defaultModel,
+    models: modelIds.map((id) => ({
+      id,
+      launchModel: id,
+      displayName: id,
+      hidden: false,
+      supportedReasoningEfforts: ['low', 'medium', 'high'] as const,
+      defaultReasoningEffort: 'medium' as const,
+      inputModalities: ['text'],
+      supportsPersonality: false,
+      isDefault: id === defaultModel,
+      upgrade: false,
+      source: 'app-server' as const,
+    })),
+    diagnostics: { configReadState: 'ready' as const, appServerState: 'healthy' as const },
+  };
+}
+
 async function removeTempRoot(dirPath: string): Promise<void> {
   if (!dirPath) {
     return;
@@ -393,6 +425,13 @@ describe('TeamProvisioningService prepare/auth behavior', () => {
     addTeamNotificationMock.mockResolvedValue(null);
     tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-team-prepare-'));
     vi.mocked(ClaudeBinaryResolver.resolve).mockResolvedValue('/fake/claude');
+    vi.mocked(CodexBinaryResolver.resolve).mockResolvedValue('/fake/codex');
+    vi.spyOn(ProviderConnectionService.getInstance(), 'getCodexModelCatalog').mockResolvedValue(
+      stockCodexCatalog() as any
+    );
+    vi.spyOn(ProviderConnectionService.getInstance(), 'getConnectionInfo').mockResolvedValue({
+      codex: { launchAllowed: true, effectiveAuthMode: 'chatgpt' },
+    } as any);
     vi.mocked(resolveInteractiveShellEnvBestEffort).mockResolvedValue({
       PATH: '/usr/bin',
       SHELL: '/bin/zsh',
@@ -701,10 +740,10 @@ describe('TeamProvisioningService prepare/auth behavior', () => {
       expected: [{ name: 'tom', providerId: 'codex', model: 'gpt-5.4', effort: undefined }],
     },
     {
-      label: 'resolves secondary non-Anthropic default model without inheriting lead effort',
+      label: 'lets a Codex teammate inherit its own CLI default without inheriting lead effort',
       defaults: { providerId: 'anthropic', model: 'sonnet', effort: 'low' },
       members: [{ name: 'sam', providerId: 'codex' }],
-      expected: [{ name: 'sam', providerId: 'codex', model: 'gpt-5.4-mini', effort: undefined }],
+      expected: [{ name: 'sam', providerId: 'codex', model: undefined, effort: undefined }],
     },
     {
       label: 'does not inherit Codex lead effort into an Anthropic teammate model',
@@ -2367,28 +2406,26 @@ describe('TeamProvisioningService prepare/auth behavior', () => {
     );
   });
 
-  it('uses runtime status for codex primary preflight without print mode', async () => {
+  it('checks the stock Codex binary without invoking the legacy control plane', async () => {
     const svc = new TeamProvisioningService();
-    const spawnProbe = vi.spyOn(svc as any, 'spawnProbe').mockResolvedValue({
-      stdout: 'orchestrator-cli 1.2.3',
-      stderr: '',
-      exitCode: 0,
-    });
-
+    const spawnProbe = vi
+      .spyOn(svc as any, 'spawnProbe')
+      .mockResolvedValue({ stdout: 'codex 1', stderr: '', exitCode: 0 });
     const result = await svc.prepareForProvisioning(tempRoot, {
       forceFresh: true,
       providerId: 'codex',
     });
-
     expect(result.ready).toBe(true);
-    expect(execCliMock).toHaveBeenCalledWith(
-      '/fake/claude',
-      ['runtime', 'status', '--json', '--summary', '--provider', 'codex'],
-      expect.objectContaining({ cwd: tempRoot })
+    expect(spawnProbe).toHaveBeenCalledWith(
+      '/fake/codex',
+      ['--version'],
+      tempRoot,
+      expect.any(Object),
+      8000,
+      undefined
     );
-    expect(spawnProbe).toHaveBeenCalledTimes(1);
-    const spawnedArgLists = spawnProbe.mock.calls.map((call) => call[1] as string[]);
-    expect(spawnedArgLists.some((args) => args.includes('-p'))).toBe(false);
+    expect(execCliMock).not.toHaveBeenCalled();
+    expect(ClaudeBinaryResolver.resolve).not.toHaveBeenCalled();
   });
 
   it('strips Codex config overrides from runtime status control-plane commands', async () => {
@@ -2481,57 +2518,25 @@ describe('TeamProvisioningService prepare/auth behavior', () => {
     expect(result.warning).not.toContain('auth status did not report Anthropic authentication');
   });
 
-  it('falls back from runtime status timeout to auth status and still checks selected models', async () => {
-    execCliMock.mockImplementation(async (_binaryPath: string | null, args: string[]) => {
-      if (args[0] === 'runtime' && args[1] === 'status') {
-        throw new Error('Timeout running: orchestrator-cli runtime status --json --provider codex');
-      }
-      if (args[0] === 'auth') {
-        return {
-          stdout: JSON.stringify({ loggedIn: true, authMethod: 'chatgpt' }),
-          stderr: '',
-          exitCode: 0,
-        };
-      }
-      if (args[0] === 'model') {
-        return {
-          stdout: JSON.stringify({
-            schemaVersion: 1,
-            providers: {
-              codex: {
-                defaultModel: 'gpt-5.4-mini',
-                models: [{ id: 'gpt-5.4', label: 'GPT-5.4' }],
-              },
-            },
-          }),
-          stderr: '',
-          exitCode: 0,
-        };
-      }
-      return { stdout: '', stderr: '', exitCode: 0 };
-    });
-
+  it('uses the app-server catalog when legacy control-plane commands are unavailable', async () => {
+    execCliMock.mockRejectedValue(new Error('legacy runtime status is unavailable'));
     const svc = new TeamProvisioningService();
     vi.spyOn(svc as any, 'spawnProbe').mockResolvedValue({
-      stdout: 'orchestrator-cli 1.2.3',
+      stdout: 'codex 1',
       stderr: '',
       exitCode: 0,
     });
-
     const result = await svc.prepareForProvisioning(tempRoot, {
       forceFresh: true,
       providerId: 'codex',
       modelIds: ['gpt-5.4'],
     });
-
     expect(result.ready).toBe(true);
     expect(result.details).toContain('Selected model gpt-5.4 is available for launch.');
-    expect(result.warnings?.join('\n')).toContain('runtime status was unavailable');
-    expect(execCliMock).toHaveBeenCalledWith(
-      '/fake/claude',
-      ['auth', 'status', '--json', '--provider', 'codex'],
-      expect.objectContaining({ cwd: tempRoot })
-    );
+    expect(execCliMock).not.toHaveBeenCalled();
+    expect(ProviderConnectionService.getInstance().getCodexModelCatalog).toHaveBeenCalledWith({
+      cwd: tempRoot,
+    });
   });
 
   it('strips Codex config overrides from auth status fallback control-plane commands', async () => {
@@ -2607,47 +2612,33 @@ describe('TeamProvisioningService prepare/auth behavior', () => {
     expect(result.warning).toContain('request id: req_123');
   });
 
-  it('passes provider launch args before codex advisory one-shot probe flags', async () => {
+  it('runs Codex advisory probes through stock exec without Claude settings flags', async () => {
     const svc = new TeamProvisioningService();
-    const spawnProbe = vi.spyOn(svc as any, 'spawnProbe').mockResolvedValueOnce({
-      stdout: 'PONG',
-      stderr: '',
-      exitCode: 0,
-    });
-
+    const spawnProbe = vi
+      .spyOn(svc as any, 'spawnProbe')
+      .mockResolvedValue({ stdout: 'PONG', stderr: '', exitCode: 0 });
     const result = await (svc as any).runProviderOneShotDiagnostic(
-      '/fake/claude',
+      '/unused/claude',
       tempRoot,
-      {
-        PATH: '/usr/bin',
-        SHELL: '/bin/zsh',
-      },
+      { PATH: '/usr/bin' },
       'codex',
-      ['--settings', '{"codex":{"forced_login_method":"chatgpt"}}', '-c', 'service_tier="fast"']
+      ['--settings', 'legacy-settings']
     );
-
     expect(result.warning).toBeUndefined();
-    expect(spawnProbe).toHaveBeenNthCalledWith(
-      1,
-      '/fake/claude',
+    expect(spawnProbe).toHaveBeenCalledWith(
+      '/fake/codex',
       [
-        '--settings',
-        '{"codex":{"forced_login_method":"chatgpt"}}',
-        '-c',
-        'service_tier="fast"',
-        '-p',
-        'Output only the single word PONG.',
-        '--output-format',
-        'text',
+        'exec',
+        '--json',
+        '--skip-git-repo-check',
+        '--ephemeral',
         '--model',
-        'gpt-5.6-sol',
-        '--max-turns',
-        '1',
-        '--no-session-persistence',
+        'gpt-5.4-mini',
+        'Output only the single word PONG.',
       ],
       tempRoot,
       expect.any(Object),
-      60_000,
+      60000,
       expect.any(Object)
     );
   });
@@ -2785,9 +2776,7 @@ describe('TeamProvisioningService prepare/auth behavior', () => {
       limitContext: false,
     });
 
-    expect(result.details).toEqual([
-      'Selected model claude-opus-4-6[1m] is available for launch.',
-    ]);
+    expect(result.details).toEqual(['Selected model claude-opus-4-6[1m] is available for launch.']);
     expect(result.blockingMessages).toEqual([]);
   });
 
@@ -2832,195 +2821,40 @@ describe('TeamProvisioningService prepare/auth behavior', () => {
     ]);
   });
 
-  it('augments dynamic Codex compatibility checks with the app-server catalog', async () => {
-    const svc = new TeamProvisioningService();
-    vi.spyOn(svc as any, 'buildProvisioningEnv').mockResolvedValue({
-      env: {
-        PATH: '/usr/bin',
-        SHELL: '/bin/zsh',
-      },
+  it('accepts a newly available model from the live Codex app-server catalog', async () => {
+    const service = new TeamProvisioningService();
+    vi.spyOn(ProviderConnectionService.getInstance(), 'getCodexModelCatalog').mockResolvedValue(
+      stockCodexCatalog(['gpt-99-future']) as any
+    );
+    vi.spyOn(service as any, 'buildProvisioningEnv').mockResolvedValue({
+      env: {},
       authSource: 'codex_runtime',
-      geminiRuntimeAuth: null,
-      providerArgs: ['--settings', '{"codex":{"forced_login_method":"chatgpt"}}'],
     });
-    const getCodexModelCatalog = vi
-      .spyOn(ProviderConnectionService.getInstance(), 'getCodexModelCatalog')
-      .mockResolvedValue({
-        schemaVersion: 1,
-        providerId: 'codex',
-        source: 'app-server',
-        status: 'ready',
-        fetchedAt: '2026-04-24T00:00:00.000Z',
-        staleAt: '2026-04-24T00:10:00.000Z',
-        defaultModelId: 'gpt-99-future',
-        defaultLaunchModel: 'gpt-99-future',
-        models: [
-          {
-            id: 'gpt-99-future',
-            launchModel: 'gpt-99-future',
-            displayName: 'GPT-99 Future',
-            hidden: false,
-            supportedReasoningEfforts: ['low', 'medium', 'high', 'xhigh'],
-            defaultReasoningEffort: 'high',
-            inputModalities: ['text', 'image'],
-            supportsPersonality: false,
-            isDefault: true,
-            upgrade: false,
-            source: 'app-server',
-            badgeLabel: '99-future',
-          },
-        ],
-        diagnostics: {
-          configReadState: 'ready',
-          appServerState: 'healthy',
-          message: null,
-          code: null,
-        },
-      });
-
-    execCliMock.mockImplementation(async (_binaryPath: string | null, args: string[]) => {
-      if (args.includes('model') && args.includes('list')) {
-        return {
-          stdout: JSON.stringify({
-            schemaVersion: 1,
-            providers: {
-              codex: {
-                defaultModel: 'gpt-5.4-mini',
-                models: [
-                  { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
-                  { id: 'gpt-5.3-codex', label: 'GPT-5.3 Codex' },
-                ],
-              },
-            },
-          }),
-          stderr: '',
-          exitCode: 0,
-        };
-      }
-      if (args.includes('runtime') && args.includes('status')) {
-        return {
-          stdout: JSON.stringify({
-            providers: {
-              codex: {
-                runtimeCapabilities: {
-                  modelCatalog: { dynamic: true, source: 'runtime' },
-                },
-              },
-            },
-          }),
-          stderr: '',
-          exitCode: 0,
-        };
-      }
-      return { stdout: '', stderr: '', exitCode: 0 };
-    });
-
-    const result = await (svc as any).verifySelectedProviderModels({
-      claudePath: '/fake/claude',
+    const result = await (service as any).verifySelectedProviderModels({
+      claudePath: '/fake/codex',
       cwd: tempRoot,
       providerId: 'codex',
-      modelIds: ['gpt-99-future', 'gpt-5.4-mini', 'gpt-5.3-codex'],
+      modelIds: ['gpt-99-future'],
       limitContext: false,
     });
-
-    expect(result.details).toEqual([
-      'Selected model gpt-99-future is available for launch.',
-      'Selected model gpt-5.4-mini is available for launch.',
-      'Selected model gpt-5.3-codex is available for launch.',
-    ]);
+    expect(result.details).toEqual(['Selected model gpt-99-future is available for launch.']);
     expect(result.blockingMessages).toEqual([]);
-    expect(getCodexModelCatalog).toHaveBeenCalledWith({ cwd: tempRoot });
+    expect(execCliMock).not.toHaveBeenCalled();
   });
 
-  it('uses the orchestrator Codex catalog before falling back to the direct app-server catalog', async () => {
-    const svc = new TeamProvisioningService();
-    vi.spyOn(svc as any, 'buildProvisioningEnv').mockResolvedValue({
-      env: {
-        PATH: '/usr/bin',
-        SHELL: '/bin/zsh',
-      },
-      authSource: 'codex_runtime',
-      geminiRuntimeAuth: null,
-      providerArgs: ['--settings', '{"codex":{"forced_login_method":"chatgpt"}}'],
-    });
-    const getCodexModelCatalog = vi
-      .spyOn(ProviderConnectionService.getInstance(), 'getCodexModelCatalog')
-      .mockResolvedValue(null);
-
-    execCliMock.mockImplementation(async (_binaryPath: string | null, args: string[]) => {
-      if (args.includes('model') && args.includes('list')) {
-        return {
-          stdout: JSON.stringify({
-            schemaVersion: 1,
-            providers: {
-              codex: {
-                defaultModel: 'gpt-5.4',
-                models: [{ id: 'gpt-5.4', label: 'GPT-5.4' }],
-              },
-            },
-          }),
-          stderr: '',
-          exitCode: 0,
-        };
-      }
-      if (args.includes('runtime') && args.includes('status')) {
-        return {
-          stdout: JSON.stringify({
-            providers: {
-              codex: {
-                runtimeCapabilities: {
-                  modelCatalog: { dynamic: true, source: 'app-server' },
-                },
-                modelCatalog: {
-                  schemaVersion: 1,
-                  providerId: 'codex',
-                  source: 'app-server',
-                  status: 'ready',
-                  fetchedAt: '2026-04-28T00:00:00.000Z',
-                  staleAt: '2026-04-28T00:10:00.000Z',
-                  defaultModelId: 'gpt-5.4',
-                  defaultLaunchModel: 'gpt-5.4',
-                  models: [
-                    {
-                      id: 'gpt-5.5',
-                      launchModel: 'gpt-5.5',
-                      displayName: 'GPT-5.5',
-                      hidden: false,
-                      supportedReasoningEfforts: ['low', 'medium', 'high', 'xhigh'],
-                      defaultReasoningEffort: 'high',
-                      inputModalities: ['text', 'image'],
-                      supportsPersonality: false,
-                      isDefault: false,
-                      upgrade: false,
-                      source: 'app-server',
-                    },
-                  ],
-                  diagnostics: {
-                    configReadState: 'skipped',
-                    appServerState: 'healthy',
-                  },
-                },
-              },
-            },
-          }),
-          stderr: '',
-          exitCode: 0,
-        };
-      }
-      return { stdout: '', stderr: '', exitCode: 0 };
-    });
-
-    const result = await (svc as any).verifySelectedProviderModels({
-      claudePath: '/fake/claude',
+  it('reads Codex launch facts from app-server without a Claude runtime catalog', async () => {
+    const service = new TeamProvisioningService();
+    const facts = await (service as any).readRuntimeProviderLaunchFacts({
+      claudePath: '/fake/codex',
       cwd: tempRoot,
       providerId: 'codex',
-      modelIds: ['gpt-5.5'],
-      limitContext: false,
+      env: {},
     });
-
-    expect(result.details).toEqual(['Selected model gpt-5.5 is available for launch.']);
-    expect(result.blockingMessages).toEqual([]);
-    expect(getCodexModelCatalog).not.toHaveBeenCalled();
+    expect(facts.modelIds).toEqual(new Set(['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex']));
+    expect(facts.runtimeCapabilities.reasoningEffort.configPassthrough).toBe(true);
+    expect(facts.providerStatus.authenticated).toBe(true);
+    expect(ProviderConnectionService.getInstance().getConnectionInfo).toHaveBeenCalledWith('codex');
+    expect(execCliMock).not.toHaveBeenCalled();
   });
 
   it('strips Codex config overrides from model-list control-plane commands', async () => {
@@ -3079,19 +2913,10 @@ describe('TeamProvisioningService prepare/auth behavior', () => {
     for (const call of execCliMock.mock.calls) {
       expect(call[1]).not.toContain('-c');
     }
-    expect(execCliMock).toHaveBeenCalledWith(
-      '/fake/claude',
-      [
-        '--settings',
-        '{"codex":{"forced_login_method":"chatgpt"}}',
-        'model',
-        'list',
-        '--json',
-        '--provider',
-        'codex',
-      ],
-      expect.objectContaining({ cwd: tempRoot })
-    );
+    expect(execCliMock).not.toHaveBeenCalled();
+    expect(ProviderConnectionService.getInstance().getCodexModelCatalog).toHaveBeenCalledWith({
+      cwd: tempRoot,
+    });
   });
 
   it('treats missing Codex models as launchable when the runtime catalog is dynamic', async () => {
@@ -3129,7 +2954,10 @@ describe('TeamProvisioningService prepare/auth behavior', () => {
     expect(spawnProbe).not.toHaveBeenCalled();
   });
 
-  it('treats explicit Codex models as launchable when the runtime model list is unparsable', async () => {
+  it('uses the app-server catalog even if legacy CLI output is not JSON', async () => {
+    vi.spyOn(ProviderConnectionService.getInstance(), 'getCodexModelCatalog').mockResolvedValue(
+      stockCodexCatalog(['gpt-5.5']) as any
+    );
     execCliMock.mockImplementation(async (_binaryPath: string | null, args: string[]) => {
       if (args[0] === 'model' && args[1] === 'list' && args.includes('codex')) {
         return {
@@ -3187,9 +3015,7 @@ describe('TeamProvisioningService prepare/auth behavior', () => {
     expect(result.details).toEqual(['Selected model gpt-5.5 is available for launch.']);
     expect(result.message).toBe('CLI is warmed up and ready to launch');
     expect(spawnProbe).not.toHaveBeenCalled();
-    expect(vi.mocked(console.warn).mock.calls.map((call) => call.join(' '))).toEqual([
-      '[Service:TeamProvisioning] [codex] Failed to parse runtime model list for launch validation: No JSON object found in CLI output',
-    ]);
+    expect(execCliMock).not.toHaveBeenCalled();
     vi.mocked(console.warn).mockClear();
   });
 
@@ -3835,10 +3661,7 @@ describe('TeamProvisioningService prepare/auth behavior', () => {
           '--provider-passthrough',
         ],
       },
-      extraArgs: [
-        '--settings={"codex":{"nested":{"extra":true}}}',
-        '--extra-passthrough',
-      ],
+      extraArgs: ['--settings={"codex":{"nested":{"extra":true}}}', '--extra-passthrough'],
       inheritedProviderArgs: [
         '--settings',
         '{"codex":{"forced_login_method":"chatgpt","nested":{"inherited":true}}}',
@@ -3982,51 +3805,45 @@ describe('TeamProvisioningService prepare/auth behavior', () => {
 
   it('coalesces multiple non-primary provider settings without leaking provider secrets into env patch', async () => {
     const svc = new TeamProvisioningService();
-    vi.spyOn(svc as any, 'buildProvisioningEnv').mockImplementation(
-      (providerId: unknown) => {
-        const resolvedProviderId = typeof providerId === 'string' ? providerId : undefined;
-        if (resolvedProviderId === 'codex') {
-          return Promise.resolve({
-            env: {
-              CLAUDE_CODE_CODEX_BACKEND: 'codex-native',
-              CLAUDE_CODE_CODEX_FORCED_LOGIN_METHOD: 'chatgpt',
-              CODEX_CLI_PATH: '/opt/codex',
-              CODEX_HOME: '/Users/tester/.codex',
-              CODEX_API_KEY: 'sk-codex-should-not-leak',
-              OPENAI_API_KEY: 'sk-openai-should-not-leak',
-            },
-            authSource: 'codex_runtime',
-            geminiRuntimeAuth: null,
-            providerArgs: [
-              '--settings',
-              '{"codex":{"forced_login_method":"chatgpt"}}',
-              '--codex-passthrough',
-            ],
-          });
-        }
-        if (resolvedProviderId === 'gemini') {
-          return Promise.resolve({
-            env: {
-              GEMINI_API_KEY: 'gemini-should-not-leak',
-              GOOGLE_APPLICATION_CREDENTIALS: '/tmp/gcp-creds.json',
-            },
-            authSource: 'gemini_api_key',
-            geminiRuntimeAuth: null,
-            providerArgs: [
-              '--settings',
-              '{"gemini":{"auth_refresh":"gcp"}}',
-              '--gemini-passthrough',
-            ],
-          });
-        }
+    vi.spyOn(svc as any, 'buildProvisioningEnv').mockImplementation((providerId: unknown) => {
+      const resolvedProviderId = typeof providerId === 'string' ? providerId : undefined;
+      if (resolvedProviderId === 'codex') {
         return Promise.resolve({
-          env: {},
-          authSource: 'none',
+          env: {
+            CLAUDE_CODE_CODEX_BACKEND: 'codex-native',
+            CLAUDE_CODE_CODEX_FORCED_LOGIN_METHOD: 'chatgpt',
+            CODEX_CLI_PATH: '/opt/codex',
+            CODEX_HOME: '/Users/tester/.codex',
+            CODEX_API_KEY: 'sk-codex-should-not-leak',
+            OPENAI_API_KEY: 'sk-openai-should-not-leak',
+          },
+          authSource: 'codex_runtime',
           geminiRuntimeAuth: null,
-          providerArgs: [],
+          providerArgs: [
+            '--settings',
+            '{"codex":{"forced_login_method":"chatgpt"}}',
+            '--codex-passthrough',
+          ],
         });
       }
-    );
+      if (resolvedProviderId === 'gemini') {
+        return Promise.resolve({
+          env: {
+            GEMINI_API_KEY: 'gemini-should-not-leak',
+            GOOGLE_APPLICATION_CREDENTIALS: '/tmp/gcp-creds.json',
+          },
+          authSource: 'gemini_api_key',
+          geminiRuntimeAuth: null,
+          providerArgs: ['--settings', '{"gemini":{"auth_refresh":"gcp"}}', '--gemini-passthrough'],
+        });
+      }
+      return Promise.resolve({
+        env: {},
+        authSource: 'none',
+        geminiRuntimeAuth: null,
+        providerArgs: [],
+      });
+    });
 
     const crossProvider = await (svc as any).buildCrossProviderMemberArgs(
       'anthropic',
@@ -4402,6 +4219,7 @@ describe('TeamProvisioningService prepare/auth behavior', () => {
     (svc as any).provisioningRunByTeam.set(run.teamName, run.runId);
     (svc as any).runs.set(run.runId, run);
 
+    Object.assign(run, { leadIdentity: { name: 'team-lead' } });
     await (svc as any).handleProvisioningTurnComplete(run);
 
     expect(handleAuthFailureInOutput).not.toHaveBeenCalledWith(
@@ -4465,6 +4283,7 @@ describe('TeamProvisioningService prepare/auth behavior', () => {
     (svc as any).provisioningRunByTeam.set(run.teamName, run.runId);
     (svc as any).runs.set(run.runId, run);
 
+    Object.assign(run, { leadIdentity: { name: 'team-lead' } });
     await (svc as any).handleProvisioningTurnComplete(run);
 
     expect(handleAuthFailureInOutput).toHaveBeenCalledWith(
@@ -5009,6 +4828,7 @@ describe('TeamProvisioningService prepare/auth behavior', () => {
     (svc as any).provisioningRunByTeam.set(run.teamName, run.runId);
     (svc as any).runs.set(run.runId, run);
 
+    Object.assign(run, { leadIdentity: { name: 'team-lead' } });
     await (svc as any).handleProvisioningTurnComplete(run);
 
     expect(emitter).toHaveBeenCalledWith(

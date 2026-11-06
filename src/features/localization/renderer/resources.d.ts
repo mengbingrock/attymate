@@ -1126,8 +1126,8 @@ export default interface Resources {
         foundButFailed: '{{runtime}} was found but failed to start';
         healthCheckFailedDescription: 'The app found the configured {{runtime}}, but its startup health check failed. Repair or reinstall it, then retry.';
         install: 'Install {{runtime}}';
-        installRequiredDescription: '{{runtime}} is required for team provisioning and session management. Install it to get started.';
-        isRequired: '{{runtime}} is required';
+        installRequiredDescription: 'Install the CLI for your chosen provider. Codex teams use Codex CLI; Claude teams use Claude CLI.';
+        isRequired: '{{runtime}} is not installed';
         reinstall: 'Reinstall {{runtime}}';
       };
       runtimeInstall: {

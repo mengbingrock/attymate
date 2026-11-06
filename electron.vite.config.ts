@@ -196,6 +196,8 @@ export default defineConfig({
         '@main': resolve(__dirname, 'src/main'),
         '@shared': resolve(__dirname, 'src/shared'),
         '@preload': resolve(__dirname, 'src/preload'),
+        // v6 headless publishes an invalid `module` path; bundle its valid CJS entry.
+        '@xterm/headless': resolve(__dirname, 'node_modules/@xterm/headless/lib-headless/xterm-headless.js'),
         ...terminalPlatformSdkAliases
       }
     },
